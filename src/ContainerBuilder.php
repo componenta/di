@@ -121,7 +121,7 @@ class ContainerBuilder
         \Componenta\DI\Cache\DiCacheGeneratorInterface::class => \Componenta\DI\Cache\DiCacheGenerator::class,
     ];
 
-    /** @var array<string, callable|class-string|array{0: class-string, 1: string}> */
+    /** @var array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array{0: string, 1: string}|\Componenta\DI\Definition\FactoryDefinition|\Componenta\DI\Definition\ClassDefinition> */
     private(set) array $factories = [];
 
     /** @var list<class-string> */
@@ -949,12 +949,18 @@ class ContainerBuilder
     // Fluent API
     // =========================================================================
 
+    /**
+     * @param callable(ContainerValue, array<string|int, mixed>):mixed $factory
+     */
     public function addFactory(string $id, callable $factory): static
     {
         $this->factories[$id] = $factory;
         return $this;
     }
 
+    /**
+     * @param array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array{0: string, 1: string}|\Componenta\DI\Definition\FactoryDefinition|\Componenta\DI\Definition\ClassDefinition> $factories
+     */
     public function addFactories(array $factories): static
     {
         $this->factories = [...$this->factories, ...$factories];

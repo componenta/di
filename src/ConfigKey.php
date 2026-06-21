@@ -33,7 +33,7 @@ final class ConfigKey
     // Dependencies section keys
     // ==========================================================================
 
-    /** Factory callables: id => callable|class-string */
+    /** Factory callables: id => callable(ContainerValue, context)|class-string */
     public const string FACTORIES = \Componenta\Config\ConfigKey::FACTORIES;
 
     /** Simple classes without dependencies: list<class-string> or id => class-string */

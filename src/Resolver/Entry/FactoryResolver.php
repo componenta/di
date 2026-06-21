@@ -24,6 +24,9 @@ use Psr\Container\ContainerInterface;
  * my service in lazy form" and the resolver delegates to its `lazy()`
  * method. All other factories execute eagerly.
  *
+ * Factory callables receive the container value and the resolution context.
+ * Lazy factories receive the same context as the third lazy() argument.
+ *
  * Class-level {@see \Componenta\DI\Attribute\Lazy} / {@see \Componenta\DI\Attribute\Proxy}
  * attributes are honoured by {@see ReflectionResolver} for autowired
  * services. They are intentionally NOT consulted here - a factory is the
@@ -34,7 +37,7 @@ use Psr\Container\ContainerInterface;
 class FactoryResolver implements DefinitionAwareResolverInterface
 {
     /**
-     * @param array<string, callable|string|array|FactoryDefinition|ClassDefinition> $factories
+     * @param array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array|FactoryDefinition|ClassDefinition> $factories
      */
     public function __construct(
         protected array $factories,
@@ -50,7 +53,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     /**
      * Resolves an entry by executing its factory.
      *
-     * @throws ResolutionException If factory execution fails.
+     * @throws ResolutionException|ContainerExceptionInterface If factory execution fails.
      */
     public function resolve(string $id, array $context = []): mixed
     {
@@ -59,8 +62,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface
             $container = new ContainerValue($this->container);
 
             return $factory instanceof LazyServiceFactoryInterface
-                ? $factory->lazy($container, $this->proxyFactory)
-                : $factory($container);
+                ? $factory->lazy($container, $this->proxyFactory, $context)
+                : $factory($container, $context);
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -94,7 +97,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
 
     protected function createFactoryFromDefinition(ClassDefinition $definition): callable
     {
-        return function (ContainerValue $container) use ($definition) {
+        return function (ContainerValue $container, array $_context = []) use ($definition) {
             $className = $definition->value;
 
             $resolveValue = static function (mixed $value) use ($container) {

@@ -38,7 +38,7 @@ describe('Definition', function () {
                 return new SimpleService();
             }
 
-            public function lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory): object
+            public function lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory, array $context = []): object
             {
                 return new SimpleService();
             }

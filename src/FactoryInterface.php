@@ -21,8 +21,12 @@ interface FactoryInterface
      *
      * @template T of object
      *
-     * @param class-string<T>|string $entry  Class name or service identifier.
-     * @param array<string, mixed>   $params Parameters to pass to constructor.
+     * @param class-string<T>|string $entry Class name or service identifier.
+     * @param array<string|int, mixed> $params Resolution context forwarded to
+     *                                         the entry resolver. Reflection-based
+     *                                         entries use it for constructor, property,
+     *                                         and setup parameters; factories receive
+     *                                         it as their second argument.
      *
      * @return T The created instance.
      *

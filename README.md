@@ -134,7 +134,7 @@ use Componenta\DI\ContainerBuilder;
 $builder = new ContainerBuilder();
 
 $builder
-    ->addFactory(MailerInterface::class, static fn ($c) => new SmtpMailer(
+    ->addFactory(MailerInterface::class, static fn ($c, array $context) => new SmtpMailer(
         $c->get(SmtpConfig::class),
     ))
     ->addInvokable(HealthCheck::class)
@@ -147,7 +147,7 @@ $container = $builder->build();
 
 | Method | Meaning |
 |---|---|
-| `addFactory(string $id, callable $factory)` | Registers a factory for an entry id. The callable receives the container. |
+| `addFactory(string $id, callable $factory)` | Registers a factory for an entry id. The callable receives `ContainerValue $container` and `array $context`. |
 | `addFactories(array $factories)` | Bulk factory registration. |
 | `addInvokable(string $classOrAlias, ?string $class = null)` | Registers a class that can be constructed without constructor parameters or with default parameters. Keyed form also registers an alias. |
 | `addInvokables(array $invokables)` | Bulk invokable registration. |
@@ -175,7 +175,7 @@ use function Componenta\Config\entry;
 
 $builder->addFactory(
     MailerInterface::class,
-    static fn (ContainerValue $container): MailerInterface => new SmtpMailer(
+    static fn (ContainerValue $container, array $context): MailerInterface => new SmtpMailer(
         logger: $container->find('mail.logger', entry(LoggerInterface::class, LoggerInterface::class)),
         host: $container->config->string(new ConfigPath('mail.host'), 'localhost'),
     ),
@@ -196,7 +196,7 @@ use Componenta\DI\Container;
 $config = new Config([
     ConfigKey::DEPENDENCIES => [
         ConfigKey::FACTORIES => [
-            MailerInterface::class => static fn ($c) => new SmtpMailer(),
+            MailerInterface::class => static fn ($c, array $context) => new SmtpMailer(),
         ],
         ConfigKey::ALIASES => [
             'mailer' => MailerInterface::class,
@@ -278,7 +278,7 @@ return [
 
 | Definition | Meaning |
 |---|---|
-| `Definition::factory(callable $factory)` | Wraps a callable factory. The callable receives the container and returns the entry value. |
+| `Definition::factory(callable $factory)` | Wraps a callable factory. The callable receives `ContainerValue $container` and `array $context`, and returns the entry value. |
 | `Definition::autowire(string $className)` | Creates a `ClassDefinition` for explicit `new $className(...$params)` construction inside `FactoryResolver`. |
 | `Definition::reference(string $entryId)` | Refers to another container entry inside `ClassDefinition` constructor or method parameters. |
 | `Definition::invokable(string $className)` | Creates an `InvokableDefinition` for entries that should be created through `InvokableResolver`. |
@@ -598,7 +598,7 @@ Use parameter/property `#[Proxy]` when the injection point should receive a virt
 
 Class-level `#[Lazy]` and `#[Proxy]` are read by `ReflectionResolver` and `InvokableResolver`. They are not read for objects returned by ordinary factories. Factory-bound entries are eager by default.
 
-Factories can implement `LazyServiceFactoryInterface` when they need to control lazy construction for a factory-bound entry. The `lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory)` method decides whether to return a PHP 8.4 lazy object or a virtual proxy.
+Factories can implement `LazyServiceFactoryInterface` when they need to control lazy construction for a factory-bound entry. The `lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory, array $context = [])` method decides whether to return a PHP 8.4 lazy object or a virtual proxy. The third argument is the per-call context forwarded by `FactoryInterface::make()`.
 
 ## Delegators
 

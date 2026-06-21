@@ -199,7 +199,7 @@ $response = $container->call([PostController::class, 'show'], ['id' => $postId])
 use Componenta\DI\ContainerBuilder;
 
 $container = (new ContainerBuilder())
-    ->addFactory(MailerInterface::class, static fn ($c) => new SmtpMailer(
+    ->addFactory(MailerInterface::class, static fn ($c, array $context) => new SmtpMailer(
         $c->get(SmtpConfig::class),
     ))
     ->addInvokable(HealthCheck::class)
@@ -211,7 +211,7 @@ $container = (new ContainerBuilder())
 
 | Метод | Что делает |
 |---|---|
-| `addFactory(string $id, callable $factory)` | Регистрирует фабрику сервиса. Фабрика получает контейнер. |
+| `addFactory(string $id, callable $factory)` | Регистрирует фабрику сервиса. Фабрика получает `ContainerValue $container` и `array $context`. |
 | `addFactories(array $factories)` | Массово регистрирует фабрики. |
 | `addInvokable(string $classOrAlias, ?string $class = null)` | Регистрирует класс, создаваемый без обязательных аргументов конструктора. Если передан псевдоним, добавляет его для класса. |
 | `addInvokables(array $invokables)` | Массово регистрирует простые классы без обязательных аргументов конструктора. |
@@ -239,7 +239,7 @@ use function Componenta\Config\entry;
 
 $builder->addFactory(
     MailerInterface::class,
-    static fn (ContainerValue $container): MailerInterface => new SmtpMailer(
+    static fn (ContainerValue $container, array $context): MailerInterface => new SmtpMailer(
         logger: $container->find('mail.logger', entry(LoggerInterface::class, LoggerInterface::class)),
         host: $container->config->string(new ConfigPath('mail.host'), 'localhost'),
     ),
@@ -258,7 +258,7 @@ $builder->addFactory(
 
 ```php
 $builder
-    ->addFactory(MailerInterface::class, static fn ($c) => new SmtpMailer())
+    ->addFactory(MailerInterface::class, static fn ($c, array $context) => new SmtpMailer())
     ->addInvokable(HealthCheck::class);
 ```
 
@@ -282,7 +282,7 @@ $container->set(
 
 | Метод | Возвращает | Когда использовать |
 |---|---|---|
-| `Definition::factory(callable $factory)` | `FactoryDefinition` | Сервис полностью создается фабрикой. Фабрика получает контейнер. |
+| `Definition::factory(callable $factory)` | `FactoryDefinition` | Сервис полностью создается фабрикой. Фабрика получает `ContainerValue $container` и `array $context`. |
 | `Definition::autowire(string $className)` | `ClassDefinition` | Нужно создать класс через `new` и явно указать аргументы конструктора или вызовы методов. |
 | `Definition::reference(string $entryId)` | `ReferenceDefinition` | Нужно сослаться на другой сервис внутри `ClassDefinition`. |
 | `Definition::invokable(string $className)` | `InvokableDefinition` | Нужно зарегистрировать простой класс, который создается без обязательных аргументов конструктора. |
@@ -349,7 +349,7 @@ use Componenta\DI\Container;
 $config = new Config([
     ConfigKey::DEPENDENCIES => [
         ConfigKey::FACTORIES => [
-            MailerInterface::class => static fn ($c) => new SmtpMailer(),
+            MailerInterface::class => static fn ($c, array $context) => new SmtpMailer(),
         ],
         ConfigKey::ALIASES => [
             'mailer' => MailerInterface::class,
@@ -390,10 +390,10 @@ $container = Container::create($config);
 
 | Форма | Как обрабатывается |
 |---|---|
-| PHP callable | Вызывается как фабрика и получает контейнер. |
+| PHP callable | Вызывается как фабрика и получает `ContainerValue $container` и `array $context`. |
 | Строковый идентификатор сервиса | Контейнер получает сервис по этому идентификатору; результат должен быть вызываемым объектом. |
 | Массив `[serviceId, method]` | Первый элемент разрешается через контейнер, затем вызывается указанный метод. |
-| `FactoryDefinition` | Разворачивается в callable и получает контейнер. |
+| `FactoryDefinition` | Разворачивается в callable и получает `ContainerValue $container` и `array $context`. |
 | `ClassDefinition` | Создает класс через `new`, подставляет явные параметры конструктора и выполняет явно указанные методы. |
 
 ## ConfigProvider
@@ -480,7 +480,7 @@ $container->set(
 );
 
 $container->set('logger.file', Definition::factory(
-    static fn ($c) => new FileLogger('/var/log/app.log'),
+    static fn ($c, array $context) => new FileLogger('/var/log/app.log'),
 ));
 ```
 
@@ -890,6 +890,7 @@ interface LazyServiceFactoryInterface
     public function lazy(
         ContainerInterface $container,
         ProxyFactoryInterface $proxyFactory,
+        array $context = [],
     ): object;
 }
 ```
@@ -919,6 +920,7 @@ final class DatabaseFactory implements LazyServiceFactoryInterface
     public function lazy(
         ContainerInterface $container,
         ProxyFactoryInterface $proxyFactory,
+        array $context = [],
     ): object {
         return $proxyFactory->makeProxy(
             DatabaseConnection::class,
@@ -962,6 +964,7 @@ final class ReportBuilderFactory implements LazyServiceFactoryInterface
     public function lazy(
         ContainerInterface $container,
         ProxyFactoryInterface $proxyFactory,
+        array $context = [],
     ): object {
         return $proxyFactory->makeLazy(
             ReportBuilder::class,

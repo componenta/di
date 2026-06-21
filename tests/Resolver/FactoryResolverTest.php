@@ -86,6 +86,20 @@ describe('Resolver\\FactoryResolver', function () {
             expect($resolver->resolve('svc'))->toBe('Componenta');
         });
 
+        it('passes resolution context as the second factory argument', function () {
+            $resolver = makeFactoryResolver([
+                'svc' => fn (ContainerInterface $container, array $context): array => [
+                    'context' => $context,
+                    'container' => $container,
+                ],
+            ]);
+
+            $result = $resolver->resolve('svc', ['name' => 'Alex', 1 => 'positional']);
+
+            expect($result['context'])->toBe(['name' => 'Alex', 1 => 'positional'])
+                ->and($result['container'])->toBeInstanceOf(ContainerValue::class);
+        });
+
         it('unwraps FactoryDefinition and invokes the callable inside', function () {
             $resolver = makeFactoryResolver([
                 'svc' => Definition::factory(fn () => 'from-definition'),
@@ -166,7 +180,7 @@ describe('Resolver\\FactoryResolver', function () {
                 public bool $called = false;
                 public ?ContainerInterface $seen = null;
 
-                public function lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory): object
+                public function lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory, array $context = []): object
                 {
                     $this->called = true;
                     $this->seen = $container;
@@ -185,6 +199,38 @@ describe('Resolver\\FactoryResolver', function () {
             expect($lazy->called)->toBeTrue()
                 ->and($lazy->seen)->toBeInstanceOf(ContainerValue::class)
                 ->and($result)->toBeInstanceOf(SimpleService::class);
+        });
+
+        it('passes resolution context as the third lazy factory argument', function () {
+            $lazy = new class () implements LazyServiceFactoryInterface {
+                /** @var array<string|int, mixed> */
+                public array $seenContext = [];
+
+                public function lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory, array $context = []): object
+                {
+                    $this->seenContext = $context;
+
+                    return new class ($context) {
+                        /**
+                         * @param array<string|int, mixed> $context
+                         */
+                        public function __construct(
+                            public array $context,
+                        ) {}
+                    };
+                }
+
+                public function __invoke(ContainerInterface $container): object
+                {
+                    throw new RuntimeException('should not call __invoke when lazy() exists');
+                }
+            };
+            $resolver = makeFactoryResolver(['svc' => $lazy]);
+
+            $result = $resolver->resolve('svc', ['name' => 'lazy']);
+
+            expect($result->context)->toBe(['name' => 'lazy'])
+                ->and($lazy->seenContext)->toBe(['name' => 'lazy']);
         });
 
         it('wraps foreign Throwables from the factory into ResolutionException', function () {

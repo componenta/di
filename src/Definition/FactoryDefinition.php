@@ -9,16 +9,19 @@ namespace Componenta\DI\Definition;
  *
  * @example
  * ```php
- * new FactoryDefinition(fn(ContainerInterface $c) => new Service($c->get(Dep::class)))
+ * new FactoryDefinition(fn(ContainerInterface $c, array $context) => new Service($c->get(Dep::class)))
  * ```
  */
 final readonly class FactoryDefinition implements DefinitionInterface
 {
     /**
-     * @var callable
+     * @var callable(\Componenta\Config\ContainerValue, array<string|int, mixed>):mixed
      */
     public mixed $value;
 
+    /**
+     * @param callable(\Componenta\Config\ContainerValue, array<string|int, mixed>):mixed $value
+     */
     public function __construct(callable $value)
     {
         $this->value = $value;

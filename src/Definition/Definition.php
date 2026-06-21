@@ -10,7 +10,7 @@ namespace Componenta\DI\Definition;
  * @example
  * ```php
  * return [
- *     LoggerInterface::class => Definition::factory(fn($c) => new Logger()),
+ *     LoggerInterface::class => Definition::factory(fn($c, array $context) => new Logger()),
  *     UserService::class => Definition::autowire(UserService::class),
  *     'db' => Definition::reference(Connection::class),
  * ];
@@ -18,6 +18,9 @@ namespace Componenta\DI\Definition;
  */
 final class Definition
 {
+    /**
+     * @param callable(\Componenta\Config\ContainerValue, array<string|int, mixed>):mixed $factory
+     */
     public static function factory(callable $factory): FactoryDefinition
     {
         return new FactoryDefinition($factory);
