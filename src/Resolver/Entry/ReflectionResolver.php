@@ -4,139 +4,143 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
-use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\AttributeExecutionPlan;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use Componenta\Reflection\Reflection;
-use ReflectionClass;
+use Psr\Container\ContainerExceptionInterface;
+use Throwable;
 
-/**
- * Resolves entries by reflection-driven autowiring.
- *
- * Orchestrates three collaborators behind interfaces - each owns a single
- * step of the construction pipeline:
- *
- *  - {@see InstantiatorInterface}     - constructor invocation / {@see \Componenta\DI\Attribute\NoConstructor}
- *  - {@see PropertyInjectorInterface} - attribute-driven property injection
- *  - {@see PostInitializerInterface}  - post-construction {@see \Componenta\DI\Attribute\SetUp} methods
- *
- * Construction mode is decided here directly. Classes without lazy markers
- * are built eagerly. The {@see Lazy} attribute opts into a PHP 8.4 lazy
- * object (ghost), which preserves class identity. The {@see Proxy}
- * attribute opts into a virtual proxy when forwarding semantics are needed.
- */
-final class ReflectionResolver implements EntryResolverInterface
+/** Reflection fallback for entries without an explicit or generated factory. */
+final readonly class ReflectionResolver implements EntryResolverInterface
 {
-    /** @var array<class-string, Strategy> */
-    private array $strategyCache = [];
-
     public function __construct(
-        private readonly InstantiatorInterface $instanceCreator,
-        private readonly PropertyInjectorInterface $propertyInjector,
-        private readonly PostInitializerInterface $setUpRunner,
-        private readonly ProxyFactoryInterface $proxyFactory,
+        private InstanceCreator $instanceCreator,
+        private AttributeProcessor $attributes,
+        private ProxyFactoryInterface $proxyFactory,
     ) {}
 
     public function can(string $id): bool
     {
-        return Reflection::class($id)?->isInstantiable() ?? false;
+        return ($class = Reflection::class($id)) !== null
+            && EntryClassEligibility::allows($class);
     }
 
-    /**
-     * @throws ResolutionException If the class cannot be reflected.
-     */
+    /** @throws ResolutionException */
     public function resolve(string $id, array $context = []): object
     {
         $reflector = Reflection::class($id);
-
-        if ($reflector === null) {
+        if ($reflector === null || !EntryClassEligibility::allows($reflector)) {
             throw ResolutionException::forMissingService($id);
         }
 
-        return match ($this->detectStrategy($reflector)) {
-            Strategy::VirtualProxy => $this->buildVirtualProxy($reflector, $context),
-            Strategy::Lazy         => $this->buildLazy($reflector, $context),
-            Strategy::Eager        => $this->buildEager($reflector, $context),
-        };
+        try {
+            $plan = $this->attributes->plan($reflector);
+            if ($plan->isEmpty()) {
+                return $this->instanceCreator->create($reflector, $context);
+            }
+
+            $creation = new ObjectCreationContext(
+                class: $reflector,
+                parameters: $context,
+            );
+
+            $this->attributes->processPlan(
+                $plan,
+                AttributePhase::BeforeInstantiation,
+                $creation,
+            );
+
+            return match ($creation->strategy) {
+                CreationStrategy::Eager => $this->buildEager($creation, $plan),
+                CreationStrategy::Lazy => $this->buildLazy($creation, $plan),
+                CreationStrategy::Proxy => $this->buildVirtualProxy($creation, $plan),
+            };
+        } catch (ContainerExceptionInterface|ResolutionException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forService($id, $e);
+        }
     }
 
-    /**
-     * Eager construction - invoke ctor, inject properties, run SetUp.
-     *
-     * Used both as the unwrapped path (called from inside lazy/proxy
-     * initializers) and the only direct caller.
-     */
-    private function buildEager(ReflectionClass $reflector, array $context): object
+    private function buildEager(
+        ObjectCreationContext $context,
+        AttributeExecutionPlan $plan,
+    ): object
     {
-        $entry = $this->instanceCreator->create($reflector, $context);
-        $this->propertyInjector->inject($reflector, $entry, $context);
-        $this->setUpRunner->run($reflector, $entry, $context);
+        try {
+            $entry = $context->constructorEnabled
+                ? $this->instanceCreator->create($context->class, $context->parameters)
+                : $context->class->newInstanceWithoutConstructor();
 
-        return $entry;
+            $this->complete($context, $entry, $plan);
+
+            return $entry;
+        } catch (ContainerExceptionInterface|ResolutionException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forService($context->class->getName(), $e);
+        }
     }
 
-    /**
-     * Lazy-object path: PHP allocates the shell up front; the constructor
-     * runs on it in place at first observable access, then the rest of
-     * the pipeline populates it.
-     */
-    private function buildLazy(ReflectionClass $reflector, array $context): object
+    private function buildLazy(
+        ObjectCreationContext $context,
+        AttributeExecutionPlan $plan,
+    ): object
     {
         return $this->proxyFactory->makeLazy(
-            $reflector->getName(),
-            function (object $entry) use ($reflector, $context): void {
-                $this->instanceCreator->initialize($entry, $reflector, $context);
-                $this->propertyInjector->inject($reflector, $entry, $context);
-                $this->setUpRunner->run($reflector, $entry, $context);
+            $context->class->getName(),
+            function (object $entry) use ($context, $plan): void {
+                $attempt = $context->freshAttempt();
+
+                try {
+                    if ($attempt->constructorEnabled) {
+                        $this->instanceCreator->initialize(
+                            $entry,
+                            $attempt->class,
+                            $attempt->parameters,
+                        );
+                    }
+
+                    $this->complete($attempt, $entry, $plan);
+                } catch (ContainerExceptionInterface|ResolutionException $e) {
+                    throw $e;
+                } catch (Throwable $e) {
+                    throw ResolutionException::forService(
+                        $attempt->class->getName(),
+                        $e,
+                    );
+                }
             },
         );
     }
 
-    /**
-     * Virtual-proxy path: returns a forwarding subtype. The real instance
-     * is built eagerly (by the same pipeline) on first access and
-     * subsequent calls are routed to it.
-     */
-    private function buildVirtualProxy(ReflectionClass $reflector, array $context): object
+    private function buildVirtualProxy(
+        ObjectCreationContext $context,
+        AttributeExecutionPlan $plan,
+    ): object
     {
         return $this->proxyFactory->makeProxy(
-            $reflector->getName(),
-            fn(object $proxy): object => $this->buildEager($reflector, $context),
+            $context->class->getName(),
+            fn(object $proxy): object => $this->buildEager($context->freshAttempt(), $plan),
         );
     }
 
-    /**
-     * Determines the resolution strategy for a class.
-     *
-     * Priority:
-     *  1. {@see Proxy} attribute on the class -> virtual proxy.
-     *  2. {@see Lazy} attribute on the class -> lazy object (ghost).
-     *  3. No attribute -> eager construction.
-     *
-     * Eager is the default because lazy wrappers carry per-resolve cost
-     * (one `newLazyGhost` allocation per service) that outweighs deferred
-     * construction for cheap services. Mark heavy services with {@see Lazy}
-     * or {@see Proxy} explicitly.
-     *
-     * Result is memoised per class.
-     */
-    private function detectStrategy(ReflectionClass $reflector): Strategy
+    private function complete(
+        ObjectCreationContext $context,
+        object $entry,
+        AttributeExecutionPlan $plan,
+    ): void
     {
-        $key = $reflector->getName();
+        $context->initialize($entry);
 
-        if (isset($this->strategyCache[$key])) {
-            return $this->strategyCache[$key];
-        }
-
-        if ($reflector->getAttributes(Proxy::class) !== []) {
-            return $this->strategyCache[$key] = Strategy::VirtualProxy;
-        }
-
-        if ($reflector->getAttributes(Lazy::class) !== []) {
-            return $this->strategyCache[$key] = Strategy::Lazy;
-        }
-
-        return $this->strategyCache[$key] = Strategy::Eager;
+        $this->attributes->processPlan(
+            $plan,
+            AttributePhase::AfterInstantiation,
+            $context,
+        );
     }
 }

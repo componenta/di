@@ -32,15 +32,28 @@ final class EntryCache
     /** @var array<string, array<string, true>> Canonical id -> set of requested ids that mapped to it. */
     private array $reverseIndex = [];
 
-
-    public function hasBase(string $id): bool
+    /** @param array<string, mixed> $base */
+    public function __construct(array $base = [])
     {
-        return isset($this->base[$id]) || array_key_exists($id, $this->base);
+        $this->base = $base;
     }
 
-    public function getBase(string $id): mixed
+    /**
+     * Reads a base entry in one cache operation while preserving stored nulls.
+     */
+    public function tryGetBase(string $id, mixed &$value): bool
     {
-        return $this->base[$id];
+        if (isset($this->base[$id])) {
+            $value = $this->base[$id];
+            return true;
+        }
+
+        if (!array_key_exists($id, $this->base)) {
+            return false;
+        }
+
+        $value = null;
+        return true;
     }
 
     public function putBase(string $id, mixed $value): void
@@ -53,15 +66,22 @@ final class EntryCache
         unset($this->base[$id]);
     }
 
-
-    public function hasResolved(string $id): bool
+    /**
+     * Reads a decorated entry in one cache operation while preserving stored nulls.
+     */
+    public function tryGetResolved(string $id, mixed &$value): bool
     {
-        return isset($this->resolved[$id]) || array_key_exists($id, $this->resolved);
-    }
+        if (isset($this->resolved[$id])) {
+            $value = $this->resolved[$id];
+            return true;
+        }
 
-    public function getResolved(string $id): mixed
-    {
-        return $this->resolved[$id];
+        if (!array_key_exists($id, $this->resolved)) {
+            return false;
+        }
+
+        $value = null;
+        return true;
     }
 
     /**
@@ -81,7 +101,6 @@ final class EntryCache
             $this->reverseIndex[$canonicalId][$requestedId] = true;
         }
     }
-
 
     /**
      * Invalidates both sides of the cache for the given id.

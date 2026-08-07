@@ -5,81 +5,53 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\Reflection\ReflectionType;
-use ReflectionParameter;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/**
- * Resolves parameters from provided array by name or position.
- *
- * First resolver in the default chain. Looks up values using:
- * 1. Parameter name as array key
- * 2. Parameter position as array index
- *
- * When a value is provided under the parameter's name or position but its
- * type does not satisfy the declared parameter type, an
- * {@see ResolutionException} is raised: silently falling through to
- * autowire/default resolvers would discard the caller's explicit value.
- *
- * Runtime-only resolver - cannot be compiled as it depends on
- * runtime-provided parameters.
- *
- * @example By name
- * ```php
- * function greet(string $name) {}
- * $resolver->resolve($param, ['name' => 'John']); // 'John'
- * ```
- *
- * @example By position
- * ```php
- * function greet(string $name) {}
- * $resolver->resolve($param, ['John']); // 'John' (position 0)
- * ```
- */
-final class ArrayResolver implements
-    ParameterResolverInterface
+/** Resolves an explicit value by parameter name or position. */
+final class ArrayResolver implements ParameterResolverInterface
 {
+    public function supports(ParameterTarget $target): bool
+    {
+        return true;
+    }
+
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        $name = $parameter->getName();
-        $position = $parameter->getPosition();
-        $type = $parameter->getType();
+        if (array_key_exists($target->name, $context->provided)) {
+            $value = $context->provided[$target->name];
 
-        if (array_key_exists($name, $providedParameters)) {
-            $value = $providedParameters[$name];
-
-            if (ReflectionType::match($type, $value)) {
-                return [$position, $value];
+            if ($target->accepts($value)) {
+                return [$target->position, $value];
             }
 
             throw ResolutionException::forParameter(
-                $parameter,
+                $target->reflection,
                 reason: sprintf(
                     'value provided for "$%s" does not satisfy declared type',
-                    $name,
+                    $target->name,
                 ),
-                providedParameters: $providedParameters,
-                resolvedParameters: $resolvedParameters,
+                providedParameters: $context->provided,
+                resolvedParameters: $context->resolved,
             );
         }
 
-        if (array_key_exists($position, $providedParameters)) {
-            $value = $providedParameters[$position];
+        if (array_key_exists($target->position, $context->provided)) {
+            $value = $context->provided[$target->position];
 
-            if (ReflectionType::match($type, $value)) {
-                return [$position, $value];
+            if ($target->accepts($value)) {
+                return [$target->position, $value];
             }
 
             throw ResolutionException::forParameter(
-                $parameter,
+                $target->reflection,
                 reason: sprintf(
                     'value provided at position %d does not satisfy declared type',
-                    $position,
+                    $target->position,
                 ),
-                providedParameters: $providedParameters,
-                resolvedParameters: $resolvedParameters,
+                providedParameters: $context->provided,
+                resolvedParameters: $context->resolved,
             );
         }
 

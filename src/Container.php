@@ -59,29 +59,73 @@ final readonly class Container implements
         private EntryResolverInterface    $resolver,
         private AliasResolverInterface    $aliases,
         private CallableExecutorInterface $callableExecutor,
-        ?EntryCache                       $cache = null,
-        ?DelegatorRegistry                $delegators = null,
-        ?ExternalContainerRegistry        $externalContainers = null,
-        ?CycleGuard                       $cycleGuard = null,
-        ?ProxyFactoryInterface            $proxyFactory = null,
+        ?EntryCache $cache = null,
+        ?DelegatorRegistry $delegators = null,
+        ?ExternalContainerRegistry $externalContainers = null,
+        ?CycleGuard $cycleGuard = null,
+        ?ProxyFactoryInterface $proxyFactory = null,
+        array $bootstrapServices = [],
     ) {
-        $this->cache              = $cache ?? new EntryCache();
+        $coreServices = [
+            ContainerInterface::class => $this,
+            FactoryInterface::class => $this,
+            CallableInvokerInterface::class => $this,
+            ProxyFactoryInterface::class => $this,
+            LazyObjectFactoryInterface::class => $this,
+            VirtualProxyFactoryInterface::class => $this,
+            self::class => $this,
+            AliasResolverInterface::class => $this->aliases,
+            CallableExecutorInterface::class => $this->callableExecutor,
+        ];
+        $validatedBootstrapServices = [];
+
+        foreach ($bootstrapServices as $id => $service) {
+            if (!is_string($id) || ($expected = ProtectedServiceIds::bootstrapType($id)) === null) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Unsupported bootstrap service id "%s".',
+                    is_scalar($id) ? (string) $id : get_debug_type($id),
+                ));
+            }
+
+            if (!$service instanceof $expected) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Bootstrap service "%s" must implement %s; got %s.',
+                    $id,
+                    $expected,
+                    get_debug_type($service),
+                ));
+            }
+
+            $validatedBootstrapServices[$id] = $service;
+        }
+
+        if ($cache === null) {
+            $this->cache = new EntryCache(
+                $coreServices + $validatedBootstrapServices,
+            );
+        } else {
+            $this->cache = $cache;
+
+            foreach ($coreServices as $id => $service) {
+                $this->cache->putBase($id, $service);
+            }
+
+            foreach ($validatedBootstrapServices as $id => $service) {
+                if ($this->cache->tryGetBase($id, $existing)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Bootstrap service "%s" is already initialized.',
+                        $id,
+                    ));
+                }
+
+                $this->cache->putBase($id, $service);
+            }
+        }
+
         $this->delegators         = $delegators ?? new DelegatorRegistry($this->callableExecutor);
         $this->externalContainers = $externalContainers ?? new ExternalContainerRegistry();
         $this->cycleGuard         = $cycleGuard ?? new CycleGuard();
         $this->proxyFactory       = $proxyFactory ?? new ProxyFactory();
-
-        // Self-registration - the container advertises itself under every
-        // interface it implements so resolvers can depend on it by type.
-        $this->cache->putBase(ContainerInterface::class, $this);
-        $this->cache->putBase(FactoryInterface::class, $this);
-        $this->cache->putBase(CallableInvokerInterface::class, $this);
-        $this->cache->putBase(ProxyFactoryInterface::class, $this);
-        $this->cache->putBase(LazyObjectFactoryInterface::class, $this);
-        $this->cache->putBase(VirtualProxyFactoryInterface::class, $this);
-        $this->cache->putBase(self::class, $this);
-        $this->cache->putBase(AliasResolverInterface::class, $this->aliases);
-        $this->cache->putBase(CallableExecutorInterface::class, $this->callableExecutor);
     }
 
     /**
@@ -98,9 +142,10 @@ final readonly class Container implements
      * Resolution order:
      * 1. Decorated cache (by requested id).
      * 2. Alias resolution to canonical id.
-     * 3. External PSR-11 containers (inside the cycle guard).
-     * 4. Resolver chain.
-     * 5. Delegators applied on top of the produced value.
+     * 3. Local base cache by canonical id.
+     * 4. External PSR-11 containers (inside the cycle guard).
+     * 5. Resolver chain.
+     * 6. Delegators applied on top of the produced value.
      *
      * @throws NotFoundException           If no resolver can handle the entry.
      * @throws CircularDependencyException If a cycle is detected.
@@ -108,16 +153,18 @@ final readonly class Container implements
      */
     public function get(string $id): mixed
     {
-        if ($this->cache->hasResolved($id)) {
-            return $this->cache->getResolved($id);
+        if ($this->cache->tryGetResolved($id, $entry)) {
+            return $entry;
         }
 
         $entryId = $this->aliases->resolve($id);
+        $this->cycleGuard->enter($entryId);
 
-        return $this->cycleGuard->track(
-            $entryId,
-            fn(): mixed => $this->resolveAndStore($id, $entryId),
-        );
+        try {
+            return $this->resolveAndStore($id, $entryId);
+        } finally {
+            $this->cycleGuard->leave($entryId);
+        }
     }
 
     /**
@@ -125,57 +172,52 @@ final readonly class Container implements
      */
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
-        $external = $this->externalContainers->findOwning($entryId);
+        if (!$this->cache->tryGetBase($entryId, $entry)) {
+            $external = $this->externalContainers->findOwning($entryId);
 
-        $entry = $external !== null
-            ? $external->get($entryId)
-            : $this->resolveFromChain($entryId);
-
-        $entry = $this->delegators->apply($requestedId, $entry, $this);
-
-        $this->cache->putResolved($requestedId, $entryId, $entry);
-
-        return $entry;
-    }
-
-    /**
-     * Pulls the base entry from cache or falls through to the resolver chain.
-     *
-     * @throws NotFoundException
-     */
-    private function resolveFromChain(string $entryId): mixed
-    {
-        if ($this->cache->hasBase($entryId)) {
-            return $this->cache->getBase($entryId);
+            if ($external !== null) {
+                $entry = $external->get($entryId);
+            } else {
+                $entry = $this->resolver->resolve($entryId);
+                $this->cache->putBase($entryId, $entry);
+            }
         }
 
-        $entry = $this->resolver->resolve($entryId);
-
-        $this->cache->putBase($entryId, $entry);
+        $entry = $this->delegators->apply($requestedId, $entry, $this);
+        $this->cache->putResolved($requestedId, $entryId, $entry);
 
         return $entry;
     }
 
     public function has(string $id): bool
     {
-        if ($this->cache->hasResolved($id)) {
+        if ($this->cache->tryGetResolved($id, $resolved)) {
             return true;
         }
 
         // Only container-typed failures collapse to "absent"; real bugs
-        // (e.g. TypeError in a resolver's can()) propagate.
+        // (e.g. TypeError in a resolver's can()) propagate. A distinct guard
+        // key prevents mutually delegated containers from recursively probing
+        // each other's has() forever without interfering with service-cycle
+        // diagnostics used by get().
         try {
             $entryId = $this->aliases->resolve($id);
+            $guardId = "\0has:" . $entryId;
+            $this->cycleGuard->enter($guardId);
 
-            if ($this->externalContainers->has($entryId)) {
-                return true;
+            try {
+                if ($this->cache->tryGetBase($entryId, $base)) {
+                    return true;
+                }
+
+                if ($this->externalContainers->findOwning($entryId) !== null) {
+                    return true;
+                }
+
+                return $this->resolver->can($entryId);
+            } finally {
+                $this->cycleGuard->leave($guardId);
             }
-
-            if ($this->cache->hasBase($entryId)) {
-                return true;
-            }
-
-            return $this->resolver->can($entryId);
         } catch (ContainerExceptionInterface) {
             return false;
         }
@@ -186,17 +228,26 @@ final readonly class Container implements
      *
      * Aliases are resolved before the base cache write so that a value set
      * under an alias name lands at the canonical id - otherwise
-     * {@see resolveFromChain()} (which only consults the base cache by
-     * canonical id) would miss it and recreate the entry from scratch.
+     * the local base cache (which is keyed by canonical id) would miss it and recreate the entry from scratch.
      *
-     * Definitions are forwarded to the resolver under the requested id since
-     * the resolver-level table is alias-agnostic by design.
+     * Definitions use the same canonical id as ordinary values. Otherwise a
+     * definition registered through an alias could never be reached because
+     * get() resolves aliases before consulting the resolver chain.
      *
      * @throws InvalidConfigurationException If the definition type is not
      *                                       supported by the resolver.
      */
     public function set(string $id, mixed $entry): void
     {
+        $canonical = $this->aliases->resolve($id);
+
+        if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot replace protected DI id "%s".',
+                $id,
+            ));
+        }
+
         if ($entry instanceof DefinitionInterface) {
             if (!$this->resolver instanceof DefinitionAwareResolverInterface
                 || !$this->resolver->supportsDefinition($entry)
@@ -204,10 +255,9 @@ final readonly class Container implements
                 throw InvalidConfigurationException::forInvalidDefinition($entry);
             }
 
-            $this->cache->removeBase($id);
-            $this->resolver->setDefinition($id, $entry);
+            $this->cache->removeBase($canonical);
+            $this->resolver->setDefinition($canonical, $entry);
         } else {
-            $canonical = $this->aliases->resolve($id);
             $this->cache->putBase($canonical, $entry);
         }
 
@@ -239,8 +289,6 @@ final readonly class Container implements
         try {
             $instance = $this->resolver->resolve($resolved, $params);
         } catch (ContainerExceptionInterface $e) {
-            // PSR-11 / DI exceptions preserve their concrete type so callers
-            // can still differentiate them via the specific interface.
             throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forService($entry, $e);
@@ -287,13 +335,27 @@ final readonly class Container implements
      */
     public function addContainer(ContainerInterface $container): void
     {
+        if ($container === $this) {
+            throw new InvalidConfigurationException(
+                'The container cannot delegate lookups to itself.',
+            );
+        }
+
         $this->externalContainers->register($container);
     }
 
     public function alias(string $alias, string $target): void
     {
+        if (ProtectedServiceIds::contains($alias)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot replace protected DI alias "%s".',
+                $alias,
+            ));
+        }
+
+        $previousCanonical = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
-        $this->invalidate($alias);
+        $this->invalidate($alias, $previousCanonical);
     }
 
     /**
@@ -307,6 +369,14 @@ final readonly class Container implements
      */
     public function delegator(string $id, callable|string|array $delegator): void
     {
+        $canonical = $this->aliases->resolve($id);
+        if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot decorate protected DI id "%s".',
+                $id,
+            ));
+        }
+
         $this->delegators->register($id, $delegator);
         $this->invalidate($id);
     }
@@ -316,12 +386,12 @@ final readonly class Container implements
      * given id - directly, through an alias pointing at it, or through its
      * canonical target.
      */
-    private function invalidate(string $id): void
+    private function invalidate(string $id, ?string $knownCanonical = null): void
     {
         // Best-effort resolve to canonical; a malformed alias map must not
         // abort cleanup here.
         try {
-            $canonical = $this->aliases->resolve($id);
+            $canonical = $knownCanonical ?? $this->aliases->resolve($id);
         } catch (Throwable) {
             $canonical = $id;
         }

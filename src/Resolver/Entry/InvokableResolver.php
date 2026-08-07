@@ -11,30 +11,21 @@ use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use Psr\Container\ContainerExceptionInterface;
 use ReflectionClass;
 use Throwable;
 
-/**
- * Resolves container entries as invokable classes (direct instantiation).
- *
- * Invokable classes have no-arg constructors. Classes without lazy markers
- * are built eagerly. The {@see Lazy} attribute opts into a PHP 8.4 lazy
- * object (ghost). The {@see Proxy} attribute opts into a virtual proxy.
- */
+/** Resolves registered no-argument classes without reflection autowiring. */
 class InvokableResolver implements DefinitionAwareResolverInterface
 {
-    /** @var array<string, class-string> id -> class-string to instantiate. */
+    /** @var array<string, class-string> */
     private array $invokables = [];
 
-    /** @var array<class-string, Strategy> */
+    /** @var array<class-string, CreationStrategy> */
     private array $strategyCache = [];
 
-    /**
-     * @param list<class-string> $invokables List of class names to register.
-     *                                       Each class is registered under its
-     *                                       own FQN as the entry id.
-     */
+    /** @param list<class-string> $invokables */
     public function __construct(
         array $invokables = [],
         private readonly ?ProxyFactoryInterface $proxyFactory = null,
@@ -49,11 +40,6 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         return isset($this->invokables[$id]);
     }
 
-    /**
-     * Resolves an entry by direct instantiation of the mapped class.
-     *
-     * @throws ResolutionException If instantiation fails.
-     */
     public function resolve(string $id, array $context = []): object
     {
         $class = $this->invokables[$id];
@@ -64,22 +50,19 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             }
 
             return match ($this->detectStrategy($class)) {
-                Strategy::VirtualProxy => $this->proxyFactory->makeProxy(
+                CreationStrategy::Proxy => $this->proxyFactory->makeProxy(
                     $class,
                     static fn(object $proxy): object => new $class(),
                 ),
-                Strategy::Lazy => $this->proxyFactory->makeLazy(
+                CreationStrategy::Lazy => $this->proxyFactory->makeLazy(
                     $class,
                     static function (object $entry) use ($class): void {
-                        // Skip __construct() when the class doesn't declare
-                        // one - PHP treats it as a non-existent method and
-                        // raises "Call to undefined method".
                         if (method_exists($class, '__construct')) {
                             $entry->__construct();
                         }
                     },
                 ),
-                Strategy::Eager => new $class(),
+                CreationStrategy::Eager => new $class(),
             };
         } catch (ContainerExceptionInterface $e) {
             throw $e;
@@ -102,22 +85,23 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         return $definition instanceof InvokableDefinition;
     }
 
-    private function detectStrategy(string $class): Strategy
+    /** @param class-string $class */
+    private function detectStrategy(string $class): CreationStrategy
     {
         if (isset($this->strategyCache[$class])) {
             return $this->strategyCache[$class];
         }
 
-        $rc = new ReflectionClass($class);
+        $reflection = new ReflectionClass($class);
 
-        if ($rc->getAttributes(Proxy::class) !== []) {
-            return $this->strategyCache[$class] = Strategy::VirtualProxy;
+        if ($reflection->getAttributes(Proxy::class) !== []) {
+            return $this->strategyCache[$class] = CreationStrategy::Proxy;
         }
 
-        if ($rc->getAttributes(Lazy::class) !== []) {
-            return $this->strategyCache[$class] = Strategy::Lazy;
+        if ($reflection->getAttributes(Lazy::class) !== []) {
+            return $this->strategyCache[$class] = CreationStrategy::Lazy;
         }
 
-        return $this->strategyCache[$class] = Strategy::Eager;
+        return $this->strategyCache[$class] = CreationStrategy::Eager;
     }
 }

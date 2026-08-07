@@ -9,41 +9,38 @@ use Componenta\DI\Resolver\CurrentUserProvider;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Resolver\CurrentUserResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
+use Componenta\DI\Resolver\Parameter\Request\RequestResolverFactory;
 
-/**
- * Optional resolver registrations that the bare {@see ContainerBuilder} no
- * longer ships with. Include this provider in the application's config chain
- * to enable `#[Cast]`, `#[CurrentUser]`, and the PSR-7 attribute family
- * (`#[Header]`, `#[QueryParam]`, `Map*`, ...).
- *
- * The provider also installs a no-op {@see CurrentUserProvider} default so
- * apps that don't wire their own user provider still satisfy the resolver's
- * dependency.
- */
+/** Optional parameter resolvers and attribute handlers. */
 final class ConfigProvider extends \Componenta\Config\ConfigProvider
 {
     protected function getFactories(): array
     {
         return [
-            CurrentUserProviderInterface::class => static fn (): CurrentUserProviderInterface
-                => new CurrentUserProvider(),
+            CurrentUserProviderInterface::class
+                => static fn(): CurrentUserProviderInterface => new CurrentUserProvider(),
+            RequestResolver::class => RequestResolverFactory::class,
         ];
     }
 
     protected function getParameterResolvers(): array
     {
         return [
-            ContainerBuilder::PRIORITY_PARAM_CASTABLE     => CastableResolver::class,
+            ContainerBuilder::PRIORITY_PARAM_CASTABLE => CastableResolver::class,
             ContainerBuilder::PRIORITY_PARAM_CURRENT_USER => CurrentUserResolver::class,
-            ContainerBuilder::PRIORITY_PARAM_REQUEST      => RequestResolver::class,
+            ContainerBuilder::PRIORITY_PARAM_REQUEST => RequestResolver::class,
         ];
     }
 
-    protected function getPropertyResolvers(): array
+    protected function getDependencies(): array
     {
-        return [
-            ContainerBuilder::PRIORITY_PROP_CASTABLE     => CastableResolver::class,
-            ContainerBuilder::PRIORITY_PROP_CURRENT_USER => CurrentUserResolver::class,
+        $dependencies = parent::getDependencies();
+
+        $dependencies[ConfigKey::ATTRIBUTE_HANDLERS] = [
+            CastableResolver::class,
+            CurrentUserResolver::class,
         ];
+
+        return array_filter($dependencies);
     }
 }

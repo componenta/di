@@ -10,15 +10,12 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 /**
  * Resolves aliases to their target identifiers.
  *
- * Uses internal cache for resolved alias chains to achieve O(1)
- * lookups after first resolution.
+ * Uses path compression so every alias encountered in a successfully resolved
+ * chain becomes an O(1) lookup until the map changes.
  */
 final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
 {
-    /**
-     * Cache of fully resolved aliases.
-     * @var array<string, string>
-     */
+    /** @var array<string, string> Cache of fully resolved aliases. */
     private array $resolved = [];
 
     /** @var array<string, string> */
@@ -34,7 +31,6 @@ final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
     ) {
         if ($skipValidation) {
             $this->map = $map;
-
             return;
         }
 
@@ -57,28 +53,36 @@ final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
             return $id;
         }
 
-        // Return cached resolution
         if (isset($this->resolved[$id])) {
             return $this->resolved[$id];
         }
 
-        // Resolve chain with cycle guard (defensive: validate() may have been skipped)
-        $current = $this->map[$id];
-        $visited = [$id => true, $current => true];
+        $current = $id;
+        $path = [];
+        $visited = [];
 
         while (isset($this->map[$current])) {
+            $path[] = $current;
+            $visited[$current] = true;
             $next = $this->map[$current];
 
             if (isset($visited[$next])) {
-                $path = [...array_keys($visited), $next];
-                throw CircularDependencyException::forAlias($path);
+                throw CircularDependencyException::forAlias([...$path, $next]);
             }
 
-            $visited[$next] = true;
+            if (isset($this->resolved[$next])) {
+                $current = $this->resolved[$next];
+                break;
+            }
+
             $current = $next;
         }
 
-        return $this->resolved[$id] = $current;
+        foreach ($path as $alias) {
+            $this->resolved[$alias] = $current;
+        }
+
+        return $current;
     }
 
     public function set(string $alias, string $target): static
@@ -89,8 +93,6 @@ final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
 
         $this->assertNoCycle($alias, $target);
         $this->map[$alias] = $target;
-
-        // Clear cache - alias chain changed
         $this->resolved = [];
 
         return $this;
@@ -104,8 +106,6 @@ final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
     public function unset(string $alias): static
     {
         unset($this->map[$alias]);
-
-        // Clear cache - alias chain changed
         $this->resolved = [];
 
         return $this;
@@ -118,24 +118,25 @@ final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
 
     /**
      * Ensures that inserting `$alias -> $target` into the current map does not
-     * create a cycle. O(length of the chain starting at $target); for a
-     * cycle-free input map this is bounded by the tree depth, not N.
+     * create a cycle.
      *
      * @throws CircularDependencyException If a cycle would be created.
      */
     private function assertNoCycle(string $alias, string $target): void
     {
-        $path    = [$alias, $target];
+        $path = [$alias, $target];
+        $visited = [$alias => true, $target => true];
         $current = $target;
 
         while (isset($this->map[$current])) {
-            $next   = $this->map[$current];
+            $next = $this->map[$current];
             $path[] = $next;
 
-            if ($next === $alias) {
+            if (isset($visited[$next])) {
                 throw CircularDependencyException::forAlias($path);
             }
 
+            $visited[$next] = true;
             $current = $next;
         }
     }

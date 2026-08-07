@@ -4,82 +4,148 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Target;
 
-use Componenta\DI\Resolver\InjectionTargetInterface;
-use Componenta\Reflection\Reflection;
+use ReflectionAttribute;
+use Componenta\DI\Resolver\TypeHints;
+use ReflectionClass;
 use ReflectionParameter;
-use ReflectionProperty;
 use ReflectionType;
 
-/**
- * {@see InjectionTargetInterface} adapter over a {@see ReflectionParameter}.
- *
- * Forwards lookup methods to the underlying reflector and delegates attribute
- * access through the cached {@see Reflection} helpers.
- */
-final readonly class ParameterTarget implements InjectionTargetInterface
+/** Immutable, precomputed view of one reflected parameter. */
+final class ParameterTarget
 {
+    /** @var list<ReflectionAttribute<object>> */
+    private readonly array $attributeReflectors;
+
+    /** @var array<class-string, list<ReflectionAttribute<object>>> */
+    private readonly array $attributesByClass;
+
+    /** @var list<class-string> */
+    public readonly array $attributeClasses;
+
+    /** @var list<class-string> */
+    public readonly array $typeNames;
+
+    /** One concrete named class/interface type, when the declaration has one. */
+    public readonly ?string $className;
+
+    private readonly ?ReflectionClass $declaringClass;
+
+    public readonly string $name;
+
+    public readonly int $position;
+
+    public readonly ?ReflectionType $type;
+
+    public readonly bool $allowsNull;
+
+    public readonly bool $hasDefault;
+
+    /**
+     * Reflection defaults are read on demand. This matters for `new Foo()`
+     * defaults: PHP creates a fresh object for every invocation, while caching
+     * getDefaultValue() in the target would incorrectly share one instance.
+     */
+    public mixed $default {
+        get => $this->hasDefault ? $this->reflection->getDefaultValue() : null;
+    }
+
+    public readonly bool $variadic;
+
+    public readonly bool $byReference;
+
+    public readonly string $declaringContext;
+
     public function __construct(
-        private ReflectionParameter $parameter,
-    ) {}
+        public readonly ReflectionParameter $reflection,
+    ) {
+        $this->name = $reflection->getName();
+        $this->position = $reflection->getPosition();
+        $this->type = $reflection->getType();
+        $this->declaringClass = $reflection->getDeclaringClass();
+        $this->typeNames = TypeHints::classNames($this->type, $this->declaringClass);
+        $this->className = TypeHints::classOf($this->type, $this->declaringClass);
+        $this->allowsNull = $reflection->allowsNull();
+        $this->hasDefault = $reflection->isDefaultValueAvailable();
+        $this->variadic = $reflection->isVariadic();
+        $this->byReference = $reflection->isPassedByReference();
+        $this->declaringContext = self::declaringContext($reflection);
 
-    public function getName(): string
-    {
-        return $this->parameter->getName();
+        $allAttributes = [];
+        $attributes = [];
+        $classes = [];
+
+        foreach ($reflection->getAttributes() as $attribute) {
+            /** @var class-string $class */
+            $class = $attribute->getName();
+            $allAttributes[] = $attribute;
+            $attributes[$class][] = $attribute;
+            $classes[$class] = true;
+        }
+
+        $this->attributeReflectors = $allAttributes;
+        $this->attributesByClass = $attributes;
+        $this->attributeClasses = array_keys($classes);
     }
 
-    public function getType(): ?ReflectionType
+    public function hasAttribute(string $attributeClass): bool
     {
-        return $this->parameter->getType();
+        if (isset($this->attributesByClass[$attributeClass])) {
+            return true;
+        }
+
+        foreach ($this->attributeClasses as $class) {
+            if (is_a($class, $attributeClass, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    public function allowsNull(): bool
+    /**
+     * @template T of object
+     * @param class-string<T> $attributeClass
+     * @return T|null
+     */
+    public function firstAttribute(string $attributeClass): ?object
     {
-        return $this->parameter->allowsNull();
+        return ($this->attributeReflectors($attributeClass)[0] ?? null)?->newInstance();
     }
 
-    public function isDefaultValueAvailable(): bool
+    /** @return list<ReflectionAttribute<object>> */
+    private function attributeReflectors(string $attributeClass): array
     {
-        return $this->parameter->isDefaultValueAvailable();
+        $attributes = [];
+
+        // Preserve native declaration order across exact and inherited
+        // matches. Grouping by concrete class first would incorrectly prefer
+        // an exact base attribute declared later over an earlier subclass.
+        foreach ($this->attributeReflectors as $attribute) {
+            if (is_a($attribute->getName(), $attributeClass, true)) {
+                $attributes[] = $attribute;
+            }
+        }
+
+        return $attributes;
     }
 
-    public function getDefaultValue(): mixed
+    /** Whether a value satisfies this parameter's declared lexical type. */
+    public function accepts(mixed $value): bool
     {
-        return $this->parameter->getDefaultValue();
+        return TypeHints::matches($this->type, $value, $this->declaringClass);
     }
 
-    public function getPosition(): ?int
+    private static function declaringContext(ReflectionParameter $parameter): string
     {
-        return $this->parameter->getPosition();
-    }
-
-    public function getDeclaringContext(): string
-    {
-        $function = $this->parameter->getDeclaringFunction();
-        $class    = $this->parameter->getDeclaringClass();
+        $function = $parameter->getDeclaringFunction();
+        $class = $parameter->getDeclaringClass();
 
         if ($class !== null) {
             return sprintf('%s::%s()', $class->getName(), $function->getName());
         }
 
-        if ($function->isClosure()) {
-            return 'Closure';
-        }
-
-        return sprintf('%s()', $function->getName());
-    }
-
-    public function getFirstAttribute(string $attributeClass): ?object
-    {
-        return Reflection::getFirstMetadata($this->parameter, $attributeClass);
-    }
-
-    public function getAttributes(?string $attributeClass = null): ?array
-    {
-        return Reflection::getMetadata($this->parameter, $attributeClass);
-    }
-
-    public function getReflector(): ReflectionParameter|ReflectionProperty
-    {
-        return $this->parameter;
+        return $function->isClosure()
+            ? 'Closure'
+            : sprintf('%s()', $function->getName());
     }
 }

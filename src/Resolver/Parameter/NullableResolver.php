@@ -4,72 +4,22 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Compile\AttributeMatcherInterface;
-use Componenta\DI\Compile\CompilesPlanPayloadInterface;
-use Componenta\DI\Compile\ParameterPlanResolverInterface;
-use ReflectionParameter;
-use ReflectionProperty;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/**
- * Resolves nullable parameters to null as a last resort.
- *
- * Last resolver in the default chain. Returns null for parameters
- * that allow null values, preventing resolution failure.
- *
- * @example
- * ```php
- * function process(?string $name, ?LoggerInterface $logger) {}
- * // Both resolve to null if nothing else matched
- * ```
- */
-final class NullableResolver implements
-    ParameterResolverInterface,
-    AttributeMatcherInterface,
-    CompilesPlanPayloadInterface,
-    ParameterPlanResolverInterface
+/** Resolves nullable parameters to null as the final fallback. */
+final class NullableResolver implements ParameterResolverInterface
 {
-    public const string KIND = 'componenta.di.nullable';
-
-    public function planKind(): string
+    public function supports(ParameterTarget $target): bool
     {
-        return self::KIND;
-    }
-
-    public function claimTarget(ReflectionParameter|ReflectionProperty $target): ?string
-    {
-        if (!$target instanceof ReflectionParameter) {
-            return null;
-        }
-        return $target->allowsNull() ? self::KIND : null;
-    }
-
-    public function compilePayload(ReflectionParameter|ReflectionProperty $target): mixed
-    {
-        return $target instanceof ReflectionParameter && $target->allowsNull();
+        return $target->allowsNull;
     }
 
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        if ($parameter->allowsNull()) {
-            return [$parameter->getPosition(), null];
-        }
-
-        return null;
-    }
-
-    public function resolveParameterPlan(
-        ReflectionParameter $parameter,
-        mixed $payload,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
-    ): ?array {
-        if ($payload !== true) {
-            return $this->resolveParameter($parameter, $providedParameters, $resolvedParameters);
-        }
-
-        return [$parameter->getPosition(), null];
+        return $target->allowsNull
+            ? [$target->position, null]
+            : null;
     }
 }
