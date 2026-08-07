@@ -6,13 +6,7 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 
 if (!function_exists('minimalBuilder')) {
-    /**
-     * Builder with no extra services - the bare default chain (Array,
-     * ArrayTyped, Make, Env, EntryId, Config, Autowire, DefaultValue,
-     * Nullable for parameters; Array, Init, Make, Env, EntryId, Inject,
-     * Config for properties) does not require Caster / Validation /
-     * CurrentUser providers anymore.
-     */
+    /** Builder with the default parameter-resolver and attribute-handler pipelines. */
     function minimalBuilder(): ContainerBuilder
     {
         return new ContainerBuilder();

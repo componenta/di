@@ -8,8 +8,8 @@ namespace Componenta\DI\Attribute;
  * Marks a property for injection from DI container by its type.
  *
  * The property type is used as the service ID to resolve from container.
- * For parameters, type-based resolution happens automatically via ContainerResolver,
- * so this attribute is primarily useful for property injection.
+ * Constructor and callable parameters are autowired by type automatically, so
+ * this attribute is only needed on properties.
  *
  * @example Property injection by type
  * ```php

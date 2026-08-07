@@ -13,10 +13,9 @@ use Throwable;
  * Raised when the container cannot produce a value for a service, a parameter,
  * or a property.
  *
- * Consolidates what used to be separated between `UnresolvableException` and
- * `FactoryException`: every "failed to build X" path - autowire miss, factory
- * throw, constructor parameter gap, property injection gap, missing class -
- * surfaces as a single type with named constructors discriminating the cause.
+ * Every "failed to build X" path - autowire miss, factory throw, constructor
+ * parameter gap, attributed-property injection gap, or missing class - surfaces
+ * as a single type with named constructors discriminating the cause.
  *
  * Build instances through the {@see ::forParameter()}, {@see ::forProperty()},
  * {@see ::forService()}, {@see ::forMissingService()} and {@see ::forNonObject()}

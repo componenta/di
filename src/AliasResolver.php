@@ -6,14 +6,18 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use IteratorAggregate;
+use Traversable;
 
 /**
  * Resolves aliases to their target identifiers.
  *
  * Uses path compression so every alias encountered in a successfully resolved
  * chain becomes an O(1) lookup until the map changes.
+ *
+ * @implements IteratorAggregate<string, string>
  */
-final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
+final class AliasResolver implements AliasResolverInterface, IteratorAggregate
 {
     /** @var array<string, string> Cache of fully resolved aliases. */
     private array $resolved = [];
@@ -111,7 +115,7 @@ final class AliasResolver implements AliasResolverInterface, \IteratorAggregate
         return $this;
     }
 
-    public function getIterator(): \Traversable
+    public function getIterator(): Traversable
     {
         yield from $this->map;
     }

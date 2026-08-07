@@ -18,8 +18,8 @@ use Attribute;
  * ## Compatibility
  *
  * - **Autowired services** (resolved by reflection): fully supported.
- *   The constructor is invoked on the lazy instance using arguments
- *   resolved from the DI plan.
+ *   The constructor is invoked on the lazy instance using arguments resolved
+ *   by the configured parameter-resolver pipeline.
  * - **Factory-bound services** (resolved by an application factory):
  *   not supported. Ghost mode requires constructor visibility, which
  *   opaque factories do not provide. Use {@see Proxy} instead, or
