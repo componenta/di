@@ -315,6 +315,25 @@ describe('ContainerBuilder', function () {
             ->toBe([BuilderGeneratedEntry::class]);
     });
 
+    it('omits empty and default dependency sections from normalized cache data', function () {
+        $normalized = ContainerBuilder::normalizeDependencies([]);
+
+        expect(array_keys($normalized))->toBe([ConfigKey::ALIASES]);
+
+        $configured = ContainerBuilder::normalizeDependencies([
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE => true,
+            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE => true,
+            ConfigKey::GENERATED_ENTRY_RESOLVER_FILE => 'container.resolver.php',
+            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT => 'release',
+        ]);
+
+        expect($configured)
+            ->toHaveKey(ConfigKey::PARAMETER_RESOLVERS_REPLACE, true)
+            ->toHaveKey(ConfigKey::ATTRIBUTE_HANDLERS_REPLACE, true)
+            ->toHaveKey(ConfigKey::GENERATED_ENTRY_RESOLVER_FILE, 'container.resolver.php')
+            ->toHaveKey(ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT, 'release');
+    });
+
     it('uses singular validation for every bulk registration API', function () {
         expect(fn() => (new ContainerBuilder())->addFactories([0 => static fn() => null]))
             ->toThrow(InvalidConfigurationException::class)

@@ -278,7 +278,12 @@ class ContainerBuilder
                 ] ?? null,
         ];
 
-        return $normalized;
+        return array_filter(
+            $normalized,
+            static fn (mixed $value): bool => $value !== []
+                && $value !== false
+                && $value !== null,
+        );
     }
 
     public function build(): Container
