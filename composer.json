@@ -29,7 +29,7 @@
         "php": "^8.4",
         "componenta/array": "^1.0",
         "componenta/caster": "^1.0",
-        "componenta/config": "^1.0",
+        "componenta/config": "^2.0",
         "componenta/priority-list": "^1.0",
         "componenta/reflection": "^1.0",
         "componenta/validation": "^1.0",

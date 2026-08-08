@@ -21,33 +21,23 @@ final class ConfigKey
     public const string PARAMETER_RESOLVERS_REPLACE = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS_REPLACE;
 
     /** Custom runtime attribute handlers in registration order. */
-    public const string ATTRIBUTE_HANDLERS = 'attribute_handlers';
+    public const string ATTRIBUTE_HANDLERS = \Componenta\Config\ConfigKey::ATTRIBUTE_HANDLERS;
 
     /** Replace all built-in lifecycle/property handlers. */
-    public const string ATTRIBUTE_HANDLERS_REPLACE = 'attribute_handlers_replace';
+    public const string ATTRIBUTE_HANDLERS_REPLACE
+        = \Componenta\Config\ConfigKey::ATTRIBUTE_HANDLERS_REPLACE;
 
     /** Generated EntryResolver PHP file loaded before ReflectionResolver. */
-    public const string GENERATED_ENTRY_RESOLVER_FILE = 'generated_entry_resolver_file';
+    public const string GENERATED_ENTRY_RESOLVER_FILE
+        = \Componenta\Config\ConfigKey::GENERATED_ENTRY_RESOLVER_FILE;
 
     /** Release/deploy identifier that replaces per-build source hashing. */
     public const string GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-        = 'generated_entry_resolver_release_fingerprint';
+        = \Componenta\Config\ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT;
 
     /** @return list<string> */
     public static function dependencyKeys(): array
     {
-        return [
-            self::FACTORIES,
-            self::INVOKABLES,
-            self::ALIASES,
-            self::DELEGATORS,
-            self::SERVICES,
-            self::PARAMETER_RESOLVERS,
-            self::PARAMETER_RESOLVERS_REPLACE,
-            self::ATTRIBUTE_HANDLERS,
-            self::ATTRIBUTE_HANDLERS_REPLACE,
-            self::GENERATED_ENTRY_RESOLVER_FILE,
-            self::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT,
-        ];
+        return \Componenta\Config\ConfigKey::dependencyKeys();
     }
 }

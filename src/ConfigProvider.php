@@ -32,15 +32,11 @@ final class ConfigProvider extends \Componenta\Config\ConfigProvider
         ];
     }
 
-    protected function getDependencies(): array
+    protected function getAttributeHandlers(): array
     {
-        $dependencies = parent::getDependencies();
-
-        $dependencies[ConfigKey::ATTRIBUTE_HANDLERS] = [
+        return [
             CastableResolver::class,
             CurrentUserResolver::class,
         ];
-
-        return array_filter($dependencies);
     }
 }
