@@ -69,7 +69,7 @@ final class GeneratedEntryResolverWriter
 
         $pipes = [];
         $process = @proc_open(
-            [PHP_BINARY, '-n', '-l', $file],
+            [PHP_BINARY, '-n', '-d', 'memory_limit=-1', '-l', $file],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
