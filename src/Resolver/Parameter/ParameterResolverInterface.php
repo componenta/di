@@ -5,33 +5,27 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
-use ReflectionParameter;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/**
- * Resolves values for function/method parameters.
- *
- * The method is named `resolveParameter` (rather than a plain `resolve`) so
- * that a single class can simultaneously implement this interface and
- * {@see \Componenta\DI\Resolver\Property\PropertyResolverInterface::resolveProperty()},
- * which is how merged resolvers cover both parameters and properties without
- * duplication.
- */
+/** Resolves one callable parameter from an immutable target and call context. */
 interface ParameterResolverInterface
 {
     /**
-     * Attempts to resolve a parameter value.
+     * Whether the resolver can potentially handle this target.
      *
-     * @param ReflectionParameter      $parameter          The parameter to resolve.
-     * @param array<string|int, mixed> $providedParameters User-provided parameters.
-     * @param array<int, mixed>        $resolvedParameters Already resolved parameters.
-     *
-     * @return array{0: int, 1: mixed}|null Returns [position, value] or null if cannot resolve.
-     *
-     * @throws ResolutionException If resolution fails hard.
+     * This is immutable metadata classification: implementations must be pure
+     * and stable for the lifetime of the resolver. Returning true does not
+     * guarantee a value in a particular call; resolveParameter() may still
+     * return null based on the call context.
+     */
+    public function supports(ParameterTarget $target): bool;
+
+    /**
+     * @return array{0: int, 1: mixed}|null
+     * @throws ResolutionException
      */
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array;
 }

@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-use IteratorAggregate;
 use Psr\Container\ContainerInterface;
-use Traversable;
 
 /**
  * Holds the ordered list of PSR-11 containers the main {@see Container} will
@@ -16,10 +14,8 @@ use Traversable;
  * no effect - and preserves insertion order, which is also the lookup order.
  *
  * @internal
- *
- * @implements IteratorAggregate<int, ContainerInterface>
  */
-final class ExternalContainerRegistry implements IteratorAggregate
+final class ExternalContainerRegistry
 {
     /** @var array<int, ContainerInterface> Indexed by spl_object_id for dedup. */
     private array $containers = [];
@@ -35,22 +31,12 @@ final class ExternalContainerRegistry implements IteratorAggregate
      */
     public function findOwning(string $id): ?ContainerInterface
     {
-        return array_find($this->containers, static fn($container) => $container->has($id));
+        foreach ($this->containers as $container) {
+            if ($container->has($id)) {
+                return $container;
+            }
+        }
 
-    }
-
-    public function has(string $id): bool
-    {
-        return $this->findOwning($id) !== null;
-    }
-
-    /**
-     * Iterates over registered containers in insertion order.
-     *
-     * @return Traversable<int, ContainerInterface>
-     */
-    public function getIterator(): Traversable
-    {
-        yield from array_values($this->containers);
+        return null;
     }
 }

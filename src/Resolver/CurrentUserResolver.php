@@ -5,179 +5,198 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver;
 
 use Componenta\DI\Attribute\CurrentUser;
-use Componenta\DI\Compile\AttributeMatcherInterface;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Property\PropertyResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\DI\Resolver\Target\PropertyTarget;
+use LogicException;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
-use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionProperty;
+use Reflector;
+use Throwable;
+use UnexpectedValueException;
 
-/**
- * Injects the authenticated user (via {@see CurrentUserProviderInterface})
- * into parameters or properties marked with {@see CurrentUser}.
- *
- * Respects nullable declarations (returns `null` when no user is available
- * and the target permits null) and enforces both the attribute's type
- * constraint and the target's declared type.
- *
- * The provider is fetched from the container on every resolution instead of
- * cached on the resolver: the container's {@see \Componenta\DI\EntryCache} already
- * memoises singletons, so we save nothing by caching here, and an immutable
- * resolver keeps authentication lookups honest if the provider binding is
- * ever swapped at runtime.
- *
- * @example Parameter
- * ```php
- * public function updateProfile(
- *     #[CurrentUser] User $user,
- *     ProfileDTO $data,
- * ): void {}
- * ```
- *
- * @example Optional parameter
- * ```php
- * public function view(#[CurrentUser] ?User $user): Response { ... }
- * ```
- *
- * @example Property
- * ```php
- * class AdminController {
- *     #[CurrentUser(Admin::class)]
- *     private Admin $admin;
- * }
- * ```
- */
-final readonly class CurrentUserResolver implements
+/** Injects the authenticated user into #[CurrentUser] targets. */
+final class CurrentUserResolver implements
     ParameterResolverInterface,
-    PropertyResolverInterface,
-    AttributeDrivenResolverInterface,
-    AttributeMatcherInterface
+    AttributeHandlerInterface
 {
-    public const string KIND = 'componenta.di.current_user';
-
-    public function __construct(
-        private ContainerInterface $container,
-    ) {}
-
-    public function planKind(): string
-    {
-        return self::KIND;
+    public AttributePhase $phase {
+        get => AttributePhase::AfterInstantiation;
     }
 
-    public function claimTarget(ReflectionParameter|ReflectionProperty $target): ?string
+    public int $priority {
+        get => 700;
+    }
+
+    public function __construct(
+        private readonly ContainerInterface $container,
+    ) {}
+
+    public function supports(ParameterTarget $target): bool
     {
-        return $target->getAttributes(CurrentUser::class) !== [] ? self::KIND : null;
+        return $target->hasAttribute(CurrentUser::class);
+    }
+
+    public function supportsAttribute(string $attributeClass, Reflector $target): bool
+    {
+        return $target instanceof ReflectionProperty
+            && is_a($attributeClass, CurrentUser::class, true);
+    }
+
+    public function handle(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+    ): void {
+        if (!$attribute instanceof CurrentUser || !$target instanceof ReflectionProperty) {
+            throw new LogicException('CurrentUserResolver received an unsupported attribute target.');
+        }
+
+        if (!$context->claimProperty($target)) {
+            return;
+        }
+
+        $value = $this->resolveUser(
+            target: $target,
+            attributeType: $attribute->type,
+            allowsNull: $target->getType()?->allowsNull() ?? true,
+            declaredType: TypeHints::classOf($target->getType(), $target->getDeclaringClass()),
+        );
+
+        $context->writeProperty($target, $value);
     }
 
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        $target    = new ParameterTarget($parameter);
-        $attribute = $target->getFirstAttribute(CurrentUser::class);
-
+        $attribute = $target->firstAttribute(CurrentUser::class);
         if ($attribute === null) {
             return null;
         }
 
-        $user = $this->provider()->getUser();
+        return [
+            $target->position,
+            $this->resolveUser(
+                target: $target->reflection,
+                attributeType: $attribute->type,
+                allowsNull: $target->allowsNull,
+                declaredType: $target->className,
+                providedParameters: $context->provided,
+                resolvedParameters: $context->resolved,
+            ),
+        ];
+    }
 
-        if ($user === null) {
-            if ($target->allowsNull()) {
-                return [$parameter->getPosition(), null];
+    /**
+     * @param array<string|int, mixed> $providedParameters
+     * @param array<int, mixed>        $resolvedParameters
+     */
+    private function resolveUser(
+        ReflectionParameter|ReflectionProperty $target,
+        ?string $attributeType,
+        bool $allowsNull,
+        ?string $declaredType,
+        array $providedParameters = [],
+        array $resolvedParameters = [],
+    ): ?object {
+        try {
+            $provider = $this->container->get(CurrentUserProviderInterface::class);
+            if (!$provider instanceof CurrentUserProviderInterface) {
+                throw new UnexpectedValueException(sprintf(
+                    'Container entry "%s" must implement %s; got %s.',
+                    CurrentUserProviderInterface::class,
+                    CurrentUserProviderInterface::class,
+                    get_debug_type($provider),
+                ));
             }
 
+            $user = $provider->getUser();
+        } catch (ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            if ($target instanceof ReflectionParameter) {
+                throw ResolutionException::forParameter(
+                    $target,
+                    previous: $e,
+                    providedParameters: $providedParameters,
+                    resolvedParameters: $resolvedParameters,
+                );
+            }
+
+            throw ResolutionException::forProperty($target, previous: $e);
+        }
+
+        if ($user === null) {
+            if ($allowsNull) {
+                return null;
+            }
+
+            $reason = 'current user is required but not authenticated';
+
+            if ($target instanceof ReflectionParameter) {
+                throw ResolutionException::forParameter(
+                    $target,
+                    reason: $reason,
+                    providedParameters: $providedParameters,
+                    resolvedParameters: $resolvedParameters,
+                );
+            }
+
+            throw ResolutionException::forProperty($target, reason: $reason);
+        }
+
+        if ($attributeType !== null && !$user instanceof $attributeType) {
+            $this->throwTypeMismatch(
+                $target,
+                $attributeType,
+                $user::class,
+                $providedParameters,
+                $resolvedParameters,
+            );
+        }
+
+        if ($declaredType !== null && !$user instanceof $declaredType) {
+            $this->throwTypeMismatch(
+                $target,
+                $declaredType,
+                $user::class,
+                $providedParameters,
+                $resolvedParameters,
+            );
+        }
+
+        return $user;
+    }
+
+    /**
+     * @param array<string|int, mixed> $providedParameters
+     * @param array<int, mixed>        $resolvedParameters
+     */
+    private function throwTypeMismatch(
+        ReflectionParameter|ReflectionProperty $target,
+        string $expected,
+        string $actual,
+        array $providedParameters = [],
+        array $resolvedParameters = [],
+    ): never {
+        $reason = sprintf('current user must be instance of "%s", got "%s"', $expected, $actual);
+
+        if ($target instanceof ReflectionParameter) {
             throw ResolutionException::forParameter(
-                $parameter,
-                reason: 'current user is required but not authenticated',
+                $target,
+                reason: $reason,
                 providedParameters: $providedParameters,
                 resolvedParameters: $resolvedParameters,
             );
         }
 
-        $this->assertUserType($user, $attribute, $target);
-
-        return [$parameter->getPosition(), $user];
-    }
-
-    public function resolveProperty(ReflectionProperty $property, array $context = []): ?array
-    {
-        $target    = new PropertyTarget($property);
-        $attribute = $target->getFirstAttribute(CurrentUser::class);
-
-        if ($attribute === null) {
-            return null;
-        }
-
-        $user = $this->provider()->getUser();
-
-        if ($user === null) {
-            if ($target->allowsNull()) {
-                return [$property, null];
-            }
-
-            throw ResolutionException::forProperty(
-                $property,
-                reason: 'current user is required but not authenticated',
-            );
-        }
-
-        $this->assertUserType($user, $attribute, $target);
-
-        return [$property, $user];
-    }
-
-    private function provider(): CurrentUserProviderInterface
-    {
-        return $this->container->get(CurrentUserProviderInterface::class);
-    }
-
-    /**
-     * Validates the resolved user against both the attribute constraint and
-     * the target's declared type.
-     *
-     * @throws ResolutionException If either check fails.
-     */
-    private function assertUserType(
-        object $user,
-        CurrentUser $attribute,
-        InjectionTargetInterface $target,
-    ): void {
-        if ($attribute->type !== null && !$user instanceof $attribute->type) {
-            $this->throwTypeMismatch($target, $attribute->type, $user::class);
-        }
-
-        $type = $target->getType();
-        if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-            return;
-        }
-
-        $typeName = $type->getName();
-        if ($typeName !== 'object' && !$user instanceof $typeName) {
-            $this->throwTypeMismatch($target, $typeName, $user::class);
-        }
-    }
-
-    /**
-     * @throws ResolutionException
-     */
-    private function throwTypeMismatch(
-        InjectionTargetInterface $target,
-        string $expected,
-        string $actual,
-    ): void {
-        $reason    = sprintf('current user must be instance of "%s", got "%s"', $expected, $actual);
-        $reflector = $target->getReflector();
-
-        if ($reflector instanceof ReflectionParameter) {
-            throw ResolutionException::forParameter($reflector, reason: $reason);
-        }
-
-        throw ResolutionException::forProperty($reflector, reason: $reason);
+        throw ResolutionException::forProperty($target, reason: $reason);
     }
 }

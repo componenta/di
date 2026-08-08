@@ -2,82 +2,57 @@
 
 declare(strict_types=1);
 
+namespace Componenta\DI\Tests;
+
 use Componenta\DI\ExternalContainerRegistry;
 use Psr\Container\ContainerInterface;
 
-function fakeContainer(array $owned): ContainerInterface
+final class ExternalContainerForRegistryTest implements ContainerInterface
 {
-    return new class ($owned) implements ContainerInterface {
-        public function __construct(private array $owned) {}
+    public int $hasCalls = 0;
 
-        public function get(string $id): mixed
-        {
-            return $this->owned[$id] ?? throw new RuntimeException("no $id");
-        }
+    /** @param array<string, mixed> $entries */
+    public function __construct(private array $entries) {}
 
-        public function has(string $id): bool
-        {
-            return array_key_exists($id, $this->owned);
-        }
-    };
+    public function get(string $id): mixed
+    {
+        return $this->entries[$id];
+    }
+
+    public function has(string $id): bool
+    {
+        ++$this->hasCalls;
+
+        return array_key_exists($id, $this->entries);
+    }
 }
 
 describe('ExternalContainerRegistry', function () {
-    it('reports no owner when empty', function () {
+    it('returns the first owning container in stable registration order', function () {
         $registry = new ExternalContainerRegistry();
-
-        expect($registry->findOwning('anything'))->toBeNull()
-            ->and($registry->has('anything'))->toBeFalse();
-    });
-
-    it('finds the container that owns the id', function () {
-        $registry = new ExternalContainerRegistry();
-        $a = fakeContainer(['alpha' => 1]);
-        $b = fakeContainer(['beta' => 2]);
-        $registry->register($a);
-        $registry->register($b);
-
-        expect($registry->findOwning('beta'))->toBe($b)
-            ->and($registry->has('beta'))->toBeTrue();
-    });
-
-    it('returns the first registered container when several report ownership', function () {
-        $registry = new ExternalContainerRegistry();
-        $first = fakeContainer(['shared' => 1]);
-        $second = fakeContainer(['shared' => 2]);
+        $first = new ExternalContainerForRegistryTest(['shared' => 'first']);
+        $second = new ExternalContainerForRegistryTest(['shared' => 'second']);
         $registry->register($first);
         $registry->register($second);
 
-        expect($registry->findOwning('shared'))->toBe($first);
+        expect($registry->findOwning('shared'))->toBe($first)
+            ->and($registry->findOwning('missing'))->toBeNull();
     });
 
-    it('deduplicates the same container instance on repeated registration', function () {
+    it('deduplicates repeated registration of the same instance', function () {
         $registry = new ExternalContainerRegistry();
-        $container = fakeContainer([]);
-
+        $container = new ExternalContainerForRegistryTest(['id' => 1]);
         $registry->register($container);
         $registry->register($container);
 
-        expect(iterator_to_array($registry, preserve_keys: false))->toBe([$container]);
+        expect($registry->findOwning('missing'))->toBeNull()
+            ->and($container->hasCalls)->toBe(1);
     });
 
-    it('preserves insertion order on iteration', function () {
-        $registry = new ExternalContainerRegistry();
-        $a = fakeContainer([]);
-        $b = fakeContainer([]);
-        $c = fakeContainer([]);
-        $registry->register($a);
-        $registry->register($b);
-        $registry->register($c);
-
-        expect(iterator_to_array($registry, preserve_keys: false))->toBe([$a, $b, $c]);
-    });
-
-    it('returns null from findOwning when no registered container owns the id', function () {
-        $registry = new ExternalContainerRegistry();
-        $registry->register(fakeContainer(['alpha' => 1]));
-
-        expect($registry->findOwning('unknown'))->toBeNull()
-            ->and($registry->has('unknown'))->toBeFalse();
+    it('does not expose redundant lookup or iteration APIs', function () {
+        expect(method_exists(ExternalContainerRegistry::class, 'has'))->toBeFalse()
+            ->and(method_exists(ExternalContainerRegistry::class, 'getIterator'))->toBeFalse()
+            ->and(is_a(ExternalContainerRegistry::class, \IteratorAggregate::class, true))
+            ->toBeFalse();
     });
 });

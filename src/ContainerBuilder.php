@@ -4,22 +4,32 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Closure;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
-use Componenta\DI\Compile\AttributeMatcherInterface;
-use Componenta\DI\Compile\FilePlanProvider;
-use Componenta\DI\Compile\PlanCompiler;
-use Componenta\DI\Compile\PlanDispatcher;
+use Componenta\DI\Compile\Entry\GeneratedEntryResolverGenerator;
+use Componenta\DI\Compile\Entry\GeneratedEntryResolverLoader;
+use Componenta\DI\Compile\Entry\GeneratedEntryResolverWriter;
+use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
+use Componenta\DI\Compile\Parameter\DefaultParameterResolverCodeGenerators;
+use Componenta\DI\Compile\Parameter\ParameterCodeGenerator;
+use Componenta\DI\Compile\Parameter\ParameterResolverCodeGeneratorRegistry;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\Handler\InitHandler;
+use Componenta\DI\Resolver\Attribute\Handler\InjectHandler;
+use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
+use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
+use Componenta\DI\Resolver\Attribute\Handler\ProxyHandler;
 use Componenta\DI\Resolver\ConfigAttributeResolver;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
-use Componenta\DI\Resolver\MakeAttributeResolver;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
-use Componenta\DI\Resolver\Entry\PropertyInjector;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
 use Componenta\DI\Resolver\Entry\SetUp\ConfigUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
@@ -28,116 +38,49 @@ use Componenta\DI\Resolver\Entry\SetUp\EnvUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUpRunner;
 use Componenta\DI\Resolver\EntryIdResolver;
 use Componenta\DI\Resolver\EnvResolver;
+use Componenta\DI\Resolver\MakeAttributeResolver;
 use Componenta\DI\Resolver\Parameter\ArrayResolver as ParameterArrayResolver;
 use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
 use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
 use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Property\ArrayResolver as PropertyArrayResolver;
-use Componenta\DI\Resolver\Property\InitResolver;
-use Componenta\DI\Resolver\Property\InjectResolver;
-use Componenta\DI\Resolver\Property\PropertiesResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Property\PropertyResolverInterface;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\Reflection\Reflection;
-use Closure;
 use Psr\Container\ContainerInterface;
 
-/**
- * Builds Container instances with configurable resolver chains.
- *
- * @example From Config instance
- * ```php
- * $config = new Config([
- *     ConfigKey::DEPENDENCIES => [
- *         ConfigKey::FACTORIES => [LoggerInterface::class => LoggerFactory::class],
- *         ConfigKey::ALIASES => ['logger' => LoggerInterface::class],
- *     ],
- *     'database' => ['host' => 'localhost'],
- * ]);
- * $container = ContainerBuilder::configure($config)->build();
- * ```
- *
- * @example Fluent API
- * ```php
- * $container = (new ContainerBuilder())
- *     ->addFactory(LoggerInterface::class, fn($c) => new FileLogger())
- *     ->addAlias('logger', LoggerInterface::class)
- *     ->build();
- * ```
- *
- * @example Resolver chain customisation
- * ```php
- * // Add custom resolvers via Config:
- * ConfigKey::DEPENDENCIES => [
- *     ConfigKey::PARAMETER_RESOLVERS => [
- *         500 => MyResolver::class,
- *     ],
- *     ConfigKey::PARAMETER_RESOLVERS_REPLACE => true, // optional: skip defaults
- * ];
- * ```
- */
+/** Builds the runtime container and its resolver/attribute pipelines. */
 class ContainerBuilder
 {
-    // =========================================================================
-    // Default chain priorities
-    //
-    // Higher = earlier (PriorityList sorts DESC by default; equal priorities
-    // preserve insertion order). Constants are spaced by 100 so consumers can
-    // wedge a custom resolver between two defaults via an explicit priority,
-    // e.g. ConfigKey::PARAMETER_RESOLVERS => [self::PRIORITY_PARAM_AUTOWIRE + 50 => $r].
-    // =========================================================================
+    public const int PRIORITY_PARAM_CASTABLE = 1200;
+    public const int PRIORITY_PARAM_ARRAY = 1100;
+    public const int PRIORITY_PARAM_ARRAY_TYPED = 1000;
+    public const int PRIORITY_PARAM_CURRENT_USER = 900;
+    public const int PRIORITY_PARAM_REQUEST = 800;
+    public const int PRIORITY_PARAM_MAKE = 700;
+    public const int PRIORITY_PARAM_ENV = 600;
+    public const int PRIORITY_PARAM_ENTRY_ID = 500;
+    public const int PRIORITY_PARAM_CONFIG = 400;
+    public const int PRIORITY_PARAM_AUTOWIRE = 300;
+    public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
+    public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int PRIORITY_PARAM_CASTABLE         = 1200;
-    public const int PRIORITY_PARAM_ARRAY            = 1100;
-    public const int PRIORITY_PARAM_ARRAY_TYPED      = 1000;
-    public const int PRIORITY_PARAM_CURRENT_USER     = 900;
-    public const int PRIORITY_PARAM_REQUEST          = 800;
-    public const int PRIORITY_PARAM_MAKE             = 700;
-    public const int PRIORITY_PARAM_ENV              = 600;
-    public const int PRIORITY_PARAM_ENTRY_ID         = 500;
-    public const int PRIORITY_PARAM_CONFIG           = 400;
-    public const int PRIORITY_PARAM_AUTOWIRE         = 300;
-    public const int PRIORITY_PARAM_DEFAULT_VALUE    = 200;
-    public const int PRIORITY_PARAM_NULLABLE         = 100;
+    public const int CACHE_VERSION = 5;
 
-    public const int PRIORITY_PROP_CASTABLE          = 900;
-    public const int PRIORITY_PROP_ARRAY             = 800;
-    public const int PRIORITY_PROP_CURRENT_USER      = 700;
-    public const int PRIORITY_PROP_INIT              = 600;
-    public const int PRIORITY_PROP_MAKE              = 500;
-    public const int PRIORITY_PROP_ENV               = 400;
-    public const int PRIORITY_PROP_ENTRY_ID          = 300;
-    public const int PRIORITY_PROP_INJECT            = 200;
-    public const int PRIORITY_PROP_CONFIG            = 100;
-
-    public const int CACHE_VERSION = 1;
-
-    /**
-     * @var array<string, string>
-     */
+    /** @var array<string, string> */
     private const array DEFAULT_ALIASES = [
-        \Componenta\DI\Cache\DiCacheGeneratorInterface::class => \Componenta\DI\Cache\DiCacheGenerator::class,
+        \Componenta\DI\Cache\DiCacheGeneratorInterface::class
+            => \Componenta\DI\Cache\DiCacheGenerator::class,
     ];
 
-    /** @var array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array{0: string, 1: string}|\Componenta\DI\Definition\FactoryDefinition|\Componenta\DI\Definition\ClassDefinition> */
+
+    /** @var array<string, mixed> */
     private(set) array $factories = [];
 
     /** @var list<class-string> */
     private(set) array $invokables = [];
 
-    /** @var list<class-string> */
-    private(set) array $autowires = [];
-
-    /**
-     * Interface -> concrete defaults that every container needs but which
-     * application ConfigProviders rarely override (they may, via
-     * {@see addAlias()}). Listed here so the container is usable
-     * out-of-the-box without boilerplate.
-     *
-     * @var array<string, string>
-     */
+    /** @var array<string, string> */
     private(set) array $aliases = self::DEFAULT_ALIASES;
 
     /** @var array<string, list<callable|string|array>> */
@@ -146,168 +89,115 @@ class ContainerBuilder
     /** @var array<string, mixed> */
     private(set) array $services = [];
 
-    /** @var list<array{0: callable|string, 1: int}> Anonymous parameter resolver additions (no slot). */
+    /** @var list<array{0: mixed, 1: int}> */
     private(set) array $parameterResolvers = [];
 
-    /** @var list<array{0: callable|string, 1: int}> Anonymous property resolver additions (no slot). */
-    private(set) array $propertyResolvers = [];
+    /** @var list<mixed> */
+    private(set) array $attributeHandlers = [];
 
-    /** When true, the default parameter chain is skipped - only user resolvers run. */
     private(set) bool $replaceParameterResolvers = false;
 
-    /** When true, the default property chain is skipped - only user resolvers run. */
-    private(set) bool $replacePropertyResolvers = false;
+    private(set) bool $replaceAttributeHandlers = false;
+
+    private(set) ?string $generatedEntryResolverFile = null;
+
+    private(set) ?string $generatedEntryResolverReleaseFingerprint = null;
 
     private(set) ?Config $config = null;
 
-    /**
-     * Compiled DI plans pre-computed offline by {@see PlanCompiler}.
-     * Empty when the consumer hasn't run `discovery:compile` (or hasn't
-     * supplied a section under `dependencies.di_plans` in config) - in
-     * which case the runtime falls back to the full resolver chain.
-     *
-     * @var array{param?: array, prop?: array}
-     */
-    private(set) array $diPlans = [];
-
-    /**
-     * Sidecar file with compiled DI plans. When present, plans are loaded by
-     * {@see FilePlanProvider} only on first resolver use.
-     */
-    private(set) ?string $diPlansFile = null;
-
-    /**
-     * Precomputed `plan kind -> resolver class` map generated alongside DI
-     * plans. Empty when absent or when the runtime should use the legacy
-     * scan-and-bind dispatcher assembly.
-     *
-     * @var array{param?: array<string, class-string>, prop?: array<string, class-string>}
-     */
-    private(set) array $diPlanDispatcherMap = [];
-
-    /**
-     * Per-container-build cache of stateless resolvers shared by both the
-     * parameter and property chains. The cache is keyed by the container
-     * instance used for the current assembly so compile-time resolver chains
-     * cannot leak into a later runtime container built by the same builder.
-     *
-     * @var array<class-string, ParameterResolverInterface|PropertyResolverInterface>|null
-     */
+    /** @var array<class-string, ParameterResolverInterface&AttributeHandlerInterface>|null */
     private ?array $sharedResolvers = null;
 
-    private ?int $sharedResolversContainerId = null;
-
-    /**
-     * Creates builder from Config instance.
-     *
-     * Extracts 'dependencies' section for container configuration.
-     * Creates new Config without 'dependencies' for application config,
-     * preserving the Environment.
-     *
-     * @param Config $config Configuration with 'dependencies' section.
-     */
     public static function configure(Config $config): static
     {
-        // Extract dependencies section
         $dependencies = $config->has(ConfigKey::DEPENDENCIES)
             ? $config->get(ConfigKey::DEPENDENCIES)
             : [];
 
         if (!is_array($dependencies)) {
-            throw new InvalidConfigurationException('Container dependencies section must be an array.');
+            throw new InvalidConfigurationException(
+                'Container dependencies section must be an array.',
+            );
         }
 
         return static::configureWithDependencies($config, $dependencies);
     }
 
-    /**
-     * Creates builder from a preloaded dependencies section.
-     *
-     * Used by production `container.cache.php`: the full Config still gets
-     * registered as a service, while the container wiring itself can come from
-     * a smaller, purpose-built cache file.
-     *
-     * @param array<string, mixed> $dependencies Normalized or raw dependencies section.
-     */
-    public static function configureWithDependencies(Config $config, array $dependencies): static
-    {
+    /** @param array<string, mixed> $dependencies */
+    public static function configureWithDependencies(
+        Config $config,
+        array $dependencies,
+    ): static {
+        self::assertDependencyShape($dependencies);
+
         $builder = new static();
 
-        // User-provided config always wins over builder defaults ($builder->aliases
-        // is pre-seeded with core aliases; keys from config override them).
-        $builder->factories = array_merge($builder->factories, $dependencies[ConfigKey::FACTORIES] ?? []);
-        $builder->aliases = array_merge($builder->aliases, $dependencies[ConfigKey::ALIASES] ?? []);
-        $builder->services = array_merge($dependencies[ConfigKey::SERVICES] ?? [], [Environment::class => $config->environment]);
-        $builder->autowires = $dependencies[ConfigKey::AUTOWIRES] ?? [];
+        $builder->factories = array_merge(
+            $builder->factories,
+            $dependencies[ConfigKey::FACTORIES] ?? [],
+        );
+        $builder->aliases = array_merge(
+            $builder->aliases,
+            $dependencies[ConfigKey::ALIASES] ?? [],
+        );
+        $builder->services = $dependencies[ConfigKey::SERVICES] ?? [];
 
-        // Normalize delegators to list format
         foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $delegatorList) {
-            $builder->delegators[$id] = is_array($delegatorList) && array_is_list($delegatorList)
-                ? $delegatorList
-                : [$delegatorList];
+            $builder->delegators[$id] = self::normalizeDelegatorList($delegatorList, $id);
         }
 
-        // Normalize invokables: extract aliases from keyed entries.
-        // Explicit ALIASES already configured on the builder take precedence:
-        // an invokable alias is only registered when no explicit alias exists
-        // for the same key.
         foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $key => $value) {
-            $builder->invokables[] = $value;
+            if (!in_array($value, $builder->invokables, true)) {
+                $builder->invokables[] = $value;
+            }
+
             if (is_string($key) && !isset($builder->aliases[$key])) {
                 $builder->aliases[$key] = $value;
             }
         }
 
-        // Compiled DI plans (optional - produced offline by `discovery:compile`).
-        if (isset($dependencies[PlanCompiler::CONFIG_KEY]) && is_array($dependencies[PlanCompiler::CONFIG_KEY])) {
-            $builder->diPlans = $dependencies[PlanCompiler::CONFIG_KEY];
-        } elseif (isset($dependencies[PlanCompiler::FILE_CONFIG_KEY])
-            && is_string($dependencies[PlanCompiler::FILE_CONFIG_KEY])
-            && $dependencies[PlanCompiler::FILE_CONFIG_KEY] !== ''
-        ) {
-            $builder->diPlansFile = $dependencies[PlanCompiler::FILE_CONFIG_KEY];
+        foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
+            $builder->parameterResolvers[] = [$resolver, $priority];
         }
 
-        if (isset($dependencies[PlanDispatcher::CONFIG_KEY]) && is_array($dependencies[PlanDispatcher::CONFIG_KEY])) {
-            $builder->diPlanDispatcherMap = $dependencies[PlanDispatcher::CONFIG_KEY];
+        foreach ($dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [] as $handler) {
+            $builder->attributeHandlers[] = $handler;
         }
 
-        // Custom parameter/property resolvers
-        // Normalize user input [priority => resolver] into the internal list-of-pairs.
-        foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolverConfig) {
-            $builder->parameterResolvers[] = [$resolverConfig, (int) $priority];
+        $builder->replaceParameterResolvers = (bool) (
+            $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false
+        );
+        $builder->replaceAttributeHandlers = (bool) (
+            $dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE] ?? false
+        );
+
+        $generatedFile = $dependencies[ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] ?? null;
+        if (is_string($generatedFile) && $generatedFile !== '') {
+            $builder->generatedEntryResolverFile = $generatedFile;
         }
-        foreach ($dependencies[ConfigKey::PROPERTY_RESOLVERS] ?? [] as $priority => $resolverConfig) {
-            $builder->propertyResolvers[] = [$resolverConfig, (int) $priority];
+        $generatedRelease = $dependencies[
+            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
+        ] ?? null;
+        if (is_string($generatedRelease) && $generatedRelease !== '') {
+            $builder->generatedEntryResolverReleaseFingerprint = $generatedRelease;
         }
 
-        $builder->replaceParameterResolvers = (bool) ($dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false);
-        $builder->replacePropertyResolvers  = (bool) ($dependencies[ConfigKey::PROPERTY_RESOLVERS_REPLACE] ?? false);
 
-        // Keep the full Config shape visible through the container service.
-        // Production can load a slim `config.cache.php` without dependencies;
-        // when the builder receives dependencies from `container.cache.php`,
-        // reattach them here so Config consumers keep seeing the historical
-        // shape without forcing the config cache itself to duplicate DI data.
         $builder->config = self::configWithDependencies($config, $dependencies);
 
         return $builder;
     }
 
-    /**
-     * Creates builder from a `container.cache.php` payload.
-     *
-     * Accepted cache shapes:
-     *  - `['version' => 1, 'dependencies' => [...]]` (current generated format)
-     *  - raw dependencies array (kept as a compatibility escape hatch)
-     *
-     * @param array<string, mixed> $cache
-     */
-    public static function configureFromCache(Config $config, array $cache, ?string $baseDir = null): static
-    {
-        if (array_key_exists('version', $cache) || array_key_exists(ConfigKey::DEPENDENCIES, $cache)) {
+    /** @param array<string, mixed> $cache */
+    public static function configureFromCache(
+        Config $config,
+        array $cache,
+        ?string $baseDir = null,
+    ): static {
+        if (array_key_exists('version', $cache)
+            || array_key_exists(ConfigKey::DEPENDENCIES, $cache)
+        ) {
             $version = $cache['version'] ?? self::CACHE_VERSION;
-
             if ($version !== self::CACHE_VERSION) {
                 throw new InvalidConfigurationException(sprintf(
                     'Unsupported container cache version "%s"; expected "%d".',
@@ -317,85 +207,862 @@ class ContainerBuilder
             }
 
             $dependencies = $cache[ConfigKey::DEPENDENCIES] ?? [];
-
             if (!is_array($dependencies)) {
-                throw new InvalidConfigurationException('Container cache dependencies section must be an array.');
+                throw new InvalidConfigurationException(
+                    'Container cache dependencies section must be an array.',
+                );
             }
 
-            return static::configureWithDependencies($config, self::resolveDependencyFiles($dependencies, $baseDir));
+            return static::configureWithDependencies(
+                $config,
+                self::resolveDependencyFiles($dependencies, $baseDir),
+            );
         }
 
-        return static::configureWithDependencies($config, self::resolveDependencyFiles($cache, $baseDir));
+        return static::configureWithDependencies(
+            $config,
+            self::resolveDependencyFiles($cache, $baseDir),
+        );
     }
 
     /**
-     * Normalizes declarative DI dependencies for `container.cache.php`.
-     *
-     * Runtime services such as {@see Environment} are intentionally excluded:
-     * they are rebound from the live {@see Config} during
-     * {@see configureWithDependencies()} so the cache can be reused across
-     * deployment environments without freezing build-time env values.
-     *
      * @param array<string, mixed> $dependencies
      * @return array<string, mixed>
      */
     public static function normalizeDependencies(array $dependencies): array
     {
-        $aliases = array_merge(self::DEFAULT_ALIASES, $dependencies[ConfigKey::ALIASES] ?? []);
+        self::assertDependencyShape($dependencies);
+
+        $aliases = array_merge(
+            self::DEFAULT_ALIASES,
+            $dependencies[ConfigKey::ALIASES] ?? [],
+        );
         $invokables = [];
 
         foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $key => $value) {
-            $invokables[] = $value;
+            if (!in_array($value, $invokables, true)) {
+                $invokables[] = $value;
+            }
+
             if (is_string($key) && !isset($aliases[$key])) {
                 $aliases[$key] = $value;
             }
         }
 
         $delegators = [];
-        foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $delegatorList) {
-            $delegators[$id] = is_array($delegatorList) && array_is_list($delegatorList)
-                ? $delegatorList
-                : [$delegatorList];
+        foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $list) {
+            $delegators[$id] = self::normalizeDelegatorList($list, $id);
         }
 
         $normalized = [
             ConfigKey::FACTORIES => $dependencies[ConfigKey::FACTORIES] ?? [],
             ConfigKey::INVOKABLES => $invokables,
-            ConfigKey::AUTOWIRES => $dependencies[ConfigKey::AUTOWIRES] ?? [],
             ConfigKey::ALIASES => $aliases,
             ConfigKey::DELEGATORS => $delegators,
             ConfigKey::SERVICES => $dependencies[ConfigKey::SERVICES] ?? [],
-            ConfigKey::PARAMETER_RESOLVERS => $dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [],
-            ConfigKey::PROPERTY_RESOLVERS => $dependencies[ConfigKey::PROPERTY_RESOLVERS] ?? [],
-            ConfigKey::PARAMETER_RESOLVERS_REPLACE => (bool) ($dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false),
-            ConfigKey::PROPERTY_RESOLVERS_REPLACE => (bool) ($dependencies[ConfigKey::PROPERTY_RESOLVERS_REPLACE] ?? false),
+            ConfigKey::PARAMETER_RESOLVERS
+                => $dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [],
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE => (bool) (
+                $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false
+            ),
+            ConfigKey::ATTRIBUTE_HANDLERS
+                => $dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [],
+            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE => (bool) (
+                $dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE] ?? false
+            ),
+            ConfigKey::GENERATED_ENTRY_RESOLVER_FILE
+                => $dependencies[ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] ?? null,
+            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
+                => $dependencies[
+                    ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
+                ] ?? null,
         ];
-
-        if (isset($dependencies[PlanCompiler::CONFIG_KEY]) && is_array($dependencies[PlanCompiler::CONFIG_KEY])) {
-            $normalized[PlanCompiler::CONFIG_KEY] = $dependencies[PlanCompiler::CONFIG_KEY];
-        } elseif (isset($dependencies[PlanCompiler::FILE_CONFIG_KEY])
-            && is_string($dependencies[PlanCompiler::FILE_CONFIG_KEY])
-            && $dependencies[PlanCompiler::FILE_CONFIG_KEY] !== ''
-        ) {
-            $normalized[PlanCompiler::FILE_CONFIG_KEY] = $dependencies[PlanCompiler::FILE_CONFIG_KEY];
-        }
-
-        if (isset($dependencies[PlanDispatcher::CONFIG_KEY]) && is_array($dependencies[PlanDispatcher::CONFIG_KEY])) {
-            $normalized[PlanDispatcher::CONFIG_KEY] = $dependencies[PlanDispatcher::CONFIG_KEY];
-        }
 
         return $normalized;
     }
 
-    /**
-     * @param array<string, mixed> $dependencies
-     */
-    private static function configWithDependencies(Config $config, array $dependencies): Config
+    public function build(): Container
     {
-        if ($config->has(ConfigKey::DEPENDENCIES)) {
+        $this->assertNoReservedBindings();
+        $this->sharedResolvers = null;
+
+        $entryResolver = null;
+        $callableExecutor = null;
+        $config = $this->config;
+        if ($config === null) {
+            $environment = new Environment([]);
+            $config = new Config([], $environment);
+        } else {
+            $environment = $config->environment ?? new Environment([]);
+        }
+        $parametersResolver = new ParametersResolver();
+        $handlerRegistry = new AttributeHandlerRegistry();
+        $attributeProcessor = new AttributeProcessor($handlerRegistry);
+        $aliases = new AliasResolver(
+            [
+                ...$this->aliases,
+                'config' => Config::class,
+            ],
+            skipValidation: $this->aliases === self::DEFAULT_ALIASES,
+        );
+        $proxyFactory = $this->createProxyFactory();
+
+        $container = Reflection::class(Container::class)->newLazyGhost(
+            static function (Container $container) use (
+                &$entryResolver,
+                &$callableExecutor,
+                $aliases,
+                $proxyFactory,
+                $config,
+                $environment,
+                $parametersResolver,
+                $handlerRegistry,
+                $attributeProcessor,
+            ): void {
+                $container->__construct(
+                    resolver: $entryResolver,
+                    aliases: $aliases,
+                    callableExecutor: $callableExecutor,
+                    proxyFactory: $proxyFactory,
+                    bootstrapServices: [
+                        Config::class => $config,
+                        Environment::class => $environment,
+                        ContainerValue::class => new ContainerValue($container, $config),
+                        ParametersResolver::class => $parametersResolver,
+                        AttributeHandlerRegistry::class => $handlerRegistry,
+                        AttributeProcessor::class => $attributeProcessor,
+                    ],
+                );
+            },
+        );
+
+        $callableResolver = new CallableResolver($container);
+        $callableExecutor = new CallableExecutor($callableResolver, $parametersResolver);
+
+        $entryResolver = $this->createEntryResolver(
+            $parametersResolver,
+            $attributeProcessor,
+            $container,
+            $proxyFactory,
+        );
+
+        // Trigger the one-shot lazy constructor only after every captured
+        // collaborator has been assigned. Core services are installed atomically
+        // inside Container::__construct() and can never be rebound afterwards.
+        $container->get(Config::class);
+        foreach ($this->services as $id => $service) {
+            $container->set($id, $service);
+        }
+
+        foreach ($this->delegators as $id => $delegatorList) {
+            foreach ($delegatorList as $delegator) {
+                $container->delegator($id, $delegator);
+            }
+        }
+
+        $this->fillPipelines(
+            $parametersResolver,
+            $handlerRegistry,
+            $container,
+        );
+        $parametersResolver->seal();
+        $handlerRegistry->seal();
+        $this->installGeneratedEntryResolver(
+            $entryResolver,
+            $parametersResolver,
+            $attributeProcessor,
+            $proxyFactory,
+        );
+
+        return $container;
+    }
+
+    /**
+     * Compiles one generated EntryResolver file from the exact runtime
+     * parameter-resolver and attribute-handler pipelines assembled by this
+     * builder.
+     *
+     * @param iterable<class-string> $classes
+     * @param ?string $releaseFingerprint Deployment identifier covering both
+     *        application sources and DI extension configuration. It must change
+     *        whenever either changes. Null keeps strict source hashing on every
+     *        generated resolver load.
+     */
+    public function compileGeneratedEntryResolver(
+        iterable $classes,
+        string $file,
+        ?ParameterResolverCodeGeneratorRegistry $generators = null,
+        string $namespace = 'Componenta\\DI\\Generated',
+        ?string $releaseFingerprint = null,
+    ): string {
+        $container = $this->build();
+        $parameters = $container->get(ParametersResolver::class);
+        $attributes = $container->get(AttributeProcessor::class);
+
+        if (!$parameters instanceof ParametersResolver
+            || !$attributes instanceof AttributeProcessor
+        ) {
+            throw new InvalidConfigurationException(
+                'Runtime DI compiler services are unavailable.',
+            );
+        }
+
+        $generators ??= DefaultParameterResolverCodeGenerators::create();
+        $parameterCode = new ParameterCodeGenerator($parameters, $generators);
+        $factoryCode = new FactoryCodeGenerator($parameterCode, $attributes);
+        $code = (new GeneratedEntryResolverGenerator(
+            $factoryCode,
+            $parameters,
+            $attributes,
+            $generators,
+        ))->generate($classes, $namespace, $releaseFingerprint);
+
+        (new GeneratedEntryResolverWriter())->write($file, $code);
+        $this->generatedEntryResolverFile = $file;
+        $this->generatedEntryResolverReleaseFingerprint = $releaseFingerprint;
+
+        return $file;
+    }
+
+    public function toArray(): array
+    {
+        $data = $this->config?->toArray() ?? [];
+        $data[ConfigKey::DEPENDENCIES] = [
+            ConfigKey::FACTORIES => $this->factories,
+            ConfigKey::INVOKABLES => $this->invokables,
+            ConfigKey::ALIASES => $this->aliases,
+            ConfigKey::DELEGATORS => $this->delegators,
+            ConfigKey::SERVICES => $this->services,
+            ConfigKey::PARAMETER_RESOLVERS
+                => $this->resolversToMap($this->parameterResolvers),
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE
+                => $this->replaceParameterResolvers,
+            ConfigKey::ATTRIBUTE_HANDLERS => $this->attributeHandlers,
+            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE
+                => $this->replaceAttributeHandlers,
+            ConfigKey::GENERATED_ENTRY_RESOLVER_FILE
+                => $this->generatedEntryResolverFile,
+            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
+                => $this->generatedEntryResolverReleaseFingerprint,
+        ];
+
+        return $data;
+    }
+
+    protected function createEntryResolver(
+        ParametersResolver $parametersResolver,
+        AttributeProcessor $attributeProcessor,
+        ContainerInterface $container,
+        ProxyFactoryInterface $proxyFactory,
+    ): EntryResolverInterface {
+        return new CompositeResolver(
+            new EntryFactoryResolver(
+                $this->factories,
+                $container,
+                $proxyFactory,
+            ),
+            new InvokableResolver(
+                $this->invokables,
+                $proxyFactory,
+            ),
+            new ReflectionResolver(
+                new InstanceCreator($parametersResolver),
+                $attributeProcessor,
+                $proxyFactory,
+            ),
+        );
+    }
+
+    protected function installGeneratedEntryResolver(
+        EntryResolverInterface $entryResolver,
+        ParametersResolver $parametersResolver,
+        AttributeProcessor $attributeProcessor,
+        ProxyFactoryInterface $proxyFactory,
+    ): void {
+        if ($this->generatedEntryResolverFile === null
+            || !$entryResolver instanceof CompositeResolver
+        ) {
+            return;
+        }
+
+        $generated = (new GeneratedEntryResolverLoader())->load(
+            $this->generatedEntryResolverFile,
+            $parametersResolver->resolverList,
+            $attributeProcessor->registry->handlers,
+            $proxyFactory,
+            $this->generatedEntryResolverReleaseFingerprint,
+        );
+
+        if ($generated === null) {
+            return;
+        }
+
+        $entryResolver->addResolverBefore(
+            $generated,
+            ReflectionResolver::class,
+        );
+    }
+
+    /**
+     * Builds both extension pipelines in dependency-safe order.
+     *
+     * Default parameter resolvers are required to autowire custom handlers;
+     * default attribute handlers are required to initialize custom parameter
+     * resolvers materialized through the container. Register both default
+     * layers before either custom layer so extension services observe the same
+     * complete baseline pipeline as ordinary application services.
+     */
+    protected function fillPipelines(
+        ParametersResolver $parameters,
+        AttributeHandlerRegistry $handlers,
+        ContainerInterface $container,
+    ): void {
+        if (!$this->replaceParameterResolvers) {
+            foreach ($this->buildDefaultParameterResolvers($container) as [$resolver, $priority]) {
+                $parameters->add($resolver, $priority);
+            }
+        }
+
+        if (!$this->replaceAttributeHandlers) {
+            $handlers->addAll($this->buildDefaultAttributeHandlers($container));
+        }
+
+        foreach ($this->parameterResolvers as [$config, $priority]) {
+            $parameters->add($this->materializeResolver($config, $container), $priority);
+        }
+
+        foreach ($this->attributeHandlers as $config) {
+            $handlers->add($this->materializeHandler($config, $container));
+        }
+    }
+
+    /** @return array<string, array{0: ParameterResolverInterface, 1: int}> */
+    protected function buildDefaultParameterResolvers(
+        ContainerInterface $container,
+    ): array {
+        $shared = $this->sharedResolvers($container);
+
+        return [
+            ParameterArrayResolver::class => [
+                new ParameterArrayResolver(),
+                self::PRIORITY_PARAM_ARRAY,
+            ],
+            ArrayTypedResolver::class => [
+                new ArrayTypedResolver(),
+                self::PRIORITY_PARAM_ARRAY_TYPED,
+            ],
+            MakeAttributeResolver::class => [
+                $shared[MakeAttributeResolver::class],
+                self::PRIORITY_PARAM_MAKE,
+            ],
+            EnvResolver::class => [
+                $shared[EnvResolver::class],
+                self::PRIORITY_PARAM_ENV,
+            ],
+            EntryIdResolver::class => [
+                $shared[EntryIdResolver::class],
+                self::PRIORITY_PARAM_ENTRY_ID,
+            ],
+            ConfigAttributeResolver::class => [
+                $shared[ConfigAttributeResolver::class],
+                self::PRIORITY_PARAM_CONFIG,
+            ],
+            AutowireByTypeResolver::class => [
+                new AutowireByTypeResolver($container),
+                self::PRIORITY_PARAM_AUTOWIRE,
+            ],
+            DefaultValueResolver::class => [
+                new DefaultValueResolver(),
+                self::PRIORITY_PARAM_DEFAULT_VALUE,
+            ],
+            NullableResolver::class => [
+                new NullableResolver(),
+                self::PRIORITY_PARAM_NULLABLE,
+            ],
+        ];
+    }
+
+    /** @return list<AttributeHandlerInterface> */
+    protected function buildDefaultAttributeHandlers(
+        ContainerInterface $container,
+    ): array {
+        $shared = $this->sharedResolvers($container);
+        $callableInvoker = $container instanceof CallableInvokerInterface
+            ? $container
+            : $container->get(CallableInvokerInterface::class);
+
+        if (!$callableInvoker instanceof CallableInvokerInterface) {
+            throw new InvalidConfigurationException(sprintf(
+                'Internal service "%s" must implement %s; got %s.',
+                CallableInvokerInterface::class,
+                CallableInvokerInterface::class,
+                get_debug_type($callableInvoker),
+            ));
+        }
+
+        return [
+            new NoConstructorHandler(),
+            new ProxyHandler(),
+            new LazyHandler(),
+            new InitHandler($callableInvoker),
+            $shared[MakeAttributeResolver::class],
+            $shared[EnvResolver::class],
+            $shared[EntryIdResolver::class],
+            new InjectHandler($container),
+            $shared[ConfigAttributeResolver::class],
+            new SetUpRunner(
+                $callableInvoker,
+                new ContainerValueUnwrapper($this->containerValue($container)),
+                new EntryIdUnwrapper($container),
+                new ConfigUnwrapper($container),
+                new EnvUnwrapper($container),
+            ),
+        ];
+    }
+
+    protected function createProxyFactory(): ProxyFactoryInterface
+    {
+        return new ProxyFactory();
+    }
+
+    private function containerValue(ContainerInterface $container): ContainerValue
+    {
+        $value = $container->get(ContainerValue::class);
+
+        if (!$value instanceof ContainerValue) {
+            throw new InvalidConfigurationException(sprintf(
+                'Internal service "%s" must be an instance of %s.',
+                ContainerValue::class,
+                ContainerValue::class,
+            ));
+        }
+
+        return $value;
+    }
+
+
+    private function assertNoReservedBindings(): void
+    {
+        if ($this->factories === []
+            && $this->invokables === []
+            && $this->aliases === self::DEFAULT_ALIASES
+            && $this->delegators === []
+            && $this->services === []
+        ) {
+            return;
+        }
+
+        $aliases = new AliasResolver($this->aliases);
+
+        foreach ([
+            'factory' => array_keys($this->factories),
+            'service' => array_keys($this->services),
+            'delegator' => array_keys($this->delegators),
+            'invokable' => $this->invokables,
+        ] as $kind => $ids) {
+            foreach ($ids as $id) {
+                if (!is_string($id)) {
+                    continue;
+                }
+
+                self::assertBindingIdAvailable($id, $kind);
+
+                if (($kind === 'factory' || $kind === 'invokable') && $aliases->has($id)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        '%s id "%s" is also an alias and would be unreachable after canonicalization.',
+                        ucfirst($kind),
+                        $id,
+                    ));
+                }
+
+                $canonical = $aliases->resolve($id);
+                if (ProtectedServiceIds::contains($canonical)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Cannot register %s for id "%s" because it resolves to reserved DI id "%s".',
+                        $kind,
+                        $id,
+                        $canonical,
+                    ));
+                }
+            }
+        }
+
+        foreach (array_keys($this->aliases) as $alias) {
+            self::assertBindingIdAvailable($alias, 'alias');
+        }
+
+        $this->assertSingleBindingPerCanonicalId($aliases);
+    }
+
+    private function assertSingleBindingPerCanonicalId(AliasResolverInterface $aliases): void
+    {
+        /** @var array<string, array{kind: string, id: string}> $owners */
+        $owners = [];
+
+        foreach ([
+            'factory' => array_keys($this->factories),
+            'invokable' => $this->invokables,
+            'service' => array_keys($this->services),
+        ] as $kind => $ids) {
+            foreach ($ids as $id) {
+                if (!is_string($id)) {
+                    continue;
+                }
+
+                $canonical = $aliases->resolve($id);
+                $owner = $owners[$canonical] ?? null;
+
+                if ($owner !== null) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Canonical DI id "%s" has conflicting %s binding "%s" and %s binding "%s".',
+                        $canonical,
+                        $owner['kind'],
+                        $owner['id'],
+                        $kind,
+                        $id,
+                    ));
+                }
+
+                $owners[$canonical] = ['kind' => $kind, 'id' => $id];
+            }
+        }
+    }
+
+    private static function assertBindingIdAvailable(string $id, string $kind): void
+    {
+        if ($id === '') {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot register %s with an empty DI id.',
+                $kind,
+            ));
+        }
+
+        if (ProtectedServiceIds::contains($id)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot register %s for reserved DI id "%s".',
+                $kind,
+                $id,
+            ));
+        }
+    }
+
+    /**
+     * @return array<class-string, ParameterResolverInterface&AttributeHandlerInterface>
+     */
+    private function sharedResolvers(ContainerInterface $container): array
+    {
+        if ($this->sharedResolvers !== null) {
+            return $this->sharedResolvers;
+        }
+
+        if (!$container instanceof FactoryInterface) {
+            throw new InvalidConfigurationException('FactoryInterface service is unavailable.');
+        }
+
+        if (!$container instanceof ProxyFactoryInterface) {
+            throw new InvalidConfigurationException(
+                'ProxyFactoryInterface service is unavailable.',
+            );
+        }
+
+        return $this->sharedResolvers = [
+            MakeAttributeResolver::class => new MakeAttributeResolver(
+                $container,
+                $container,
+            ),
+            EnvResolver::class => new EnvResolver($container),
+            EntryIdResolver::class => new EntryIdResolver($container),
+            ConfigAttributeResolver::class => new ConfigAttributeResolver($container),
+        ];
+    }
+
+    protected function materializeResolver(
+        mixed $config,
+        ContainerInterface $container,
+    ): ParameterResolverInterface {
+        $resolver = $this->materializeExtension($config, $container);
+
+        if (!$resolver instanceof ParameterResolverInterface) {
+            throw new InvalidConfigurationException(sprintf(
+                'Expected %s, got %s.',
+                ParameterResolverInterface::class,
+                get_debug_type($resolver),
+            ));
+        }
+
+        return $resolver;
+    }
+
+    protected function materializeHandler(
+        mixed $config,
+        ContainerInterface $container,
+    ): AttributeHandlerInterface {
+        $handler = $this->materializeExtension($config, $container);
+
+        if (!$handler instanceof AttributeHandlerInterface) {
+            throw new InvalidConfigurationException(sprintf(
+                'Expected %s, got %s.',
+                AttributeHandlerInterface::class,
+                get_debug_type($handler),
+            ));
+        }
+
+        return $handler;
+    }
+
+    private function materializeExtension(
+        mixed $config,
+        ContainerInterface $container,
+    ): object {
+        if (is_object($config)
+            && ($config instanceof ParameterResolverInterface
+                || $config instanceof AttributeHandlerInterface)
+        ) {
             return $config;
         }
 
+        $extension = match (true) {
+            $config instanceof Closure => $config($container),
+            is_callable($config) => $config($container),
+            is_string($config) => $container->get($config),
+            default => throw new InvalidConfigurationException(sprintf(
+                'Extension specification must be an instance, callable or service id; got %s.',
+                get_debug_type($config),
+            )),
+        };
+
+        if (!is_object($extension)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Extension factory returned %s instead of an object.',
+                get_debug_type($extension),
+            ));
+        }
+
+        return $extension;
+    }
+
+    /** @param list<array{0: mixed, 1: int}> $resolvers */
+    private function resolversToMap(array $resolvers): array
+    {
+        $map = [];
+        foreach ($resolvers as [$resolver, $priority]) {
+            if (array_key_exists($priority, $map)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Parameter resolver priority %d is registered more than once.',
+                    $priority,
+                ));
+            }
+
+            $map[$priority] = $resolver;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @return list<callable|string|array>
+     */
+    private static function normalizeDelegatorList(mixed $value, string $id): array
+    {
+        $items = self::isCallableArraySpecification($value)
+            ? [$value]
+            : (is_array($value) && array_is_list($value) ? $value : [$value]);
+
+        foreach ($items as $delegator) {
+            self::assertDelegatorSpecification($delegator, $id);
+        }
+
+        /** @var list<callable|string|array> $items */
+        return array_values($items);
+    }
+
+    private static function assertDelegatorSpecification(mixed $delegator, string $id): void
+    {
+        if (is_callable($delegator)
+            || is_string($delegator)
+            || self::isCallableArraySpecification($delegator)
+        ) {
+            return;
+        }
+
+        throw new InvalidConfigurationException(sprintf(
+            'Delegator for "%s" must be callable, string or [class|object, method]; got %s.',
+            $id,
+            get_debug_type($delegator),
+        ));
+    }
+
+    private static function assertExtensionSpecification(mixed $extension, string $kind): void
+    {
+        if ($extension instanceof ParameterResolverInterface
+            || $extension instanceof AttributeHandlerInterface
+            || $extension instanceof Closure
+            || is_callable($extension)
+            || (is_string($extension) && $extension !== '')
+        ) {
+            return;
+        }
+
+        throw new InvalidConfigurationException(sprintf(
+            '%s specification must be an instance, callable or non-empty service id; got %s.',
+            ucfirst($kind),
+            get_debug_type($extension),
+        ));
+    }
+
+    private static function isCallableArraySpecification(mixed $value): bool
+    {
+        if (!is_array($value)
+            || array_keys($value) !== [0, 1]
+            || !is_string($value[1])
+        ) {
+            return false;
+        }
+
+        if (is_callable($value)) {
+            return true;
+        }
+
+        // A non-static [Class::class, method] pair is resolved through the
+        // container later and is therefore not directly callable yet.
+        return is_string($value[0])
+            && class_exists($value[0])
+            && method_exists($value[0], $value[1]);
+    }
+
+    /** @param array<string, mixed> $dependencies */
+    private static function assertDependencyShape(array $dependencies): void
+    {
+        $allowed = array_fill_keys(ConfigKey::dependencyKeys(), true);
+
+        foreach ($dependencies as $key => $_value) {
+            if (!is_string($key) || !isset($allowed[$key])) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Unsupported container dependency key "%s".',
+                    is_scalar($key) ? (string) $key : get_debug_type($key),
+                ));
+            }
+        }
+
+        foreach ([
+            ConfigKey::FACTORIES,
+            ConfigKey::INVOKABLES,
+            ConfigKey::ALIASES,
+            ConfigKey::DELEGATORS,
+            ConfigKey::SERVICES,
+            ConfigKey::PARAMETER_RESOLVERS,
+            ConfigKey::ATTRIBUTE_HANDLERS,
+        ] as $key) {
+            if (array_key_exists($key, $dependencies)
+                && !is_array($dependencies[$key])
+            ) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Container dependency "%s" must be an array; got %s.',
+                    $key,
+                    get_debug_type($dependencies[$key]),
+                ));
+            }
+        }
+
+        foreach ([
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE,
+            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE,
+        ] as $key) {
+            if (array_key_exists($key, $dependencies)
+                && !is_bool($dependencies[$key])
+            ) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Container dependency "%s" must be bool; got %s.',
+                    $key,
+                    get_debug_type($dependencies[$key]),
+                ));
+            }
+        }
+
+        $file = $dependencies[ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] ?? null;
+        if ($file !== null && (!is_string($file) || $file === '')) {
+            throw new InvalidConfigurationException(sprintf(
+                'Container dependency "%s" must be null or a non-empty string; got %s.',
+                ConfigKey::GENERATED_ENTRY_RESOLVER_FILE,
+                get_debug_type($file),
+            ));
+        }
+
+        $releaseFingerprint = $dependencies[
+            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
+        ] ?? null;
+        if ($releaseFingerprint !== null
+            && (!is_string($releaseFingerprint) || $releaseFingerprint === '')
+        ) {
+            throw new InvalidConfigurationException(sprintf(
+                'Container dependency "%s" must be null or a non-empty string; got %s.',
+                ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT,
+                get_debug_type($releaseFingerprint),
+            ));
+        }
+
+        foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
+            if (!is_int($priority)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Parameter resolver priority must be int; got %s.',
+                    get_debug_type($priority),
+                ));
+            }
+
+            self::assertExtensionSpecification($resolver, 'parameter resolver');
+        }
+
+        $handlers = $dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [];
+        if ($handlers !== [] && !array_is_list($handlers)) {
+            throw new InvalidConfigurationException(
+                'Attribute handlers must be configured as a list in registration order.',
+            );
+        }
+
+        foreach ($handlers as $handler) {
+            self::assertExtensionSpecification($handler, 'attribute handler');
+        }
+
+        foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $class) {
+            if (!is_string($class) || $class === '') {
+                throw new InvalidConfigurationException(sprintf(
+                    'Invokable entry must be a non-empty class-string; got %s.',
+                    get_debug_type($class),
+                ));
+            }
+        }
+
+        foreach ($dependencies[ConfigKey::ALIASES] ?? [] as $alias => $target) {
+            if (!is_string($alias) || $alias === ''
+                || !is_string($target) || $target === ''
+            ) {
+                throw new InvalidConfigurationException(
+                    'Aliases must map non-empty string ids to non-empty string targets.',
+                );
+            }
+        }
+
+        foreach ([
+            ConfigKey::FACTORIES,
+            ConfigKey::DELEGATORS,
+            ConfigKey::SERVICES,
+        ] as $key) {
+            foreach ($dependencies[$key] ?? [] as $id => $_value) {
+                if (!is_string($id) || $id === '') {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Container dependency "%s" requires non-empty string ids.',
+                        $key,
+                    ));
+                }
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $dependencies */
+    private static function configWithDependencies(
+        Config $config,
+        array $dependencies,
+    ): Config {
         $data = $config->toArray();
         $data[ConfigKey::DEPENDENCIES] = $dependencies;
 
@@ -406,22 +1073,27 @@ class ContainerBuilder
      * @param array<string, mixed> $dependencies
      * @return array<string, mixed>
      */
-    private static function resolveDependencyFiles(array $dependencies, ?string $baseDir): array
-    {
-        if ($baseDir === null
-            || !isset($dependencies[PlanCompiler::FILE_CONFIG_KEY])
-            || !is_string($dependencies[PlanCompiler::FILE_CONFIG_KEY])
-        ) {
+    private static function resolveDependencyFiles(
+        array $dependencies,
+        ?string $baseDir,
+    ): array {
+        if ($baseDir === null) {
             return $dependencies;
         }
 
-        $file = $dependencies[PlanCompiler::FILE_CONFIG_KEY];
+        foreach ([ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] as $key) {
+            $file = $dependencies[$key] ?? null;
 
-        if ($file === '' || self::isAbsolutePath($file)) {
-            return $dependencies;
+            if (!is_string($file)
+                || $file === ''
+                || self::isAbsolutePath($file)
+            ) {
+                continue;
+            }
+
+            $dependencies[$key]
+                = rtrim($baseDir, '/\\') . '/' . ltrim($file, '/\\');
         }
-
-        $dependencies[PlanCompiler::FILE_CONFIG_KEY] = rtrim($baseDir, '/\\') . '/' . ltrim($file, '/\\');
 
         return $dependencies;
     }
@@ -429,558 +1101,65 @@ class ContainerBuilder
     private static function isAbsolutePath(string $path): bool
     {
         return $path !== ''
-            && (
-                $path[0] === '/'
+            && ($path[0] === '/'
                 || $path[0] === '\\'
-                || (strlen($path) >= 3 && ctype_alpha($path[0]) && $path[1] === ':')
-            );
+                || (strlen($path) >= 3
+                    && ctype_alpha($path[0])
+                    && $path[1] === ':'));
     }
 
-    /**
-     * Builds the container.
-     *
-     * Construction is strictly constructor-injected: the core collaborators
-     * ({@see AliasResolver}, {@see CallableResolver}, {@see CallableExecutor},
-     * {@see ParametersResolver}, {@see PropertiesResolver}) are wired here and
-     * handed to the {@see Container} ctor. Classes that need the container
-     * itself (factory resolvers, SetUp unwrappers, user factories) receive a
-     * {@see \ReflectionClass::newLazyGhost() lazy-ghost} Container whose
-     * constructor runs in-place on first observable access - by which time
-     * the collaborator graph captured by reference is fully assembled.
-     */
-    public function build(): Container
-    {
-        $entryResolver    = null;
-        $callableExecutor = null;
-        $aliases          = new AliasResolver($this->aliases);
-
-        $container = Reflection::class(Container::class)->newLazyGhost(
-            static function (Container $container) use (&$entryResolver, &$callableExecutor, $aliases): void {
-                $container->__construct($entryResolver, $aliases, $callableExecutor);
-            },
-        );
-
-        $parametersResolver = new ParametersResolver();
-        $propertiesResolver = new PropertiesResolver();
-
-        $callableResolver = new CallableResolver($container);
-        $callableExecutor = new CallableExecutor($callableResolver, $parametersResolver);
-
-        $entryResolver = $this->createEntryResolver(
-            $parametersResolver,
-            $propertiesResolver,
-            $container,
-        );
-
-        // Register core services FIRST so user-supplied bindings (caster
-        // provider, validation provider, ...) are visible to fill*Resolver,
-        // which resolves them via $container->get(...) while assembling the
-        // default chains. The first set() below is also what triggers the
-        // lazy-ghost initializer - $entryResolver and $callableExecutor are
-        // both assigned by this point.
-        $container->set(Config::class, $this->config ?? new Config([]));
-        $container->alias('config', Config::class);
-        $container->set(ParametersResolver::class, $parametersResolver);
-        $container->set(PropertiesResolver::class, $propertiesResolver);
-
-        foreach ($this->services as $id => $service) {
-            $container->set($id, $service);
-        }
-
-        $config = $container->get(Config::class);
-        if (!$config instanceof Config) {
-            throw new InvalidConfigurationException(sprintf(
-                'Service "%s" must be an instance of %s.',
-                Config::class,
-                Config::class,
-            ));
-        }
-
-        $container->set(ContainerValue::class, new ContainerValue($container, $config));
-
-        foreach ($this->delegators as $id => $delegatorList) {
-            foreach ($delegatorList as $delegator) {
-                $container->delegator($id, $delegator);
-            }
-        }
-
-        $this->fillParametersResolver($parametersResolver, $container);
-        $this->fillPropertiesResolver($propertiesResolver, $container);
-
-        if ($this->diPlans !== [] || $this->diPlansFile !== null) {
-            $dispatcher = $this->buildPlanDispatcher($parametersResolver, $propertiesResolver);
-
-            if ($this->diPlansFile !== null && $this->diPlans === []) {
-                $provider = new FilePlanProvider($this->diPlansFile);
-                $parametersResolver->setCompiledPlanProvider($provider, $dispatcher);
-                $propertiesResolver->setCompiledPlanProvider($provider, $dispatcher);
-            } else {
-                $parametersResolver->setCompiledPlans($this->diPlans['param'] ?? [], $dispatcher);
-                $propertiesResolver->setCompiledPlans($this->diPlans['prop'] ?? [], $dispatcher);
-            }
-        }
-
-        return $container;
-    }
-
-    /**
-     * Builds the plan dispatcher by walking the already-assembled
-     * parameter and property chains and auto-binding every resolver that
-     * implements {@see AttributeMatcherInterface}.
-     *
-     * Open/Closed: a user-supplied matcher-aware resolver registered through
-     * {@see ConfigKey::PARAMETER_RESOLVERS} / {@see ConfigKey::PROPERTY_RESOLVERS}
-     * participates automatically - the dispatcher needs no further wiring.
-     */
-    private function buildPlanDispatcher(
-        ParametersResolver $params,
-        PropertiesResolver $props,
-    ): PlanDispatcher {
-        if ($this->diPlanDispatcherMap !== []) {
-            $cached = PlanDispatcher::fromKindMap(
-                $this->diPlanDispatcherMap,
-                $params->resolvers,
-                $props->resolvers,
-            );
-
-            if ($cached !== null) {
-                return $cached;
-            }
-        }
-
-        $dispatcher = new PlanDispatcher();
-
-        foreach ($params->resolvers as $r) {
-            if ($r instanceof AttributeMatcherInterface) {
-                $dispatcher->bind($r);
-            }
-        }
-
-        foreach ($props->resolvers as $r) {
-            if ($r instanceof AttributeMatcherInterface) {
-                $dispatcher->bind($r);
-            }
-        }
-
-        return $dispatcher;
-    }
-
-    /**
-     * One-shot offline-compile helper for callers without a discovery layer.
-     *
-     * Wraps {@see getPlanCompilers()} + {@see PlanCompiler::compile()} so a
-     * standalone consumer can produce plans from any class-list source - a
-     * literal array, their own scanner, a Composer classmap, etc. - without
-     * touching the compiler internals.
-     *
-     * Typical wiring:
-     * ```php
-     * $builder = ContainerBuilder::configure($appConfig);
-     * $plans   = $builder->compilePlans([UserService::class, ...]);
-     *
-     * $config  = new Config([
-     *     ConfigKey::DEPENDENCIES => [DiPlanCompiler::CONFIG_KEY => $plans],
-     *     ...$appConfig->toArray(),
-     * ], $appConfig->environment);
-     *
-     * $container = ContainerBuilder::configure($config)->build();
-     * ```
-     *
-     * Discovery is optional - projects that ship one (e.g. {@see \Componenta\App\Discovery\Discovery})
-     * just feed its result into `$classes`. Projects that don't can hand-pick
-     * the classes they care about most (typically every autowire / invokable
-     * target plus high-traffic factory output classes).
-     *
-     * @param iterable<class-string> $classes
-     * @return array{param: array<class-string, array<string, array<int, string>>>, prop: array<class-string, array<string, string>>}
-     */
-    public function compilePlans(iterable $classes, string $mode = PlanCompiler::MODE_SPARSE): array
-    {
-        $matchers = $this->getPlanCompilers();
-
-        return new PlanCompiler($matchers['param'], $matchers['prop'], $mode)->compile($classes);
-    }
-
-    /**
-     * Returns the matcher-aware resolvers (in priority order) that the
-     * offline compiler should consult. Uses the same chains the runtime
-     * uses, so user-supplied resolvers - including pure compile-time ones
-     * with no runtime work - are picked up automatically.
-     *
-     * @return array{param: list<AttributeMatcherInterface>, prop: list<AttributeMatcherInterface>}
-     */
-    public function getPlanCompilers(): array
-    {
-        $entryResolver    = null;
-        $callableExecutor = null;
-        $aliases          = new AliasResolver($this->aliases);
-
-        $container = Reflection::class(Container::class)->newLazyGhost(
-            static function (Container $container) use (&$entryResolver, &$callableExecutor, $aliases): void {
-                $container->__construct($entryResolver, $aliases, $callableExecutor);
-            },
-        );
-
-        $parametersResolver = new ParametersResolver();
-        $propertiesResolver = new PropertiesResolver();
-
-        $callableResolver = new CallableResolver($container);
-        $callableExecutor = new CallableExecutor($callableResolver, $parametersResolver);
-
-        $entryResolver = $this->createEntryResolver(
-            $parametersResolver,
-            $propertiesResolver,
-            $container,
-        );
-
-        $container->set(Config::class, $this->config ?? new Config([]));
-        $container->alias('config', Config::class);
-        $container->set(ParametersResolver::class, $parametersResolver);
-
-        foreach ($this->services as $id => $service) {
-            $container->set($id, $service);
-        }
-
-        $config = $container->get(Config::class);
-        if (!$config instanceof Config) {
-            throw new InvalidConfigurationException(sprintf(
-                'Service "%s" must be an instance of %s.',
-                Config::class,
-                Config::class,
-            ));
-        }
-
-        $container->set(ContainerValue::class, new ContainerValue($container, $config));
-
-        $this->fillParametersResolver($parametersResolver, $container);
-        $this->fillPropertiesResolver($propertiesResolver, $container);
-
-        $extract = static function (iterable $chain): array {
-            $out = [];
-            foreach ($chain as $r) {
-                if ($r instanceof AttributeMatcherInterface) {
-                    $out[] = $r;
-                }
-            }
-            return $out;
-        };
-
-        return [
-            'param' => $extract($parametersResolver->resolvers),
-            'prop'  => $extract($propertiesResolver->resolvers),
-        ];
-    }
-
-    /**
-     * Returns current configuration as array.
-     *
-     * Resolver lists are rendered as `[priority => resolver]` for
-     * config-compatible round-tripping. When the same priority is registered
-     * more than once, the last registration wins in this output - all entries
-     * remain in effect at build time.
-     */
-    public function toArray(): array
-    {
-        $data = $this->config?->toArray() ?? [];
-
-        $data[ConfigKey::DEPENDENCIES] = [
-                ConfigKey::FACTORIES => $this->factories,
-                ConfigKey::INVOKABLES => $this->invokables,
-                ConfigKey::AUTOWIRES => $this->autowires,
-                ConfigKey::ALIASES => $this->aliases,
-                ConfigKey::DELEGATORS => $this->delegators,
-                ConfigKey::SERVICES => $this->services,
-                PlanCompiler::CONFIG_KEY => $this->diPlans,
-                PlanCompiler::FILE_CONFIG_KEY => $this->diPlansFile,
-                PlanDispatcher::CONFIG_KEY => $this->diPlanDispatcherMap,
-                ConfigKey::PARAMETER_RESOLVERS => $this->resolversToMap($this->parameterResolvers),
-                ConfigKey::PROPERTY_RESOLVERS => $this->resolversToMap($this->propertyResolvers),
-                ConfigKey::PARAMETER_RESOLVERS_REPLACE => $this->replaceParameterResolvers,
-                ConfigKey::PROPERTY_RESOLVERS_REPLACE => $this->replacePropertyResolvers,
-        ];
-
-        return $data;
-    }
-
-    /**
-     * Flattens a list of [resolver, priority] pairs into a priority-keyed map.
-     *
-     * On priority collision, the later entry wins - only relevant for
-     * {@see toArray()} output (see its docblock).
-     *
-     * @param list<array{0: callable|string, 1: int}> $resolvers
-     * @return array<int, callable|string>
-     */
-    private function resolversToMap(array $resolvers): array
-    {
-        $map = [];
-        foreach ($resolvers as [$resolver, $priority]) {
-            $map[$priority] = $resolver;
-        }
-
-        return $map;
-    }
-
-    /**
-     * Creates the entry resolver chain. Override in a subclass to replace
-     * the chain wholesale; for piecewise tweaks prefer the parameter / property
-     * resolver slot API.
-     */
-    protected function createEntryResolver(
-        ParametersResolver $parametersResolver,
-        PropertiesResolver $propertiesResolver,
-        ContainerInterface $container,
-    ): EntryResolverInterface {
-        return $this->createDefaultEntryResolver(
-            $parametersResolver,
-            $propertiesResolver,
-            $container,
-        );
-    }
-
-    /**
-     * Creates default entry resolver chain.
-     *
-     * Resolution order:
-     * 1. FactoryResolver - manual factories
-     * 2. InvokableResolver - simple classes without dependencies
-     * 3. ReflectionResolver - autowiring fallback
-     */
-    protected function createDefaultEntryResolver(
-        ParametersResolver $parametersResolver,
-        PropertiesResolver $propertiesResolver,
-        ContainerInterface $container,
-    ): EntryResolverInterface {
-        $composite = new CompositeResolver();
-
-        // One ProxyFactory shared by every entry resolver - keeps the
-        // PHP 8.4 lazy-object machinery encapsulated and swappable from
-        // the outside if needed (tests, alternate runtimes).
-        $proxyFactory = new ProxyFactory();
-
-        // Always register FactoryResolver and InvokableResolver - they own
-        // the FactoryDefinition / ClassDefinition / InvokableDefinition
-        // contracts that Container::set() relies on, so they must be present
-        // even when the builder starts with empty factories/invokables.
-        $composite->addResolver(new EntryFactoryResolver($this->factories, $container, $proxyFactory));
-        $composite->addResolver(new InvokableResolver($this->invokables, $proxyFactory));
-
-        $composite->addResolver(new ReflectionResolver(
-            new InstanceCreator($parametersResolver),
-            new PropertyInjector($propertiesResolver),
-            new SetUpRunner(
-                $parametersResolver,
-                new ContainerValueUnwrapper(new ContainerValue($container, $this->config ?? new Config([]))),
-                new EntryIdUnwrapper($container),
-                new ConfigUnwrapper($container),
-                new EnvUnwrapper($container),
-            ),
-            $proxyFactory,
-        ));
-
-        return $composite;
-    }
-
-    /**
-     * Fills ParametersResolver with sub-resolvers.
-     *
-     * Order:
-     * 1. Defaults from {@see buildDefaultParameterResolvers()} - skipped when
-     *    {@see $replaceParameterResolvers} is true.
-     * 2. User resolvers from {@see ConfigKey::PARAMETER_RESOLVERS}.
-     */
-    protected function fillParametersResolver(
-        ParametersResolver $resolver,
-        ContainerInterface $container,
-    ): void {
-        if (!$this->replaceParameterResolvers) {
-            foreach ($this->buildDefaultParameterResolvers($container) as [$subResolver, $priority]) {
-                $resolver->add($subResolver, $priority);
-            }
-        }
-
-        foreach ($this->parameterResolvers as [$resolverConfig, $priority]) {
-            $resolver->add($this->materializeResolver($resolverConfig, $container), $priority);
-        }
-    }
-
-    /**
-     * Fills PropertiesResolver with sub-resolvers.
-     *
-     * Mirrors {@see fillParametersResolver()} semantics for the property chain.
-     */
-    protected function fillPropertiesResolver(
-        PropertiesResolver $resolver,
-        ContainerInterface $container,
-    ): void {
-        if (!$this->replacePropertyResolvers) {
-            foreach ($this->buildDefaultPropertyResolvers($container) as [$subResolver, $priority]) {
-                $resolver->add($subResolver, $priority);
-            }
-        }
-
-        foreach ($this->propertyResolvers as [$resolverConfig, $priority]) {
-            $resolver->add($this->materializeResolver($resolverConfig, $container), $priority);
-        }
-    }
-
-    /**
-     * Produces the built-in parameter resolver chain as a slot-keyed map.
-     * Subclasses override this to tweak the baseline chain wholesale.
-     *
-     * @return array<string, array{0: ParameterResolverInterface, 1: int}>
-     */
-    protected function buildDefaultParameterResolvers(ContainerInterface $container): array
-    {
-        $shared = $this->sharedResolvers($container);
-
-        return [
-            ParameterArrayResolver::class  => [new ParameterArrayResolver(),            self::PRIORITY_PARAM_ARRAY],
-            ArrayTypedResolver::class      => [new ArrayTypedResolver(),                self::PRIORITY_PARAM_ARRAY_TYPED],
-            MakeAttributeResolver::class   => [$shared[MakeAttributeResolver::class],   self::PRIORITY_PARAM_MAKE],
-            EnvResolver::class             => [$shared[EnvResolver::class],             self::PRIORITY_PARAM_ENV],
-            EntryIdResolver::class         => [$shared[EntryIdResolver::class],         self::PRIORITY_PARAM_ENTRY_ID],
-            ConfigAttributeResolver::class => [$shared[ConfigAttributeResolver::class], self::PRIORITY_PARAM_CONFIG],
-            AutowireByTypeResolver::class  => [new AutowireByTypeResolver($container),  self::PRIORITY_PARAM_AUTOWIRE],
-            DefaultValueResolver::class    => [new DefaultValueResolver(),              self::PRIORITY_PARAM_DEFAULT_VALUE],
-            NullableResolver::class        => [new NullableResolver(),                  self::PRIORITY_PARAM_NULLABLE],
-        ];
-    }
-
-    /**
-     * Produces the built-in property resolver chain as a slot-keyed map.
-     *
-     * NOTE: DefaultValueResolver and NullableResolver are deliberately NOT in
-     * the property chain. They exist for parameters (a parameter MUST receive
-     * a value); for properties, PHP already assigns declared defaults before
-     * the constructor runs - injecting a default on top overwrites whatever
-     * the constructor just set. Only resolvers driven by explicit intent
-     * (attribute or context key) should produce values for properties.
-     *
-     * @return array<string, array{0: PropertyResolverInterface, 1: int}>
-     */
-    protected function buildDefaultPropertyResolvers(ContainerInterface $container): array
-    {
-        $shared = $this->sharedResolvers($container);
-
-        return [
-            PropertyArrayResolver::class   => [new PropertyArrayResolver(),             self::PRIORITY_PROP_ARRAY],
-            InitResolver::class            => [new InitResolver($container->get(CallableInvokerInterface::class)), self::PRIORITY_PROP_INIT],
-            MakeAttributeResolver::class   => [$shared[MakeAttributeResolver::class],   self::PRIORITY_PROP_MAKE],
-            EnvResolver::class             => [$shared[EnvResolver::class],             self::PRIORITY_PROP_ENV],
-            EntryIdResolver::class         => [$shared[EntryIdResolver::class],         self::PRIORITY_PROP_ENTRY_ID],
-            InjectResolver::class          => [new InjectResolver($container),          self::PRIORITY_PROP_INJECT],
-            ConfigAttributeResolver::class => [$shared[ConfigAttributeResolver::class], self::PRIORITY_PROP_CONFIG],
-        ];
-    }
-
-    /**
-     * Lazily creates resolvers that are stateless w.r.t. the chain they live
-     * in and therefore safe to share between the parameter and property
-     * defaults (MakeAttributeResolver, EnvResolver, EntryIdResolver,
-     * ConfigAttributeResolver). Saves duplicate construction on every
-     * container build.
-     *
-     * @return array<class-string, ParameterResolverInterface|PropertyResolverInterface>
-     */
-    private function sharedResolvers(ContainerInterface $container): array
-    {
-        $containerId = spl_object_id($container);
-
-        if ($this->sharedResolvers !== null && $this->sharedResolversContainerId === $containerId) {
-            return $this->sharedResolvers;
-        }
-
-        $factory = $container->get(FactoryInterface::class);
-        $this->sharedResolversContainerId = $containerId;
-
-        return $this->sharedResolvers = [
-            MakeAttributeResolver::class   => new MakeAttributeResolver($factory),
-            EnvResolver::class             => new EnvResolver($container),
-            EntryIdResolver::class         => new EntryIdResolver($container),
-            ConfigAttributeResolver::class => new ConfigAttributeResolver($container),
-        ];
-    }
-
-    /**
-     * Turns a slot or anonymous-registration specification into a concrete
-     * resolver instance.
-     *
-     * Accepted forms:
-     *  - {@see ParameterResolverInterface} / {@see PropertyResolverInterface}
-     *    instance - used as-is (for pre-built resolver objects supplied via
-     *    the slot API).
-     *  - {@see Closure} - invoked with the container; expected to return the resolver.
-     *  - Other callable (array `[class, method]`, function name, invokable
-     *    object) - invoked with the container.
-     *  - String that isn't directly callable - treated as a service id and
-     *    looked up through `$container->get()`.
-     *
-     * @param callable|string|ParameterResolverInterface|PropertyResolverInterface $config
-     */
-    protected function materializeResolver(mixed $config, ContainerInterface $container): object
-    {
-        if ($config instanceof ParameterResolverInterface
-            || $config instanceof PropertyResolverInterface
-        ) {
-            return $config;
-        }
-
-        if ($config instanceof Closure) {
-            return $config($container);
-        }
-
-        if (is_callable($config)) {
-            return $config($container);
-        }
-
-        if (is_string($config)) {
-            return $container->get($config);
-        }
-
-        throw new \InvalidArgumentException(sprintf(
-            'Resolver specification must be a resolver instance, Closure, callable, '
-            . 'or service id string; got %s.',
-            get_debug_type($config),
-        ));
-    }
-
-    // =========================================================================
-    // Fluent API
-    // =========================================================================
-
-    /**
-     * @param callable(ContainerValue, array<string|int, mixed>):mixed $factory
-     */
+    /** @param callable(ContainerValue, array<string|int, mixed>):mixed $factory */
     public function addFactory(string $id, callable $factory): static
     {
+        self::assertBindingIdAvailable($id, 'factory');
         $this->factories[$id] = $factory;
         return $this;
     }
 
-    /**
-     * @param array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array{0: string, 1: string}|\Componenta\DI\Definition\FactoryDefinition|\Componenta\DI\Definition\ClassDefinition> $factories
-     */
     public function addFactories(array $factories): static
     {
-        $this->factories = [...$this->factories, ...$factories];
+        foreach ($factories as $id => $factory) {
+            if (!is_string($id)) {
+                throw new InvalidConfigurationException(
+                    'Factory ids must be strings.',
+                );
+            }
+
+            if (!is_callable($factory)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Factory "%s" must be callable; got %s.',
+                    $id,
+                    get_debug_type($factory),
+                ));
+            }
+
+            $this->addFactory($id, $factory);
+        }
+
         return $this;
     }
 
     public function addInvokable(string $classOrAlias, ?string $class = null): static
     {
-        if ($class === null) {
-            if (!in_array($classOrAlias, $this->invokables, true)) {
-                $this->invokables[] = $classOrAlias;
-            }
-        } else {
-            if (!in_array($class, $this->invokables, true)) {
-                $this->invokables[] = $class;
-            }
-            // Explicit alias takes precedence - do not overwrite.
-            if (!isset($this->aliases[$classOrAlias])) {
-                $this->aliases[$classOrAlias] = $class;
-            }
+        if ($classOrAlias === '' || $class === '') {
+            throw new InvalidConfigurationException(
+                'Invokable class and alias names must be non-empty strings.',
+            );
+        }
+
+        $target = $class ?? $classOrAlias;
+        self::assertBindingIdAvailable($target, 'invokable');
+
+        if ($class !== null) {
+            self::assertBindingIdAvailable($classOrAlias, 'alias');
+        }
+
+        if (!in_array($target, $this->invokables, true)) {
+            $this->invokables[] = $target;
+        }
+
+        if ($class !== null && !isset($this->aliases[$classOrAlias])) {
+            $this->aliases[$classOrAlias] = $class;
         }
 
         return $this;
@@ -989,6 +1168,19 @@ class ContainerBuilder
     public function addInvokables(array $invokables): static
     {
         foreach ($invokables as $key => $value) {
+            if (!is_string($value) || $value === '') {
+                throw new InvalidConfigurationException(sprintf(
+                    'Invokable entry must be a non-empty class-string; got %s.',
+                    get_debug_type($value),
+                ));
+            }
+
+            if (!is_int($key) && !is_string($key)) {
+                throw new InvalidConfigurationException(
+                    'Invokable aliases must be strings.',
+                );
+            }
+
             is_int($key)
                 ? $this->addInvokable($value)
                 : $this->addInvokable($key, $value);
@@ -996,51 +1188,63 @@ class ContainerBuilder
         return $this;
     }
 
-    public function addAutowire(string $class): static
-    {
-        if (!in_array($class, $this->autowires, true)) {
-            $this->autowires[] = $class;
-        }
-
-        return $this;
-    }
-
-    public function addAutowires(array $classes): static
-    {
-        foreach ($classes as $class) {
-            $this->addAutowire($class);
-        }
-
-        return $this;
-    }
-
     public function addAlias(string $alias, string $target): static
     {
+        self::assertBindingIdAvailable($alias, 'alias');
+        if ($target === '') {
+            throw new InvalidConfigurationException(
+                'Alias target must be a non-empty DI id.',
+            );
+        }
+
         $this->aliases[$alias] = $target;
         return $this;
     }
 
     public function addAliases(array $aliases): static
     {
-        $this->aliases = [...$this->aliases, ...$aliases];
+        foreach ($aliases as $alias => $target) {
+            if (!is_string($alias)) {
+                throw new InvalidConfigurationException(
+                    'Alias ids must be strings.',
+                );
+            }
+
+            if (!is_string($target)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Alias "%s" target must be a string; got %s.',
+                    $alias,
+                    get_debug_type($target),
+                ));
+            }
+
+            $this->addAlias($alias, $target);
+        }
+
         return $this;
     }
 
-    public function addDelegator(string $id, callable|string|array $delegator): static
-    {
+    public function addDelegator(
+        string $id,
+        callable|string|array $delegator,
+    ): static {
+        self::assertBindingIdAvailable($id, 'delegator');
+        self::assertDelegatorSpecification($delegator, $id);
         $this->delegators[$id][] = $delegator;
         return $this;
     }
 
     public function addDelegators(array $delegators): static
     {
-        foreach ($delegators as $id => $delegatorList) {
-            $list = is_array($delegatorList) && array_is_list($delegatorList)
-                ? $delegatorList
-                : [$delegatorList];
+        foreach ($delegators as $id => $list) {
+            if (!is_string($id)) {
+                throw new InvalidConfigurationException(
+                    'Delegator ids must be strings.',
+                );
+            }
 
-            foreach ($list as $delegator) {
-                $this->delegators[$id][] = $delegator;
+            foreach (self::normalizeDelegatorList($list, $id) as $delegator) {
+                $this->addDelegator($id, $delegator);
             }
         }
 
@@ -1049,14 +1253,89 @@ class ContainerBuilder
 
     public function addService(string $id, mixed $service): static
     {
+        self::assertBindingIdAvailable($id, 'service');
         $this->services[$id] = $service;
         return $this;
     }
 
     public function addServices(array $services): static
     {
-        $this->services = [...$this->services, ...$services];
+        foreach ($services as $id => $service) {
+            if (!is_string($id)) {
+                throw new InvalidConfigurationException(
+                    'Service ids must be strings.',
+                );
+            }
+
+            $this->addService($id, $service);
+        }
+
         return $this;
     }
 
+    /**
+     * Installs a generated resolver. A release fingerprint avoids source-file
+     * hashing during build; it must be the same value used during compilation
+     * and must change with application sources or DI extension configuration.
+     * Null preserves strict runtime source validation.
+     */
+    public function useGeneratedEntryResolver(
+        ?string $file,
+        ?string $releaseFingerprint = null,
+    ): static
+    {
+        if ($file === '') {
+            throw new InvalidConfigurationException(
+                'Generated entry resolver path must be null or a non-empty string.',
+            );
+        }
+        if ($releaseFingerprint === '') {
+            throw new InvalidConfigurationException(
+                'Generated entry resolver release fingerprint must be null or a non-empty string.',
+            );
+        }
+
+        $this->generatedEntryResolverFile = $file;
+        $this->generatedEntryResolverReleaseFingerprint = $releaseFingerprint;
+
+        return $this;
+    }
+
+    public function addParameterResolver(
+        mixed $resolver,
+        int $priority = 0,
+    ): static {
+        self::assertExtensionSpecification($resolver, 'parameter resolver');
+
+        foreach ($this->parameterResolvers as [, $registeredPriority]) {
+            if ($registeredPriority === $priority) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Parameter resolver priority %d is already registered.',
+                    $priority,
+                ));
+            }
+        }
+
+        $this->parameterResolvers[] = [$resolver, $priority];
+        return $this;
+    }
+
+    public function replaceParameterResolvers(bool $replace = true): static
+    {
+        $this->replaceParameterResolvers = $replace;
+        return $this;
+    }
+
+    public function addAttributeHandler(mixed $handler): static
+    {
+        self::assertExtensionSpecification($handler, 'attribute handler');
+        $this->attributeHandlers[] = $handler;
+        return $this;
+    }
+
+    public function replaceAttributeHandlers(bool $replace = true): static
+    {
+        $this->replaceAttributeHandlers = $replace;
+        return $this;
+    }
 }

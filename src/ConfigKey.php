@@ -4,86 +4,50 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-/**
- * Configuration keys for DI container.
- *
- * @example Usage in config files
- * ```php
- * use Componenta\DI\ConfigKey;
- *
- * return [
- *     ConfigKey::DEPENDENCIES => [
- *         ConfigKey::FACTORIES => [...],
- *         ConfigKey::ALIASES => [...],
- *     ],
- * ];
- * ```
- */
+/** Configuration keys owned and consumed by the DI package. */
 final class ConfigKey
 {
-
-    // ==========================================================================
-    // Top-level keys
-    // ==========================================================================
-
-    /** Root key for all DI configuration */
     public const string DEPENDENCIES = \Componenta\Config\ConfigKey::DEPENDENCIES;
-
-    // ==========================================================================
-    // Dependencies section keys
-    // ==========================================================================
-
-    /** Factory callables: id => callable(ContainerValue, context)|class-string */
     public const string FACTORIES = \Componenta\Config\ConfigKey::FACTORIES;
-
-    /** Simple classes without dependencies: list<class-string> or id => class-string */
     public const string INVOKABLES = \Componenta\Config\ConfigKey::INVOKABLES;
-
-    /** Service aliases: alias => target */
     public const string ALIASES = \Componenta\Config\ConfigKey::ALIASES;
-
-    /** Classes for autowiring: list<class-string> */
-    public const string AUTOWIRES = \Componenta\Config\ConfigKey::AUTOWIRES;
-
-    /** Delegator factories: id => list<callable|class-string> */
     public const string DELEGATORS = \Componenta\Config\ConfigKey::DELEGATORS;
-
-    /** Pre-instantiated services: id => instance */
     public const string SERVICES = \Componenta\Config\ConfigKey::SERVICES;
 
-    /** app config key */
-    public const string CONFIG = \Componenta\Config\ConfigKey::CONFIG;
-
-    /** Custom parameter resolvers: priority => class-string|callable|ParameterResolverInterface */
+    /** Custom parameter resolvers: priority => service/callable/instance. */
     public const string PARAMETER_RESOLVERS = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS;
 
-    /** Custom property resolvers: priority => class-string|callable|PropertyResolverInterface */
-    public const string PROPERTY_RESOLVERS = \Componenta\Config\ConfigKey::PROPERTY_RESOLVERS;
-
-    /** When true, the default parameter resolver chain is NOT installed; only the user-supplied resolvers are. */
+    /** Replace the default parameter resolver chain. */
     public const string PARAMETER_RESOLVERS_REPLACE = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS_REPLACE;
 
-    /** When true, the default property resolver chain is NOT installed; only the user-supplied resolvers are. */
-    public const string PROPERTY_RESOLVERS_REPLACE = \Componenta\Config\ConfigKey::PROPERTY_RESOLVERS_REPLACE;
+    /** Custom runtime attribute handlers in registration order. */
+    public const string ATTRIBUTE_HANDLERS = 'attribute_handlers';
 
-    /** DI plan compiler mode: sparse by default, complete for legacy rollback. */
-    public const string DI_PLANS_MODE = \Componenta\DI\Compile\PlanCompiler::MODE_CONFIG_KEY;
+    /** Replace all built-in lifecycle/property handlers. */
+    public const string ATTRIBUTE_HANDLERS_REPLACE = 'attribute_handlers_replace';
 
-    /**
-     * Get all dependency section keys.
-     *
-     * @return list<string>
-     */
+    /** Generated EntryResolver PHP file loaded before ReflectionResolver. */
+    public const string GENERATED_ENTRY_RESOLVER_FILE = 'generated_entry_resolver_file';
+
+    /** Release/deploy identifier that replaces per-build source hashing. */
+    public const string GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
+        = 'generated_entry_resolver_release_fingerprint';
+
+    /** @return list<string> */
     public static function dependencyKeys(): array
     {
         return [
             self::FACTORIES,
             self::INVOKABLES,
             self::ALIASES,
-            self::AUTOWIRES,
             self::DELEGATORS,
             self::SERVICES,
-            self::CONFIG,
+            self::PARAMETER_RESOLVERS,
+            self::PARAMETER_RESOLVERS_REPLACE,
+            self::ATTRIBUTE_HANDLERS,
+            self::ATTRIBUTE_HANDLERS_REPLACE,
+            self::GENERATED_ENTRY_RESOLVER_FILE,
+            self::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT,
         ];
     }
 }

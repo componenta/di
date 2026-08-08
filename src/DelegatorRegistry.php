@@ -45,11 +45,6 @@ final class DelegatorRegistry
         unset($this->callables[$id]);
     }
 
-    public function has(string $id): bool
-    {
-        return isset($this->raw[$id]);
-    }
-
     /**
      * Drops the resolved-callable cache for the entry; raw registrations are
      * preserved. Container invokes this from its invalidation flow so the

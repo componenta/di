@@ -2,370 +2,380 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/Fixture/container_helpers.php';
+namespace Componenta\DI\Tests;
 
-use Componenta\DI\Compile\PlanCompiler;
 use Componenta\Config\Config;
-use Componenta\Config\Environment;
-use Componenta\DI\Attribute\EntryId;
+use Componenta\DI\Attribute\Inject;
+use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Compile\Entry\GeneratedEntryResolverLoader;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\Tests\Fixture\CacheConsumer;
-use Componenta\DI\Tests\Fixture\CacheDelegator;
-use Componenta\DI\Tests\Fixture\CacheFactory;
-use Componenta\DI\Tests\Fixture\ServiceWithParam;
-use Componenta\DI\Tests\Fixture\SimpleService;
+use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerInterface;
 
-final class ContainerBuilderPlanModeTarget
+final class BuilderGeneratedEntry
 {
     public function __construct(
-        string $slug,
-        SimpleService $service,
+        public int $value = 1,
     ) {}
 }
 
-final class ContainerBuilderEntryIdTarget
+final class BuilderInjectedDependency {}
+
+final class BuilderAttributedResolver implements
+    \Componenta\DI\Resolver\Parameter\ParameterResolverInterface
 {
-    public function __construct(
-        #[EntryId(ContainerInterface::class)]
-        public ContainerInterface $container,
-    ) {}
+    #[Inject]
+    public BuilderInjectedDependency $dependency;
+
+    public function supports(
+        \Componenta\DI\Resolver\Target\ParameterTarget $target,
+    ): bool {
+        return false;
+    }
+
+    public function resolveParameter(
+        \Componenta\DI\Resolver\Target\ParameterTarget $target,
+        \Componenta\DI\Resolver\Parameter\ParameterResolutionContext $context,
+    ): ?array {
+        return null;
+    }
+}
+
+#[Lazy]
+final class BuilderLazyEntry
+{
+    public function __construct(public int $value = 5) {}
+}
+
+final class BuilderProxyFactory implements ProxyFactoryInterface
+{
+    public int $lazyCalls = 0;
+    public int $proxyCalls = 0;
+
+    public function makeLazy(string $class, callable $initializer): object
+    {
+        ++$this->lazyCalls;
+        $entry = (new \ReflectionClass($class))->newInstanceWithoutConstructor();
+        $initializer($entry);
+
+        return $entry;
+    }
+
+    public function makeProxy(string $class, callable $initializer): object
+    {
+        ++$this->proxyCalls;
+
+        return $initializer((new \ReflectionClass($class))->newInstanceWithoutConstructor());
+    }
+}
+
+final class BuilderExternalContainer implements ContainerInterface
+{
+    /** @param array<string, mixed> $entries */
+    public function __construct(private array $entries) {}
+
+    public function get(string $id): mixed
+    {
+        return $this->entries[$id] ?? throw new \RuntimeException($id);
+    }
+
+    public function has(string $id): bool
+    {
+        return array_key_exists($id, $this->entries);
+    }
+}
+
+final class BuilderMagicDelegator
+{
+    public function __call(string $name, array $arguments): mixed
+    {
+        return $arguments[0] ?? null;
+    }
+}
+
+final class BuilderWithProxyFactory extends ContainerBuilder
+{
+    public readonly BuilderProxyFactory $proxy;
+
+    public function __construct()
+    {
+        $this->proxy = new BuilderProxyFactory();
+    }
+
+    protected function createProxyFactory(): ProxyFactoryInterface
+    {
+        return $this->proxy;
+    }
 }
 
 describe('ContainerBuilder', function () {
-    it('build() returns a Container instance', function () {
-        expect(minimalBuilder()->build())->toBeInstanceOf(Container::class);
+    it('builds one runtime container and resolves fresh objects with explicit context', function () {
+        $container = (new ContainerBuilder())->build();
+
+        $first = $container->make(BuilderGeneratedEntry::class, ['value' => 9]);
+        $second = $container->make(BuilderGeneratedEntry::class, ['value' => 10]);
+
+        expect($first)->toBeInstanceOf(BuilderGeneratedEntry::class)
+            ->and($first->value)->toBe(9)
+            ->and($second->value)->toBe(10)
+            ->and($second)->not->toBe($first);
     });
 
-    it('rejects a non-array dependencies section', function () {
-        $config = new Config([
-            ConfigKey::DEPENDENCIES => 'invalid',
-        ]);
+    it('installs default attribute handlers before materializing custom parameter resolvers', function () {
+        $dependency = new BuilderInjectedDependency();
+        $container = (new ContainerBuilder())
+            ->addService(BuilderInjectedDependency::class, $dependency)
+            ->addParameterResolver(BuilderAttributedResolver::class, -1000)
+            ->build();
 
-        expect(fn () => ContainerBuilder::configure($config))
-            ->toThrow(InvalidConfigurationException::class, 'dependencies section must be an array');
+        $custom = array_find(
+            $container->get(ParametersResolver::class)->resolverList,
+            static fn(object $resolver): bool => $resolver instanceof BuilderAttributedResolver,
+        );
+
+        expect($custom)->toBeInstanceOf(BuilderAttributedResolver::class)
+            ->and($custom->dependency)->toBe($dependency);
     });
 
-    describe('addService', function () {
-        it('exposes the value under the registered id', function () {
-            $obj = new stdClass();
+    it('uses one proxy collaborator behind reflection and the public container facade', function () {
+        $builder = new BuilderWithProxyFactory();
+        $container = $builder->build();
 
-            $container = minimalBuilder()
-                ->addService('svc', $obj)
-                ->build();
+        $entry = $container->make(BuilderLazyEntry::class);
+        $container->makeLazy(
+            BuilderGeneratedEntry::class,
+            static function (object $entry): void {
+                $entry->__construct(7);
+            },
+        );
 
-            expect($container->get('svc'))->toBe($obj);
-        });
-
-        it('addServices registers multiple in one call', function () {
-            $container = minimalBuilder()
-                ->addServices(['a' => 1, 'b' => 2])
-                ->build();
-
-            expect($container->get('a'))->toBe(1)
-                ->and($container->get('b'))->toBe(2);
-        });
+        expect($entry)->toBeInstanceOf(BuilderLazyEntry::class)
+            ->and($entry->value)->toBe(5)
+            ->and($builder->proxy->lazyCalls)->toBe(2)
+            ->and($container->get(ProxyFactoryInterface::class))->toBe($container);
     });
 
-    describe('addFactory / addFactories', function () {
-        it('invokes the factory with a container that can resolve other services', function () {
-            $container = minimalBuilder()
-                ->addService('dep', 'from-dep')
-                ->addFactory('svc', fn (ContainerInterface $c) => 'got:' . $c->get('dep'))
-                ->build();
+    it('compiles and installs a generated entry resolver without replacing the container', function () {
+        $file = sys_get_temp_dir()
+            . '/componenta-di-builder-'
+            . bin2hex(random_bytes(6))
+            . '.php';
 
-            expect($container->get('svc'))->toBe('got:from-dep');
-        });
-
-        it('addFactories registers a batch', function () {
-            $container = minimalBuilder()
-                ->addFactories([
-                    'a' => fn () => 'A',
-                    'b' => fn () => 'B',
-                ])
-                ->build();
-
-            expect($container->get('a'))->toBe('A')
-                ->and($container->get('b'))->toBe('B');
-        });
-    });
-
-    describe('addAlias / addAliases', function () {
-        it('registers aliases resolved via get()', function () {
-            $container = minimalBuilder()
-                ->addService('real', 'value')
-                ->addAlias('short', 'real')
-                ->build();
-
-            expect($container->get('short'))->toBe('value');
-        });
-
-        it('addAliases registers a batch', function () {
-            $container = minimalBuilder()
-                ->addService('real', 'value')
-                ->addAliases(['a' => 'real', 'b' => 'real'])
-                ->build();
-
-            expect($container->get('a'))->toBe('value')
-                ->and($container->get('b'))->toBe('value');
-        });
-    });
-
-    describe('addAutowire', function () {
-        it('enables the container to construct the class via reflection', function () {
-            $container = minimalBuilder()
-                ->addAutowire(SimpleService::class)
-                ->build();
-
-            expect($container->get(SimpleService::class))->toBeInstanceOf(SimpleService::class);
-        });
-    });
-
-    describe('addInvokable', function () {
-        it('registers the class under its FQN', function () {
-            $container = minimalBuilder()
-                ->addInvokable(SimpleService::class)
-                ->build();
-
-            expect($container->get(SimpleService::class))->toBeInstanceOf(SimpleService::class);
-        });
-
-        it('registers under a distinct alias when given two arguments', function () {
-            $container = minimalBuilder()
-                ->addInvokable('alias', SimpleService::class)
-                ->build();
-
-            expect($container->get('alias'))->toBeInstanceOf(SimpleService::class);
-        });
-    });
-
-    describe('addDelegator', function () {
-        it('wires the delegator so it is applied on get()', function () {
-            $container = minimalBuilder()
-                ->addFactory('svc', fn () => 'base')
-                ->addDelegator('svc', fn (string $v) => $v . '-decorated')
-                ->build();
-
-            expect($container->get('svc'))->toBe('base-decorated');
-        });
-    });
-
-    describe('definitions', function () {
-        it('accepts a factory definition registered via addService', function () {
-            $container = minimalBuilder()
-                ->addService('svc', Definition::factory(fn () => 'via-definition'))
-                ->build();
-
-            // Definitions registered as services are stored verbatim and
-            // resolved at set() time inside build() - see Container::set().
-            expect($container->get('svc'))->toBe('via-definition');
-        });
-
-        it('builds from an autowire ClassDefinition with explicit constructor params', function () {
-            $container = minimalBuilder()
-                ->addService('svc', Definition::autowire(ServiceWithParam::class)
-                    ->constructor(['value' => 'built']))
-                ->build();
-
-            $instance = $container->get('svc');
-
-            expect($instance)->toBeInstanceOf(ServiceWithParam::class)
-                ->and($instance->value)->toBe('built');
-        });
-    });
-
-    describe('default chain behaviour', function () {
-        it('resolves unregistered classes via the reflection chain (autowired on demand)', function () {
-            $container = minimalBuilder()->build();
-
-            expect($container->get(SimpleService::class))->toBeInstanceOf(SimpleService::class);
-        });
-
-        it('throws NotFoundException for an unknown non-class id', function () {
-            $container = minimalBuilder()->build();
-
-            expect(fn () => $container->get('some.unknown.id'))
-                ->toThrow(NotFoundException::class);
-        });
-    });
-
-    describe('compilePlans', function () {
-        it('uses sparse mode by default and allows complete mode rollback', function () {
-            $builder = minimalBuilder();
-
-            $sparse = $builder->compilePlans([ContainerBuilderPlanModeTarget::class]);
-            $complete = $builder->compilePlans(
-                [ContainerBuilderPlanModeTarget::class],
-                PlanCompiler::MODE_COMPLETE,
+        try {
+            (new ContainerBuilder())->compileGeneratedEntryResolver(
+                [BuilderGeneratedEntry::class],
+                $file,
+                namespace: 'Componenta\\DI\\Tests\\GeneratedBuilder',
+                releaseFingerprint: 'builder-test-release',
             );
 
-            expect($sparse['param'][ContainerBuilderPlanModeTarget::class]['__construct'])
-                ->toBe([
-                    1 => [
-                        'kind' => 'componenta.di.autowire',
-                        'payload' => ['type' => SimpleService::class],
-                    ],
-                ])
-                ->and($complete['param'])
-                ->toBe([]);
-        });
+            $container = (new ContainerBuilder())
+                ->useGeneratedEntryResolver($file, 'builder-test-release')
+                ->build();
 
-        it('does not leak compile-time resolvers into the runtime container', function () {
-            $builder = minimalBuilder();
+            $entry = $container->make(
+                BuilderGeneratedEntry::class,
+                ['value' => 33],
+            );
 
-            $builder->compilePlans([ContainerBuilderEntryIdTarget::class]);
-            $container = $builder->build();
-
-            $target = $container->make(ContainerBuilderEntryIdTarget::class);
-
-            expect($target->container)->toBe($container);
-        });
-
-        it('does not reuse resolver instances across repeated build calls', function () {
-            $builder = minimalBuilder();
-            $first = $builder->build();
-            $second = $builder->build();
-
-            $target = $second->make(ContainerBuilderEntryIdTarget::class);
-
-            expect($target->container)
-                ->toBe($second)
-                ->not->toBe($first);
-        });
+            expect($entry)->toBeInstanceOf(BuilderGeneratedEntry::class)
+                ->and($entry->value)->toBe(33);
+        } finally {
+            @unlink($file);
+        }
     });
 
-    describe('toArray', function () {
-        it('exports fluent changes made after configure()', function () {
-            $config = new Config([
-                ConfigKey::DEPENDENCIES => [
-                    ConfigKey::SERVICES => [
-                        'from.config' => 'config',
-                    ],
-                ],
-                'app.name' => 'Ophire',
-            ]);
+    it('falls back to reflection when the configured generated file is invalid', function () {
+        $file = sys_get_temp_dir()
+            . '/componenta-di-invalid-'
+            . bin2hex(random_bytes(6))
+            . '.php';
+        file_put_contents($file, "<?php\nreturn null;\n");
 
-            $array = ContainerBuilder::configure($config)
-                ->addService('from.builder', 'builder')
-                ->toArray();
+        try {
+            $container = (new ContainerBuilder())
+                ->useGeneratedEntryResolver($file)
+                ->build();
 
-            expect($array['app.name'])
-                ->toBe('Ophire')
-                ->and($array[ConfigKey::DEPENDENCIES][ConfigKey::SERVICES]['from.config'])
-                ->toBe('config')
-                ->and($array[ConfigKey::DEPENDENCIES][ConfigKey::SERVICES]['from.builder'])
-                ->toBe('builder');
-        });
+            expect($container->make(BuilderGeneratedEntry::class)->value)->toBe(1);
+        } finally {
+            @unlink($file);
+        }
     });
 
-    describe('container cache', function () {
-        it('builds from cached dependencies with the same runtime behaviour', function () {
-            $dependencies = [
-                ConfigKey::SERVICES => [
-                    'cache.value' => 'from-cache',
-                ],
-                ConfigKey::FACTORIES => [
-                    'cached.service' => CacheFactory::class,
-                ],
-                ConfigKey::ALIASES => [
-                    'cached.alias' => 'cached.service',
-                ],
-                ConfigKey::DELEGATORS => [
-                    'cached.service' => CacheDelegator::class,
-                ],
-                ConfigKey::INVOKABLES => [
-                    'simple.alias' => SimpleService::class,
-                ],
-                ConfigKey::AUTOWIRES => [
-                    CacheConsumer::class,
-                ],
-            ];
+    it('installs core pipeline services atomically and forbids rebinding or decoration', function () {
+        $container = (new ContainerBuilder())->build();
 
-            $config = new Config(
-                [ConfigKey::DEPENDENCIES => $dependencies],
-                new Environment(['APP_ENV' => 'production']),
-            );
-            $slimConfig = new Config(
-                ['app.name' => 'Ophire'],
-                $config->environment,
-            );
-            $cache = [
-                'version' => ContainerBuilder::CACHE_VERSION,
-                ConfigKey::DEPENDENCIES => ContainerBuilder::normalizeDependencies($dependencies),
-            ];
+        expect($container->get(ParametersResolver::class))
+            ->toBeInstanceOf(ParametersResolver::class)
+            ->and($container->get(AttributeProcessor::class))
+            ->toBeInstanceOf(AttributeProcessor::class)
+            ->and(fn() => $container->set(ParametersResolver::class, new ParametersResolver()))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => $container->alias(ParametersResolver::class, BuilderGeneratedEntry::class))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => $container->delegator(ParametersResolver::class, static fn($entry) => $entry))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => $container->get(ParametersResolver::class)->add(
+                new \Componenta\DI\Resolver\Parameter\ArrayResolver(),
+            ))->toThrow(\LogicException::class)
+            ->and(fn() => $container->get(
+                \Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry::class,
+            )->add(new \Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler()))
+            ->toThrow(\LogicException::class);
+    });
 
-            $fromConfig = ContainerBuilder::configure($config)->build();
-            $fromCache = ContainerBuilder::configureFromCache($slimConfig, $cache)->build();
+    it('canonicalizes definitions registered through aliases', function () {
+        $container = (new ContainerBuilder())
+            ->addAlias('builder.entry', BuilderGeneratedEntry::class)
+            ->build();
 
-            expect($cache[ConfigKey::DEPENDENCIES][ConfigKey::SERVICES])
-                ->toBe(['cache.value' => 'from-cache'])
-                ->and($fromCache->get(Config::class)->has(ConfigKey::DEPENDENCIES))
-                ->toBeTrue()
-                ->and($fromCache->get(Config::class)->get('app.name'))
-                ->toBe('Ophire')
-                ->and($fromCache->get('cached.service')->value)
-                ->toBe($fromConfig->get('cached.service')->value)
-                ->toBe('from-cache-decorated')
-                ->and($fromCache->get('cached.alias')->value)
-                ->toBe($fromConfig->get('cached.alias')->value)
-                ->toBe('from-cache')
-                ->and($fromCache->get('simple.alias'))
-                ->toBeInstanceOf(SimpleService::class)
-                ->and($fromCache->get(CacheConsumer::class)->service)
-                ->toBeInstanceOf(SimpleService::class);
+        $container->set(
+            'builder.entry',
+            Definition::autowire(BuilderGeneratedEntry::class)
+                ->constructor(['value' => 44]),
+        );
 
-            $fromCache->set('cached.service', new ServiceWithParam('runtime'));
-            expect($fromCache->get('cached.service')->value)->toBe('runtime-decorated');
+        expect($container->get('builder.entry'))
+            ->toBeInstanceOf(BuilderGeneratedEntry::class)
+            ->and($container->get('builder.entry')->value)->toBe(44);
+    });
 
-            $fromCache->alias('late.value', 'cache.value');
-            expect($fromCache->get('late.value'))->toBe('from-cache');
-
-            expect($fromCache->make(ServiceWithParam::class, ['value' => 'fresh'])->value)
-                ->toBe('fresh');
-
-            $external = new class implements ContainerInterface {
-                public function get(string $id): mixed
-                {
-                    return 'external-value';
-                }
-
-                public function has(string $id): bool
-                {
-                    return $id === 'external.value';
-                }
-            };
-
-            $fromCache->addContainer($external);
-            expect($fromCache->get('external.value'))->toBe('external-value');
-        });
-
-        it('rejects unsupported cache versions', function () {
-            $config = new Config([]);
-
-            expect(fn () => ContainerBuilder::configureFromCache($config, [
-                'version' => ContainerBuilder::CACHE_VERSION + 1,
-                ConfigKey::DEPENDENCIES => [],
-            ]))->toThrow(InvalidConfigurationException::class);
-        });
-
-        it('resolves relative DI plan sidecar paths from the container cache directory', function () {
-            $builder = ContainerBuilder::configureFromCache(
+    it('rejects legacy, unknown and malformed dependency configuration', function () {
+        expect(fn() => ContainerBuilder::configureWithDependencies(
+            new Config([]),
+            ['property_resolvers' => []],
+        ))->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => ContainerBuilder::configureWithDependencies(
                 new Config([]),
-                [
-                    'version' => ContainerBuilder::CACHE_VERSION,
-                    ConfigKey::DEPENDENCIES => ContainerBuilder::normalizeDependencies([
-                        PlanCompiler::FILE_CONFIG_KEY => 'di-plans.cache.php',
-                    ]),
-                ],
-                __DIR__,
-            );
+                [ConfigKey::PARAMETER_RESOLVERS => ['priority' => BuilderGeneratedEntry::class]],
+            ))->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => ContainerBuilder::configureWithDependencies(
+                new Config([]),
+                [ConfigKey::ATTRIBUTE_HANDLERS => ['named' => BuilderGeneratedEntry::class]],
+            ))->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => ContainerBuilder::configureWithDependencies(
+                new Config([]),
+                [ConfigKey::PARAMETER_RESOLVERS => [100 => new \stdClass()]],
+            ))->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addAttributeHandler(new \stdClass()))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addParameterResolver(new \stdClass()))
+            ->toThrow(InvalidConfigurationException::class);
+    });
 
-            expect($builder->diPlansFile)->toBe(__DIR__ . '/di-plans.cache.php');
-        });
+    it('rejects unreachable factories and canonical bindings to protected services', function () {
+        expect(fn() => (new ContainerBuilder())
+            ->addFactory('builder.alias', static fn() => new BuilderGeneratedEntry())
+            ->addAlias('builder.alias', BuilderGeneratedEntry::class)
+            ->build())
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())
+                ->addAlias('builder.parameters', ParametersResolver::class)
+                ->addService('builder.parameters', new \stdClass())
+                ->build())
+            ->toThrow(InvalidConfigurationException::class);
+    });
+
+    it('rejects multiple binding mechanisms for the same canonical id', function () {
+        expect(fn() => (new ContainerBuilder())
+            ->addFactory(BuilderGeneratedEntry::class, static fn() => new BuilderGeneratedEntry())
+            ->addService(BuilderGeneratedEntry::class, new BuilderGeneratedEntry())
+            ->build())
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())
+                ->addFactory(BuilderGeneratedEntry::class, static fn() => new BuilderGeneratedEntry())
+                ->addInvokable(BuilderGeneratedEntry::class)
+                ->build())
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())
+                ->addAlias('builder.service.alias', BuilderGeneratedEntry::class)
+                ->addServices([
+                    'builder.service.alias' => new BuilderGeneratedEntry(1),
+                    BuilderGeneratedEntry::class => new BuilderGeneratedEntry(2),
+                ])
+                ->build())
+            ->toThrow(InvalidConfigurationException::class);
+    });
+
+    it('normalizes duplicate invokable classes from configuration', function () {
+        $builder = ContainerBuilder::configureWithDependencies(
+            new Config([]),
+            [ConfigKey::INVOKABLES => [BuilderGeneratedEntry::class, BuilderGeneratedEntry::class]],
+        );
+
+        expect($builder->toArray()[ConfigKey::DEPENDENCIES][ConfigKey::INVOKABLES])
+            ->toBe([BuilderGeneratedEntry::class]);
+    });
+
+    it('uses singular validation for every bulk registration API', function () {
+        expect(fn() => (new ContainerBuilder())->addFactories([0 => static fn() => null]))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addFactories(['entry' => new \stdClass()]))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addAliases(['entry' => 123]))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addInvokables([new \stdClass()]))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addDelegator('entry', [new \stdClass()]))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(fn() => (new ContainerBuilder())->addDelegators(['entry' => 123]))
+            ->toThrow(InvalidConfigurationException::class)
+            ->and((new ContainerBuilder())->addDelegators([
+                'entry' => [new BuilderMagicDelegator(), 'dynamic'],
+            ])->toArray()[ConfigKey::DEPENDENCIES][ConfigKey::DELEGATORS]['entry'])
+            ->toHaveCount(1)
+            ->and(fn() => (new ContainerBuilder())->addServices([0 => new \stdClass()]))
+            ->toThrow(InvalidConfigurationException::class);
+    });
+
+    it('breaks mutual external-container has cycles without hiding get failures', function () {
+        $left = (new ContainerBuilder())->build();
+        $right = (new ContainerBuilder())->build();
+        $left->addContainer($right);
+        $right->addContainer($left);
+
+        expect($left->has('builder.missing'))->toBeFalse()
+            ->and($right->has('builder.missing'))->toBeFalse()
+            ->and(fn() => $left->get('builder.missing'))
+            ->toThrow(NotFoundException::class);
+    });
+
+    it('keeps local base entries ahead of external containers deterministically', function () {
+        $container = (new ContainerBuilder())
+            ->addService('builder.shared', 'local')
+            ->build();
+        $container->addContainer(new BuilderExternalContainer([
+            'builder.shared' => 'external',
+            'builder.external-only' => 'external-only',
+        ]));
+
+        expect($container->get('builder.shared'))->toBe('local')
+            ->and($container->get('builder.external-only'))->toBe('external-only')
+            ->and(fn() => $container->addContainer($container))
+            ->toThrow(InvalidConfigurationException::class);
+    });
+
+    it('does not expose removed legacy API', function () {
+        expect(method_exists(ContainerBuilder::class, 'addAutowire'))->toBeFalse()
+            ->and(method_exists(ContainerBuilder::class, 'compilePlans'))->toBeFalse()
+            ->and(defined(ConfigKey::class . '::PROPERTY_RESOLVERS'))->toBeFalse()
+            ->and(defined(ConfigKey::class . '::AUTOWIRES'))->toBeFalse()
+            ->and(class_exists(GeneratedEntryResolverLoader::class))->toBeTrue()
+            ->and(class_exists('Componenta\\DI\\Compile\\PlanCompiler'))->toBeFalse()
+            ->and(interface_exists('Componenta\\DI\\Resolver\\Entry\\InstantiatorInterface'))->toBeFalse()
+            ->and(class_exists('Componenta\\DI\\Resolver\\Target\\PropertyTarget'))->toBeFalse()
+            ->and(class_exists('Componenta\\DI\\Resolver\\FactoryConfigReader'))->toBeFalse()
+            ->and(class_exists('Componenta\\DI\\Resolver\\Entry\\ContainerCallableInvoker'))->toBeFalse()
+            ->and(method_exists('Componenta\\DI\\CycleGuard', 'track'))->toBeFalse()
+            ->and(method_exists('Componenta\\DI\\DelegatorRegistry', 'has'))->toBeFalse()
+            ->and(method_exists('Componenta\\DI\\ExternalContainerRegistry', 'getIterator'))->toBeFalse();
     });
 });

@@ -39,22 +39,6 @@ function recordingResolver(array $map = []): CallableResolverInterface
 }
 
 describe('DelegatorRegistry', function () {
-    describe('register() / has()', function () {
-        it('reports no delegators for an unregistered id', function () {
-            $registry = new DelegatorRegistry(recordingResolver());
-
-            expect($registry->has('svc'))->toBeFalse();
-        });
-
-        it('reports true after a delegator is registered', function () {
-            $registry = new DelegatorRegistry(recordingResolver());
-
-            $registry->register('svc', fn ($e) => $e);
-
-            expect($registry->has('svc'))->toBeTrue();
-        });
-    });
-
     describe('apply()', function () {
         it('returns the entry unchanged when no delegators are registered', function () {
             $registry = new DelegatorRegistry(recordingResolver());
@@ -175,8 +159,7 @@ describe('DelegatorRegistry', function () {
 
             $registry->invalidate('svc');
 
-            expect($registry->has('svc'))->toBeTrue()
-                ->and($registry->apply('svc', 'v', stubContainer()))->toBe('v-x');
+            expect($registry->apply('svc', 'v', stubContainer()))->toBe('v-x');
         });
 
         it('wraps a delegator\'s foreign exception in DelegatorException with entry id and previous', function () {

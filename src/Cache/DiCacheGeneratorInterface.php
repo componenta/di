@@ -10,14 +10,14 @@ use Componenta\DI\Exception\InvalidConfigurationException;
  * Writes a DI configuration cache file.
  *
  * Implementations take a plain array describing the DI section of a
- * Componenta configuration (factories, invokables, aliases, delegators,
- * services, compiled DI plans) and serialise it to a PHP file that
+ * Componenta configuration (factories, invokables, aliases, delegators, services,
+ * parameter resolvers and attribute handlers) and serialise it to a PHP file that
  * {@see \Componenta\DI\ContainerBuilder} can `require` on bootstrap to skip
  * runtime discovery and reflection.
  *
  * The contract is intentionally narrow - array in, file out. It does
- * not compute DI plans, scan classes, or merge with the rest of the
- * config; those concerns live in the discovery / compile pipeline.
+ * not scan classes, generate entry resolvers, or merge with the rest of the
+ * config; those concerns live in the application compile pipeline.
  *
  * Implementations are responsible for:
  *
@@ -33,8 +33,8 @@ interface DiCacheGeneratorInterface
      * Writes `$config` to `$path` as a PHP file returning the array.
      *
      * @param array<string, mixed> $config DI configuration to serialise.
-     *     Typically the contents of `dependencies.*` plus compiled DI
-     *     plans, but the format is opaque to the writer.
+     *     Typically the contents of `dependencies.*`; the format is opaque
+     *     to the writer.
      * @param string               $path   Absolute destination path.
      *     Intermediate directories are created if missing.
      *

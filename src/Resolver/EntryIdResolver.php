@@ -5,134 +5,93 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver;
 
 use Componenta\DI\Attribute\EntryId;
-use Componenta\DI\Compile\AttributeMatcherInterface;
-use Componenta\DI\Compile\CompilesPlanPayloadInterface;
-use Componenta\DI\Compile\ParameterPlanResolverInterface;
-use Componenta\DI\Compile\PropertyPlanResolverInterface;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Property\PropertyResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\DI\Resolver\Target\PropertyTarget;
+use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use ReflectionParameter;
 use ReflectionProperty;
+use Reflector;
 use Throwable;
 
-/**
- * Resolves parameters and properties marked with {@see EntryId} by looking up
- * the given identifier in the container.
- *
- * @example
- * ```php
- * public function __construct(
- *     #[EntryId('cache.redis')] CacheInterface $cache,
- * ) {}
- *
- * class Service {
- *     #[EntryId('cache.redis')] private CacheInterface $cache;
- * }
- * ```
- */
-final readonly class EntryIdResolver implements
+/** Resolves #[EntryId] parameters and handles #[EntryId] properties. */
+final class EntryIdResolver implements
     ParameterResolverInterface,
-    PropertyResolverInterface,
-    AttributeDrivenResolverInterface,
-    AttributeMatcherInterface,
-    CompilesPlanPayloadInterface,
-    ParameterPlanResolverInterface,
-    PropertyPlanResolverInterface
+    AttributeHandlerInterface
 {
-    public const string KIND = 'componenta.di.entry_id';
+    public AttributePhase $phase {
+        get => AttributePhase::AfterInstantiation;
+    }
+
+    public int $priority {
+        get => 300;
+    }
 
     public function __construct(
-        private ContainerInterface $container,
+        private readonly ContainerInterface $container,
     ) {}
 
-    public function planKind(): string
+    public function supports(ParameterTarget $target): bool
     {
-        return self::KIND;
+        return $target->hasAttribute(EntryId::class);
     }
 
-    public function claimTarget(ReflectionParameter|ReflectionProperty $target): ?string
+    public function supportsAttribute(string $attributeClass, Reflector $target): bool
     {
-        return $target->getAttributes(EntryId::class) !== [] ? self::KIND : null;
+        return $target instanceof ReflectionProperty
+            && is_a($attributeClass, EntryId::class, true);
     }
 
-    public function compilePayload(ReflectionParameter|ReflectionProperty $target): mixed
-    {
-        $attribute = $target->getAttributes(EntryId::class)[0] ?? null;
-        if ($attribute === null) {
-            return null;
+    public function handle(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+    ): void {
+        if (!$attribute instanceof EntryId || !$target instanceof ReflectionProperty) {
+            throw new LogicException('EntryIdResolver received an unsupported attribute target.');
         }
 
-        /** @var EntryId $entryId */
-        $entryId = $attribute->newInstance();
+        if (!$context->claimProperty($target)) {
+            return;
+        }
 
-        return ['id' => $entryId->value];
+        try {
+            $value = $this->container->get($attribute->value);
+        } catch (ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forProperty($target, previous: $e);
+        }
+
+        $context->writeProperty($target, $value);
     }
 
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        $entryId = (new ParameterTarget($parameter))->getFirstAttribute(EntryId::class);
+        $entryId = $target->firstAttribute(EntryId::class);
         if ($entryId === null) {
             return null;
         }
 
-        return $this->resolveParameterEntryId($parameter, $entryId->value, $providedParameters, $resolvedParameters);
-    }
-
-    public function resolveParameterPlan(
-        ReflectionParameter $parameter,
-        mixed $payload,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
-    ): ?array {
-        $entryId = $this->entryIdFromPayload($payload);
-        if ($entryId === null) {
-            return $this->resolveParameter($parameter, $providedParameters, $resolvedParameters);
-        }
-
-        return $this->resolveParameterEntryId($parameter, $entryId, $providedParameters, $resolvedParameters);
-    }
-
-    public function resolveProperty(ReflectionProperty $property, array $context = []): ?array
-    {
-        $entryId = (new PropertyTarget($property))->getFirstAttribute(EntryId::class);
-        if ($entryId === null) {
-            return null;
-        }
-
-        return $this->resolvePropertyEntryId($property, $entryId->value);
-    }
-
-    public function resolvePropertyPlan(
-        ReflectionProperty $property,
-        mixed $payload,
-        array $context = [],
-    ): ?array {
-        $entryId = $this->entryIdFromPayload($payload);
-        if ($entryId === null) {
-            return $this->resolveProperty($property, $context);
-        }
-
-        return $this->resolvePropertyEntryId($property, $entryId);
-    }
-
-    private function entryIdFromPayload(mixed $payload): ?string
-    {
-        return is_array($payload) && is_string($payload['id'] ?? null)
-            ? $payload['id']
-            : null;
+        return $this->resolveParameterEntryId(
+            $target->reflection,
+            $entryId->value,
+            $context->provided,
+            $context->resolved,
+        );
     }
 
     /**
      * @param array<string|int, mixed> $providedParameters
-     * @param array<int, mixed> $resolvedParameters
+     * @param array<int, mixed>        $resolvedParameters
      * @return array{0: int, 1: mixed}
      */
     private function resolveParameterEntryId(
@@ -152,20 +111,6 @@ final readonly class EntryIdResolver implements
                 providedParameters: $providedParameters,
                 resolvedParameters: $resolvedParameters,
             );
-        }
-    }
-
-    /**
-     * @return array{0: ReflectionProperty, 1: mixed}
-     */
-    private function resolvePropertyEntryId(ReflectionProperty $property, string $entryId): array
-    {
-        try {
-            return [$property, $this->container->get($entryId)];
-        } catch (ContainerExceptionInterface $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw ResolutionException::forProperty($property, previous: $e);
         }
     }
 }

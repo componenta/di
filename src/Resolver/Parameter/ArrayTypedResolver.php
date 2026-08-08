@@ -4,69 +4,35 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use ReflectionNamedType;
-use ReflectionParameter;
-use ReflectionUnionType;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/**
- * Resolves parameters by matching type against provided values.
- *
- * Useful when passing objects without specifying parameter names.
- * Checks:
- * 1. Array key matching type name
- * 2. Values that are instanceof the parameter type
- *
- * Skips built-in types (int, string, array, etc.).
- * Runtime-only resolver - cannot be compiled.
- *
- * @example By instanceof
- * ```php
- * function handle(ServerRequestInterface $request, LoggerInterface $logger) {}
- * 
- * // Pass objects without keys - matched by type
- * $resolver->resolveAll($method, [$serverRequest, $fileLogger]);
- * ```
- *
- * @example By type key
- * ```php
- * $resolver->resolveAll($method, [
- *     ServerRequestInterface::class => $request,
- * ]);
- * ```
- */
-final class ArrayTypedResolver implements
-    ParameterResolverInterface
+/** Resolves an explicit object by declared class/interface type. */
+final class ArrayTypedResolver implements ParameterResolverInterface
 {
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->typeNames !== [];
+    }
+
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        $type = $parameter->getType();
-
-        if ($type === null) {
-            return null;
-        }
-
-        $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
-
-        foreach ($types as $t) {
-            if (!$t instanceof ReflectionNamedType || $t->isBuiltin()) {
+        foreach ($target->typeNames as $typeName) {
+            if (!array_key_exists($typeName, $context->provided)) {
                 continue;
             }
 
-            $typeName = $t->getName();
+            $value = $context->provided[$typeName];
 
-            // Check by type name key
-            if (array_key_exists($typeName, $providedParameters)) {
-                return [$parameter->getPosition(), $providedParameters[$typeName]];
+            if (is_object($value) && $target->accepts($value)) {
+                return [$target->position, $value];
             }
+        }
 
-            // Check by instanceof
-            foreach ($providedParameters as $value) {
-                if ($value instanceof $typeName) {
-                    return [$parameter->getPosition(), $value];
-                }
+        foreach ($context->provided as $value) {
+            if (is_object($value) && $target->accepts($value)) {
+                return [$target->position, $value];
             }
         }
 

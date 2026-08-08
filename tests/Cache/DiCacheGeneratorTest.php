@@ -31,7 +31,7 @@ describe('Cache\\DiCacheGenerator', function () {
         $config = [
             'factories' => ['svc' => 'FactoryClass'],
             'aliases'   => ['a' => 'b'],
-            'plans'     => ['Foo' => ['method' => ['x']]],
+            'attribute_handlers' => ['HandlerClass'],
         ];
 
         $generator->generate($config, $this->path);

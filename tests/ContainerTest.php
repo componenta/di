@@ -204,7 +204,6 @@ describe('Container', function () {
     describe('make()', function () {
         it('returns a fresh instance on each call (no caching)', function () {
             $container = minimalBuilder()
-                ->addAutowire(SimpleService::class)
                 ->build();
 
             $a = $container->make(SimpleService::class);
@@ -215,7 +214,6 @@ describe('Container', function () {
 
         it('passes user-supplied params to the constructor by name', function () {
             $container = minimalBuilder()
-                ->addAutowire(ServiceWithParam::class)
                 ->build();
 
             $instance = $container->make(ServiceWithParam::class, ['value' => 'hello']);
@@ -225,7 +223,6 @@ describe('Container', function () {
 
         it('resolves aliases', function () {
             $container = minimalBuilder()
-                ->addAutowire(SimpleService::class)
                 ->addAlias('service', SimpleService::class)
                 ->build();
 
@@ -234,7 +231,6 @@ describe('Container', function () {
 
         it('does not apply delegators registered on the id', function () {
             $container = minimalBuilder()
-                ->addAutowire(SimpleService::class)
                 ->build();
             $container->delegator(SimpleService::class, fn ($entry) => 'replaced-by-delegator');
 

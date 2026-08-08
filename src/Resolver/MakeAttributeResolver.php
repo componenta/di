@@ -6,136 +6,171 @@ namespace Componenta\DI\Resolver;
 
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
-use Componenta\DI\Compile\AttributeMatcherInterface;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
-use Componenta\DI\ProxyFactory;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Property\PropertyResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
+use LogicException;
 use Psr\Container\ContainerExceptionInterface;
-use ReflectionParameter;
+use ReflectionAttribute;
 use ReflectionProperty;
+use Reflector;
 use Throwable;
 
-/**
- * Creates instances via {@see FactoryInterface} for parameters or properties
- * marked with {@see \Componenta\DI\Attribute\Make} or {@see \Componenta\DI\Attribute\Proxy}.
- *
- * Resolution triggers:
- * - `#[Make]` - creates a new instance via the factory.
- * - `#[Proxy]` - wraps the resolved entry in a virtual proxy, deferring
- *               construction to first observable access.
- *
- * Entry resolution order (when `Make->entry` is null):
- * 1. Target type if it's a class or interface.
- * 2. Target name otherwise.
- *
- * @example Parameter: basic factory creation
- * ```php
- * function process(#[Make(UserDTO::class)] UserDTO $user) {}
- * ```
- *
- * @example Property: with constructor parameters
- * ```php
- * class Service {
- *     #[Make(PdfRenderer::class, params: ['format' => 'A4'])]
- *     private PdfRenderer $renderer;
- * }
- * ```
- *
- * @example Virtual proxy at injection point
- * ```php
- * function process(#[Proxy] HeavyService $service) {}
- * ```
- */
-final readonly class MakeAttributeResolver implements
+/** Creates #[Make]/#[Proxy] parameter and property values. */
+final class MakeAttributeResolver implements
     ParameterResolverInterface,
-    PropertyResolverInterface,
-    AttributeDrivenResolverInterface,
-    AttributeMatcherInterface
+    AttributeHandlerInterface
 {
-    public const string KIND = 'componenta.di.make';
+    public AttributePhase $phase {
+        get => AttributePhase::AfterInstantiation;
+    }
 
-    private FactoryConfigReader $configReader;
-    private ProxyFactoryInterface $proxyFactory;
+    public int $priority {
+        get => 500;
+    }
 
     public function __construct(
-        private FactoryInterface $factory,
-        ?FactoryConfigReader $configReader = null,
-        ?ProxyFactoryInterface $proxyFactory = null,
-    ) {
-        $this->configReader = $configReader ?? new FactoryConfigReader();
-        $this->proxyFactory = $proxyFactory
-            ?? ($factory instanceof ProxyFactoryInterface ? $factory : new ProxyFactory());
+        private readonly FactoryInterface $factory,
+        private readonly ProxyFactoryInterface $proxyFactory,
+    ) {}
+
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->hasAttribute(Make::class) || $target->hasAttribute(Proxy::class);
     }
 
-    public function planKind(): string
+    public function supportsAttribute(string $attributeClass, Reflector $target): bool
     {
-        return self::KIND;
+        return $target instanceof ReflectionProperty
+            && (is_a($attributeClass, Make::class, true)
+                || is_a($attributeClass, Proxy::class, true));
     }
 
-    public function claimTarget(ReflectionParameter|ReflectionProperty $target): ?string
-    {
-        if ($target->getAttributes(Make::class) !== []
-            || $target->getAttributes(Proxy::class) !== []
+    public function handle(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+    ): void {
+        if ((!$attribute instanceof Make && !$attribute instanceof Proxy)
+            || !$target instanceof ReflectionProperty
         ) {
-            return self::KIND;
+            throw new LogicException('MakeAttributeResolver received an unsupported attribute target.');
         }
-        return null;
+
+        // #[Make] and #[Proxy] are one configuration. Whichever attribute is
+        // processed first claims the property; the second invocation becomes
+        // a no-op before any factory/proxy work can happen.
+        if (!$context->claimProperty($target)) {
+            return;
+        }
+
+        $make = $attribute instanceof Make
+            ? $attribute
+            : self::firstPropertyAttribute($target, Make::class);
+        $proxy = $attribute instanceof Proxy
+            ? $attribute
+            : self::firstPropertyAttribute($target, Proxy::class);
+        $config = self::configuration(
+            name: $target->getName(),
+            typeName: TypeHints::classOf($target->getType(), $target->getDeclaringClass()),
+            make: $make,
+            proxy: $proxy,
+        );
+
+        try {
+            $value = $this->create($config);
+        } catch (ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forProperty($target, previous: $e);
+        }
+
+        $context->writeProperty($target, $value);
     }
 
     public function resolveParameter(
-        ReflectionParameter $parameter,
-        array $providedParameters = [],
-        array $resolvedParameters = [],
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        $config = $this->configReader->read($parameter);
-        if ($config === null) {
+        $make = $target->firstAttribute(Make::class);
+        $proxy = $target->firstAttribute(Proxy::class);
+
+        if (!$make instanceof Make && !$proxy instanceof Proxy) {
             return null;
         }
 
-        try {
-            $instance = $config['proxy']
-                ? $this->proxyFactory->makeProxy(
-                    $config['entry'],
-                    fn(object $proxy): object => $this->factory->make($config['entry'], $config['params']),
-                )
-                : $this->factory->make($config['entry'], $config['params']);
+        $config = self::configuration(
+            name: $target->name,
+            typeName: $target->className,
+            make: $make instanceof Make ? $make : null,
+            proxy: $proxy instanceof Proxy ? $proxy : null,
+        );
 
-            return [$parameter->getPosition(), $instance];
+        try {
+            return [$target->position, $this->create($config)];
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forParameter(
-                $parameter,
+                $target->reflection,
                 previous: $e,
-                providedParameters: $providedParameters,
-                resolvedParameters: $resolvedParameters,
+                providedParameters: $context->provided,
+                resolvedParameters: $context->resolved,
             );
         }
     }
 
-    public function resolveProperty(ReflectionProperty $property, array $context = []): ?array
+    /**
+     * @return array{entry: string, params: array<string, mixed>, proxy: bool}
+     */
+    private static function configuration(
+        string $name,
+        ?string $typeName,
+        ?Make $make,
+        ?Proxy $proxy,
+    ): array {
+        return [
+            'entry' => $make?->entry ?? $typeName ?? $name,
+            'params' => $make?->params ?? [],
+            'proxy' => $proxy !== null,
+        ];
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $attributeClass
+     * @return T|null
+     */
+    private static function firstPropertyAttribute(
+        ReflectionProperty $property,
+        string $attributeClass,
+    ): ?object {
+        /** @var ReflectionAttribute<T>|null $attribute */
+        $attribute = $property->getAttributes(
+            $attributeClass,
+            ReflectionAttribute::IS_INSTANCEOF,
+        )[0] ?? null;
+
+        return $attribute?->newInstance();
+    }
+
+    /** @param array{entry: string, params: array<string, mixed>, proxy: bool} $config */
+    private function create(array $config): object
     {
-        $config = $this->configReader->read($property);
-        if ($config === null) {
-            return null;
-        }
-
-        try {
-            $instance = $config['proxy']
-                ? $this->proxyFactory->makeProxy(
+        return $config['proxy']
+            ? $this->proxyFactory->makeProxy(
+                $config['entry'],
+                fn(object $proxy): object => $this->factory->make(
                     $config['entry'],
-                    fn(object $proxy): object => $this->factory->make($config['entry'], $config['params']),
-                )
-                : $this->factory->make($config['entry'], $config['params']);
-
-            return [$property, $instance];
-        } catch (ContainerExceptionInterface $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw ResolutionException::forProperty($property, previous: $e);
-        }
+                    $config['params'],
+                ),
+            )
+            : $this->factory->make($config['entry'], $config['params']);
     }
 }
