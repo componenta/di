@@ -90,6 +90,21 @@ final class FactoryCodeGenerator
             || $invocations['after'] !== [];
         $beforeCode = $this->compileInvocations($invocations['before']);
         $afterCode = $this->compileInvocations($invocations['after']);
+
+        if (!$this->hasAttributeInvocations) {
+            $this->factory->addMethod(
+                $method,
+                $this->createPlainMethod($method),
+            );
+            $this->appendRequiredMetadataHelpers();
+
+            return new GeneratedFactory(
+                class: $class,
+                method: $method,
+                code: $this->factory->code,
+            );
+        }
+
         $instantiationMethod = $this->createInstantiationMethod();
 
         $this->factory->addMethod(
@@ -197,11 +212,71 @@ final class FactoryCodeGenerator
         return implode("\n\n", $parts);
     }
 
+    /** Generates the common eager path without creation-strategy machinery. */
+    private function createPlainMethod(string $method): string
+    {
+        $constructor = $this->class->getConstructor();
+        if ($constructor === null || $constructor->getNumberOfParameters() === 0) {
+            return sprintf(
+                "public function %s(array \$parameters = []): \%s\n{\n    return new \%s();\n}",
+                $method,
+                $this->className,
+                $this->className,
+            );
+        }
+
+        [$parameterCode, $arguments, $usesNativeDefaults] = $this->compileConstructor($constructor);
+        $body = [];
+
+        if ($usesNativeDefaults) {
+            $body[] = sprintf(
+                "if (\$parameters === []) {\n    return new \%s();\n}",
+                $this->className,
+            );
+        }
+
+        $tryBody = [sprintf(
+            '$context = new \%s($parameters);',
+            ParameterResolutionContext::class,
+        )];
+        if ($parameterCode !== '') {
+            $tryBody[] = $parameterCode;
+        }
+        $tryBody[] = sprintf(
+            'return new \%s(%s);',
+            $this->className,
+            implode(', ', $arguments),
+        );
+
+        $body[] = sprintf(
+            <<<'PHP'
+try {
+%s
+} catch (\Psr\Container\ContainerExceptionInterface|\%s $error) {
+    throw $error;
+} catch (\Throwable $error) {
+    throw \%s::forService(\%s::class, $error);
+}
+PHP,
+            self::indent(implode("\n\n", $tryBody)),
+            \Componenta\DI\Exception\ResolutionException::class,
+            \Componenta\DI\Exception\ResolutionException::class,
+            $this->className,
+        );
+
+        return sprintf(
+            "public function %s(array \$parameters = []): \%s\n{\n%s\n}",
+            $method,
+            $this->className,
+            self::indent(implode("\n\n", $body)),
+        );
+    }
+
     private function createMethod(string $method, string $beforeCode): string
     {
         if ($this->fastPath === self::FAST_PATH_ALWAYS) {
             return sprintf(
-                "private function %s(array \$parameters = []): \%s\n{\n    return new \%s();\n}",
+                "public function %s(array \$parameters = []): \%s\n{\n    return new \%s();\n}",
                 $method,
                 $this->className,
                 $this->className,
@@ -272,7 +347,7 @@ PHP,
         );
 
         return sprintf(
-            "private function %s(array \$parameters = []): \\%s\n{\n%s\n}",
+            "public function %s(array \$parameters = []): \\%s\n{\n%s\n}",
             $method,
             $this->className,
             self::indent(implode("\n\n", $body)),

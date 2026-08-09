@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests;
 
 use Componenta\Config\Config;
+use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\Compile\Entry\GeneratedEntryResolverLoader;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
@@ -116,6 +116,53 @@ final class BuilderWithProxyFactory extends ContainerBuilder
 }
 
 describe('ContainerBuilder', function () {
+    it('shares the built container identity with bootstrap values and factories', function () {
+        $factoryContainer = null;
+        $container = (new ContainerBuilder())
+            ->addFactory('builder.identity', static function (ContainerValue $value) use (&$factoryContainer): object {
+                $factoryContainer = $value->value;
+
+                return new \stdClass();
+            })
+            ->build();
+
+        $container->get('builder.identity');
+
+        expect($factoryContainer)->toBe($container)
+            ->and($container->get(ContainerValue::class)->value)->toBe($container);
+    });
+
+    it('materializes custom pipeline extensions before build returns', function () {
+        $materialized = false;
+        $resolver = new class implements \Componenta\DI\Resolver\Parameter\ParameterResolverInterface {
+            public function supports(
+                \Componenta\DI\Resolver\Target\ParameterTarget $target,
+            ): bool {
+                return false;
+            }
+
+            public function resolveParameter(
+                \Componenta\DI\Resolver\Target\ParameterTarget $target,
+                \Componenta\DI\Resolver\Parameter\ParameterResolutionContext $context,
+            ): ?array {
+                return null;
+            }
+        };
+
+        (new ContainerBuilder())
+            ->addParameterResolver(
+                static function () use (&$materialized, $resolver): object {
+                    $materialized = true;
+
+                    return $resolver;
+                },
+                -1000,
+            )
+            ->build();
+
+        expect($materialized)->toBeTrue();
+    });
+
     it('builds one runtime container and resolves fresh objects with explicit context', function () {
         $container = (new ContainerBuilder())->build();
 
@@ -160,54 +207,6 @@ describe('ContainerBuilder', function () {
             ->and($entry->value)->toBe(5)
             ->and($builder->proxy->lazyCalls)->toBe(2)
             ->and($container->get(ProxyFactoryInterface::class))->toBe($container);
-    });
-
-    it('compiles and installs a generated entry resolver without replacing the container', function () {
-        $file = sys_get_temp_dir()
-            . '/componenta-di-builder-'
-            . bin2hex(random_bytes(6))
-            . '.php';
-
-        try {
-            (new ContainerBuilder())->compileGeneratedEntryResolver(
-                [BuilderGeneratedEntry::class],
-                $file,
-                namespace: 'Componenta\\DI\\Tests\\GeneratedBuilder',
-                releaseFingerprint: 'builder-test-release',
-            );
-
-            $container = (new ContainerBuilder())
-                ->useGeneratedEntryResolver($file, 'builder-test-release')
-                ->build();
-
-            $entry = $container->make(
-                BuilderGeneratedEntry::class,
-                ['value' => 33],
-            );
-
-            expect($entry)->toBeInstanceOf(BuilderGeneratedEntry::class)
-                ->and($entry->value)->toBe(33);
-        } finally {
-            @unlink($file);
-        }
-    });
-
-    it('falls back to reflection when the configured generated file is invalid', function () {
-        $file = sys_get_temp_dir()
-            . '/componenta-di-invalid-'
-            . bin2hex(random_bytes(6))
-            . '.php';
-        file_put_contents($file, "<?php\nreturn null;\n");
-
-        try {
-            $container = (new ContainerBuilder())
-                ->useGeneratedEntryResolver($file)
-                ->build();
-
-            expect($container->make(BuilderGeneratedEntry::class)->value)->toBe(1);
-        } finally {
-            @unlink($file);
-        }
     });
 
     it('installs core pipeline services atomically and forbids rebinding or decoration', function () {
@@ -323,15 +322,30 @@ describe('ContainerBuilder', function () {
         $configured = ContainerBuilder::normalizeDependencies([
             ConfigKey::PARAMETER_RESOLVERS_REPLACE => true,
             ConfigKey::ATTRIBUTE_HANDLERS_REPLACE => true,
-            ConfigKey::GENERATED_ENTRY_RESOLVER_FILE => 'container.resolver.php',
-            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT => 'release',
         ]);
 
         expect($configured)
             ->toHaveKey(ConfigKey::PARAMETER_RESOLVERS_REPLACE, true)
-            ->toHaveKey(ConfigKey::ATTRIBUTE_HANDLERS_REPLACE, true)
-            ->toHaveKey(ConfigKey::GENERATED_ENTRY_RESOLVER_FILE, 'container.resolver.php')
-            ->toHaveKey(ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT, 'release');
+            ->toHaveKey(ConfigKey::ATTRIBUTE_HANDLERS_REPLACE, true);
+    });
+
+    it('revalidates a trusted cache after a conflicting runtime binding is added', function () {
+        $builder = ContainerBuilder::configureFromCache(
+            new Config([]),
+            [
+                'version' => ContainerBuilder::CACHE_VERSION,
+                ContainerBuilder::CACHE_VALIDATED_KEY => true,
+                ConfigKey::DEPENDENCIES => [
+                    ConfigKey::FACTORIES => [
+                        'builder.conflict' => static fn () => new \stdClass(),
+                    ],
+                ],
+            ],
+        );
+        $builder->addService('builder.conflict', new \stdClass());
+
+        expect(fn () => $builder->build())
+            ->toThrow(InvalidConfigurationException::class);
     });
 
     it('uses singular validation for every bulk registration API', function () {
@@ -387,7 +401,7 @@ describe('ContainerBuilder', function () {
             ->and(method_exists(ContainerBuilder::class, 'compilePlans'))->toBeFalse()
             ->and(defined(ConfigKey::class . '::PROPERTY_RESOLVERS'))->toBeFalse()
             ->and(defined(ConfigKey::class . '::AUTOWIRES'))->toBeFalse()
-            ->and(class_exists(GeneratedEntryResolverLoader::class))->toBeTrue()
+            ->and(class_exists('Componenta\\DI\\Compile\\Entry\\GeneratedEntryResolverLoader'))->toBeFalse()
             ->and(class_exists('Componenta\\DI\\Compile\\PlanCompiler'))->toBeFalse()
             ->and(interface_exists('Componenta\\DI\\Resolver\\Entry\\InstantiatorInterface'))->toBeFalse()
             ->and(class_exists('Componenta\\DI\\Resolver\\Target\\PropertyTarget'))->toBeFalse()

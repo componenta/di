@@ -1,6 +1,6 @@
 # Componenta DI
 
-PSR-11 dependency injection container for PHP 8.4+. It provides shared-entry caching, reflection autowiring, fresh object creation, DI-aware callable invocation, attribute-based parameter and property injection, PSR-7 request mapping, native lazy objects, virtual proxies, aliases, delegators, external-container bridging, and generated entry resolvers.
+PSR-11 dependency injection container for PHP 8.4+. It provides shared-entry caching, reflection autowiring, fresh object creation, DI-aware callable invocation, attribute-based parameter and property injection, PSR-7 request mapping, native lazy objects, virtual proxies, aliases, delegators, external-container bridging, and build-time compiled factory shards.
 
 **[English](README.md)** | **[Russian](README.ru.md)**
 
@@ -8,7 +8,7 @@ PSR-11 dependency injection container for PHP 8.4+. It provides shared-entry cac
 
 `componenta/di` owns runtime dependency resolution. It does not scan an application or choose its configuration providers. Class discovery, provider compilation, deployment cache orchestration, and entry-point bootstrapping belong to the application layer, normally `componenta/app`.
 
-Property injection is supported only through attributes and attribute handlers. Generated entry resolvers are the only ahead-of-time resolution path.
+Property injection is supported only through attributes and attribute handlers. Ahead-of-time compilation produces ordinary factory definitions; runtime reflection remains the fallback for dynamic classes.
 
 ## Installation
 
@@ -114,8 +114,7 @@ Local entries therefore take precedence over external containers. `has()` conver
 | `replaceParameterResolvers(bool $replace = true)` | Omit built-in parameter resolvers. |
 | `addAttributeHandler(mixed $handler)` | Extend the attribute pipeline. |
 | `replaceAttributeHandlers(bool $replace = true)` | Omit built-in attribute handlers. |
-| `useGeneratedEntryResolver(?string $file, ?string $releaseFingerprint = null)` | Configure a generated resolver artifact. |
-| `compileGeneratedEntryResolver(iterable $classes, string $file, ?ParameterResolverCodeGeneratorRegistry $generators = null, string $namespace = 'Componenta\DI\Generated', ?string $releaseFingerprint = null)` | Generate and configure that artifact. |
+| `compileFactories(iterable $entries, string $directory, ?ParameterResolverCodeGeneratorRegistry $generators = null, int $maxShardBytes = 131072, string $namespace = 'Componenta\DI\Generated')` | Compile known autowiring roots and their concrete dependency graph into factory shards. |
 | `toArray()` | Export the current configuration. |
 | `build()` | Build a sealed runtime container. |
 
@@ -154,7 +153,7 @@ Available definitions are `factory()`, `autowire()`, `reference()`, and `invokab
 
 | Key | Shape |
 |---|---|
-| `ConfigKey::FACTORIES` | `array<string, callable|string|array|FactoryDefinition|ClassDefinition>` |
+| `ConfigKey::FACTORIES` | `array<string, callable|string|array|FactoryDefinition|ClassDefinition|CompiledFactoryDefinition>` |
 | `ConfigKey::INVOKABLES` | `list<class-string>` or `array<string, class-string>` |
 | `ConfigKey::ALIASES` | `array<string, string>` |
 | `ConfigKey::DELEGATORS` | `array<string, callable|string|array|list<...>>` |
@@ -163,12 +162,11 @@ Available definitions are `factory()`, `autowire()`, `reference()`, and `invokab
 | `ConfigKey::PARAMETER_RESOLVERS_REPLACE` | `bool` |
 | `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|AttributeHandlerInterface>` |
 | `ConfigKey::ATTRIBUTE_HANDLERS_REPLACE` | `bool` |
-| `ConfigKey::GENERATED_ENTRY_RESOLVER_FILE` | `?string` |
-| `ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT` | `?string` |
+
 
 Unknown keys and malformed shapes are rejected with `InvalidConfigurationException`.
 
-`configureFromCache($config, $cache, $baseDir)` accepts either a versioned cache envelope or a raw dependency array. When `$baseDir` is provided, a relative generated-resolver path is resolved against it.
+`configureFromCache($config, $cache, $baseDir)` accepts either a versioned cache envelope or a raw dependency array. When `$baseDir` is provided, relative paths in compiled factory definitions are resolved against it.
 
 `ConfigProvider` registers optional casting, current-user, and PSR-7 request resolvers. Componenta application bootstrap can discover it through package metadata.
 
@@ -241,43 +239,33 @@ An attribute handler implements `AttributeHandlerInterface`, exposes immutable `
 
 The builder seals both extension registries after assembly. Mutating a resolved registry at runtime is rejected.
 
-## Production and generated resolvers
+## Production compiled factories
 
-A generated entry resolver replaces reflection and runtime pipeline traversal for the listed classes while retaining reflection fallback for every other eligible class.
+Known autowiring roots can be compiled into ordinary entries in `ConfigKey::FACTORIES`. The compiler follows concrete constructor, `#[Inject]`, and `#[SetUp]` dependencies. Existing services, invokables, and explicitly configured factories keep ownership and are never replaced.
 
 ```php
-$release = getenv('APP_RELEASE');
+use Componenta\DI\Compile\Autowire\AutowireEntry;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
 
 $builder = ContainerBuilder::configure($config);
-
-$builder->compileGeneratedEntryResolver(
-    classes: [CreateOrder::class, OrderService::class],
-    file: __DIR__ . '/var/cache/di.entries.php',
-    releaseFingerprint: $release,
+$compiled = $builder->compileFactories(
+    entries: [new AutowireEntry(CreateOrder::class, 'application command')],
+    directory: __DIR__ . '/var/cache/build',
 );
 
-$container = $builder->build();
+$dependencies = $config->get(ConfigKey::DEPENDENCIES, []);
+$dependencies[ConfigKey::FACTORIES] = array_replace(
+    $compiled,
+    $dependencies[ConfigKey::FACTORIES] ?? [], // explicit factories win
+);
 ```
 
-A later process can load the same artifact:
+Each `CompiledFactoryDefinition` contains a relative shard file, generated class, and factory method. Shards have content-addressed names, are loaded only when one of their entries is first resolved, and are then reused by that container. No source SHA-256 is recalculated during bootstrap. Dynamic classes continue through reflection autowiring.
 
-```php
-$container = ContainerBuilder::configureFromCache(
-    $config,
-    require __DIR__ . '/var/cache/di.config.php',
-    __DIR__,
-)->build();
-```
+Application integration normally owns root discovery. `componenta/app` provides the build-only `AutowireEntryContributorInterface` flow and recognizes `#[Autowire]`; Router, CQRS, and boot discovery contribute their known runtime entry classes automatically.
 
-The loader validates format and generator versions, parameter-resolver order/state, attribute-handler order/state, and source compatibility. An invalid, missing, or unreadable artifact is ignored safely and the runtime falls back to reflection.
-
-Fingerprint modes:
-
-- With `releaseFingerprint: null`, every load recalculates SHA-256 for relevant class, interface, parent, trait, handler, resolver, and generator source files.
-- With a non-empty release fingerprint, runtime source hashing is skipped. The deployment identifier must change whenever application code or DI extension configuration changes.
-
-`DiCacheGeneratorInterface::generate(array $config, string $path)` atomically writes the exact supplied array as PHP. It does not discover classes or generate entry resolvers. Runtime entry caches remain inside each `Container` instance; persistent cache files and OPcache are deployment concerns.
-
+`DiCacheGeneratorInterface::generate(array $config, string $path)` atomically writes the exact supplied array as PHP. It does not discover classes or compile factories. Runtime entry caches remain inside each `Container` instance; persistent cache files and OPcache are deployment concerns.
 ## Exceptions
 
 | Exception | Meaning |

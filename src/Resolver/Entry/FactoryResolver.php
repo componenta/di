@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\Config\ContainerValue;
+use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
@@ -13,6 +14,8 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 
@@ -36,13 +39,23 @@ use Psr\Container\ContainerInterface;
  */
 class FactoryResolver implements DefinitionAwareResolverInterface
 {
+    /** @var array<string, object> */
+    private array $compiledShards = [];
+
+    /** @var array<string, callable(array<string|int, mixed>): mixed> */
+    private array $compiledFactories = [];
+
     /**
-     * @param array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array|FactoryDefinition|ClassDefinition> $factories
+     * @param array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array|FactoryDefinition|ClassDefinition|CompiledFactoryDefinition> $factories
      */
     public function __construct(
         protected array $factories,
         protected readonly ContainerInterface $container,
         protected readonly ProxyFactoryInterface $proxyFactory,
+        protected readonly ?ParametersResolver $parametersResolver = null,
+        protected readonly ?AttributeProcessor $attributeProcessor = null,
+        protected readonly ?string $compiledFactoryBaseDir = null,
+        protected readonly bool $trustedCompiledFactories = false,
     ) {}
 
     public function can(string $id): bool
@@ -58,6 +71,20 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     public function resolve(string $id, array $context = []): mixed
     {
         try {
+            if (isset($this->compiledFactories[$id])) {
+                return ($this->compiledFactories[$id])($context);
+            }
+
+            $definition = $this->factories[$id];
+            $compiled = CompiledFactoryDefinition::decode($definition);
+            if ($compiled !== null) {
+                $factory = $this->compiledFactory($compiled);
+                $this->factories[$id] = $compiled;
+                $this->compiledFactories[$id] = $factory;
+
+                return $factory($context);
+            }
+
             $factory = $this->resolveFactory($id);
             $container = new ContainerValue($this->container);
 
@@ -95,6 +122,75 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         return $factory;
     }
 
+    private function compiledFactory(CompiledFactoryDefinition $definition): callable
+    {
+        if ($this->parametersResolver === null || $this->attributeProcessor === null) {
+            throw new InvalidConfigurationException(
+                'Compiled factories require the runtime parameter and attribute pipelines.',
+            );
+        }
+
+        $file = $definition->file;
+        if ($this->compiledFactoryBaseDir !== null && !self::isAbsolutePath($file)) {
+            $file = rtrim($this->compiledFactoryBaseDir, '/\\') . '/' . ltrim($file, '/\\');
+        }
+
+        $shard = $this->compiledShards[$file] ?? null;
+
+        if ($shard === null) {
+            $class = $definition->class;
+
+            // The loader, not every generated file, owns idempotence. This also
+            // permits multiple container instances in one long-running worker.
+            if (!class_exists($class, false)) {
+                if (!$this->trustedCompiledFactories && !is_file($file)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Compiled factory shard "%s" does not exist.',
+                        $file,
+                    ));
+                }
+
+                $loadedClass = require $file;
+                if (!$this->trustedCompiledFactories
+                    && (!is_string($loadedClass)
+                        || $loadedClass !== $class
+                        || !class_exists($class, false))
+                ) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Compiled factory shard "%s" returned an unexpected class.',
+                        $file,
+                    ));
+                }
+            }
+
+            $shard = new $class(
+                $this->parametersResolver->resolverList,
+                $this->attributeProcessor->registry->handlers,
+                $this->proxyFactory,
+            );
+            $this->compiledShards[$file] = $shard;
+        }
+
+        $factory = [$shard, $definition->method];
+        if (!is_callable($factory)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled factory method "%s::%s" is not callable.',
+                $definition->class,
+                $definition->method,
+            ));
+        }
+
+        return $factory;
+    }
+
+    private static function isAbsolutePath(string $path): bool
+    {
+        return $path !== ''
+            && ($path[0] === '/'
+                || $path[0] === '\\'
+                || (strlen($path) >= 3 && ctype_alpha($path[0]) && $path[1] === ':'));
+    }
+
     protected function createFactoryFromDefinition(ClassDefinition $definition): callable
     {
         return function (ContainerValue $container, array $_context = []) use ($definition) {
@@ -130,11 +226,13 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         $this->factories[$id] = $definition;
+        unset($this->compiledFactories[$id]);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
     {
         return $definition instanceof FactoryDefinition
-            || $definition instanceof ClassDefinition;
+            || $definition instanceof ClassDefinition
+            || $definition instanceof CompiledFactoryDefinition;
     }
 }

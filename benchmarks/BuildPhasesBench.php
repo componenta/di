@@ -115,26 +115,6 @@ namespace Componenta\DI\Benchmarks\Build {
             }
         }
 
-        protected function installGeneratedEntryResolver(
-            EntryResolverInterface $entryResolver,
-            ParametersResolver $parametersResolver,
-            AttributeProcessor $attributeProcessor,
-            ProxyFactoryInterface $proxyFactory,
-        ): void {
-            $started = hrtime(true);
-
-            try {
-                parent::installGeneratedEntryResolver(
-                    $entryResolver,
-                    $parametersResolver,
-                    $attributeProcessor,
-                    $proxyFactory,
-                );
-            } finally {
-                self::record('generated loader', $started);
-            }
-        }
-
         private static function record(string $phase, int $started): void
         {
             self::$nanoseconds[$phase] = (self::$nanoseconds[$phase] ?? 0)

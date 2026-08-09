@@ -119,17 +119,11 @@ it('keeps public named-argument contracts aligned with implementations', functio
         'configureFromCache',
         ['config', 'cache', 'baseDir'],
     ],
-    'builder compile generated resolver' => [
+    'builder compile factories' => [
         ContainerBuilder::class,
         ContainerBuilder::class,
-        'compileGeneratedEntryResolver',
-        ['classes', 'file', 'generators', 'namespace', 'releaseFingerprint'],
-    ],
-    'builder use generated resolver' => [
-        ContainerBuilder::class,
-        ContainerBuilder::class,
-        'useGeneratedEntryResolver',
-        ['file', 'releaseFingerprint'],
+        'compileFactories',
+        ['entries', 'directory', 'generators', 'maxShardBytes', 'namespace'],
     ],
     'builder add parameter resolver' => [
         ContainerBuilder::class,

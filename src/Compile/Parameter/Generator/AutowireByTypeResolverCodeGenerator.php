@@ -16,7 +16,7 @@ use LogicException;
  * Compiles the autowire type, then calls the exact resolver slot directly.
  *
  * The resolver instance owns its container dependency. The generated code
- * must not replace it with the generated resolver's container because users
+ * must not replace it with the compiled factory's shard because users
  * may register multiple AutowireByTypeResolver instances with different
  * container state.
  */

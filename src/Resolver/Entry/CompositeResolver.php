@@ -53,33 +53,6 @@ class CompositeResolver implements DefinitionAwareResolverInterface
         $this->ownerCache = [];
     }
 
-    /**
-     * Inserts a resolver immediately before the first resolver of `$before`.
-     * The owner cache is cleared because previously resolved classes may now
-     * belong to the newly inserted generated resolver.
-     *
-     * @param class-string<EntryResolverInterface> $before
-     */
-    public function addResolverBefore(
-        EntryResolverInterface $resolver,
-        string $before,
-    ): bool {
-        $this->assertNotRegistered($resolver);
-
-        foreach ($this->resolvers as $index => $candidate) {
-            if (!$candidate instanceof $before) {
-                continue;
-            }
-
-            array_splice($this->resolvers, $index, 0, [$resolver]);
-            $this->ownerCache = [];
-
-            return true;
-        }
-
-        return false;
-    }
-
     public function can(string $id): bool
     {
         return $this->findOwner($id) !== null;

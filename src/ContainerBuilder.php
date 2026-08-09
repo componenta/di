@@ -8,9 +8,12 @@ use Closure;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
-use Componenta\DI\Compile\Entry\GeneratedEntryResolverGenerator;
-use Componenta\DI\Compile\Entry\GeneratedEntryResolverLoader;
-use Componenta\DI\Compile\Entry\GeneratedEntryResolverWriter;
+use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Attribute\Proxy;
+use Componenta\DI\Compile\Autowire\AutowireClassGraph;
+use Componenta\DI\Compile\Autowire\AutowireEntry;
+use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
+use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
 use Componenta\DI\Compile\Parameter\DefaultParameterResolverCodeGenerators;
 use Componenta\DI\Compile\Parameter\ParameterCodeGenerator;
@@ -48,6 +51,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\Reflection\Reflection;
 use Psr\Container\ContainerInterface;
+use ReflectionClass;
 
 /** Builds the runtime container and its resolver/attribute pipelines. */
 class ContainerBuilder
@@ -65,7 +69,8 @@ class ContainerBuilder
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int CACHE_VERSION = 5;
+    public const int CACHE_VERSION = 7;
+    public const string CACHE_VALIDATED_KEY = 'validated';
 
     /** @var array<string, string> */
     private const array DEFAULT_ALIASES = [
@@ -99,11 +104,16 @@ class ContainerBuilder
 
     private(set) bool $replaceAttributeHandlers = false;
 
-    private(set) ?string $generatedEntryResolverFile = null;
-
-    private(set) ?string $generatedEntryResolverReleaseFingerprint = null;
 
     private(set) ?Config $config = null;
+
+    private ?string $compiledFactoryBaseDir = null;
+
+    /** The generated cache has already passed the complete binding validation. */
+    private bool $bindingsValidated = false;
+
+    /** Compiled shard paths and class names came from the generated cache. */
+    private bool $compiledFactoriesTrusted = false;
 
     /** @var array<class-string, ParameterResolverInterface&AttributeHandlerInterface>|null */
     private ?array $sharedResolvers = null;
@@ -171,17 +181,6 @@ class ContainerBuilder
             $dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE] ?? false
         );
 
-        $generatedFile = $dependencies[ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] ?? null;
-        if (is_string($generatedFile) && $generatedFile !== '') {
-            $builder->generatedEntryResolverFile = $generatedFile;
-        }
-        $generatedRelease = $dependencies[
-            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-        ] ?? null;
-        if (is_string($generatedRelease) && $generatedRelease !== '') {
-            $builder->generatedEntryResolverReleaseFingerprint = $generatedRelease;
-        }
-
 
         $builder->config = self::configWithDependencies($config, $dependencies);
 
@@ -213,16 +212,16 @@ class ContainerBuilder
                 );
             }
 
-            return static::configureWithDependencies(
-                $config,
-                self::resolveDependencyFiles($dependencies, $baseDir),
-            );
+        } else {
+            $dependencies = $cache;
         }
 
-        return static::configureWithDependencies(
-            $config,
-            self::resolveDependencyFiles($cache, $baseDir),
-        );
+        $builder = static::configureWithDependencies($config, $dependencies);
+        $builder->compiledFactoryBaseDir = $baseDir;
+        $builder->bindingsValidated = ($cache[self::CACHE_VALIDATED_KEY] ?? false) === true;
+        $builder->compiledFactoriesTrusted = $builder->bindingsValidated;
+
+        return $builder;
     }
 
     /**
@@ -270,25 +269,29 @@ class ContainerBuilder
             ConfigKey::ATTRIBUTE_HANDLERS_REPLACE => (bool) (
                 $dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE] ?? false
             ),
-            ConfigKey::GENERATED_ENTRY_RESOLVER_FILE
-                => $dependencies[ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] ?? null,
-            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-                => $dependencies[
-                    ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-                ] ?? null,
         ];
 
-        return array_filter(
+        $normalized = array_filter(
             $normalized,
             static fn (mixed $value): bool => $value !== []
                 && $value !== false
                 && $value !== null,
         );
+
+        // Cache generation is the trust boundary. Production builds can skip
+        // this full graph validation after loading the resulting artifact.
+        $validator = static::configureWithDependencies(new Config([]), $normalized);
+        $validator->assertNoReservedBindings();
+
+        return $normalized;
     }
 
     public function build(): Container
     {
-        $this->assertNoReservedBindings();
+        if (!$this->bindingsValidated) {
+            $this->assertNoReservedBindings();
+            $this->bindingsValidated = true;
+        }
         $this->sharedResolvers = null;
 
         $entryResolver = null;
@@ -372,63 +375,75 @@ class ContainerBuilder
         );
         $parametersResolver->seal();
         $handlerRegistry->seal();
-        $this->installGeneratedEntryResolver(
-            $entryResolver,
-            $parametersResolver,
-            $attributeProcessor,
-            $proxyFactory,
-        );
 
         return $container;
     }
 
     /**
-     * Compiles one generated EntryResolver file from the exact runtime
-     * parameter-resolver and attribute-handler pipelines assembled by this
-     * builder.
+     * Compiles known autowiring roots and their concrete dependency graph into
+     * lazy, content-addressed factory shards.
      *
-     * @param iterable<class-string> $classes
-     * @param ?string $releaseFingerprint Deployment identifier covering both
-     *        application sources and DI extension configuration. It must change
-     *        whenever either changes. Null keeps strict source hashing on every
-     *        generated resolver load.
+     * @param iterable<AutowireEntry|class-string> $entries
+     * @return array<class-string, CompiledFactoryDefinition>
      */
-    public function compileGeneratedEntryResolver(
-        iterable $classes,
-        string $file,
+    public function compileFactories(
+        iterable $entries,
+        string $directory,
         ?ParameterResolverCodeGeneratorRegistry $generators = null,
+        int $maxShardBytes = CompiledFactoryShardCompiler::DEFAULT_MAX_BYTES,
         string $namespace = 'Componenta\\DI\\Generated',
-        ?string $releaseFingerprint = null,
-    ): string {
+    ): array {
         $container = $this->build();
         $parameters = $container->get(ParametersResolver::class);
         $attributes = $container->get(AttributeProcessor::class);
 
-        if (!$parameters instanceof ParametersResolver
-            || !$attributes instanceof AttributeProcessor
-        ) {
-            throw new InvalidConfigurationException(
-                'Runtime DI compiler services are unavailable.',
-            );
+        if (!$parameters instanceof ParametersResolver || !$attributes instanceof AttributeProcessor) {
+            throw new InvalidConfigurationException('Runtime DI compiler services are unavailable.');
+        }
+
+        $excluded = array_fill_keys([
+            ...array_keys($this->factories),
+            ...array_keys($this->services),
+            ...array_keys($this->aliases),
+            ...$this->invokables,
+        ], true);
+        $classes = (new AutowireClassGraph())->expand($entries, $excluded);
+
+        if ($classes === []) {
+            return [];
+        }
+
+        $compiledClasses = [];
+        foreach ($classes as $class) {
+            $reflection = new ReflectionClass($class);
+            $constructor = $reflection->getConstructor();
+            $invocations = $attributes->invocations($reflection);
+
+            if (($constructor === null || $constructor->getNumberOfParameters() === 0)
+                && self::supportsInvokableAttributes($invocations)
+            ) {
+                $this->addInvokable($class);
+                continue;
+            }
+
+            $compiledClasses[] = $class;
+        }
+
+        if ($compiledClasses === []) {
+            return [];
         }
 
         $generators ??= DefaultParameterResolverCodeGenerators::create();
         $parameterCode = new ParameterCodeGenerator($parameters, $generators);
         $factoryCode = new FactoryCodeGenerator($parameterCode, $attributes);
-        $code = (new GeneratedEntryResolverGenerator(
-            $factoryCode,
-            $parameters,
-            $attributes,
-            $generators,
-        ))->generate($classes, $namespace, $releaseFingerprint);
 
-        (new GeneratedEntryResolverWriter())->write($file, $code);
-        $this->generatedEntryResolverFile = $file;
-        $this->generatedEntryResolverReleaseFingerprint = $releaseFingerprint;
-
-        return $file;
+        return (new CompiledFactoryShardCompiler($factoryCode))->compile(
+            $compiledClasses,
+            $directory,
+            $maxShardBytes,
+            $namespace,
+        );
     }
-
     public function toArray(): array
     {
         $data = $this->config?->toArray() ?? [];
@@ -445,10 +460,6 @@ class ContainerBuilder
             ConfigKey::ATTRIBUTE_HANDLERS => $this->attributeHandlers,
             ConfigKey::ATTRIBUTE_HANDLERS_REPLACE
                 => $this->replaceAttributeHandlers,
-            ConfigKey::GENERATED_ENTRY_RESOLVER_FILE
-                => $this->generatedEntryResolverFile,
-            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-                => $this->generatedEntryResolverReleaseFingerprint,
         ];
 
         return $data;
@@ -465,6 +476,10 @@ class ContainerBuilder
                 $this->factories,
                 $container,
                 $proxyFactory,
+                $parametersResolver,
+                $attributeProcessor,
+                $this->compiledFactoryBaseDir,
+                $this->compiledFactoriesTrusted,
             ),
             new InvokableResolver(
                 $this->invokables,
@@ -475,36 +490,6 @@ class ContainerBuilder
                 $attributeProcessor,
                 $proxyFactory,
             ),
-        );
-    }
-
-    protected function installGeneratedEntryResolver(
-        EntryResolverInterface $entryResolver,
-        ParametersResolver $parametersResolver,
-        AttributeProcessor $attributeProcessor,
-        ProxyFactoryInterface $proxyFactory,
-    ): void {
-        if ($this->generatedEntryResolverFile === null
-            || !$entryResolver instanceof CompositeResolver
-        ) {
-            return;
-        }
-
-        $generated = (new GeneratedEntryResolverLoader())->load(
-            $this->generatedEntryResolverFile,
-            $parametersResolver->resolverList,
-            $attributeProcessor->registry->handlers,
-            $proxyFactory,
-            $this->generatedEntryResolverReleaseFingerprint,
-        );
-
-        if ($generated === null) {
-            return;
-        }
-
-        $entryResolver->addResolverBefore(
-            $generated,
-            ReflectionResolver::class,
         );
     }
 
@@ -697,6 +682,48 @@ class ContainerBuilder
         }
 
         $this->assertSingleBindingPerCanonicalId($aliases);
+    }
+
+    /**
+     * InvokableResolver preserves class-level Lazy and Proxy strategies. Any
+     * other attribute invocation still needs the generated attribute pipeline.
+     *
+     * @param array{before: list<\Componenta\DI\Resolver\Attribute\AttributeInvocation>, after: list<\Componenta\DI\Resolver\Attribute\AttributeInvocation>} $invocations
+     */
+    private static function supportsInvokableAttributes(array $invocations): bool
+    {
+        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
+            if (!$invocation->target instanceof ReflectionClass
+                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function invalidateBindingValidationFor(string $id, string $kind): void
+    {
+        if (!$this->bindingsValidated) {
+            return;
+        }
+
+        if (isset($this->aliases[$id]) || in_array($id, $this->aliases, true)) {
+            $this->bindingsValidated = false;
+            return;
+        }
+
+        $hasConflict = match ($kind) {
+            'factory' => isset($this->services[$id]) || in_array($id, $this->invokables, true),
+            'invokable' => isset($this->factories[$id]) || isset($this->services[$id]),
+            'service' => isset($this->factories[$id]) || in_array($id, $this->invokables, true),
+            default => false,
+        };
+
+        if ($hasConflict) {
+            $this->bindingsValidated = false;
+        }
     }
 
     private function assertSingleBindingPerCanonicalId(AliasResolverInterface $aliases): void
@@ -984,28 +1011,6 @@ class ContainerBuilder
             }
         }
 
-        $file = $dependencies[ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] ?? null;
-        if ($file !== null && (!is_string($file) || $file === '')) {
-            throw new InvalidConfigurationException(sprintf(
-                'Container dependency "%s" must be null or a non-empty string; got %s.',
-                ConfigKey::GENERATED_ENTRY_RESOLVER_FILE,
-                get_debug_type($file),
-            ));
-        }
-
-        $releaseFingerprint = $dependencies[
-            ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-        ] ?? null;
-        if ($releaseFingerprint !== null
-            && (!is_string($releaseFingerprint) || $releaseFingerprint === '')
-        ) {
-            throw new InvalidConfigurationException(sprintf(
-                'Container dependency "%s" must be null or a non-empty string; got %s.',
-                ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT,
-                get_debug_type($releaseFingerprint),
-            ));
-        }
-
         foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
             if (!is_int($priority)) {
                 throw new InvalidConfigurationException(sprintf(
@@ -1074,49 +1079,11 @@ class ContainerBuilder
         return new Config($data, $config->environment);
     }
 
-    /**
-     * @param array<string, mixed> $dependencies
-     * @return array<string, mixed>
-     */
-    private static function resolveDependencyFiles(
-        array $dependencies,
-        ?string $baseDir,
-    ): array {
-        if ($baseDir === null) {
-            return $dependencies;
-        }
-
-        foreach ([ConfigKey::GENERATED_ENTRY_RESOLVER_FILE] as $key) {
-            $file = $dependencies[$key] ?? null;
-
-            if (!is_string($file)
-                || $file === ''
-                || self::isAbsolutePath($file)
-            ) {
-                continue;
-            }
-
-            $dependencies[$key]
-                = rtrim($baseDir, '/\\') . '/' . ltrim($file, '/\\');
-        }
-
-        return $dependencies;
-    }
-
-    private static function isAbsolutePath(string $path): bool
-    {
-        return $path !== ''
-            && ($path[0] === '/'
-                || $path[0] === '\\'
-                || (strlen($path) >= 3
-                    && ctype_alpha($path[0])
-                    && $path[1] === ':'));
-    }
-
     /** @param callable(ContainerValue, array<string|int, mixed>):mixed $factory */
     public function addFactory(string $id, callable $factory): static
     {
         self::assertBindingIdAvailable($id, 'factory');
+        $this->invalidateBindingValidationFor($id, 'factory');
         $this->factories[$id] = $factory;
         return $this;
     }
@@ -1154,9 +1121,11 @@ class ContainerBuilder
 
         $target = $class ?? $classOrAlias;
         self::assertBindingIdAvailable($target, 'invokable');
+        $this->invalidateBindingValidationFor($target, 'invokable');
 
         if ($class !== null) {
             self::assertBindingIdAvailable($classOrAlias, 'alias');
+            $this->bindingsValidated = false;
         }
 
         if (!in_array($target, $this->invokables, true)) {
@@ -1202,6 +1171,7 @@ class ContainerBuilder
             );
         }
 
+        $this->bindingsValidated = false;
         $this->aliases[$alias] = $target;
         return $this;
     }
@@ -1235,6 +1205,9 @@ class ContainerBuilder
     ): static {
         self::assertBindingIdAvailable($id, 'delegator');
         self::assertDelegatorSpecification($delegator, $id);
+        if (isset($this->aliases[$id]) || in_array($id, $this->aliases, true)) {
+            $this->bindingsValidated = false;
+        }
         $this->delegators[$id][] = $delegator;
         return $this;
     }
@@ -1259,6 +1232,7 @@ class ContainerBuilder
     public function addService(string $id, mixed $service): static
     {
         self::assertBindingIdAvailable($id, 'service');
+        $this->invalidateBindingValidationFor($id, 'service');
         $this->services[$id] = $service;
         return $this;
     }
@@ -1274,34 +1248,6 @@ class ContainerBuilder
 
             $this->addService($id, $service);
         }
-
-        return $this;
-    }
-
-    /**
-     * Installs a generated resolver. A release fingerprint avoids source-file
-     * hashing during build; it must be the same value used during compilation
-     * and must change with application sources or DI extension configuration.
-     * Null preserves strict runtime source validation.
-     */
-    public function useGeneratedEntryResolver(
-        ?string $file,
-        ?string $releaseFingerprint = null,
-    ): static
-    {
-        if ($file === '') {
-            throw new InvalidConfigurationException(
-                'Generated entry resolver path must be null or a non-empty string.',
-            );
-        }
-        if ($releaseFingerprint === '') {
-            throw new InvalidConfigurationException(
-                'Generated entry resolver release fingerprint must be null or a non-empty string.',
-            );
-        }
-
-        $this->generatedEntryResolverFile = $file;
-        $this->generatedEntryResolverReleaseFingerprint = $releaseFingerprint;
 
         return $this;
     }

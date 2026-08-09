@@ -8,7 +8,7 @@ PSR-11-контейнер внедрения зависимостей для PHP
 
 `componenta/di` отвечает за разрешение зависимостей во время выполнения. Библиотека не сканирует приложение и не выбирает его поставщиков конфигурации. Поиск классов, компиляция конфигурации, подготовка файлов кеша при развертывании и запуск приложения относятся к прикладному слою, обычно к `componenta/app`.
 
-Свойства заполняются только через атрибуты и их обработчики. Единственный путь предварительной компиляции — generated entry resolver.
+Свойства заполняются только через атрибуты и их обработчики. Предварительная компиляция создаёт обычные фабрики; для динамических классов сохраняется сборка через рефлексию.
 
 ## Установка
 
@@ -114,8 +114,7 @@ assert($first !== $second);
 | `replaceParameterResolvers(bool $replace = true)` | Отключает стандартные резолверы параметров. |
 | `addAttributeHandler(mixed $handler)` | Расширяет цепочку атрибутов. |
 | `replaceAttributeHandlers(bool $replace = true)` | Отключает стандартные обработчики атрибутов. |
-| `useGeneratedEntryResolver(?string $file, ?string $releaseFingerprint = null)` | Подключает сгенерированный резолвер. |
-| `compileGeneratedEntryResolver(iterable $classes, string $file, ?ParameterResolverCodeGeneratorRegistry $generators = null, string $namespace = 'Componenta\DI\Generated', ?string $releaseFingerprint = null)` | Создает и подключает такой файл. |
+| `compileFactories(iterable $entries, string $directory, ?ParameterResolverCodeGeneratorRegistry $generators = null, int $maxShardBytes = 131072, string $namespace = 'Componenta\DI\Generated')` | Компилирует известные корни автоматической сборки и их конкретные зависимости в шарды фабрик. |
 | `toArray()` | Экспортирует текущую конфигурацию. |
 | `build()` | Собирает контейнер и закрывает цепочки расширения от изменений. |
 
@@ -154,7 +153,7 @@ $container->set(
 
 | Ключ | Формат |
 |---|---|
-| `ConfigKey::FACTORIES` | `array<string, callable|string|array|FactoryDefinition|ClassDefinition>` |
+| `ConfigKey::FACTORIES` | `array<string, callable|string|array|FactoryDefinition|ClassDefinition|CompiledFactoryDefinition>` |
 | `ConfigKey::INVOKABLES` | `list<class-string>` или `array<string, class-string>` |
 | `ConfigKey::ALIASES` | `array<string, string>` |
 | `ConfigKey::DELEGATORS` | `array<string, callable|string|array|list<...>>` |
@@ -163,12 +162,11 @@ $container->set(
 | `ConfigKey::PARAMETER_RESOLVERS_REPLACE` | `bool` |
 | `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|AttributeHandlerInterface>` |
 | `ConfigKey::ATTRIBUTE_HANDLERS_REPLACE` | `bool` |
-| `ConfigKey::GENERATED_ENTRY_RESOLVER_FILE` | `?string` |
-| `ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT` | `?string` |
+
 
 Неизвестные ключи и неправильные форматы приводят к `InvalidConfigurationException`.
 
-`configureFromCache($config, $cache, $baseDir)` принимает версионированный конверт кеша или простой массив зависимостей. Если передан `$baseDir`, относительный путь к сгенерированному резолверу вычисляется от него.
+`configureFromCache($config, $cache, $baseDir)` принимает версионированный конверт кеша или простой массив зависимостей. Если передан `$baseDir`, относительные пути из описаний скомпилированных фабрик вычисляются от него.
 
 `ConfigProvider` регистрирует необязательные резолверы преобразования типов, текущего пользователя и PSR-7-запроса. Приложение Componenta может обнаружить его через метаданные пакета.
 
@@ -241,43 +239,33 @@ interface ParameterResolverInterface
 
 После сборки контейнера обе цепочки закрываются от изменений. Попытка изменить полученный из контейнера реестр приводит к ошибке.
 
-## Боевое окружение и generated resolver
+## Скомпилированные фабрики в боевом окружении
 
-Сгенерированный резолвер убирает рефлексию и проход по цепочкам во время создания перечисленных классов. Для остальных классов сохраняется обычный запасной путь через рефлексию.
+Известные корни автоматической сборки компилируются в обычные элементы `ConfigKey::FACTORIES`. Компилятор проходит по конкретным зависимостям конструктора, `#[Inject]` и `#[SetUp]`. Готовые сервисы, invokable-классы и явно настроенные фабрики сохраняют приоритет и не заменяются.
 
 ```php
-$release = getenv('APP_RELEASE');
+use Componenta\DI\Compile\Autowire\AutowireEntry;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
 
 $builder = ContainerBuilder::configure($config);
-
-$builder->compileGeneratedEntryResolver(
-    classes: [CreateOrder::class, OrderService::class],
-    file: __DIR__ . '/var/cache/di.entries.php',
-    releaseFingerprint: $release,
+$compiled = $builder->compileFactories(
+    entries: [new AutowireEntry(CreateOrder::class, 'application command')],
+    directory: __DIR__ . '/var/cache/build',
 );
 
-$container = $builder->build();
+$dependencies = $config->get(ConfigKey::DEPENDENCIES, []);
+$dependencies[ConfigKey::FACTORIES] = array_replace(
+    $compiled,
+    $dependencies[ConfigKey::FACTORIES] ?? [], // явные фабрики имеют приоритет
+);
 ```
 
-Другой процесс загружает тот же артефакт из кеша конфигурации:
+Каждый `CompiledFactoryDefinition` содержит относительный путь к шарду, имя сгенерированного класса и метод фабрики. Имя шарда зависит от его содержимого. Файл подключается только при первом запросе одного из его элементов, после чего экземпляр шарда повторно используется контейнером. При запуске SHA-256 исходных файлов не пересчитывается. Для динамических классов сохраняется автоматическая сборка через рефлексию.
 
-```php
-$container = ContainerBuilder::configureFromCache(
-    $config,
-    require __DIR__ . '/var/cache/di.config.php',
-    __DIR__,
-)->build();
-```
+Корни обычно определяет прикладной слой. `componenta/app` предоставляет сборочный контракт `AutowireEntryContributorInterface` и обрабатывает `#[Autowire]`; интеграции Router, CQRS и boot автоматически добавляют известные им классы.
 
-Загрузчик проверяет версии формата и генератора, порядок и состояние резолверов параметров, порядок и состояние обработчиков атрибутов, а также совместимость исходного кода. Отсутствующий, поврежденный или устаревший файл безопасно игнорируется; контейнер продолжает работать через рефлексию.
-
-Режимы отпечатка:
-
-- При `releaseFingerprint: null` каждая загрузка заново вычисляет SHA-256 соответствующих классов, интерфейсов, родителей, трейтов, обработчиков, резолверов и генераторов.
-- Непустой отпечаток релиза отключает чтение и хеширование исходных файлов во время выполнения. Идентификатор развертывания обязан меняться при любом изменении кода приложения или конфигурации расширений DI.
-
-`DiCacheGeneratorInterface::generate(array $config, string $path)` атомарно записывает переданный массив как PHP-файл без изменения структуры. Этот компонент не ищет классы и не создает generated resolver. Кеши сервисов принадлежат конкретному экземпляру `Container`; постоянные файлы кеша и OPcache управляются процессом развертывания.
-
+`DiCacheGeneratorInterface::generate(array $config, string $path)` атомарно записывает переданный массив как PHP-файл. Он не ищет классы и не компилирует фабрики. Кеши сервисов принадлежат экземпляру `Container`, а постоянными файлами кеша и OPcache управляет развертывание.
 ## Исключения
 
 | Исключение | Причина |

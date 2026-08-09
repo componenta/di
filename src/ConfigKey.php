@@ -27,13 +27,6 @@ final class ConfigKey
     public const string ATTRIBUTE_HANDLERS_REPLACE
         = \Componenta\Config\ConfigKey::ATTRIBUTE_HANDLERS_REPLACE;
 
-    /** Generated EntryResolver PHP file loaded before ReflectionResolver. */
-    public const string GENERATED_ENTRY_RESOLVER_FILE
-        = \Componenta\Config\ConfigKey::GENERATED_ENTRY_RESOLVER_FILE;
-
-    /** Release/deploy identifier that replaces per-build source hashing. */
-    public const string GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT
-        = \Componenta\Config\ConfigKey::GENERATED_ENTRY_RESOLVER_RELEASE_FINGERPRINT;
 
     /** @return list<string> */
     public static function dependencyKeys(): array
