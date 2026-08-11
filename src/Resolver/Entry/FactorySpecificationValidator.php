@@ -9,6 +9,7 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
+use ReflectionException;
 
 /** Validates the public configuration forms accepted by FactoryResolver. */
 final class FactorySpecificationValidator
@@ -60,14 +61,24 @@ final class FactorySpecificationValidator
         string $id,
         ClassDefinition $definition,
     ): void {
-        /** @var ReflectionClass<object> $class */
-        $class = new ReflectionClass($definition->value);
+        $className = self::runtimeClassName($definition);
+
+        try {
+            /** @var ReflectionClass<object> $class */
+            $class = new ReflectionClass($className);
+        } catch (ReflectionException $e) {
+            throw new InvalidConfigurationException(sprintf(
+                'Class definition for "%s" targets unavailable class "%s".',
+                $id,
+                $className,
+            ), previous: $e);
+        }
 
         if (!$class->isInstantiable()) {
             throw new InvalidConfigurationException(sprintf(
                 'Class definition for "%s" targets non-instantiable class "%s".',
                 $id,
-                $definition->value,
+                $className,
             ));
         }
 
@@ -85,7 +96,7 @@ final class FactorySpecificationValidator
                 throw new InvalidConfigurationException(sprintf(
                     'Class definition for "%s" calls missing method "%s::%s".',
                     $id,
-                    $definition->value,
+                    $className,
                     $method,
                 ));
             }
@@ -94,11 +105,20 @@ final class FactorySpecificationValidator
                 throw new InvalidConfigurationException(sprintf(
                     'Class definition for "%s" calls non-public method "%s::%s".',
                     $id,
-                    $definition->value,
+                    $className,
                     $method,
                 ));
             }
         }
+    }
+
+    /**
+     * Treat the documented class-string as untrusted runtime input at the
+     * configuration boundary; PHP cannot enforce the PHPDoc type itself.
+     */
+    private static function runtimeClassName(ClassDefinition $definition): string
+    {
+        return $definition->value;
     }
 
     private static function isDeferredCallable(mixed $factory): bool
