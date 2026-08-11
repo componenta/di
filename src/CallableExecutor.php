@@ -75,7 +75,7 @@ class CallableExecutor implements CallableExecutorInterface
             }
 
             $reflection = new ReflectionFunction($callable);
-            $signature = (string) $reflection;
+            $signature = self::closureSignature($reflection);
 
             return $closureTargets[$callable]
                 = $this->closureSignatures[$signature]
@@ -87,6 +87,21 @@ class CallableExecutor implements CallableExecutorInterface
         return $this->callableTargets[$key] ??= $this->parametersResolver->targets(
             Reflection::callable($callable)->getParameters(),
         );
+    }
+
+    /**
+     * ReflectionFunction::__toString() does not include the closure's lexical
+     * or called class. Those scopes affect `self`, `parent`, and `static`
+     * parameter types, especially for closures declared in traits and reused
+     * by multiple classes, so they are part of the reusable metadata key.
+     */
+    private static function closureSignature(ReflectionFunction $reflection): string
+    {
+        return implode("\0", [
+            $reflection->getClosureScopeClass()?->getName() ?? '',
+            $reflection->getClosureCalledClass()?->getName() ?? '',
+            (string) $reflection,
+        ]);
     }
 
     private static function cacheKey(callable $callable): string
