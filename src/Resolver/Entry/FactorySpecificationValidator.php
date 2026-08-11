@@ -63,11 +63,19 @@ final class FactorySpecificationValidator
 
     private static function isDeferredCallable(mixed $factory): bool
     {
-        return is_array($factory)
-            && array_keys($factory) === [0, 1]
-            && ((is_string($factory[0]) && $factory[0] !== '') || is_object($factory[0]))
-            && is_string($factory[1])
-            && $factory[1] !== '';
+        if (!is_array($factory)
+            || array_keys($factory) !== [0, 1]
+            || !is_string($factory[1])
+            || $factory[1] === ''
+        ) {
+            return false;
+        }
+
+        if (is_object($factory[0])) {
+            return method_exists($factory[0], $factory[1]);
+        }
+
+        return is_string($factory[0]) && $factory[0] !== '';
     }
 
     private function __construct() {}
