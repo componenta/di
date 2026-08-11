@@ -12,37 +12,23 @@ use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\Reflection\ReflectionType;
+use Componenta\DI\Resolver\TypeHints;
 use Componenta\Validation\Context;
 use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Exception\ValidationExceptionInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
+use ReflectionIntersectionType;
+use ReflectionNamedType;
 use ReflectionParameter;
+use ReflectionType;
+use ReflectionUnionType;
 
 /** Resolves parameters from a PSR-7 request. */
 final class RequestResolver implements ParameterResolverInterface
 {
     public const string PARAMETER_NAME_ATTRIBUTE = '__parameter_name';
-
-    /** @var array<string, true> */
-    private const array BUILTIN_TYPES = [
-        'array' => true,
-        'bool' => true,
-        'callable' => true,
-        'false' => true,
-        'float' => true,
-        'int' => true,
-        'iterable' => true,
-        'mixed' => true,
-        'never' => true,
-        'null' => true,
-        'object' => true,
-        'string' => true,
-        'true' => true,
-        'void' => true,
-    ];
 
     /** @var array<class-string, bool> */
     private static array $inheritanceCache = [];
@@ -61,8 +47,7 @@ final class RequestResolver implements ParameterResolverInterface
             }
         }
 
-        return $target->type !== null
-            && ReflectionType::contains($target->type, UriInterface::class);
+        return in_array(UriInterface::class, $target->typeNames, true);
     }
 
     /** @throws ValidationExceptionInterface|CasterExceptionInterface */
@@ -153,8 +138,7 @@ final class RequestResolver implements ParameterResolverInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        return $target->type !== null
-            && ReflectionType::contains($target->type, UriInterface::class)
+        return in_array(UriInterface::class, $target->typeNames, true)
             ? $this->resolveUri($target, $context)
             : null;
     }
@@ -192,6 +176,7 @@ final class RequestResolver implements ParameterResolverInterface
         return null;
     }
 
+    /** @param class-string $class */
     private function isRequestAttribute(string $class): bool
     {
         return self::$inheritanceCache[$class] ??= (
@@ -224,18 +209,19 @@ final class RequestResolver implements ParameterResolverInterface
             : $data;
     }
 
+    /** @return class-string|null */
     private function resolveTypeName(ReflectionParameter $parameter): ?string
     {
         $type = $parameter->getType();
 
-        if (ReflectionType::contains($type, 'array')) {
+        if ($type === null || self::containsBuiltinType($type, 'array')) {
             return null;
         }
 
-        $classTypes = array_values(array_filter(
-            ReflectionType::getTypeNames($type),
-            static fn(string $typeName): bool => !isset(self::BUILTIN_TYPES[$typeName]),
-        ));
+        $classTypes = TypeHints::classNames(
+            $type,
+            $parameter->getDeclaringClass(),
+        );
 
         if (count($classTypes) > 1) {
             throw ResolutionException::forParameter(
@@ -250,7 +236,33 @@ final class RequestResolver implements ParameterResolverInterface
         return $classTypes[0] ?? null;
     }
 
-    /** @throws ValidationExceptionInterface */
+    private static function containsBuiltinType(
+        ReflectionType $type,
+        string $name,
+    ): bool {
+        if ($type instanceof ReflectionNamedType) {
+            return $type->isBuiltin() && $type->getName() === $name;
+        }
+
+        if (!$type instanceof ReflectionUnionType
+            && !$type instanceof ReflectionIntersectionType
+        ) {
+            return false;
+        }
+
+        foreach ($type->getTypes() as $nested) {
+            if (self::containsBuiltinType($nested, $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @throws ValidationExceptionInterface
+     */
     private function validateData(?string $typeName, array $data): void
     {
         if ($typeName === null || $this->validationProvider === null) {
@@ -262,5 +274,4 @@ final class RequestResolver implements ParameterResolverInterface
             new Context([ContextInterface::THROW_ON_FAILURE_ATTRIBUTE => true]),
         );
     }
-
 }
