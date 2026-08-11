@@ -73,6 +73,7 @@ final class CastableResolver implements
         $context->writeProperty($target, $value);
     }
 
+    /** @return array{0: int, 1: mixed}|null */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -94,7 +95,7 @@ final class CastableResolver implements
 
     /**
      * @param array<string|int, mixed> $providedParameters
-     * @param array<int, mixed>        $resolvedParameters
+     * @param array<int, mixed> $resolvedParameters
      * @return array{0: int, 1: mixed}
      */
     private function resolveParameterCast(
@@ -145,8 +146,6 @@ final class CastableResolver implements
             return [$position, $caster->cast($value)];
         } catch (ContainerExceptionInterface $e) {
             throw $e;
-        } catch (ResolutionException $e) {
-            throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forParameter(
                 $parameter,
@@ -185,8 +184,6 @@ final class CastableResolver implements
 
             return $caster->cast($hasValue ? $context[$name] : $default);
         } catch (ContainerExceptionInterface $e) {
-            throw $e;
-        } catch (ResolutionException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($property, previous: $e);
