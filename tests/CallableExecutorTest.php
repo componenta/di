@@ -45,6 +45,19 @@ describe('CallableExecutor', function () {
                 ->and($parametersResolver->calls)->toBe(0);
         });
 
+        it('forwards explicit positional arguments when the callable declares no parameters', function () {
+            $executor = makeExecutor();
+
+            $result = $executor->call(
+                static function (): array {
+                    return func_get_args();
+                },
+                ['first', 'second'],
+            );
+
+            expect($result)->toBe(['first', 'second']);
+        });
+
         it('passes provided parameters to the callable by name', function () {
             $executor = makeExecutor();
 
