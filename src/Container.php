@@ -54,6 +54,8 @@ final readonly class Container implements
      * The internal state holders are optional in the signature so tests and
      * bespoke bootstrap code can plug in replacements; the builder always
      * passes fresh instances.
+     *
+     * @param array<array-key, mixed> $bootstrapServices
      */
     public function __construct(
         private EntryResolverInterface    $resolver,
@@ -83,7 +85,7 @@ final readonly class Container implements
             if (!is_string($id) || ($expected = ProtectedServiceIds::bootstrapType($id)) === null) {
                 throw new InvalidConfigurationException(sprintf(
                     'Unsupported bootstrap service id "%s".',
-                    is_scalar($id) ? (string) $id : get_debug_type($id),
+                    (string) $id,
                 ));
             }
 
@@ -128,9 +130,7 @@ final readonly class Container implements
         $this->proxyFactory       = $proxyFactory ?? new ProxyFactory();
     }
 
-    /**
-     * Creates a container from a {@see Config} instance.
-     */
+    /** Creates a container from a {@see Config} instance. */
     public static function create(Config $config): Container
     {
         return ContainerBuilder::configure($config)->build();
@@ -167,9 +167,7 @@ final readonly class Container implements
         }
     }
 
-    /**
-     * Core resolution step run inside the cycle guard.
-     */
+    /** Core resolution step run inside the cycle guard. */
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
         if (!$this->cache->tryGetBase($entryId, $entry)) {
@@ -227,15 +225,10 @@ final readonly class Container implements
      * Registers an entry or definition.
      *
      * Aliases are resolved before the base cache write so that a value set
-     * under an alias name lands at the canonical id - otherwise
-     * the local base cache (which is keyed by canonical id) would miss it and recreate the entry from scratch.
+     * under an alias name lands at the canonical id. Definitions use the same
+     * canonical id as ordinary values.
      *
-     * Definitions use the same canonical id as ordinary values. Otherwise a
-     * definition registered through an alias could never be reached because
-     * get() resolves aliases before consulting the resolver chain.
-     *
-     * @throws InvalidConfigurationException If the definition type is not
-     *                                       supported by the resolver.
+     * @throws InvalidConfigurationException If the definition type is not supported.
      */
     public function set(string $id, mixed $entry): void
     {
@@ -265,21 +258,16 @@ final readonly class Container implements
     }
 
     /**
-     * Creates a new instance with dependency injection.
+     * Performs an uncached object resolution with dependency injection.
      *
-     * Differences from {@see get()}:
-     *  - Always returns a fresh instance - never consults or populates the
-     *    cache, so repeat calls never share state.
-     *  - Delegators registered via {@see delegator()} are intentionally
-     *    **not** applied. `make()` is the "raw constructor" path: callers
-     *    use it precisely to bypass the decoration that `get()` performs.
-     *    Apply delegators explicitly at the call site if you need them.
-     *  - External containers ({@see addContainer()}) are likewise skipped -
-     *    they own caching/lifetime semantics that `make()` does not honour.
+     * The container does not consult or populate shared-entry caches, apply
+     * delegators, or query external containers on this path. Object identity is
+     * controlled by the selected resolver or user factory.
      *
      * Aliases are still resolved so callers can pass either an alias or the
      * canonical id.
      *
+     * @param array<string|int, mixed> $params
      * @throws ResolutionException If instantiation fails.
      */
     public function make(string $entry, array $params = []): object
@@ -301,38 +289,25 @@ final readonly class Container implements
         return $instance;
     }
 
-    /**
-     * Invokes a callable with dependency injection.
-     *
-     * Exceptions thrown by the callable itself propagate unchanged.
-     */
+    /** Invokes a callable with dependency injection. */
     public function call(mixed $callable, array $params = []): mixed
     {
         return $this->callableExecutor->call($callable, $params);
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function makeLazy(string $class, callable $initializer): object
     {
         return $this->proxyFactory->makeLazy($class, $initializer);
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function makeProxy(string $class, callable $factory): object
     {
         return $this->proxyFactory->makeProxy($class, $factory);
     }
 
-    /**
-     * Registers an external PSR-11 container as a delegated lookup source.
-     *
-     * External containers are probed before the resolver chain, in the order
-     * they were registered.
-     */
+    /** Registers an external PSR-11 container as a delegated lookup source. */
     public function addContainer(ContainerInterface $container): void
     {
         if ($container === $this) {
@@ -362,9 +337,9 @@ final readonly class Container implements
      * Registers a delegator (decorator) for an entry.
      *
      * Multiple delegators are applied in registration order. Non-closure forms
-     * (service id, global function, `"Class::method"`, `[class-string|object, method]`)
      * are resolved through the callable resolver on first use.
      *
+     * @param callable|string|array{0: object|string, 1: string} $delegator
      * @throws DelegatorException If the delegator itself throws at invocation time.
      */
     public function delegator(string $id, callable|string|array $delegator): void
@@ -388,8 +363,6 @@ final readonly class Container implements
      */
     private function invalidate(string $id, ?string $knownCanonical = null): void
     {
-        // Best-effort resolve to canonical; a malformed alias map must not
-        // abort cleanup here.
         try {
             $canonical = $knownCanonical ?? $this->aliases->resolve($id);
         } catch (Throwable) {
