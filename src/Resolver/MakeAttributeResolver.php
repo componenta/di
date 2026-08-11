@@ -140,11 +140,11 @@ final class MakeAttributeResolver implements
         ?Make $make,
         ?Proxy $proxy,
     ): array {
-        $entry = $make?->entry ?? $typeName ?? $name;
+        $entry = $make->entry ?? $typeName ?? $name;
 
         return [
             'entry' => $entry,
-            'params' => $make?->params ?? [],
+            'params' => $make->params ?? [],
             'proxyClass' => $proxy === null
                 ? null
                 : self::resolveProxyClass($entry, $typeName, $proxy),
