@@ -22,6 +22,14 @@ final readonly class ProxyInjectionService implements ProxyInjectionContract
     }
 }
 
+final readonly class IncompatibleProxyInjectionService
+{
+    public function value(): string
+    {
+        return 'incompatible';
+    }
+}
+
 final readonly class InterfaceProxyConsumer
 {
     public function __construct(
@@ -46,11 +54,27 @@ final readonly class AmbiguousInterfaceProxyConsumer
     ) {}
 }
 
+final readonly class IncompatibleInterfaceProxyConsumer
+{
+    public function __construct(
+        #[Proxy(IncompatibleProxyInjectionService::class)]
+        public ProxyInjectionContract $service,
+    ) {}
+}
+
+final readonly class WrongBackingProxyConsumer
+{
+    public function __construct(
+        #[Make('wrong.proxy.service'), Proxy(ProxyInjectionService::class)]
+        public ProxyInjectionContract $service,
+    ) {}
+}
+
 it('uses an explicit concrete class for interface-typed virtual proxies', function (): void {
     $container = (new ContainerBuilder())
         ->addFactory(
             ProxyInjectionContract::class,
-            static fn(): ProxyInjectionContract => new ProxyInjectionService(),
+            static fn (): ProxyInjectionContract => new ProxyInjectionService(),
         )
         ->build();
 
@@ -64,7 +88,7 @@ it('separates an arbitrary service id from its concrete proxy class', function (
     $container = (new ContainerBuilder())
         ->addFactory(
             'proxy.service',
-            static fn(): ProxyInjectionContract => new ProxyInjectionService('service-id'),
+            static fn (): ProxyInjectionContract => new ProxyInjectionService('service-id'),
         )
         ->build();
 
@@ -77,7 +101,7 @@ it('rejects an interface proxy when no concrete class can be inferred', function
     $container = (new ContainerBuilder())
         ->addFactory(
             ProxyInjectionContract::class,
-            static fn(): ProxyInjectionContract => new ProxyInjectionService(),
+            static fn (): ProxyInjectionContract => new ProxyInjectionService(),
         )
         ->build();
 
@@ -86,4 +110,27 @@ it('rejects an interface proxy when no concrete class can be inferred', function
             ResolutionException::class,
             'specify #[Proxy(ConcreteClass::class)]',
         );
+});
+
+it('rejects a concrete proxy class incompatible with the declared type', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    expect(fn () => $container->make(IncompatibleInterfaceProxyConsumer::class))
+        ->toThrow(
+            ResolutionException::class,
+            'is incompatible with declared type',
+        );
+});
+
+it('rejects a backing object that is not an instance of the proxy class', function (): void {
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            'wrong.proxy.service',
+            static fn (): object => new stdClass(),
+        )
+        ->build();
+    $consumer = $container->make(WrongBackingProxyConsumer::class);
+
+    expect(fn () => $consumer->service->value())
+        ->toThrow(LogicException::class, 'must be an instance of');
 });
