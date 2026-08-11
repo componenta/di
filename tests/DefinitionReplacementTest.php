@@ -6,10 +6,9 @@ require_once __DIR__ . '/Fixture/container_helpers.php';
 
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\NotFoundException;
-
-final readonly class ReplacementInvokableService {}
-final readonly class ReplacementFactoryService {}
-final readonly class ReplacementStoredService {}
+use Componenta\DI\Tests\Fixture\ReplacementFactoryService;
+use Componenta\DI\Tests\Fixture\ReplacementInvokableService;
+use Componenta\DI\Tests\Fixture\ReplacementStoredService;
 
 it('uses the latest runtime definition when its resolver kind changes', function (): void {
     $container = minimalContainer();
