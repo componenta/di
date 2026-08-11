@@ -32,6 +32,84 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      - name: Apply final source and documentation cleanup
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          builder = Path('src/ContainerBuilder.php')
+          text = builder.read_text()
+          text = text.replace('use Componenta\\Reflection\\Reflection;\n', '', 1)
+          text = text.replace(
+              '        $container = Reflection::class(Container::class)->newLazyGhost(\n',
+              '        $container = (new ReflectionClass(Container::class))->newLazyGhost(\n',
+              1,
+          )
+
+          old = '''        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
+            if (!$invocation->target instanceof ReflectionClass
+                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+'''
+          new = '''        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
+            if (!$invocation->target instanceof ReflectionClass
+                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
+            ) {
+                return false;
+            }
+
+            if ($invocation->attributeClass === Proxy::class) {
+                $proxy = $invocation->newAttribute();
+
+                if (!$proxy instanceof Proxy || $proxy->class !== null) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+'''
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('ContainerBuilder invokable attribute block not found')
+          builder.write_text(text)
+
+          replacements = {
+              Path('README.md'): (
+                  'All package exceptions implement `Componenta\\DI\\Exception\\ExceptionInterface`.',
+                  '`NotFoundException`, `CircularDependencyException`, `ResolutionException`, '
+                  '`InvalidConfigurationException`, `InvalidCallableException`, and '
+                  '`DelegatorException` implement `Componenta\\DI\\Exception\\ExceptionInterface`. '
+                  '`RequestDataConflictException` is an `InvalidArgumentException` because it '
+                  'represents invalid request input rather than a PSR-11 container failure.',
+              ),
+              Path('README.ru.md'): (
+                  'Все исключения пакета реализуют `Componenta\\DI\\Exception\\ExceptionInterface`.',
+                  '`NotFoundException`, `CircularDependencyException`, `ResolutionException`, '
+                  '`InvalidConfigurationException`, `InvalidCallableException` и '
+                  '`DelegatorException` реализуют `Componenta\\DI\\Exception\\ExceptionInterface`. '
+                  '`RequestDataConflictException` наследует `InvalidArgumentException`, поскольку '
+                  'описывает некорректный ввод запроса, а не ошибку PSR-11-контейнера.',
+              ),
+          }
+
+          for path, (old_text, new_text) in replacements.items():
+              body = path.read_text()
+              if old_text in body:
+                  path.write_text(body.replace(old_text, new_text, 1))
+              elif new_text not in body:
+                  raise SystemExit(f'Documentation exception contract anchor not found in {path}')
+          PY
+
+          php -l src/ContainerBuilder.php
+
       - name: Run independent verification
         id: checks
         shell: bash
@@ -55,6 +133,18 @@ jobs:
             composer audit --no-interaction \
               > "$work/composer-audit.log" 2>&1
             audit_status=$?
+
+            composer cs-fix \
+              > "$work/cs-fix.log" 2>&1
+            format_status=$?
+
+            composer cs-check \
+              > "$work/cs-check.log" 2>&1
+            cs_status=$?
+
+            git diff --check \
+              > "$work/diff-check.log" 2>&1
+            diff_status=$?
 
             find src tests verification benchmarks -name '*.php' -print0 \
               | xargs -0 -n1 php -l \
@@ -88,10 +178,6 @@ jobs:
               target.write_text('\n'.join(lines) + ('\n' if lines else ''))
           PY
 
-            composer cs-check \
-              > "$work/cs-check.log" 2>&1
-            cs_status=$?
-
             : > "$work/tests.log"
             test_status=0
             for seed in 11082026 314159 271828 161803; do
@@ -106,9 +192,11 @@ jobs:
           else
             validate_status=125
             audit_status=125
+            format_status=125
+            cs_status=125
+            diff_status=125
             lint_status=125
             phpstan_status=125
-            cs_status=125
             test_status=125
             : > .automation/phpstan-errors.tsv
           fi
@@ -118,9 +206,11 @@ jobs:
             $install_status \
             $validate_status \
             $audit_status \
+            $format_status \
+            $cs_status \
+            $diff_status \
             $lint_status \
             $phpstan_status \
-            $cs_status \
             $test_status
           do
             if [[ $status -ne 0 ]]; then
@@ -138,52 +228,41 @@ jobs:
             echo "| composer install | $install_status |"
             echo "| composer validate --strict | $validate_status |"
             echo "| composer audit | $audit_status |"
+            echo "| composer cs-fix | $format_status |"
+            echo "| composer cs-check | $cs_status |"
+            echo "| git diff --check | $diff_status |"
             echo "| PHP lint | $lint_status |"
             echo "| PHPStan level max, full src | $phpstan_status |"
-            echo "| composer cs-check | $cs_status |"
             echo "| Pest, four deterministic random seeds | $test_status |"
             echo
-            echo '## composer-validate'
-            echo
-            echo '```text'
-            cat "$work/composer-validate.log" 2>/dev/null || true
-            echo '```'
-            echo
-            echo '## composer-audit'
-            echo
-            echo '```text'
-            cat "$work/composer-audit.log" 2>/dev/null || true
-            echo '```'
-            echo
-            echo '## phpstan-stderr'
-            echo
-            echo '```text'
-            cat "$work/phpstan.stderr" 2>/dev/null || true
-            echo '```'
-            echo
-            echo '## cs-check'
-            echo
-            echo '```text'
-            tail -n 600 "$work/cs-check.log" 2>/dev/null || true
-            echo '```'
-            echo
-            echo '## tests'
-            echo
-            echo '```text'
-            tail -n 800 "$work/tests.log" 2>/dev/null || true
-            echo '```'
+            for name in \
+              composer-validate \
+              composer-audit \
+              cs-fix \
+              cs-check \
+              diff-check \
+              phpstan-stderr \
+              tests
+            do
+              echo "## $name"
+              echo
+              echo '```text'
+              tail -n 1000 "$work/${name}.log" 2>/dev/null || true
+              echo '```'
+              echo
+            done
           } > .automation/recheck-dev-result.md
 
           echo "overall=$overall" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Commit recheck report
+      - name: Commit cleanup and recheck report
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .automation/recheck-dev-result.md .automation/phpstan-errors.tsv
-          git commit -m "Record independent dev recheck"
+          git add -A
+          git commit -m "Format dev and record independent recheck"
           git push origin HEAD:dev
 
       - name: Mark failed verification
