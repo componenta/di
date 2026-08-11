@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
-use Componenta\Config\DefaultValue;
 use Componenta\Config\ConfigPath;
+use Componenta\Config\DefaultValue;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
@@ -33,7 +33,7 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
             } catch (InvalidArgumentException) {
                 if ($this->default === DefaultValue::None) {
                     throw new \RuntimeException(
-                        sprintf('Required payload parameter "%s" is missing', $this->name->value)
+                        sprintf('Required payload parameter "%s" is missing', $this->name->value),
                     );
                 }
 
@@ -43,14 +43,14 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
 
         $name = $this->name ?? $request->getAttribute(RequestResolver::PARAMETER_NAME_ATTRIBUTE);
 
-        if ($name === null) {
-            throw new \LogicException('Payload parameter name cannot be null');
+        if (!is_string($name) || $name === '') {
+            throw new \LogicException('Payload parameter name must be a non-empty string');
         }
 
         if (!array_key_exists($name, $body)) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required payload parameter "%s" is missing', $name)
+                    sprintf('Required payload parameter "%s" is missing', $name),
                 );
             }
 
@@ -60,6 +60,7 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
         return $body[$name];
     }
 
+    /** @return array<string|int, mixed> */
     private function getParsedBody(ServerRequestInterface $request): array
     {
         if (($body = $request->getParsedBody()) === null) {
