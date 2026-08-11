@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver;
 
+use ArrayAccess;
 use Componenta\DI\Attribute\Config;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -15,7 +17,6 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
-use Psr\Container\NotFoundExceptionInterface;
 use ReflectionProperty;
 use Reflector;
 use Throwable;
@@ -77,6 +78,7 @@ final class ConfigAttributeResolver implements
         $context->writeProperty($target, $value);
     }
 
+    /** @return array{0: int, 1: mixed}|null */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -100,17 +102,20 @@ final class ConfigAttributeResolver implements
         }
     }
 
-    /**
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
     private function readFromConfig(Config $config, string $fallbackName): mixed
     {
-        return $this->extractor->extract(
-            $this->container->get(Config::KEY),
-            $config,
-            $fallbackName,
-        );
-    }
+        $data = $this->container->get(Config::KEY);
 
+        if (!is_array($data) && !$data instanceof ArrayAccess) {
+            throw new InvalidConfigurationException(sprintf(
+                'Configuration service "%s" must be an array or %s; got %s.',
+                Config::KEY,
+                ArrayAccess::class,
+                get_debug_type($data),
+            ));
+        }
+
+        /** @var array<string, mixed>|ArrayAccess<string, mixed> $data */
+        return $this->extractor->extract($data, $config, $fallbackName);
+    }
 }
