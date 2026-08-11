@@ -13,6 +13,19 @@ use Componenta\DI\Tests\Fixture\NonInvokableService;
 use Componenta\DI\Tests\Fixture\ServiceWithMethods;
 use Psr\Container\ContainerInterface;
 
+interface CallableResolverContract
+{
+    public function handle(int $value): string;
+}
+
+final class CallableResolverContractImplementation implements CallableResolverContract
+{
+    public function handle(int $value): string
+    {
+        return 'contract:' . $value;
+    }
+}
+
 function mapContainer(array $entries): ContainerInterface
 {
     return new class ($entries) implements ContainerInterface {
@@ -78,6 +91,15 @@ describe('CallableResolver', function () {
             expect($resolved(5))->toBe('instance:5');
         });
 
+        it('resolves an interface instance method through the container', function () {
+            $service = new CallableResolverContractImplementation();
+            $resolver = new CallableResolver(mapContainer([CallableResolverContract::class => $service]));
+
+            $resolved = $resolver->resolve(CallableResolverContract::class . '::handle');
+
+            expect($resolved(6))->toBe('contract:6');
+        });
+
         it('throws when the class in Class::method does not exist', function () {
             $resolver = new CallableResolver(new NullContainer());
 
@@ -108,6 +130,16 @@ describe('CallableResolver', function () {
             $resolved = $resolver->resolve('handler');
 
             expect($resolved('-x'))->toBe('invoked-x');
+        });
+
+        it('treats a registered service id containing :: as an opaque id', function () {
+            $resolver = new CallableResolver(mapContainer([
+                'handler::v1' => static fn(int $value): string => 'opaque:' . $value,
+            ]));
+
+            $resolved = $resolver->resolve('handler::v1');
+
+            expect($resolved(8))->toBe('opaque:8');
         });
 
         it('throws when the container entry is not callable', function () {
@@ -170,6 +202,15 @@ describe('CallableResolver', function () {
             $resolved = $resolver->resolve([ServiceWithMethods::class, 'instanceMethod']);
 
             expect($resolved(9))->toBe('instance:9');
+        });
+
+        it('resolves [interface-string, instanceMethod] via container lookup', function () {
+            $service = new CallableResolverContractImplementation();
+            $resolver = new CallableResolver(mapContainer([CallableResolverContract::class => $service]));
+
+            $resolved = $resolver->resolve([CallableResolverContract::class, 'handle']);
+
+            expect($resolved(10))->toBe('contract:10');
         });
 
         it('throws when [class-string, method] targets an instance method but the container has no entry', function () {
