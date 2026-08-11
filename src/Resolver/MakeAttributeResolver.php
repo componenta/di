@@ -18,6 +18,7 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use ReflectionAttribute;
+use ReflectionClass;
 use ReflectionProperty;
 use Reflector;
 use Throwable;
@@ -127,7 +128,11 @@ final class MakeAttributeResolver implements
     }
 
     /**
-     * @return array{entry: string, params: array<string, mixed>, proxy: bool}
+     * @return array{
+     *     entry: string,
+     *     params: array<string, mixed>,
+     *     proxyClass: class-string|null
+     * }
      */
     private static function configuration(
         string $name,
@@ -135,11 +140,49 @@ final class MakeAttributeResolver implements
         ?Make $make,
         ?Proxy $proxy,
     ): array {
+        $entry = $make?->entry ?? $typeName ?? $name;
+
         return [
-            'entry' => $make?->entry ?? $typeName ?? $name,
+            'entry' => $entry,
             'params' => $make?->params ?? [],
-            'proxy' => $proxy !== null,
+            'proxyClass' => $proxy === null
+                ? null
+                : self::resolveProxyClass($entry, $typeName, $proxy),
         ];
+    }
+
+    /** @return class-string */
+    private static function resolveProxyClass(
+        string $entry,
+        ?string $typeName,
+        Proxy $proxy,
+    ): string {
+        $class = $proxy->class;
+
+        if ($class === null && $typeName !== null && class_exists($typeName)) {
+            $class = $typeName;
+        }
+
+        if ($class === null && class_exists($entry)) {
+            $class = $entry;
+        }
+
+        if ($class === null) {
+            throw new LogicException(sprintf(
+                'Virtual proxy entry "%s" is not a concrete class; specify #[Proxy(ConcreteClass::class)].',
+                $entry,
+            ));
+        }
+
+        $reflection = new ReflectionClass($class);
+        if (!$reflection->isInstantiable()) {
+            throw new LogicException(sprintf(
+                'Virtual proxy class "%s" must be concrete and instantiable.',
+                $class,
+            ));
+        }
+
+        return $reflection->getName();
     }
 
     /**
@@ -160,12 +203,18 @@ final class MakeAttributeResolver implements
         return $attribute?->newInstance();
     }
 
-    /** @param array{entry: string, params: array<string, mixed>, proxy: bool} $config */
+    /**
+     * @param array{
+     *     entry: string,
+     *     params: array<string, mixed>,
+     *     proxyClass: class-string|null
+     * } $config
+     */
     private function create(array $config): object
     {
-        return $config['proxy']
+        return $config['proxyClass'] !== null
             ? $this->proxyFactory->makeProxy(
-                $config['entry'],
+                $config['proxyClass'],
                 fn(object $proxy): object => $this->factory->make(
                     $config['entry'],
                     $config['params'],
