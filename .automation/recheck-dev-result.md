@@ -1,6 +1,6 @@
 # Independent dev recheck
 
-Commit checked: 54b4211d3b238e0df43ee3541bb3a6b6b0d82f92
+Commit checked: 0650d9991c180091f2a95ad2c3da3929357bf598
 
 | Check | Exit code |
 |---|---:|
@@ -33,489 +33,414 @@ Note: Using configuration file /home/runner/work/di/di/phpstan.neon.dist.
 ## cs-check
 
 ```text
--            ->and(fn() => (new ContainerBuilder())->addAttributeHandler(new \stdClass()))
-+            ->and(fn () => (new ContainerBuilder())->addAttributeHandler(new \stdClass()))
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())->addParameterResolver(new \stdClass()))
-+            ->and(fn () => (new ContainerBuilder())->addParameterResolver(new \stdClass()))
-             ->toThrow(InvalidConfigurationException::class);
-     });
- 
-     it('rejects unreachable factories and canonical bindings to protected services', function () {
--        expect(fn() => (new ContainerBuilder())
--            ->addFactory('builder.alias', static fn() => new BuilderGeneratedEntry())
-+        expect(fn () => (new ContainerBuilder())
-+            ->addFactory('builder.alias', static fn () => new BuilderGeneratedEntry())
-             ->addAlias('builder.alias', BuilderGeneratedEntry::class)
-             ->build())
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())
-+            ->and(fn () => (new ContainerBuilder())
-                 ->addAlias('builder.parameters', ParametersResolver::class)
-                 ->addService('builder.parameters', new \stdClass())
-                 ->build())
-@@ -284,17 +290,17 @@
-     });
- 
-     it('rejects multiple binding mechanisms for the same canonical id', function () {
--        expect(fn() => (new ContainerBuilder())
--            ->addFactory(BuilderGeneratedEntry::class, static fn() => new BuilderGeneratedEntry())
-+        expect(fn () => (new ContainerBuilder())
-+            ->addFactory(BuilderGeneratedEntry::class, static fn () => new BuilderGeneratedEntry())
-             ->addService(BuilderGeneratedEntry::class, new BuilderGeneratedEntry())
-             ->build())
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())
--                ->addFactory(BuilderGeneratedEntry::class, static fn() => new BuilderGeneratedEntry())
-+            ->and(fn () => (new ContainerBuilder())
-+                ->addFactory(BuilderGeneratedEntry::class, static fn () => new BuilderGeneratedEntry())
-                 ->addInvokable(BuilderGeneratedEntry::class)
-                 ->build())
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())
-+            ->and(fn () => (new ContainerBuilder())
-                 ->addAlias('builder.service.alias', BuilderGeneratedEntry::class)
-                 ->addServices([
-                     'builder.service.alias' => new BuilderGeneratedEntry(1),
-@@ -349,23 +355,23 @@
-     });
- 
-     it('uses singular validation for every bulk registration API', function () {
--        expect(fn() => (new ContainerBuilder())->addFactories([0 => static fn() => null]))
-+        expect(fn () => (new ContainerBuilder())->addFactories([0 => static fn () => null]))
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())->addFactories(['entry' => new \stdClass()]))
-+            ->and(fn () => (new ContainerBuilder())->addFactories(['entry' => new \stdClass()]))
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())->addAliases(['entry' => 123]))
-+            ->and(fn () => (new ContainerBuilder())->addAliases(['entry' => 123]))
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())->addInvokables([new \stdClass()]))
-+            ->and(fn () => (new ContainerBuilder())->addInvokables([new \stdClass()]))
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())->addDelegator('entry', [new \stdClass()]))
-+            ->and(fn () => (new ContainerBuilder())->addDelegator('entry', [new \stdClass()]))
-             ->toThrow(InvalidConfigurationException::class)
--            ->and(fn() => (new ContainerBuilder())->addDelegators(['entry' => 123]))
-+            ->and(fn () => (new ContainerBuilder())->addDelegators(['entry' => 123]))
-             ->toThrow(InvalidConfigurationException::class)
-             ->and((new ContainerBuilder())->addDelegators([
-                 'entry' => [new BuilderMagicDelegator(), 'dynamic'],
-             ])->toArray()[ConfigKey::DEPENDENCIES][ConfigKey::DELEGATORS]['entry'])
-             ->toHaveCount(1)
--            ->and(fn() => (new ContainerBuilder())->addServices([0 => new \stdClass()]))
-+            ->and(fn () => (new ContainerBuilder())->addServices([0 => new \stdClass()]))
-             ->toThrow(InvalidConfigurationException::class);
-     });
- 
-@@ -377,7 +383,7 @@
- 
-         expect($left->has('builder.missing'))->toBeFalse()
-             ->and($right->has('builder.missing'))->toBeFalse()
--            ->and(fn() => $left->get('builder.missing'))
-+            ->and(fn () => $left->get('builder.missing'))
-             ->toThrow(NotFoundException::class);
-     });
- 
-@@ -392,7 +398,7 @@
- 
-         expect($container->get('builder.shared'))->toBe('local')
-             ->and($container->get('builder.external-only'))->toBe('external-only')
--            ->and(fn() => $container->addContainer($container))
-+            ->and(fn () => $container->addContainer($container))
-             ->toThrow(InvalidConfigurationException::class);
-     });
  
 
       ----------- end diff -----------
 
- 105) tests/CallableClosureScopeCacheTest.php
+  52) tests/ProxyInjectionTest.php
       ---------- begin diff ----------
---- /home/runner/work/di/di/tests/CallableClosureScopeCacheTest.php
-+++ /home/runner/work/di/di/tests/CallableClosureScopeCacheTest.php
-@@ -8,7 +8,7 @@
- {
-     public function scopedCallable(): \Closure
-     {
--        return static fn(self $dependency): object => $dependency;
-+        return static fn (self $dependency): object => $dependency;
-     }
- }
+--- /home/runner/work/di/di/tests/ProxyInjectionTest.php
++++ /home/runner/work/di/di/tests/ProxyInjectionTest.php
+@@ -81,7 +81,7 @@
+         )
+         ->build();
  
+-    expect(fn () => $container->make(AmbiguousInterfaceProxyConsumer::class))
++    expect(fn() => $container->make(AmbiguousInterfaceProxyConsumer::class))
+         ->toThrow(
+             ResolutionException::class,
+             'specify #[Proxy(ConcreteClass::class)]',
 
       ----------- end diff -----------
 
- 106) tests/CallableExecutorCacheTest.php
+  53) tests/Cache/DiCacheGeneratorTest.php
       ---------- begin diff ----------
---- /home/runner/work/di/di/tests/CallableExecutorCacheTest.php
-+++ /home/runner/work/di/di/tests/CallableExecutorCacheTest.php
-@@ -7,13 +7,17 @@
- use Closure;
- use Componenta\DI\ContainerBuilder;
+--- /home/runner/work/di/di/tests/Cache/DiCacheGeneratorTest.php
++++ /home/runner/work/di/di/tests/Cache/DiCacheGeneratorTest.php
+@@ -100,9 +100,9 @@
+     it('throws InvalidConfigurationException when the config contains unserialisable values', function () {
+         $generator = new DiCacheGenerator();
+         // Closures cannot be serialised to PHP source by Export::pretty().
+-        $config = ['factory' => fn () => 'unserialisable'];
++        $config = ['factory' => fn() => 'unserialisable'];
  
--final class CallableCacheDependency {}
-+final class CallableCacheDependency
-+{
-+}
- 
--final class AlternateCallableCacheDependency {}
-+final class AlternateCallableCacheDependency
-+{
-+}
- 
- it('reuses parameter targets across fresh closures from the same source signature', function () {
-     $container = (new ContainerBuilder())->build();
--    $factory = static fn(): Closure => static fn(
-+    $factory = static fn (): Closure => static fn (
-         CallableCacheDependency $dependency,
-     ): CallableCacheDependency => $dependency;
- 
-@@ -26,8 +30,8 @@
- it('does not conflate different closure parameter signatures', function () {
-     $container = (new ContainerBuilder())->build();
- 
--    expect($container->call(static fn(CallableCacheDependency $dependency): object => $dependency))
-+    expect($container->call(static fn (CallableCacheDependency $dependency): object => $dependency))
-         ->toBeInstanceOf(CallableCacheDependency::class)
--        ->and($container->call(static fn(AlternateCallableCacheDependency $dependency): object => $dependency))
-+        ->and($container->call(static fn (AlternateCallableCacheDependency $dependency): object => $dependency))
-         ->toBeInstanceOf(AlternateCallableCacheDependency::class);
+-        expect(fn () => $generator->generate($config, $this->path))
++        expect(fn() => $generator->generate($config, $this->path))
+             ->toThrow(InvalidConfigurationException::class);
+     });
  });
 
       ----------- end diff -----------
 
- 107) tests/ProxyInjectionTest.php
-      ---------- begin diff ----------
---- /home/runner/work/di/di/tests/ProxyInjectionTest.php
-+++ /home/runner/work/di/di/tests/ProxyInjectionTest.php
-@@ -14,7 +14,9 @@
- 
- final readonly class ProxyInjectionService implements ProxyInjectionContract
- {
--    public function __construct(private string $value = 'proxied') {}
-+    public function __construct(private string $value = 'proxied')
-+    {
-+    }
- 
-     public function value(): string
-     {
-@@ -27,7 +29,8 @@
-     public function __construct(
-         #[Proxy(ProxyInjectionService::class)]
-         public ProxyInjectionContract $service,
--    ) {}
-+    ) {
-+    }
- }
- 
- final readonly class ServiceIdProxyConsumer
-@@ -35,7 +38,8 @@
-     public function __construct(
-         #[Make('proxy.service'), Proxy(ProxyInjectionService::class)]
-         public ProxyInjectionContract $service,
--    ) {}
-+    ) {
-+    }
- }
- 
- final readonly class AmbiguousInterfaceProxyConsumer
-@@ -43,7 +47,8 @@
-     public function __construct(
-         #[Proxy]
-         public ProxyInjectionContract $service,
--    ) {}
-+    ) {
-+    }
- }
- 
- it('uses an explicit concrete class for interface-typed virtual proxies', function (): void {
-@@ -50,7 +55,7 @@
-     $container = (new ContainerBuilder())
-         ->addFactory(
-             ProxyInjectionContract::class,
--            static fn(): ProxyInjectionContract => new ProxyInjectionService(),
-+            static fn (): ProxyInjectionContract => new ProxyInjectionService(),
-         )
-         ->build();
- 
-@@ -64,7 +69,7 @@
-     $container = (new ContainerBuilder())
-         ->addFactory(
-             'proxy.service',
--            static fn(): ProxyInjectionContract => new ProxyInjectionService('service-id'),
-+            static fn (): ProxyInjectionContract => new ProxyInjectionService('service-id'),
-         )
-         ->build();
- 
-@@ -77,7 +82,7 @@
-     $container = (new ContainerBuilder())
-         ->addFactory(
-             ProxyInjectionContract::class,
--            static fn(): ProxyInjectionContract => new ProxyInjectionService(),
-+            static fn (): ProxyInjectionContract => new ProxyInjectionService(),
-         )
-         ->build();
- 
-
-      ----------- end diff -----------
-
- 108) tests/DefinitionReplacementTest.php
+  54) tests/DefinitionReplacementTest.php
       ---------- begin diff ----------
 --- /home/runner/work/di/di/tests/DefinitionReplacementTest.php
 +++ /home/runner/work/di/di/tests/DefinitionReplacementTest.php
-@@ -6,7 +6,9 @@
- 
- use Componenta\DI\Definition\Definition;
- 
--final readonly class ReplacementInvokableService {}
-+final readonly class ReplacementInvokableService
-+{
-+}
- 
+@@ -11,7 +11,7 @@
  it('uses the latest runtime definition when its resolver kind changes', function (): void {
      $container = minimalContainer();
+ 
+-    $container->set('service', Definition::factory(static fn () => 'from-factory'));
++    $container->set('service', Definition::factory(static fn() => 'from-factory'));
+     expect($container->get('service'))->toBe('from-factory');
+ 
+     $container->set('service', Definition::invokable(ReplacementInvokableService::class));
 
       ----------- end diff -----------
 
- 109) benchmarks/GeneratedVsReflectionBench.php
+  55) tests/Resolver/FactorySpecificationValidationTest.php
+      ---------- begin diff ----------
+--- /home/runner/work/di/di/tests/Resolver/FactorySpecificationValidationTest.php
++++ /home/runner/work/di/di/tests/Resolver/FactorySpecificationValidationTest.php
+@@ -18,7 +18,7 @@
+         ],
+     ]);
+ 
+-    expect(fn () => ContainerBuilder::configure($config)->build())
++    expect(fn() => ContainerBuilder::configure($config)->build())
+         ->toThrow(InvalidConfigurationException::class, 'Factory "invalid.factory"');
+ });
+ 
+@@ -32,7 +32,7 @@
+         ],
+     ]);
+ 
+-    expect(fn () => ContainerBuilder::configure($config)->build())
++    expect(fn() => ContainerBuilder::configure($config)->build())
+         ->toThrow(InvalidConfigurationException::class, 'Factory "invalid.object.factory"');
+ });
+ 
+@@ -52,7 +52,7 @@
+ it('rejects an incomplete compiled definition registered at runtime', function (): void {
+     $container = (new ContainerBuilder())->build();
+ 
+-    expect(fn () => $container->set(
++    expect(fn() => $container->set(
+         'invalid.compiled',
+         new CompiledFactoryDefinition('', '', ''),
+     ))->toThrow(InvalidConfigurationException::class);
+
+      ----------- end diff -----------
+
+  56) tests/Resolver/Entry/SetUp/EntryIdUnwrapperTest.php
+      ---------- begin diff ----------
+--- /home/runner/work/di/di/tests/Resolver/Entry/SetUp/EntryIdUnwrapperTest.php
++++ /home/runner/work/di/di/tests/Resolver/Entry/SetUp/EntryIdUnwrapperTest.php
+@@ -46,7 +46,7 @@
+     it('propagates NotFoundException when the entry is not registered', function () {
+         $unwrapper = new EntryIdUnwrapper(entryIdUnwrapperContainer([]));
+ 
+-        expect(fn () => $unwrapper->unwrap(new EntryId('absent'), 'k'))
++        expect(fn() => $unwrapper->unwrap(new EntryId('absent'), 'k'))
+             ->toThrow(NotFoundException::class);
+     });
+ });
+
+      ----------- end diff -----------
+
+  57) tests/Resolver/Entry/SetUp/ConfigUnwrapperTest.php
+      ---------- begin diff ----------
+--- /home/runner/work/di/di/tests/Resolver/Entry/SetUp/ConfigUnwrapperTest.php
++++ /home/runner/work/di/di/tests/Resolver/Entry/SetUp/ConfigUnwrapperTest.php
+@@ -68,7 +68,7 @@
+     it('lets PSR-11 container exceptions propagate unchanged', function () {
+         $unwrapper = new ConfigUnwrapper(configUnwrapperContainer(NotFoundException::forService(Config::KEY)));
+ 
+-        expect(fn () => $unwrapper->unwrap(new Config('k'), 'key'))
++        expect(fn() => $unwrapper->unwrap(new Config('k'), 'key'))
+             ->toThrow(NotFoundException::class);
+     });
+ });
+
+      ----------- end diff -----------
+
+  58) tests/Resolver/Entry/SetUp/EnvUnwrapperTest.php
+      ---------- begin diff ----------
+--- /home/runner/work/di/di/tests/Resolver/Entry/SetUp/EnvUnwrapperTest.php
++++ /home/runner/work/di/di/tests/Resolver/Entry/SetUp/EnvUnwrapperTest.php
+@@ -71,7 +71,7 @@
+         it('throws ResolutionException when variable is missing and no default is declared', function () {
+             $unwrapper = new EnvUnwrapper(configContainerForEnv(new Environment([])));
+ 
+-            expect(fn () => $unwrapper->unwrap(new Env('ABSENT'), 'key'))
++            expect(fn() => $unwrapper->unwrap(new Env('ABSENT'), 'key'))
+                 ->toThrow(ResolutionException::class, 'ABSENT');
+         });
+ 
+@@ -84,7 +84,7 @@
+         it('throws ResolutionException when environment is unavailable and no default is set', function () {
+             $unwrapper = new EnvUnwrapper(configContainerForEnv(null));
+ 
+-            expect(fn () => $unwrapper->unwrap(new Env('X'), 'key'))
++            expect(fn() => $unwrapper->unwrap(new Env('X'), 'key'))
+                 ->toThrow(ResolutionException::class);
+         });
+     });
+
+      ----------- end diff -----------
+
+  59) tests/Resolver/CompositeResolverTest.php
+      ---------- begin diff ----------
+--- /home/runner/work/di/di/tests/Resolver/CompositeResolverTest.php
++++ /home/runner/work/di/di/tests/Resolver/CompositeResolverTest.php
+@@ -70,7 +70,7 @@
+         $composite = new CompositeResolver();
+         $composite->addResolver(entryResolver([]));
+ 
+-        expect(fn () => $composite->resolve('missing'))
++        expect(fn() => $composite->resolve('missing'))
+             ->toThrow(NotFoundException::class);
+     });
+ 
+@@ -90,7 +90,10 @@
+         $capturing = new class () implements EntryResolverInterface {
+             public array $context = [];
+ 
+-            public function can(string $id): bool { return $id === 'svc'; }
++            public function can(string $id): bool
++            {
++                return $id === 'svc';
++            }
+             public function resolve(string $id, array $context = []): mixed
+             {
+                 $this->context = $context;
+@@ -153,7 +156,7 @@
+             $composite = new CompositeResolver();
+             $composite->addResolver(entryResolver([]));
+ 
+-            expect($composite->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeFalse();
++            expect($composite->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeFalse();
+         });
+ 
+         it('forwards setDefinition to the first supporting resolver', function () {
+@@ -163,7 +166,7 @@
+             $composite->addResolver($plain);
+             $composite->addResolver($aware);
+ 
+-            $definition = new FactoryDefinition(fn () => 'value');
++            $definition = new FactoryDefinition(fn() => 'value');
+             $composite->setDefinition('svc', $definition);
+ 
+             expect($aware->definitions)->toBe(['svc' => $definition]);
+@@ -176,7 +179,7 @@
+             $composite = new CompositeResolver();
+             $composite->addResolver(definitionAwareResolver(supported: [FactoryDefinition::class]));
+ 
+-            expect(fn () => $composite->setDefinition('svc', $unsupportedDefinition))
++            expect(fn() => $composite->setDefinition('svc', $unsupportedDefinition))
+                 ->toThrow(InvalidConfigurationException::class);
+         });
+ 
+@@ -186,7 +189,7 @@
+             $composite->addResolver($aware);
+ 
+             expect($composite->can('svc'))->toBeFalse();
+-            $composite->setDefinition('svc', new FactoryDefinition(fn () => 'v'));
++            $composite->setDefinition('svc', new FactoryDefinition(fn() => 'v'));
+ 
+             expect($composite->can('svc'))->toBeTrue();
+         });
+
+      ----------- end diff -----------
+
+  60) tests/Resolver/FactoryResolverTest.php
+      ---------- begin diff ----------
+--- /home/runner/work/di/di/tests/Resolver/FactoryResolverTest.php
++++ /home/runner/work/di/di/tests/Resolver/FactoryResolverTest.php
+@@ -2,9 +2,9 @@
+ 
+ declare(strict_types=1);
+ 
+-use Componenta\DI\Definition\ClassDefinition;
+ use Componenta\Config\Config;
+ use Componenta\Config\ContainerValue;
++use Componenta\DI\Definition\ClassDefinition;
+ use Componenta\DI\Definition\Definition;
+ use Componenta\DI\Definition\FactoryDefinition;
+ use Componenta\DI\Definition\InvokableDefinition;
+@@ -54,7 +54,7 @@
+ describe('Resolver\\FactoryResolver', function () {
+     describe('can()', function () {
+         it('reports true only for registered ids', function () {
+-            $resolver = makeFactoryResolver(['svc' => fn () => 'v']);
++            $resolver = makeFactoryResolver(['svc' => fn() => 'v']);
+ 
+             expect($resolver->can('svc'))->toBeTrue()
+                 ->and($resolver->can('missing'))->toBeFalse();
+@@ -65,7 +65,7 @@
+         it('invokes a closure factory with a container value', function () {
+             $container = smallContainer();
+             $resolver = makeFactoryResolver([
+-                'svc' => fn (ContainerInterface $c) => [$c, 'produced'],
++                'svc' => fn(ContainerInterface $c) => [$c, 'produced'],
+             ], container: $container);
+ 
+             $result = $resolver->resolve('svc');
+@@ -78,7 +78,7 @@
+         it('exposes config to closure factories through the container value', function () {
+             $config = new Config(['app' => ['name' => 'Componenta']]);
+             $resolver = makeFactoryResolver([
+-                'svc' => fn (ContainerValue $container): string => $container->config->string(new \Componenta\Config\ConfigPath('app.name')),
++                'svc' => fn(ContainerValue $container): string => $container->config->string(new \Componenta\Config\ConfigPath('app.name')),
+             ], container: smallContainer([
+                 Config::class => $config,
+             ]));
+@@ -88,7 +88,7 @@
+ 
+         it('passes resolution context as the second factory argument', function () {
+             $resolver = makeFactoryResolver([
+-                'svc' => fn (ContainerInterface $container, array $context): array => [
++                'svc' => fn(ContainerInterface $container, array $context): array => [
+                     'context' => $context,
+                     'container' => $container,
+                 ],
+@@ -102,7 +102,7 @@
+ 
+         it('unwraps FactoryDefinition and invokes the callable inside', function () {
+             $resolver = makeFactoryResolver([
+-                'svc' => Definition::factory(fn () => 'from-definition'),
++                'svc' => Definition::factory(fn() => 'from-definition'),
+             ]);
+ 
+             expect($resolver->resolve('svc'))->toBe('from-definition');
+@@ -151,10 +151,10 @@
+         });
+ 
+         it('resolves a string-form factory reference through the container', function () {
+-            $callable = fn () => 'produced';
++            $callable = fn() => 'produced';
+             $resolver = makeFactoryResolver(
+                 ['svc' => 'factory.id'],
+-                container: smallContainer(['factory.id' => fn () => $callable]),
++                container: smallContainer(['factory.id' => fn() => $callable]),
+             );
+ 
+             expect($resolver->resolve('svc'))->toBe('produced');
+@@ -169,7 +169,7 @@
+             };
+             $resolver = makeFactoryResolver(
+                 ['svc' => [$service::class, 'make']],
+-                container: smallContainer([$service::class => fn () => $service]),
++                container: smallContainer([$service::class => fn() => $service]),
+             );
+ 
+             expect($resolver->resolve('svc'))->toBe('made');
+@@ -236,7 +236,9 @@
+         it('wraps foreign Throwables from the factory into ResolutionException', function () {
+             $boom = new RuntimeException('factory boom');
+             $resolver = makeFactoryResolver([
+-                'svc' => function () use ($boom) { throw $boom; },
++                'svc' => function () use ($boom) {
++                    throw $boom;
++                },
+             ]);
+ 
+             try {
+@@ -252,7 +254,9 @@
+         it('lets ContainerExceptionInterface exceptions propagate unchanged', function () {
+             $original = NotFoundException::forService('inner');
+             $resolver = makeFactoryResolver([
+-                'svc' => function () use ($original) { throw $original; },
++                'svc' => function () use ($original) {
++                    throw $original;
++                },
+             ]);
+ 
+             try {
+@@ -270,7 +274,7 @@
+         it('supportsDefinition is true for FactoryDefinition and ClassDefinition', function () {
+             $resolver = makeFactoryResolver([]);
+ 
+-            expect($resolver->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeTrue()
++            expect($resolver->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeTrue()
+                 ->and($resolver->supportsDefinition(new ClassDefinition(SimpleService::class)))->toBeTrue();
+         });
+ 
+@@ -284,7 +288,7 @@
+         it('setDefinition registers the factory and makes can() return true', function () {
+             $resolver = makeFactoryResolver([]);
+ 
+-            $resolver->setDefinition('svc', new FactoryDefinition(fn () => 'v'));
++            $resolver->setDefinition('svc', new FactoryDefinition(fn() => 'v'));
+ 
+             expect($resolver->can('svc'))->toBeTrue()
+                 ->and($resolver->resolve('svc'))->toBe('v');
+@@ -293,7 +297,7 @@
+         it('setDefinition throws InvalidConfigurationException for unsupported types', function () {
+             $resolver = makeFactoryResolver([]);
+ 
+-            expect(fn () => $resolver->setDefinition('svc', new InvokableDefinition(SimpleService::class)))
++            expect(fn() => $resolver->setDefinition('svc', new InvokableDefinition(SimpleService::class)))
+                 ->toThrow(InvalidConfigurationException::class);
+         });
+     });
+
+      ----------- end diff -----------
+
+  61) benchmarks/GeneratedVsReflectionBench.php
       ---------- begin diff ----------
 --- /home/runner/work/di/di/benchmarks/GeneratedVsReflectionBench.php
 +++ /home/runner/work/di/di/benchmarks/GeneratedVsReflectionBench.php
-@@ -10,7 +10,9 @@
+@@ -68,19 +68,19 @@
+     $compiledBuildMilliseconds = (hrtime(true) - $compiledBuildStarted) / 1_000_000;
  
- require dirname(__DIR__, 4) . '/vendor/autoload.php';
+     $reflectionDefault = benchmark(
+-        static fn (): object => $reflection->make(BenchmarkEntry::class),
++        static fn(): object => $reflection->make(BenchmarkEntry::class),
+         $iterations,
+     );
+     $compiledDefault = benchmark(
+-        static fn (): object => $compiled->make(BenchmarkEntry::class),
++        static fn(): object => $compiled->make(BenchmarkEntry::class),
+         $iterations,
+     );
+     $reflectionOverride = benchmark(
+-        static fn (): object => $reflection->make(BenchmarkEntry::class, ['number' => 42]),
++        static fn(): object => $reflection->make(BenchmarkEntry::class, ['number' => 42]),
+         $iterations,
+     );
+     $compiledOverride = benchmark(
+-        static fn (): object => $compiled->make(BenchmarkEntry::class, ['number' => 42]),
++        static fn(): object => $compiled->make(BenchmarkEntry::class, ['number' => 42]),
+         $iterations,
+     );
  
--final readonly class BenchmarkDependency {}
-+final readonly class BenchmarkDependency
-+{
-+}
- 
- final readonly class BenchmarkEntry
- {
-@@ -18,7 +20,8 @@
-         public BenchmarkDependency $dependency,
-         public int $number = 1,
-         public string $name = 'default',
--    ) {}
-+    ) {
-+    }
- }
- 
- /** @return array{nanoseconds: float, operations: float} */
 
       ----------- end diff -----------
 
- 110) benchmarks/RuntimeBench.php
-      ---------- begin diff ----------
---- /home/runner/work/di/di/benchmarks/RuntimeBench.php
-+++ /home/runner/work/di/di/benchmarks/RuntimeBench.php
-@@ -27,13 +27,19 @@
- namespace Componenta\DI\Benchmarks\Runtime {
-     use Componenta\DI\ContainerBuilder;
- 
--    final class Dependency {}
-+    final class Dependency
-+    {
-+    }
- 
--    final class NoArguments {}
-+    final class NoArguments
-+    {
-+    }
- 
-     final readonly class ConstructorTarget
-     {
--        public function __construct(public Dependency $dependency) {}
-+        public function __construct(public Dependency $dependency)
-+        {
-+        }
-     }
- 
-     final class MethodTarget
-@@ -76,34 +82,34 @@
-     $iterations = max(10_000, (int) ($_SERVER['DI_BENCH_ITERATIONS'] ?? 100_000));
-     $buildIterations = max(100, (int) ($_SERVER['DI_BUILD_ITERATIONS'] ?? 2_000));
-     $container = (new ContainerBuilder())->build();
--    $closure = static fn(Dependency $dependency): Dependency => $dependency;
-+    $closure = static fn (Dependency $dependency): Dependency => $dependency;
-     $method = [new MethodTarget(), 'execute'];
- 
-     $cases = [
-         'build/default' => [
--            static fn(): object => (new ContainerBuilder())->build(),
-+            static fn (): object => (new ContainerBuilder())->build(),
-             $buildIterations,
-         ],
-         'make/no-arguments' => [
--            static fn(): object => $container->make(NoArguments::class),
-+            static fn (): object => $container->make(NoArguments::class),
-             $iterations,
-         ],
-         'make/autowire' => [
--            static fn(): object => $container->make(ConstructorTarget::class),
-+            static fn (): object => $container->make(ConstructorTarget::class),
-             $iterations,
-         ],
-         'call/reused-closure' => [
--            static fn(): mixed => $container->call($closure),
-+            static fn (): mixed => $container->call($closure),
-             $iterations,
-         ],
-         'call/fresh-closure' => [
--            static fn(): mixed => $container->call(
--                static fn(Dependency $dependency): Dependency => $dependency,
-+            static fn (): mixed => $container->call(
-+                static fn (Dependency $dependency): Dependency => $dependency,
-             ),
-             $iterations,
-         ],
-         'call/method-array' => [
--            static fn(): mixed => $container->call($method),
-+            static fn (): mixed => $container->call($method),
-             $iterations,
-         ],
-     ];
-
-      ----------- end diff -----------
-
- 111) tests/Architecture/DevelopmentProductionParityTest.php
+  62) tests/Architecture/DevelopmentProductionParityTest.php
       ---------- begin diff ----------
 --- /home/runner/work/di/di/tests/Architecture/DevelopmentProductionParityTest.php
 +++ /home/runner/work/di/di/tests/Architecture/DevelopmentProductionParityTest.php
-@@ -11,9 +11,13 @@
- use Componenta\DI\Container;
- use Componenta\DI\ContainerBuilder;
- 
--final readonly class DevelopmentProductionParityDependency {}
-+final readonly class DevelopmentProductionParityDependency
-+{
-+}
- 
--final readonly class DevelopmentProductionParityInjected {}
-+final readonly class DevelopmentProductionParityInjected
-+{
-+}
- 
- #[SetUp('initialize')]
- final class DevelopmentProductionParityEntry
-@@ -28,7 +32,8 @@
-     public function __construct(
-         public DevelopmentProductionParityDependency $dependency,
-         public string $value = 'default',
--    ) {}
-+    ) {
-+    }
- 
-     public function initialize(DevelopmentProductionParityInjected $injected): void
-     {
-@@ -40,14 +45,19 @@
- {
-     public function __construct(
-         public DevelopmentProductionParityDependency $dependency,
--    ) {}
-+    ) {
-+    }
- }
- 
--final readonly class DevelopmentProductionParityInvokable {}
-+final readonly class DevelopmentProductionParityInvokable
-+{
-+}
- 
- final readonly class DevelopmentProductionParityExplicit
- {
--    public function __construct(public string $value) {}
-+    public function __construct(public string $value)
-+    {
-+    }
- }
- 
- final class DevelopmentProductionParityExplicitFactory
+@@ -139,7 +139,7 @@
+         'null-present' => $container->has('parity.null'),
+         'null-value' => $container->get('parity.null'),
+         'call-result' => $container->call(
+-            static fn (
++            static fn(
+                 DevelopmentProductionParityDependency $dependency,
+                 string $value = 'fallback',
+             ): string => $dependency::class . ':' . $value,
 
       ----------- end diff -----------
 
- 112) tests/Architecture/CompiledFactoryArchitectureTest.php
+  63) tests/Architecture/CompiledFactoryArchitectureTest.php
       ---------- begin diff ----------
 --- /home/runner/work/di/di/tests/Architecture/CompiledFactoryArchitectureTest.php
 +++ /home/runner/work/di/di/tests/Architecture/CompiledFactoryArchitectureTest.php
-@@ -12,12 +12,16 @@
- use Componenta\DI\ConfigKey;
- use Componenta\DI\ContainerBuilder;
- 
--final readonly class CompiledGraphLeafForTest {}
-+final readonly class CompiledGraphLeafForTest
-+{
-+}
- 
- #[SetUp('initialize')]
- final class CompiledGraphSetUpForTest
- {
--    public function initialize(CompiledGraphLeafForTest $leaf): void {}
-+    public function initialize(CompiledGraphLeafForTest $leaf): void
-+    {
-+    }
- }
- 
- final class CompiledGraphRootForTest
-@@ -25,10 +29,14 @@
-     #[Inject]
-     private CompiledGraphSetUpForTest $setup;
- 
--    public function __construct(public CompiledGraphLeafForTest $leaf) {}
-+    public function __construct(public CompiledGraphLeafForTest $leaf)
-+    {
-+    }
- }
- 
--final readonly class CompiledFactoryLeafForTest {}
-+final readonly class CompiledFactoryLeafForTest
-+{
-+}
- 
- final readonly class CompiledFactoryRootForTest
- {
-@@ -35,7 +43,8 @@
-     public function __construct(
-         public CompiledFactoryLeafForTest $leaf,
-         public int $value = 1,
--    ) {}
-+    ) {
-+    }
- }
- 
- it('expands only statically knowable concrete dependencies and honours explicit bindings', function (): void {
+@@ -76,7 +76,7 @@
+         ])->not->toHaveKey(CompiledFactoryLeafForTest::class)
+             ->and($builder->invokables)->toContain(CompiledFactoryLeafForTest::class)
+             ->and(array_unique(array_map(
+-                static fn (CompiledFactoryDefinition $factory): string => $factory->file,
++                static fn(CompiledFactoryDefinition $factory): string => $factory->file,
+                 $factories,
+             )))->toHaveCount(1)
+             ->and($source)->toBeString()->not->toContain('if (!class_exists(')
 
       ----------- end diff -----------
 
- 113) tests/Architecture/CompiledFactoryParityTest.php
-      ---------- begin diff ----------
---- /home/runner/work/di/di/tests/Architecture/CompiledFactoryParityTest.php
-+++ /home/runner/work/di/di/tests/Architecture/CompiledFactoryParityTest.php
-@@ -9,7 +9,9 @@
- use Componenta\DI\ConfigKey;
- use Componenta\DI\ContainerBuilder;
- 
--final readonly class CompiledParityDependencyForTest {}
-+final readonly class CompiledParityDependencyForTest
-+{
-+}
- 
- #[SetUp('initialize')]
- final class CompiledParityEntryForTest
-@@ -22,7 +24,8 @@
-     public function __construct(
-         public CompiledParityDependencyForTest $constructor,
-         public int $value = 1,
--    ) {}
-+    ) {
-+    }
- 
-     public function initialize(CompiledParityDependencyForTest $dependency): void
-     {
-
-      ----------- end diff -----------
-
- 114) tests/CallableResolverTest.php
+  64) tests/CallableResolverTest.php
       ---------- begin diff ----------
 --- /home/runner/work/di/di/tests/CallableResolverTest.php
 +++ /home/runner/work/di/di/tests/CallableResolverTest.php
@@ -527,111 +452,186 @@ Note: Using configuration file /home/runner/work/di/di/phpstan.neon.dist.
  require_once __DIR__ . '/Fixture/functions.php';
  
  use Componenta\DI\Tests\Fixture\InvokableService;
-@@ -15,7 +16,9 @@
- function mapContainer(array $entries): ContainerInterface
- {
-     return new class ($entries) implements ContainerInterface {
--        public function __construct(private array $entries) {}
-+        public function __construct(private array $entries)
-+        {
-+        }
+@@ -35,7 +36,7 @@
+ describe('CallableResolver', function () {
+     describe('closures and callable objects', function () {
+         it('returns a Closure as-is', function () {
+-            $closure = fn () => 'ok';
++            $closure = fn() => 'ok';
  
-         public function get(string $id): mixed
-         {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+@@ -80,7 +81,7 @@
+         it('throws when the class in Class::method does not exist', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve('NoSuchClass::someMethod'))
++            expect(fn() => $resolver->resolve('NoSuchClass::someMethod'))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -87,7 +88,7 @@
+         it('throws with forMethod variant when the method is missing', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve(ServiceWithMethods::class . '::missing'))
++            expect(fn() => $resolver->resolve(ServiceWithMethods::class . '::missing'))
+                 ->toThrow(InvalidCallableException::class, 'missing');
+         });
+ 
+@@ -94,7 +95,7 @@
+         it('throws when an instance method is requested but the class is not in the container', function () {
+             $resolver = new CallableResolver(mapContainer([]));
+ 
+-            expect(fn () => $resolver->resolve(ServiceWithMethods::class . '::instanceMethod'))
++            expect(fn() => $resolver->resolve(ServiceWithMethods::class . '::instanceMethod'))
+                 ->toThrow(InvalidCallableException::class);
+         });
+     });
+@@ -112,7 +113,7 @@
+         it('throws when the container entry is not callable', function () {
+             $resolver = new CallableResolver(mapContainer(['plain' => new NonInvokableService()]));
+ 
+-            expect(fn () => $resolver->resolve('plain'))
++            expect(fn() => $resolver->resolve('plain'))
+                 ->toThrow(InvalidCallableException::class, 'not invokable');
+         });
+ 
+@@ -127,7 +128,7 @@
+         it('reports an existing class as a missing service (needs container wiring)', function () {
+             $resolver = new CallableResolver(mapContainer([]));
+ 
+-            expect(fn () => $resolver->resolve(InvokableService::class))
++            expect(fn() => $resolver->resolve(InvokableService::class))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -134,7 +135,7 @@
+         it('throws for an unknown string that is neither service nor function nor class', function () {
+             $resolver = new CallableResolver(mapContainer([]));
+ 
+-            expect(fn () => $resolver->resolve('totally.unknown.token'))
++            expect(fn() => $resolver->resolve('totally.unknown.token'))
+                 ->toThrow(InvalidCallableException::class);
+         });
+     });
+@@ -143,7 +144,7 @@
+         it('rejects arrays that are not exactly length 2', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve([ServiceWithMethods::class]))
++            expect(fn() => $resolver->resolve([ServiceWithMethods::class]))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -150,7 +151,7 @@
+         it('rejects a non-string method without leaking a native TypeError', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve([ServiceWithMethods::class, 123]))
++            expect(fn() => $resolver->resolve([ServiceWithMethods::class, 123]))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -174,7 +175,7 @@
+         it('throws when [class-string, method] targets an instance method but the container has no entry', function () {
+             $resolver = new CallableResolver(mapContainer([]));
+ 
+-            expect(fn () => $resolver->resolve([ServiceWithMethods::class, 'instanceMethod']))
++            expect(fn() => $resolver->resolve([ServiceWithMethods::class, 'instanceMethod']))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -181,7 +182,7 @@
+         it('throws when the class part does not exist', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve(['NoSuchClass', 'someMethod']))
++            expect(fn() => $resolver->resolve(['NoSuchClass', 'someMethod']))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -188,7 +189,7 @@
+         it('throws when the method does not exist on the object', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve([new ServiceWithMethods(), 'nope']))
++            expect(fn() => $resolver->resolve([new ServiceWithMethods(), 'nope']))
+                 ->toThrow(InvalidCallableException::class);
+         });
+ 
+@@ -195,7 +196,7 @@
+         it('throws for arrays whose first element is neither object nor string', function () {
+             $resolver = new CallableResolver(new NullContainer());
+ 
+-            expect(fn () => $resolver->resolve([42, 'foo']))
++            expect(fn() => $resolver->resolve([42, 'foo']))
+                 ->toThrow(InvalidCallableException::class);
+         });
+     });
+@@ -202,7 +203,7 @@
+ 
+     describe('unsupported input types', function () {
+         it('throws InvalidCallableException for integers', function () {
+-            expect(fn () => (new CallableResolver(new NullContainer()))->resolve(123))
++            expect(fn() => (new CallableResolver(new NullContainer()))->resolve(123))
+                 ->toThrow(InvalidCallableException::class);
+         });
+     });
 
       ----------- end diff -----------
 
- 115) tests/CompositeResolverConstructionTest.php
+  65) tests/CompositeResolverConstructionTest.php
       ---------- begin diff ----------
 --- /home/runner/work/di/di/tests/CompositeResolverConstructionTest.php
 +++ /home/runner/work/di/di/tests/CompositeResolverConstructionTest.php
-@@ -13,7 +13,8 @@
-     public function __construct(
-         private string $id,
-         private string $value,
--    ) {}
-+    ) {
-+    }
+@@ -45,6 +45,6 @@
+ it('rejects duplicate resolver identities supplied through the constructor', function () {
+     $resolver = new ConstructorEntryResolverForTest('entry', 'value');
  
-     public function can(string $id): bool
-     {
+-    expect(fn () => new CompositeResolver($resolver, $resolver))
++    expect(fn() => new CompositeResolver($resolver, $resolver))
+         ->toThrow(InvalidArgumentException::class);
+ });
 
       ----------- end diff -----------
 
- 116) tests/NestedReferenceDefinitionTest.php
+  66) tests/CycleGuardTest.php
       ---------- begin diff ----------
---- /home/runner/work/di/di/tests/NestedReferenceDefinitionTest.php
-+++ /home/runner/work/di/di/tests/NestedReferenceDefinitionTest.php
-@@ -6,12 +6,16 @@
+--- /home/runner/work/di/di/tests/CycleGuardTest.php
++++ /home/runner/work/di/di/tests/CycleGuardTest.php
+@@ -20,7 +20,7 @@
+             $guard = new CycleGuard();
+             $guard->enter('a');
  
- use Componenta\DI\Definition\Definition;
+-            expect(fn () => $guard->enter('a'))
++            expect(fn() => $guard->enter('a'))
+                 ->toThrow(CircularDependencyException::class);
+         });
  
--final readonly class NestedReferenceDependency {}
-+final readonly class NestedReferenceDependency
-+{
-+}
+@@ -44,7 +44,7 @@
+             $guard->enter('a');
+             $guard->leave('a');
  
- final readonly class NestedReferenceConsumer
- {
-     /** @param array<string, array<string, object>> $dependencies */
--    public function __construct(public array $dependencies) {}
-+    public function __construct(public array $dependencies)
-+    {
-+    }
- }
+-            expect(fn () => $guard->enter('a'))
++            expect(fn() => $guard->enter('a'))
+                 ->not->toThrow(CircularDependencyException::class);
+         });
  
- it('resolves reference definitions recursively inside constructor arrays', function (): void {
-
-      ----------- end diff -----------
-
- 117) tests/ExternalContainerRegistryTest.php
-      ---------- begin diff ----------
---- /home/runner/work/di/di/tests/ExternalContainerRegistryTest.php
-+++ /home/runner/work/di/di/tests/ExternalContainerRegistryTest.php
-@@ -12,7 +12,9 @@
-     public int $hasCalls = 0;
+@@ -51,7 +51,7 @@
+         it('tolerates leaving an id that was never entered', function () {
+             $guard = new CycleGuard();
  
-     /** @param array<string, mixed> $entries */
--    public function __construct(private array $entries) {}
-+    public function __construct(private array $entries)
-+    {
-+    }
- 
-     public function get(string $id): mixed
-     {
-
-      ----------- end diff -----------
-
- 118) verification/run.php
-      ---------- begin diff ----------
---- /home/runner/work/di/di/verification/run.php
-+++ /home/runner/work/di/di/verification/run.php
-@@ -11,7 +11,9 @@
- 
- require dirname(__DIR__, 4) . '/vendor/autoload.php';
- 
--final readonly class Dependency {}
-+final readonly class Dependency
-+{
-+}
- 
- final readonly class Entry
- {
-@@ -18,7 +20,8 @@
-     public function __construct(
-         public Dependency $dependency,
-         public int $value = 1,
--    ) {}
-+    ) {
-+    }
- }
- 
- $directory = sys_get_temp_dir() . '/componenta-di-verification-' . bin2hex(random_bytes(5));
+-            expect(fn () => $guard->leave('never-entered'))
++            expect(fn() => $guard->leave('never-entered'))
+                 ->not->toThrow(Throwable::class);
+         });
+     });
 
       ----------- end diff -----------
 
 
-Found 118 of 234 files that can be fixed in 1.710 seconds, 90.30 MB memory used
+Found 66 of 234 files that can be fixed in 1.621 seconds, 92.00 MB memory used
 Script php-cs-fixer fix --dry-run --diff handling the cs-check event returned with error code 8
 ```
 
@@ -1296,7 +1296,7 @@ Script php-cs-fixer fix --dry-run --diff handling the cs-check event returned wi
   [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it keeps raw registrations on invalidate(); apply still runs the delegator[39m
 
   [30;42;1m PASS [39;49;22m[39m Tests\CallableInvokerInvalidTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit rejects a non-callable value before invoking the PHP engine[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects a non-callable value before invoking the PHP engine[39m[90m      [39m [90m0.01s[39m  
 
   [30;42;1m PASS [39;49;22m[39m Tests\Resolver\InvokableResolverTest[39m
   [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition registers the class, making can() and resolve() succeed[39m
@@ -1349,7 +1349,7 @@ Script php-cs-fixer fix --dry-run --diff handling the cs-check event returned wi
   [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it materializes custom pipeline extensions before build returns[39m
   [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it breaks mutual external-container has cycles without hiding get failures[39m
   [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it normalizes duplicate invokable classes from configuration[39m
-  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it installs core pipeline services atomically and forbids rebinding or decoration[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it installs core pipeline services atomically an[39m[90m…[39m [90m0.01s[39m  
   [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it builds one runtime container and resolves fresh objects with explicit context[39m
   [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it rejects multiple binding mechanisms for the same canonical id[39m
   [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it shares the built container identity with bootstrap values and factories[39m
@@ -1435,7 +1435,7 @@ Script php-cs-fixer fix --dry-run --diff handling the cs-check event returned wi
   [32;1m✓[39;22m[90m [39m[90mit accepts an integer for a float declaration like PHP does[39m
 
   [90mTests:[39m    [32;1m324 passed[39;22m[90m (534 assertions)[39m
-  [90mDuration:[39m [39m0.39s[39m
+  [90mDuration:[39m [39m0.40s[39m
   [90mRandom Order Seed:[39m [39m161803[39m
 
 ```
