@@ -18,7 +18,6 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
-use Reflector;
 
 /** Validates the class contract required by {@see InvokableResolver}. */
 final class InvokableSpecificationValidator
@@ -140,8 +139,13 @@ final class InvokableSpecificationValidator
         }
     }
 
-    private static function assertTargetCompatible(Reflector $target, string $targetName): void
-    {
+    /**
+     * @param ReflectionClass<object>|ReflectionProperty|ReflectionMethod $target
+     */
+    private static function assertTargetCompatible(
+        ReflectionClass|ReflectionProperty|ReflectionMethod $target,
+        string $targetName,
+    ): void {
         foreach ($target->getAttributes() as $attribute) {
             $attributeClass = $attribute->getName();
 
@@ -156,12 +160,14 @@ final class InvokableSpecificationValidator
                 continue;
             }
 
+            $className = $target instanceof ReflectionClass
+                ? $target->getName()
+                : $target->getDeclaringClass()->getName();
+
             throw new InvalidConfigurationException(sprintf(
                 'Invokable class "%s" cannot use #[%s] on "%s": '
                 . 'the attribute requires the normal DI attribute lifecycle.',
-                $target instanceof ReflectionClass
-                    ? $target->getName()
-                    : $target->getDeclaringClass()->getName(),
+                $className,
                 $attributeClass,
                 $targetName,
             ));
