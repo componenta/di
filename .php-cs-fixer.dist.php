@@ -17,7 +17,7 @@ return (new PhpCsFixer\Config())
         'array_syntax' => ['syntax' => 'short'],
         'declare_strict_types' => true,
         'function_declaration' => [
-            'closure_fn_spacing' => 'one',
+            'closure_fn_spacing' => 'none',
             'closure_function_spacing' => 'one',
         ],
         'new_with_parentheses' => [
@@ -29,6 +29,7 @@ return (new PhpCsFixer\Config())
             'imports_order' => ['class', 'function', 'const'],
             'sort_algorithm' => 'alpha',
         ],
+        'single_line_empty_body' => true,
         'trailing_comma_in_multiline' => [
             'after_heredoc' => true,
             'elements' => ['arguments', 'array_destructuring', 'arrays', 'match', 'parameters'],
