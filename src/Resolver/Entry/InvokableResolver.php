@@ -11,6 +11,7 @@ use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
@@ -30,9 +31,10 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
     public function __construct(
         array $invokables = [],
         private readonly ?ProxyFactoryInterface $proxyFactory = null,
+        private readonly ?AttributeProcessor $attributeProcessor = null,
     ) {
         foreach ($invokables as $class) {
-            InvokableSpecificationValidator::assertValid($class);
+            InvokableSpecificationValidator::assertValid($class, $this->attributeProcessor);
             $this->invokables[$class] = $class;
         }
     }
@@ -80,7 +82,10 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
 
-        InvokableSpecificationValidator::assertValid($definition->value);
+        InvokableSpecificationValidator::assertValid(
+            $definition->value,
+            $this->attributeProcessor,
+        );
         $this->invokables[$id] = $definition->value;
     }
 
