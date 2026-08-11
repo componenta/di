@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Fixture/container_helpers.php';
 
 use Componenta\DI\Definition\Definition;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Tests\Fixture\ReplacementFactoryService;
 use Componenta\DI\Tests\Fixture\ReplacementInvokableService;
@@ -65,4 +66,16 @@ it('keeps configured make semantics when a stored value only overrides get()', f
 
     expect($container->get('service'))->toBe($replacement)
         ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
+});
+
+it('keeps the previous stored value when a replacement definition is invalid', function (): void {
+    $container = minimalContainer();
+    $previous = new ReplacementStoredService();
+    $container->set('service', $previous);
+
+    expect(fn() => $container->set(
+        'service',
+        Definition::autowire(DateTimeInterface::class),
+    ))->toThrow(InvalidConfigurationException::class)
+        ->and($container->get('service'))->toBe($previous);
 });
