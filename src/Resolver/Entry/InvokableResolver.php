@@ -18,7 +18,7 @@ use ReflectionClass;
 use Throwable;
 
 /** Resolves registered no-argument classes without reflection autowiring. */
-class InvokableResolver implements DefinitionAwareResolverInterface
+class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
 {
     /** @var array<string, class-string> */
     private array $invokables = [];
@@ -82,6 +82,11 @@ class InvokableResolver implements DefinitionAwareResolverInterface
 
         InvokableSpecificationValidator::assertValid($definition->value);
         $this->invokables[$id] = $definition->value;
+    }
+
+    public function removeDefinition(string $id): void
+    {
+        unset($this->invokables[$id]);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
