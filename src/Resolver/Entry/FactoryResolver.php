@@ -56,7 +56,17 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         protected readonly ?AttributeProcessor $attributeProcessor = null,
         protected readonly ?string $compiledFactoryBaseDir = null,
         protected readonly bool $trustedCompiledFactories = false,
-    ) {}
+    ) {
+        foreach ($factories as $id => $factory) {
+            if (!is_string($id) || $id === '') {
+                throw new InvalidConfigurationException(
+                    'Factory ids must be non-empty strings.',
+                );
+            }
+
+            FactorySpecificationValidator::assertValid($id, $factory);
+        }
+    }
 
     public function can(string $id): bool
     {
