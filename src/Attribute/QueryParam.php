@@ -23,8 +23,8 @@ readonly class QueryParam implements ExtractorInterface, CastableInterface
     {
         $name = $this->name ?? $request->getAttribute(RequestResolver::PARAMETER_NAME_ATTRIBUTE);
 
-        if ($name === null) {
-            throw new \LogicException('Query parameter name cannot be null');
+        if (!is_string($name) || $name === '') {
+            throw new \LogicException('Query parameter name must be a non-empty string');
         }
 
         $params = $request->getQueryParams();
@@ -34,7 +34,7 @@ readonly class QueryParam implements ExtractorInterface, CastableInterface
         if (!array_key_exists($name, $params)) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required query parameter "%s" is missing', $name)
+                    sprintf('Required query parameter "%s" is missing', $name),
                 );
             }
 
