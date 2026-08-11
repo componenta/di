@@ -84,16 +84,21 @@ final readonly class RequestMapperPipeline
         }
 
         if ($sortMap !== []) {
-            $sort = $data[self::SORT_KEY] ?? '';
+            if (!array_key_exists(self::SORT_KEY, $data)) {
+                $data[self::ORDER_BY_KEY] = null;
+            } else {
+                $sort = $data[self::SORT_KEY];
 
-            if (!is_string($sort) && !is_int($sort)) {
-                throw new InvalidArgumentException(sprintf(
-                    'Sort alias must be a string or integer; got %s.',
-                    get_debug_type($sort),
-                ));
+                if (!is_string($sort) && !is_int($sort)) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Sort alias must be a string or integer; got %s.',
+                        get_debug_type($sort),
+                    ));
+                }
+
+                $data[self::ORDER_BY_KEY] = $sortMap[(string) $sort] ?? null;
             }
 
-            $data[self::ORDER_BY_KEY] = $sortMap[(string) $sort] ?? null;
             unset($data[self::SORT_KEY], $data[self::ORDER_KEY]);
         }
 
