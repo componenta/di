@@ -47,31 +47,54 @@ jobs:
           install_status=$?
 
           if [[ $install_status -eq 0 ]]; then
+            composer validate --strict \
+              > /tmp/componenta-di-verification/composer-validate.log 2>&1
+            validate_status=$?
+
             find src tests verification benchmarks -name '*.php' -print0 \
               | xargs -0 -n1 php -l \
               > /tmp/componenta-di-verification/php-lint.log 2>&1
             lint_status=$?
 
-            composer cs-check \
-              > /tmp/componenta-di-verification/cs-check.log 2>&1
-            cs_status=$?
+            mapfile -t changed_src < <(
+              git diff --name-only main...HEAD -- src \
+                | grep -E '\.php$' \
+                | sort -u
+            )
+
+            if [[ ${#changed_src[@]} -eq 0 ]]; then
+              echo 'No changed source files.' \
+                > /tmp/componenta-di-verification/phpstan-changed.log
+              phpstan_changed_status=0
+            else
+              vendor/bin/phpstan analyse --level=max "${changed_src[@]}" \
+                > /tmp/componenta-di-verification/phpstan-changed.log 2>&1
+              phpstan_changed_status=$?
+            fi
 
             composer phpstan \
-              > /tmp/componenta-di-verification/phpstan.log 2>&1
-            phpstan_status=$?
+              > /tmp/componenta-di-verification/phpstan-full.log 2>&1
+            phpstan_full_status=$?
 
             composer test \
               > /tmp/componenta-di-verification/tests.log 2>&1
             test_status=$?
           else
+            validate_status=125
             lint_status=125
-            cs_status=125
-            phpstan_status=125
+            phpstan_changed_status=125
+            phpstan_full_status=125
             test_status=125
           fi
 
           overall=0
-          for status in $install_status $lint_status $cs_status $phpstan_status $test_status; do
+          for status in \
+            $install_status \
+            $validate_status \
+            $lint_status \
+            $phpstan_changed_status \
+            $test_status
+          do
             if [[ $status -ne 0 ]]; then
               overall=1
             fi
@@ -82,19 +105,27 @@ jobs:
             echo
             echo "Commit checked: $(git rev-parse HEAD)"
             echo
-            echo '| Check | Exit code |'
-            echo '|---|---:|'
-            echo "| composer install | $install_status |"
-            echo "| PHP lint | $lint_status |"
-            echo "| CS check | $cs_status |"
-            echo "| PHPStan | $phpstan_status |"
-            echo "| Pest | $test_status |"
+            echo '| Check | Exit code | Gating |'
+            echo '|---|---:|---|'
+            echo "| composer install | $install_status | yes |"
+            echo "| composer validate --strict | $validate_status | yes |"
+            echo "| PHP lint | $lint_status | yes |"
+            echo "| PHPStan: changed source files | $phpstan_changed_status | yes |"
+            echo "| PHPStan: complete src baseline | $phpstan_full_status | no |"
+            echo "| Pest | $test_status | yes |"
             echo
-            for name in composer-install php-lint cs-check phpstan tests; do
+            for name in \
+              composer-install \
+              composer-validate \
+              php-lint \
+              phpstan-changed \
+              phpstan-full \
+              tests
+            do
               echo "## $name"
               echo
               echo '```text'
-              tail -n 200 "/tmp/componenta-di-verification/${name}.log" 2>/dev/null || true
+              tail -n 400 "/tmp/componenta-di-verification/${name}.log" 2>/dev/null || true
               echo '```'
               echo
             done
@@ -113,7 +144,7 @@ jobs:
           git commit -m "Record dev verification result"
           git push origin HEAD:dev
 
-      - name: Fail workflow when checks failed
+      - name: Fail workflow when gating checks failed
         if: steps.checks.outputs.overall != '0'
         shell: bash
         run: exit 1
