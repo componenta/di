@@ -71,7 +71,7 @@ final readonly class CompiledFactoryShardCompiler
         array &$definitions,
     ): void {
         $payload = implode("\n\n", array_map(
-            static fn (GeneratedFactory $factory): string => $factory->code,
+            static fn(GeneratedFactory $factory): string => $factory->code,
             $shard,
         ));
         $id = substr(hash('sha256', self::FORMAT_VERSION . "\0" . $namespace . "\0" . $payload), 0, 32);
@@ -80,10 +80,13 @@ final readonly class CompiledFactoryShardCompiler
         $file = self::FILE_PREFIX . substr(hash('sha256', $code), 0, 32) . '.php';
         $this->writer->write(rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $file, $code);
 
+        /** @var class-string $generatedClass */
+        $generatedClass = $namespace . '\\' . $class;
+
         foreach ($shard as $factory) {
             $definitions[$factory->class] = new CompiledFactoryDefinition(
                 file: $file,
-                class: $namespace . '\\' . $class,
+                class: $generatedClass,
                 method: $factory->method,
             );
         }
