@@ -11,13 +11,7 @@ use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
 
-/**
- * Scans and binds class/property/method attributes once, then executes only
- * the preselected handlers for the requested phase.
- *
- * Parameter attributes are deliberately excluded: their first-match order is
- * owned by ParametersResolver and must not be bypassed by a class scan.
- */
+/** Binds class/property/method attributes to the exact owning handlers. */
 final class AttributeProcessor
 {
     /** @var array<class-string, array{version: int, plan: AttributeExecutionPlan}> */
@@ -27,6 +21,7 @@ final class AttributeProcessor
         public readonly AttributeHandlerRegistry $registry,
     ) {}
 
+    /** @param ReflectionClass<object> $class */
     public function process(
         ReflectionClass $class,
         AttributePhase $phase,
@@ -50,13 +45,8 @@ final class AttributeProcessor
     }
 
     /**
-     * Exposes the immutable, ordered phase map to the later code-generation
-     * stage without rescanning native reflection.
-     *
-     * @return array{
-     *     before: list<AttributeInvocation>,
-     *     after: list<AttributeInvocation>
-     * }
+     * @param ReflectionClass<object> $class
+     * @return array{before: list<AttributeInvocation>, after: list<AttributeInvocation>}
      */
     public function invocations(ReflectionClass $class): array
     {
@@ -68,6 +58,7 @@ final class AttributeProcessor
         ];
     }
 
+    /** @param ReflectionClass<object> $class */
     public function plan(ReflectionClass $class): AttributeExecutionPlan
     {
         $className = $class->getName();
@@ -129,13 +120,16 @@ final class AttributeProcessor
         return $plan;
     }
 
-    /** @return list<ReflectionProperty> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionProperty>
+     */
     private static function properties(ReflectionClass $class): array
     {
         $properties = $class->getProperties();
 
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
-            foreach ($parent->getProperties(\ReflectionProperty::IS_PRIVATE) as $property) {
+            foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
                 if ($property->getDeclaringClass()->getName() === $parent->getName()) {
                     $properties[] = $property;
                 }
@@ -145,7 +139,10 @@ final class AttributeProcessor
         return $properties;
     }
 
-    /** @return list<ReflectionMethod> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionMethod>
+     */
     private static function methods(ReflectionClass $class): array
     {
         $methods = $class->getMethods();
@@ -162,6 +159,7 @@ final class AttributeProcessor
     }
 
     /**
+     * @param ReflectionClass<object>|ReflectionProperty|ReflectionMethod $target
      * @param list<array{handler: AttributeHandlerInterface, order: int, phase: AttributePhase, priority: int}> $registrations
      * @param list<AttributeInvocation> $before
      * @param list<AttributeInvocation> $after
@@ -175,6 +173,7 @@ final class AttributeProcessor
     ): void {
         /** @var ReflectionAttribute<object> $reflectionAttribute */
         foreach ($target->getAttributes() as $attributeIndex => $reflectionAttribute) {
+            /** @var class-string $attributeClass */
             $attributeClass = $reflectionAttribute->getName();
 
             foreach ($registrations as $handlerSlot => $registration) {
@@ -200,8 +199,6 @@ final class AttributeProcessor
                     $after[] = $invocation;
                 }
 
-                // One attribute is owned by the first supporting handler in
-                // registry priority order. This keeps dispatch deterministic.
                 continue 2;
             }
 
