@@ -1,0 +1,45 @@
+name: Recheck formatting
+
+on:
+  push:
+    branches: [verify-dev-recheck]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Apply project formatter
+        run: composer cs-fix
+      - name: Verify patch shape
+        shell: bash
+        run: |
+          git diff --check
+          git status --short
+          git diff --stat
+      - name: Commit formatting
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "Andrey Shelamkoff"
+          git config user.email "inbox.shelamkoff@gmail.com"
+          git add -u
+          git commit -m "Apply project code style"
+          git push origin HEAD:verify-dev-recheck
