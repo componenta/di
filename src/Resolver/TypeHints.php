@@ -14,12 +14,7 @@ use ReflectionUnionType;
 final class TypeHints
 {
     /**
-     * Returns one concrete class/interface name for a named non-builtin type.
-     *
-     * `self` and `parent` are meaningful only together with the declaring
-     * class. Without that context they deliberately resolve to null instead of
-     * leaking the pseudo-name into a container lookup.
-     *
+     * @param ReflectionClass<object>|null $declaringClass
      * @return class-string|null
      */
     public static function classOf(
@@ -34,9 +29,7 @@ final class TypeHints
     }
 
     /**
-     * Every concrete class/interface name mentioned by a named, union,
-     * intersection or DNF type, preserving declaration order.
-     *
+     * @param ReflectionClass<object>|null $declaringClass
      * @return list<class-string>
      */
     public static function classNames(
@@ -66,7 +59,7 @@ final class TypeHints
         return array_keys($classes);
     }
 
-    /** Matches a value against the declared type in its lexical class scope. */
+    /** @param ReflectionClass<object>|null $declaringClass */
     public static function matches(
         ?ReflectionType $type,
         mixed $value,
@@ -129,18 +122,26 @@ final class TypeHints
         return false;
     }
 
-    /** @return class-string|null */
+    /**
+     * @param ReflectionClass<object>|null $declaringClass
+     * @return class-string|null
+     */
     private static function resolveClassName(
         string $name,
         ?ReflectionClass $declaringClass,
     ): ?string {
-        return match ($name) {
-            'self', 'static' => $declaringClass?->getName(),
-            'parent' => ($parent = $declaringClass?->getParentClass()) === false
-                ? null
-                : $parent?->getName(),
-            default => $name,
-        };
+        if ($name === 'self' || $name === 'static') {
+            return $declaringClass?->getName();
+        }
+
+        if ($name === 'parent') {
+            $parent = $declaringClass?->getParentClass();
+
+            return $parent === false ? null : $parent?->getName();
+        }
+
+        /** @var class-string $name */
+        return $name;
     }
 
     private function __construct() {}
