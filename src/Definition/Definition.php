@@ -7,12 +7,19 @@ namespace Componenta\DI\Definition;
 /**
  * Static factory for creating definitions.
  *
+ * `ReferenceDefinition` is an argument value for a `ClassDefinition`; it is
+ * not a standalone container entry definition.
+ *
  * @example
  * ```php
  * return [
- *     LoggerInterface::class => Definition::factory(fn($c, array $context) => new Logger()),
- *     UserService::class => Definition::autowire(UserService::class),
- *     'db' => Definition::reference(Connection::class),
+ *     LoggerInterface::class => Definition::factory(
+ *         fn($c, array $context) => new Logger(),
+ *     ),
+ *     UserService::class => Definition::autowire(UserService::class)
+ *         ->constructor([
+ *             'connection' => Definition::reference(Connection::class),
+ *         ]),
  * ];
  * ```
  */
