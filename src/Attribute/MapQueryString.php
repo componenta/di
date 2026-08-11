@@ -14,7 +14,9 @@ class MapQueryString extends RequestMapper implements RequestDataExtractorInterf
 
     public function extract(ServerRequestInterface $request): array
     {
-        $data = $this->extractSharedData($request);
-        return array_merge($data, $request->getQueryParams());
+        return $this->mergeRequestData([
+            ...$this->extractSharedSources($request),
+            'query string' => $request->getQueryParams(),
+        ]);
     }
 }
