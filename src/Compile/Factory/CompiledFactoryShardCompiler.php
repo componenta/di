@@ -32,6 +32,8 @@ final readonly class CompiledFactoryShardCompiler
             throw new InvalidArgumentException('Factory shard directory must be non-empty and maxBytes must be positive.');
         }
 
+        self::assertNamespace($namespace);
+
         $definitions = [];
         $current = [];
         $size = 0;
@@ -115,6 +117,20 @@ PHP,
             self::indent($methods, 4),
             $class,
         );
+    }
+
+    private static function assertNamespace(string $namespace): void
+    {
+        $identifier = '[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*';
+
+        if ($namespace === ''
+            || preg_match('/^(?:' . $identifier . ')(?:\\\\' . $identifier . ')*$/D', $namespace) !== 1
+        ) {
+            throw new InvalidArgumentException(sprintf(
+                'Factory shard namespace "%s" is not a valid PHP namespace.',
+                $namespace,
+            ));
+        }
     }
 
     private static function indent(string $code, int $spaces): string
