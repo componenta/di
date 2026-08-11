@@ -1,4 +1,4 @@
-name: Recheck reproduction
+name: Recheck verification
 
 on:
   push:
@@ -8,17 +8,17 @@ permissions:
   contents: read
 
 jobs:
-  reproduce:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Confirm source tree matches regression commit
+      - name: Confirm source tree matches fix commit
         shell: bash
         run: |
-          git diff --exit-code de590a9559e43b84b0db9b201a28389c7836befb -- . ':(exclude).github/workflows/recheck-repro.yml'
+          git diff --exit-code 6bb18b70624aa7ecefaac39fe6ffc5cc7894d224 -- . ':(exclude).github/workflows/recheck-repro.yml'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
