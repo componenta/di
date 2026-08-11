@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Attribute;
 
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use LogicException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionParameter;
 use ReflectionProperty;
-use LogicException;
 
 /**
  * Scans and binds class/property/method attributes once, then executes only
@@ -128,80 +127,6 @@ final class AttributeProcessor
         ];
 
         return $plan;
-    }
-
-    /**
-     * Returns every attribute class name present in the entry metadata, not
-     * only attributes currently claimed by a registered handler.
-     *
-     * An unsupported attribute can become supported after its own class or
-     * inheritance hierarchy changes while the entry source and handler chain
-     * stay unchanged. Fingerprinting only bound invocations would then accept
-     * a stale generated factory that silently skips the newly applicable
-     * handler. Missing attribute classes are retained as names as well, so a
-     * class that becomes autoloadable later also invalidates the artifact.
-     *
-     * @return list<class-string>
-     */
-    public function sourceAttributeClasses(ReflectionClass $class): array
-    {
-        $classes = [];
-
-        self::collectTargetAttributeClasses($class, $classes);
-
-        foreach (self::properties($class) as $property) {
-            self::collectTargetAttributeClasses($property, $classes);
-        }
-
-        $constructor = $class->getConstructor();
-        if ($constructor !== null) {
-            self::collectParameterAttributeClasses($constructor->getParameters(), $classes);
-        }
-
-        // A class-level compilable handler may refer to a method indirectly
-        // (for example SetUp). Include both method attributes and parameter
-        // attributes while reusing the processor's canonical hierarchy walk.
-        foreach (self::methods($class) as $method) {
-            self::collectTargetAttributeClasses($method, $classes);
-            self::collectParameterAttributeClasses($method->getParameters(), $classes);
-        }
-
-        return array_keys($classes);
-    }
-
-    /**
-     * @param ReflectionClass|ReflectionProperty|ReflectionMethod $target
-     * @param array<class-string, true> $classes
-     */
-    private static function collectTargetAttributeClasses(
-        ReflectionClass|ReflectionProperty|ReflectionMethod $target,
-        array &$classes,
-    ): void {
-        /** @var ReflectionAttribute<object> $attribute */
-        foreach ($target->getAttributes() as $attribute) {
-            /** @var class-string $attributeClass */
-            $attributeClass = $attribute->getName();
-            $classes[$attributeClass] = true;
-        }
-    }
-
-    /**
-     * @param list<ReflectionParameter> $parameters
-     * @param array<class-string, true> $classes
-     */
-    private static function collectParameterAttributeClasses(
-        array $parameters,
-        array &$classes,
-    ): void {
-        foreach ($parameters as $parameter) {
-            /** @var ReflectionAttribute<object> $attribute */
-            foreach ($parameter->getAttributes() as $attribute) {
-                $attributeClass = $attribute->getName();
-
-                /** @var class-string $attributeClass */
-                $classes[$attributeClass] = true;
-            }
-        }
     }
 
     /** @return list<ReflectionProperty> */
