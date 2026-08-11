@@ -84,10 +84,9 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      * If found, `orderBy` is set to the mapped value; otherwise `orderBy`
      * is set to null. The raw `sort` and `order` keys are always removed.
      *
-     * Values must be arrays compatible with SortableInterface::$orderBy
-     * (i.e. `array<non-empty-string, Direction>`).
+     * Values must be arrays compatible with SortableInterface::$orderBy.
      *
-     * @var array<string, array>
+     * @var array<string, array<string, mixed>>
      */
     protected array $sortMap = [];
 
@@ -116,6 +115,7 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      */
     protected(set) array $map = [];
 
+    /** @param array<string, string> $map */
     public function __construct(
         array $map = [],
         ?RequestDataConflictPolicy $conflictPolicy = null,
@@ -177,6 +177,8 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
     /**
      * Applies mapper aliases, casts, defaults, sort aliases, and exclusions.
      *
+     * @param array<string|int, mixed> $data
+     * @return array<string|int, mixed>
      * @throws CasterExceptionInterface
      */
     public function transform(array $data): array
