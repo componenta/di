@@ -232,10 +232,22 @@ final class RequestResolver implements ParameterResolverInterface
             return null;
         }
 
-        return array_find(
+        $classTypes = array_values(array_filter(
             ReflectionType::getTypeNames($type),
             static fn(string $typeName): bool => !isset(self::BUILTIN_TYPES[$typeName]),
-        );
+        ));
+
+        if (count($classTypes) > 1) {
+            throw ResolutionException::forParameter(
+                $parameter,
+                reason: sprintf(
+                    'request DTO mapping requires exactly one class type; got %s',
+                    implode('|', $classTypes),
+                ),
+            );
+        }
+
+        return $classTypes[0] ?? null;
     }
 
     /** @throws ValidationExceptionInterface */
