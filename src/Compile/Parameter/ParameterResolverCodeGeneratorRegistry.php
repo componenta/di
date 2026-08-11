@@ -7,22 +7,13 @@ namespace Componenta\DI\Compile\Parameter;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use InvalidArgumentException;
 
-/** Ordered registry mapping resolver classes/interfaces to code generators. */
+/** Maps resolver classes/interfaces to their compile-time code generators. */
 final class ParameterResolverCodeGeneratorRegistry
 {
     /** @var array<class-string, ParameterResolverCodeGeneratorInterface> */
     private array $generators = [];
 
-    public private(set) int $version = 0;
-
-    /** @var list<ParameterResolverCodeGeneratorInterface> */
-    public array $generatorList {
-        get => array_values($this->generators);
-    }
-
-    /**
-     * @param class-string<ParameterResolverInterface> $resolverClass
-     */
+    /** @param class-string<ParameterResolverInterface> $resolverClass */
     public function register(
         string $resolverClass,
         ParameterResolverCodeGeneratorInterface $generator,
@@ -36,7 +27,6 @@ final class ParameterResolverCodeGeneratorRegistry
         }
 
         $this->generators[$resolverClass] = $generator;
-        ++$this->version;
     }
 
     public function find(
