@@ -35,10 +35,13 @@ jobs:
       - name: Run repository verification
         id: checks
         shell: bash
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
         run: |
           set +e
           mkdir -p /tmp/componenta-di-verification
 
+          composer config --no-plugins allow-plugins.pestphp/pest-plugin true
           composer install --no-interaction --prefer-dist --no-progress \
             > /tmp/componenta-di-verification/composer-install.log 2>&1
           install_status=$?
