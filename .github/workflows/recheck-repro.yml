@@ -1,0 +1,32 @@
+name: Recheck reproduction
+
+on:
+  push:
+    branches: [verify-dev-recheck]
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm source tree matches regression commit
+        shell: bash
+        run: |
+          git diff --exit-code de590a9559e43b84b0db9b201a28389c7836befb -- . ':(exclude).github/workflows/recheck-repro.yml'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Run focused regressions
+        run: vendor/bin/pest tests/DefinitionReplacementTest.php tests/CallableResolverTest.php
