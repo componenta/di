@@ -14,6 +14,9 @@ class MapServerParams extends RequestMapper implements RequestDataExtractorInter
 
     public function extract(ServerRequestInterface $request): array
     {
-        return array_merge($this->extractSharedData($request), $request->getServerParams());
+        return $this->mergeRequestData([
+            ...$this->extractSharedSources($request),
+            'server parameters' => $request->getServerParams(),
+        ]);
     }
 }
