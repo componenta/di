@@ -44,12 +44,13 @@ final readonly class RequestMapperPipeline
     public const string ORDER_BY_KEY = 'orderBy';
 
     /**
-     * @param array<string, mixed>          $data
-     * @param array<string, string>         $map      source-key -> target-key
-     * @param array<string, mixed>          $defaults target-key -> default value
-     * @param array<string, string>         $cast     target-key -> caster name
-     * @param array<string, array>          $sortMap  sort-alias -> orderBy array
-     * @param list<string>                  $exclude  target-keys to drop
+     * @param array<string|int, mixed>          $data
+     * @param array<string, string>             $map      source-key -> target-key
+     * @param array<string, mixed>              $defaults target-key -> default value
+     * @param array<string, string>             $cast     target-key -> caster name
+     * @param array<string, array<string, mixed>> $sortMap sort-alias -> orderBy array
+     * @param list<string>                      $exclude  target-keys to drop
+     * @return array<string|int, mixed>
      *
      * @throws InvalidArgumentException If a required mapped source key is missing.
      * @throws CasterExceptionInterface If a configured caster is not registered or fails.
@@ -115,9 +116,9 @@ final readonly class RequestMapperPipeline
      * - `'source' => 'target'`  - required: missing source raises.
      * - `'?source' => 'target'` - optional: missing source is silently skipped.
      *
-     * @param array<string, mixed>  $data
+     * @param array<string|int, mixed> $data
      * @param array<string, string> $map
-     * @return array<string, mixed>
+     * @return array<string|int, mixed>
      *
      * @throws InvalidArgumentException
      */
