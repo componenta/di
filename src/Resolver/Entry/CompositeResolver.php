@@ -19,6 +19,15 @@ class CompositeResolver implements DefinitionAwareResolverInterface
     /** @var array<string, EntryResolverInterface|null> */
     private array $ownerCache = [];
 
+    /**
+     * Runtime definitions explicitly select their owner. The selected owner
+     * must take precedence over stale definitions retained by another child
+     * resolver when a definition changes kind for the same id.
+     *
+     * @var array<string, DefinitionAwareResolverInterface>
+     */
+    private array $definitionOwners = [];
+
     public function __construct(EntryResolverInterface ...$resolvers)
     {
         if (!array_is_list($resolvers)) {
@@ -80,7 +89,8 @@ class CompositeResolver implements DefinitionAwareResolverInterface
                 && $resolver->supportsDefinition($definition)
             ) {
                 $resolver->setDefinition($id, $definition);
-                unset($this->ownerCache[$id]);
+                $this->definitionOwners[$id] = $resolver;
+                $this->ownerCache[$id] = $resolver;
                 return;
             }
         }
@@ -115,6 +125,10 @@ class CompositeResolver implements DefinitionAwareResolverInterface
 
     private function findOwner(string $id): ?EntryResolverInterface
     {
+        if (isset($this->definitionOwners[$id])) {
+            return $this->definitionOwners[$id];
+        }
+
         if (array_key_exists($id, $this->ownerCache)) {
             return $this->ownerCache[$id];
         }
