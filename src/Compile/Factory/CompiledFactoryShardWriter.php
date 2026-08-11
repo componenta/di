@@ -17,7 +17,23 @@ final readonly class CompiledFactoryShardWriter
         }
 
         if (is_file($file)) {
-            return;
+            $existing = file_get_contents($file);
+
+            if ($existing === false) {
+                throw new RuntimeException(sprintf(
+                    'Cannot read existing generated factory shard "%s".',
+                    $file,
+                ));
+            }
+
+            if ($existing === $code) {
+                return;
+            }
+
+            throw new RuntimeException(sprintf(
+                'Generated factory shard "%s" already exists with unexpected contents.',
+                $file,
+            ));
         }
 
         $temporary = tempnam($directory, basename($file) . '.tmp.');
