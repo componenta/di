@@ -8,15 +8,20 @@ use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use ReflectionClass;
+use ReflectionException;
 
 /** Validates the public configuration forms accepted by FactoryResolver. */
 final class FactorySpecificationValidator
 {
     public static function assertValid(string $id, mixed $factory): void
     {
-        if ($factory instanceof FactoryDefinition
-            || $factory instanceof ClassDefinition
-        ) {
+        if ($factory instanceof FactoryDefinition) {
+            return;
+        }
+
+        if ($factory instanceof ClassDefinition) {
+            self::assertValidClassDefinition($id, $factory);
             return;
         }
 
@@ -50,6 +55,59 @@ final class FactorySpecificationValidator
             $id,
             get_debug_type($factory),
         ));
+    }
+
+    private static function assertValidClassDefinition(
+        string $id,
+        ClassDefinition $definition,
+    ): void {
+        try {
+            /** @var ReflectionClass<object> $class */
+            $class = new ReflectionClass($definition->value);
+        } catch (ReflectionException $e) {
+            throw new InvalidConfigurationException(sprintf(
+                'Class definition for "%s" targets unavailable class "%s".',
+                $id,
+                $definition->value,
+            ), previous: $e);
+        }
+
+        if (!$class->isInstantiable()) {
+            throw new InvalidConfigurationException(sprintf(
+                'Class definition for "%s" targets non-instantiable class "%s".',
+                $id,
+                $definition->value,
+            ));
+        }
+
+        $magicCall = $class->hasMethod('__call')
+            && $class->getMethod('__call')->isPublic();
+
+        foreach ($definition->methodCalls as $call) {
+            $method = $call['method'];
+
+            if (!$class->hasMethod($method)) {
+                if ($magicCall) {
+                    continue;
+                }
+
+                throw new InvalidConfigurationException(sprintf(
+                    'Class definition for "%s" calls missing method "%s::%s".',
+                    $id,
+                    $definition->value,
+                    $method,
+                ));
+            }
+
+            if (!$class->getMethod($method)->isPublic() && !$magicCall) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Class definition for "%s" calls non-public method "%s::%s".',
+                    $id,
+                    $definition->value,
+                    $method,
+                ));
+            }
+        }
     }
 
     private static function isDeferredCallable(mixed $factory): bool
