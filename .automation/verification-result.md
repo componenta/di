@@ -1,18 +1,179 @@
 # Dev verification result
 
-Commit checked: 875aab8ae5111204e2235fb914698beae9b104d2
+Commit checked: 90f52127a2baef6719bb2ae61961f1b15e34a171
 
-| Check | Exit code |
-|---|---:|
-| composer install | 0 |
-| PHP lint | 0 |
-| CS check | 0 |
-| PHPStan | 1 |
-| Pest | 0 |
+| Check | Exit code | Gating |
+|---|---:|---|
+| composer install | 0 | yes |
+| composer validate --strict | 0 | yes |
+| PHP lint | 0 | yes |
+| PHPStan: changed source files | 0 | yes |
+| PHPStan: complete src baseline | 1 | no |
+| Pest | 0 | yes |
 
 ## composer-install
 
 ```text
+No composer.lock file present. Updating dependencies to latest instead of installing from lock file. See https://getcomposer.org/install for more information.
+Loading composer repositories with package information
+Updating dependencies
+Lock file operations: 100 installs, 0 updates, 0 removals
+  - Locking brianium/paratest (v7.20.0)
+  - Locking clue/ndjson-react (v1.3.0)
+  - Locking componenta/array (v1.0.0)
+  - Locking componenta/arrayable (v1.0.0)
+  - Locking componenta/caster (v1.0.0)
+  - Locking componenta/clock (v1.0.0)
+  - Locking componenta/config (v2.0.0)
+  - Locking componenta/mimetype-detector (v1.0.0)
+  - Locking componenta/priority-list (v1.0.0)
+  - Locking componenta/reflection (v1.0.1)
+  - Locking componenta/validation (v1.0.1)
+  - Locking componenta/var-export (v1.0.0)
+  - Locking composer/pcre (3.4.0)
+  - Locking composer/semver (3.4.4)
+  - Locking composer/xdebug-handler (3.0.5)
+  - Locking cycle/database (2.22.1)
+  - Locking doctrine/deprecations (1.1.6)
+  - Locking ergebnis/agent-detector (1.2.0)
+  - Locking evenement/evenement (v3.0.2)
+  - Locking fidry/cpu-core-counter (1.3.0)
+  - Locking filp/whoops (2.18.4)
+  - Locking friendsofphp/php-cs-fixer (v3.95.18)
+  - Locking jean85/pretty-package-versions (2.1.1)
+  - Locking myclabs/deep-copy (1.14.0)
+  - Locking nikic/php-parser (v5.8.0)
+  - Locking nunomaduro/collision (v8.9.5)
+  - Locking nunomaduro/termwind (v2.4.0)
+  - Locking pestphp/pest (v4.7.8)
+  - Locking pestphp/pest-plugin (v4.0.0)
+  - Locking pestphp/pest-plugin-arch (v4.0.2)
+  - Locking pestphp/pest-plugin-mutate (v4.0.1)
+  - Locking pestphp/pest-plugin-profanity (v4.2.1)
+  - Locking phar-io/manifest (2.0.4)
+  - Locking phar-io/version (3.2.1)
+  - Locking phpdocumentor/reflection-common (2.2.0)
+  - Locking phpdocumentor/reflection-docblock (6.0.3)
+  - Locking phpdocumentor/type-resolver (2.0.0)
+  - Locking phpstan/phpdoc-parser (2.3.3)
+  - Locking phpstan/phpstan (2.2.8)
+  - Locking phpunit/php-code-coverage (12.5.7)
+  - Locking phpunit/php-file-iterator (6.0.1)
+  - Locking phpunit/php-invoker (6.0.0)
+  - Locking phpunit/php-text-template (5.0.0)
+  - Locking phpunit/php-timer (8.0.0)
+  - Locking phpunit/phpunit (12.5.33)
+  - Locking psr/clock (1.0.0)
+  - Locking psr/container (2.0.2)
+  - Locking psr/event-dispatcher (1.0.0)
+  - Locking psr/http-message (2.0)
+  - Locking psr/log (3.0.2)
+  - Locking psr/simple-cache (3.0.0)
+  - Locking react/cache (v1.2.0)
+  - Locking react/child-process (v0.6.7)
+  - Locking react/dns (v1.14.0)
+  - Locking react/event-loop (v1.6.0)
+  - Locking react/promise (v3.3.0)
+  - Locking react/socket (v1.17.0)
+  - Locking react/stream (v1.4.0)
+  - Locking sebastian/cli-parser (4.2.1)
+  - Locking sebastian/comparator (7.1.8)
+  - Locking sebastian/complexity (5.0.0)
+  - Locking sebastian/diff (7.0.0)
+  - Locking sebastian/environment (8.1.2)
+  - Locking sebastian/exporter (7.0.3)
+  - Locking sebastian/global-state (8.0.3)
+  - Locking sebastian/lines-of-code (4.0.1)
+  - Locking sebastian/object-enumerator (7.0.0)
+  - Locking sebastian/object-reflector (5.0.0)
+  - Locking sebastian/recursion-context (7.0.1)
+  - Locking sebastian/type (6.0.4)
+  - Locking sebastian/version (6.0.0)
+  - Locking spiral/core (3.17.2)
+  - Locking spiral/hmvc (3.17.2)
+  - Locking spiral/interceptors (3.17.2)
+  - Locking spiral/pagination (3.17.1)
+  - Locking spiral/security (3.17.2)
+  - Locking staabm/side-effects-detector (1.0.5)
+  - Locking symfony/console (v8.1.4)
+  - Locking symfony/deprecation-contracts (v3.7.1)
+  - Locking symfony/event-dispatcher (v8.1.2)
+  - Locking symfony/event-dispatcher-contracts (v3.7.1)
+  - Locking symfony/filesystem (v8.1.2)
+  - Locking symfony/finder (v8.1.1)
+  - Locking symfony/options-resolver (v8.1.0)
+  - Locking symfony/polyfill-ctype (v1.37.0)
+  - Locking symfony/polyfill-intl-grapheme (v1.41.0)
+  - Locking symfony/polyfill-intl-normalizer (v1.38.0)
+  - Locking symfony/polyfill-mbstring (v1.38.2)
+  - Locking symfony/polyfill-php80 (v1.37.0)
+  - Locking symfony/polyfill-php81 (v1.38.1)
+  - Locking symfony/polyfill-php83 (v1.41.0)
+  - Locking symfony/polyfill-php84 (v1.38.1)
+  - Locking symfony/polyfill-php85 (v1.41.0)
+  - Locking symfony/process (v8.1.0)
+  - Locking symfony/service-contracts (v3.7.1)
+  - Locking symfony/stopwatch (v8.1.0)
+  - Locking symfony/string (v8.1.2)
+  - Locking ta-tikoma/phpunit-architecture-test (0.8.7)
+  - Locking theseer/tokenizer (2.0.1)
+  - Locking webmozart/assert (2.4.1)
+Writing lock file
+Installing dependencies from lock file (including require-dev)
+Package operations: 100 installs, 0 updates, 0 removals
+  - Downloading pestphp/pest-plugin (v4.0.0)
+  - Downloading componenta/arrayable (v1.0.0)
+  - Downloading componenta/array (v1.0.0)
+  - Downloading psr/clock (1.0.0)
+  - Downloading componenta/clock (v1.0.0)
+  - Downloading componenta/caster (v1.0.0)
+  - Downloading componenta/priority-list (v1.0.0)
+  - Downloading componenta/reflection (v1.0.1)
+  - Downloading psr/http-message (2.0)
+  - Downloading psr/container (2.0.2)
+  - Downloading symfony/polyfill-php83 (v1.41.0)
+  - Downloading spiral/pagination (3.17.1)
+  - Downloading spiral/core (3.17.2)
+  - Downloading psr/event-dispatcher (1.0.0)
+  - Downloading spiral/interceptors (3.17.2)
+  - Downloading spiral/hmvc (3.17.2)
+  - Downloading spiral/security (3.17.2)
+  - Downloading psr/log (3.0.2)
+  - Downloading cycle/database (2.22.1)
+  - Downloading componenta/mimetype-detector (v1.0.0)
+  - Downloading nikic/php-parser (v5.8.0)
+  - Downloading componenta/var-export (v1.0.0)
+  - Downloading componenta/config (v2.0.0)
+  - Downloading componenta/validation (v1.0.1)
+  - Downloading composer/pcre (3.4.0)
+  - Downloading filp/whoops (2.18.4)
+  - Downloading symfony/deprecation-contracts (v3.7.1)
+  - Downloading symfony/service-contracts (v3.7.1)
+  - Downloading symfony/stopwatch (v8.1.0)
+  - Downloading symfony/process (v8.1.0)
+  - Downloading symfony/polyfill-php84 (v1.38.1)
+  - Downloading symfony/polyfill-php81 (v1.38.1)
+  - Downloading symfony/polyfill-php80 (v1.37.0)
+  - Downloading symfony/polyfill-mbstring (v1.38.2)
+  - Downloading symfony/options-resolver (v8.1.0)
+  - Downloading symfony/finder (v8.1.1)
+  - Downloading symfony/polyfill-ctype (v1.37.0)
+  - Downloading symfony/filesystem (v8.1.2)
+  - Downloading symfony/event-dispatcher-contracts (v3.7.1)
+  - Downloading symfony/event-dispatcher (v8.1.2)
+  - Downloading symfony/polyfill-intl-normalizer (v1.38.0)
+  - Downloading symfony/polyfill-intl-grapheme (v1.41.0)
+  - Downloading symfony/string (v8.1.2)
+  - Downloading symfony/polyfill-php85 (v1.41.0)
+  - Downloading symfony/console (v8.1.4)
+  - Downloading sebastian/diff (7.0.0)
+  - Downloading react/event-loop (v1.6.0)
+  - Downloading evenement/evenement (v3.0.2)
+  - Downloading react/stream (v1.4.0)
+  - Downloading react/promise (v3.3.0)
+  - Downloading react/cache (v1.2.0)
+  - Downloading react/dns (v1.14.0)
+  - Downloading react/socket (v1.17.0)
   - Downloading react/child-process (v0.6.7)
   - Downloading fidry/cpu-core-counter (1.3.0)
   - Downloading ergebnis/agent-detector (1.2.0)
@@ -215,9 +376,44 @@ Class Componenta\DI\Tests\ExternalContainerForRegistryTest located in ./tests/Ex
 Use the `composer fund` command to find out more!
 ```
 
+## composer-validate
+
+```text
+./composer.json is valid
+```
+
 ## php-lint
 
 ```text
+No syntax errors detected in src/CallableExecutorInterface.php
+No syntax errors detected in src/ContainerBuilder.php
+No syntax errors detected in src/LazyServiceFactoryInterface.php
+No syntax errors detected in src/ConfigKey.php
+No syntax errors detected in src/CallableExecutor.php
+No syntax errors detected in src/DelegatorRegistry.php
+No syntax errors detected in src/NullContainer.php
+No syntax errors detected in src/AliasResolver.php
+No syntax errors detected in src/CallableResolverInterface.php
+No syntax errors detected in src/ProxyFactoryInterface.php
+No syntax errors detected in src/ProxyFactory.php
+No syntax errors detected in src/CallableResolver.php
+No syntax errors detected in src/Compile/Parameter/DefaultParameterResolverCodeGenerators.php
+No syntax errors detected in src/Compile/Parameter/ParameterResolverCodeGeneratorRegistry.php
+No syntax errors detected in src/Compile/Parameter/ParameterCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/GeneratedResolverCode.php
+No syntax errors detected in src/Compile/Parameter/EmptyContextResolution.php
+No syntax errors detected in src/Compile/Parameter/PhpValueExporter.php
+No syntax errors detected in src/Compile/Parameter/GeneratedResolverCodeType.php
+No syntax errors detected in src/Compile/Parameter/Generator/ArrayTypedResolverCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/Generator/NullableResolverCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/Generator/ArrayResolverCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/Generator/DefaultValueResolverCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/Generator/RuntimeParameterResolverCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/Generator/AutowireByTypeResolverCodeGenerator.php
+No syntax errors detected in src/Compile/Parameter/GeneratedParameterCode.php
+No syntax errors detected in src/Compile/Parameter/ParameterResolverCodeGeneratorInterface.php
+No syntax errors detected in src/Compile/Parameter/ParameterCodeGenerationContext.php
+No syntax errors detected in src/Compile/Factory/FactoryCode.php
 No syntax errors detected in src/Compile/Factory/FactoryCodeGenerator.php
 No syntax errors detected in src/Compile/Factory/CompiledFactoryShardWriter.php
 No syntax errors detected in src/Compile/Factory/CompiledFactoryShardCompiler.php
@@ -420,68 +616,225 @@ No syntax errors detected in benchmarks/RuntimeBench.php
 No syntax errors detected in benchmarks/BuildPhasesBench.php
 ```
 
-## cs-check
+## phpstan-changed
 
 ```text
-PHP CS Fixer 3.95.18 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.
-PHP runtime: 8.4.24
-Loaded config default.
-
- Do you want to create the config file? [yes]:
-  [0] yes
-  [1] no
- > PHP CS Fixer 3.95.18 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.
-PHP runtime: 8.4.24
-
- [WARNING] This command is experimental                                         
-
- ! [NOTE] While we start, we must tell you that we put our diligence to NOT     
- !        change the meaning of your codebase.                                  
- !                                                                              
- !        Yet, some of the rules are explicitly _risky_ to apply. A rule is     
- !        _risky_ if it could change code behaviour, e.g. transforming `==` into
- !        `===` or removal of trailing whitespaces within multiline strings.    
- !                                                                              
- !        Such rules are improving your codebase even further, yet you shall    
- !        always review changes proposed by _risky_ rules carefully.            
-
- Do you want to enable _risky_ rules? [no]:
-  [0] yes
-  [1] no
- > 
- ! [NOTE] We recommend usage of `@auto` rulesets. They take insights from your  
- !        existing `composer.json` to configure project the best:               
-
- * `@autoPHPMigration` - Migration rules to improve code towards the minimum ``PHP`` supported by your project (taken from ``composer.json`` file).
- * `@PER-CS` - Rules that follow `PER Coding Style <https://www.php-fig.org/per/coding-style/>`_, Set is an alias for the latest revision of ``PER-CS`` rules - use it if you always want to be in sync with newest ``PER-CS`` standard.
-
- Do you want to use `@auto` ruleset? [yes]:
-  [0] yes
-  [1] no
- > 
- Do you want to use any of other recommended ruleset? (multi-choice) [none]:
-  [@PhpCsFixer] Rules recommended by ``PHP CS Fixer`` team, highly opinionated. Extends ``@PER-CS`` and ``@Symfony``.
-  [@Symfony   ] Rules that follow the official `Symfony Coding Standards <https://symfony.com/doc/current/contributing/code/standards.html>`_. Extends ``@PER-CS``.
-  [none       ] none
- > 
- [OK] Configuration file created successfully as `.php-cs-fixer.dist.php`.      
-
-Config file created, re-run the command to put it in action.
+No changed source files.
 ```
 
-## phpstan
+## phpstan-full
 
 ```text
+  30     Method Componenta\DI\Resolver\Attribute\AttributeProcessor::process()  
+         has parameter $class with generic class ReflectionClass but does not   
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  61     Method                                                                 
+         Componenta\DI\Resolver\Attribute\AttributeProcessor::invocations()     
+         has parameter $class with generic class ReflectionClass but does not   
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  71     Method Componenta\DI\Resolver\Attribute\AttributeProcessor::plan()     
+         has parameter $class with generic class ReflectionClass but does not   
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  133    Method                                                                 
+         Componenta\DI\Resolver\Attribute\AttributeProcessor::properties() has  
+         parameter $class with generic class ReflectionClass but does not       
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  149    Method Componenta\DI\Resolver\Attribute\AttributeProcessor::methods()  
+         has parameter $class with generic class ReflectionClass but does not   
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  169    Method Componenta\DI\Resolver\Attribute\AttributeProcessor::collect()  
+         has parameter $target with generic class ReflectionClass but does not  
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+ ------ ----------------------------------------------------------------------- 
+
+ ------ --------------------------------------------------------------------- 
+  Line   Resolver/CastableResolver.php                                        
+ ------ --------------------------------------------------------------------- 
+  148    Dead catch - Componenta\DI\Exception\ResolutionException is already  
+         caught above.                                                        
+         🪪  catch.alreadyCaught                                              
+  189    Dead catch - Componenta\DI\Exception\ResolutionException is already  
+         caught above.                                                        
+         🪪  catch.alreadyCaught                                              
+ ------ --------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/ConfigAttributeResolver.php                                   
+ ------ ----------------------------------------------------------------------- 
+  110    Parameter #1 $configData of method                                     
+         Componenta\DI\Resolver\ConfigValueExtractor::extract() expects array<  
+         string, mixed>|ArrayAccess, mixed given.                               
+         🪪  argument.type                                                      
+ ------ ----------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/ConfigValueExtractor.php                                      
+ ------ ----------------------------------------------------------------------- 
+  47     Method Componenta\DI\Resolver\ConfigValueExtractor::extract() has      
+         parameter $configData with generic interface ArrayAccess but does not  
+         specify its types: TKey, TValue                                        
+         🪪  missingType.generics                                               
+  54     Parameter #4 $segments of method                                       
+         Componenta\DI\Resolver\ConfigValueExtractor::extractCompiled()         
+         expects list<string>, array<string> given.                             
+         🪪  argument.type                                                      
+         💡  array<int|string, string> might not be a list.                     
+  76     Method Componenta\DI\Resolver\ConfigValueExtractor::extractCompiled()  
+         has parameter $configData with generic interface ArrayAccess but does  
+         not specify its types: TKey, TValue                                    
+         🪪  missingType.generics                                               
+  134    Method Componenta\DI\Resolver\ConfigValueExtractor::extractNested()    
+         has parameter $configData with generic interface ArrayAccess but does  
+         not specify its types: TKey, TValue                                    
+         🪪  missingType.generics                                               
+  134    Method Componenta\DI\Resolver\ConfigValueExtractor::extractNested()    
+         has parameter $configData with no value type specified in iterable     
+         type array.                                                            
+         🪪  missingType.iterableValue                                          
+         💡  See:                                                               
+         https://phpstan.org/blog/solving-phpstan-no-value-type-specified-in-i  
+         terable-type                                                           
+  161    Method Componenta\DI\Resolver\ConfigValueExtractor::extractLiteral()   
+         has parameter $configData with generic interface ArrayAccess but does  
+         not specify its types: TKey, TValue                                    
+         🪪  missingType.generics                                               
+  161    Method Componenta\DI\Resolver\ConfigValueExtractor::extractLiteral()   
+         has parameter $configData with no value type specified in iterable     
+         type array.                                                            
+         🪪  missingType.iterableValue                                          
+         💡  See:                                                               
+         https://phpstan.org/blog/solving-phpstan-no-value-type-specified-in-i  
+         terable-type                                                           
+  174    Method Componenta\DI\Resolver\ConfigValueExtractor::hasKey() has       
+         parameter $configData with generic interface ArrayAccess but does not  
+         specify its types: TKey, TValue                                        
+         🪪  missingType.generics                                               
+  174    Method Componenta\DI\Resolver\ConfigValueExtractor::hasKey() has       
+         parameter $configData with no value type specified in iterable type    
+         array.                                                                 
+         🪪  missingType.iterableValue                                          
+         💡  See:                                                               
+         https://phpstan.org/blog/solving-phpstan-no-value-type-specified-in-i  
+         terable-type                                                           
+ ------ ----------------------------------------------------------------------- 
+
+ ------ ---------------------------------------------------------------------- 
+  Line   Resolver/Entry/EntryClassEligibility.php                              
+ ------ ---------------------------------------------------------------------- 
+  20     Method Componenta\DI\Resolver\Entry\EntryClassEligibility::allows()   
+         has parameter $class with generic class ReflectionClass but does not  
+         specify its types: T                                                  
+         🪪  missingType.generics                                              
+ ------ ---------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/Entry/FactoryResolver.php                                     
+ ------ ----------------------------------------------------------------------- 
+  51     Method Componenta\DI\Resolver\Entry\FactoryResolver::__construct()     
+         has parameter $factories with no value type specified in iterable      
+         type array.                                                            
+         🪪  missingType.iterableValue                                          
+         💡  See:                                                               
+         https://phpstan.org/blog/solving-phpstan-no-value-type-specified-in-i  
+         terable-type                                                           
+  61     Call to function is_string() with string will always evaluate to       
+         true.                                                                  
+         🪪  function.alreadyNarrowedType                                       
+         💡  Because the type is coming from a PHPDoc, you can turn off this    
+         check by setting treatPhpDocTypesAsCertain: false in your phpstan.neo  
+         n.                                                                     
+  103    Trying to invoke mixed but it's not a callable.                        
+         🪪  callable.nonCallable                                               
+  256    Property Componenta\DI\Resolver\Entry\FactoryResolver::$factories      
+         (array<string, array|(callable(Componenta\Config\ContainerValue,       
+         array<int|string, mixed>): mixed)|Componenta\DI\Compile\Factory\Compi  
+         ledFactoryDefinition|Componenta\DI\Definition\ClassDefinition|Compone  
+         nta\DI\Definition\FactoryDefinition|string>) does not accept           
+         non-empty-array<string,                                                
+         array|(callable(Componenta\Config\ContainerValue, array<int|string, m  
+         ixed>): mixed)|Componenta\DI\Definition\DefinitionInterface|string>.   
+         🪪  assign.propertyType                                                
+ ------ ----------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/Entry/FactorySpecificationValidator.php                       
+ ------ ----------------------------------------------------------------------- 
+  26     Unreachable statement - code above always terminates.                  
+         🪪  deadCode.unreachable                                               
+  33     Strict comparison using !== between class-string and '' will always    
+         evaluate to true.                                                      
+         🪪  notIdentical.alwaysTrue                                            
+         💡  Because the type is coming from a PHPDoc, you can turn off this    
+         check by setting treatPhpDocTypesAsCertain: false in your phpstan.neo  
+         n.                                                                     
+ ------ ----------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/Entry/InstanceCreator.php                                     
+ ------ ----------------------------------------------------------------------- 
+  27     Method Componenta\DI\Resolver\Entry\InstanceCreator::create() has      
+         parameter $reflector with generic class ReflectionClass but does not   
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  45     Method Componenta\DI\Resolver\Entry\InstanceCreator::initialize() has  
+         parameter $reflector with generic class ReflectionClass but does not   
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+  54     Call to an undefined method object::__construct().                     
+         🪪  method.notFound                                                    
+ ------ ----------------------------------------------------------------------- 
+
+ ------ ---------------------------------------------------------------------- 
+  Line   Resolver/Entry/InvokableResolver.php                                  
+ ------ ---------------------------------------------------------------------- 
+  61     Call to an undefined method object::__construct().                    
+         🪪  method.notFound                                                   
+  80     Property Componenta\DI\Resolver\Entry\InvokableResolver::$invokables  
+         (array<string, class-string>) does not accept array<string, mixed>.   
+         🪪  assign.propertyType                                               
+ ------ ---------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/Entry/ObjectCreationContext.php                               
+ ------ ----------------------------------------------------------------------- 
+  34     Method                                                                 
+         Componenta\DI\Resolver\Entry\ObjectCreationContext::__construct() has  
+         parameter $class with generic class ReflectionClass but does not       
+         specify its types: T                                                   
+         🪪  missingType.generics                                               
+ ------ ----------------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Resolver/Entry/SetUp/ConfigUnwrapper.php                               
+ ------ ----------------------------------------------------------------------- 
+  45     Parameter #1 $configData of method                                     
+         Componenta\DI\Resolver\ConfigValueExtractor::extract() expects array<  
+         string, mixed>|ArrayAccess, mixed given.                               
+         🪪  argument.type                                                      
+ ------ ----------------------------------------------------------------------- 
+
  ------ ------------------------------------------------------------------ 
-  Line   Resolver/MakeAttributeResolver.php                                
+  Line   Resolver/Entry/SetUpRunner.php                                    
  ------ ------------------------------------------------------------------ 
-  143    Using nullsafe property access "?->entry" on left side of ?? is   
-         unnecessary. Use -> instead.                                      
-         🪪  nullsafe.neverNull                                            
-  147    Using nullsafe property access "?->params" on left side of ?? is  
-         unnecessary. Use -> instead.                                      
-         🪪  nullsafe.neverNull                                            
+  190    Method Componenta\DI\Resolver\Entry\SetUpRunner::method() has     
+         parameter $class with generic class ReflectionClass but does not  
+         specify its types: T                                              
+         🪪  missingType.generics                                          
  ------ ------------------------------------------------------------------ 
+
+ ------ ------------------------------------------------------------- 
+  Line   Resolver/EnvNameNormalizer.php                               
+ ------ ------------------------------------------------------------- 
+  29     Parameter #1 $string of function strtoupper expects string,  
+         string|null given.                                           
+         🪪  argument.type                                            
+ ------ ------------------------------------------------------------- 
 
  ------ ----------------------------------------------------------------------- 
   Line   Resolver/Parameter/AutowireByTypeResolver.php                          
@@ -669,7 +1022,7 @@ Config file created, re-run the command to put it in action.
          🪪  return.type                                                        
  ------ ----------------------------------------------------------------------- 
 
- [ERROR] Found 183 errors                                                       
+ [ERROR] Found 181 errors                                                       
 
 Script phpstan analyse src --level=max handling the phpstan event returned with error code 1
 ```
@@ -677,190 +1030,390 @@ Script phpstan analyse src --level=max handling the phpstan event returned with 
 ## tests
 
 ```text
-  [33;1m![39;22m[90m [39m[90mit rejects invalid generated factory namespaces before writing sour[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mCallableResolver[39m[90m → [39m[37mclosures and callable objects[39m[90m → it wraps a [object, method] array callable[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableResolver[39m[90m → [39m[37m[class, method] arrays[39m[90m → it throws when the method does not exist on the object[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableResolver[39m[90m → [39m[37mplain string resolution[39m[90m → it throws when the container entry is not callable[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\RequestMapperPipelineTest[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mstep ordering: mapFields -> cast -> defaults -> sortMap -> exclude[39m[90m → it applies defaults to the mapped target key (not the source)[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it silently skips optional source keys marked with "?"[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it keeps the value when a mapping keeps the same key name[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mdefaults step[39m[90m → it fills keys that are absent after mapping[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it throws InvalidArgumentException when a required source key is missing[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it replaces sort/order keys with orderBy via the map lookup[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it always strips the raw sort and order keys from output[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it applies casts in the order declared (deterministic for multi-key configs)[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it renames source keys to target keys, dropping the source[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mstep ordering: mapFields -> cast -> defaults -> sortMap -> exclude[39m[90m → it exclude runs last, removing entries produced by earlier steps (e.g. defaults)[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it returns data unchanged when no mapping rules are set[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it is a no-op when sortMap is empty[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mstep ordering: mapFields -> cast -> defaults -> sortMap -> exclude[39m[90m → it casts against the target key, not the source[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mdefaults step[39m[90m → it does not overwrite a null value that is already present[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it applies the configured caster to the value under the matching key[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it sets orderBy to null when the sort alias is not in the map[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mexclude step[39m[90m → it drops the listed keys from the final array[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it skips cast when the key is absent from data[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it sets orderBy to null when the sort key is missing from data[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it maps optional keys when they are present[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mexclude step[39m[90m → it ignores exclude entries that are not present[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it throws CasterNotFoundException when the caster is not registered[39m
+  [30;42;1m PASS [39;49;22m[39m Tests\CallableInvokerTest[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it invokes with an empty params list when the cal[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it passes the params list verbatim (no DI, no reordering)[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it lets domain exceptions thrown inside the callable propagate unchanged[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it wraps PHP engine errors into InvalidCallableException with the original Error as previous[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it wraps TypeError from wrongly-typed arguments into InvalidCallableException[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it invokes the callable and returns its value[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it invokes an already-valid [object, method] callable[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it implements CallableInvokerInterface[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\RequestDataConflictTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit accepts the same value repeated by two request sources[39m[90m           [39m [90m0.01s[39m  
-  [32;1m✓[39;22m[90m [39m[90mit rejects a payload value that conflicts with a request attribute[39m
-  [32;1m✓[39;22m[90m [39m[90mit can explicitly opt into the legacy last-source-wins behavior[39m
-  [32;1m✓[39;22m[90m [39m[90mit can explicitly preserve the trusted first source[39m
-  [32;1m✓[39;22m[90m [39m[90mit rejects a query value that conflicts with a request attribute[39m
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\TypeHintsMatchesTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit accepts an integer for a float declaration like PHP does[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\InvokableAliasConflictTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit rejects a keyed invokable that conflicts with an existing alias[39m
-  [32;1m✓[39;22m[90m [39m[90mit rejects a conflicting fluent invokable alias registration[39m
-  [32;1m✓[39;22m[90m [39m[90mit accepts a keyed invokable when an existing alias resolves to the same target[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\ExternalContainerRegistryTest[39m
-  [32;1m✓[39;22m[90m [39m[37mExternalContainerRegistry[39m[90m → it does not expose redundant lookup or iteration APIs[39m
-  [32;1m✓[39;22m[90m [39m[37mExternalContainerRegistry[39m[90m → it returns the first owning container in stable registration order[39m
-  [32;1m✓[39;22m[90m [39m[37mExternalContainerRegistry[39m[90m → it deduplicates repeated registration of the same instance[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\Cache\DiCacheGeneratorTest[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it implements DiCacheGeneratorInterface[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it overwrites an existing file with new contents[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it creates intermediate directories as needed[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it throws InvalidConfigurationException when the config contains unserialisable values[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it writes a PHP file that returns the exact input array[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it produces a file with <?php opener and declare(strict_types=1)[39m
-  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it preserves the file on unwritable targets (throws before corrupting existing contents)[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\CompositeResolverConstructionTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit normalizes named variadic arguments without changing their call order[39m
-  [32;1m✓[39;22m[90m [39m[90mit rejects duplicate resolver identities supplied through the constructor[39m
-  [32;1m✓[39;22m[90m [39m[90mit preserves resolver order supplied through the constructor[39m
+  [30;43;1m WARN [39;49;22m[39m Tests\CompiledFactoryNamespaceTest[39m
+  [33;1m![39;22m[90m [39m[90mit rejects invalid generated factory namespaces before writing source[39m[90m [39m[33m→ rmdir(/tmp/componenta-invalid-factory-namespace-8b8d2d2660): No such file or directory[39m
 
   [30;42;1m PASS [39;49;22m[39m Tests\ProxyInjectionTest[39m
   [32;1m✓[39;22m[90m [39m[90mit uses an explicit concrete class for interface-typed virtual proxies[39m
   [32;1m✓[39;22m[90m [39m[90mit rejects an interface proxy when no concrete class can be inferred[39m
   [32;1m✓[39;22m[90m [39m[90mit separates an arbitrary service id from its concrete proxy class[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\NullContainerTest[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it reports every id as absent with dataset "regular id"[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it reports every id as absent with dataset "class FQCN"[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it reports every id as absent with dataset "empty string"[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it implements PSR-11 ContainerInterface[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it produces a PSR-11 compatible NotFoundExceptionInterface[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it throws NotFoundException on get() regardless of the id[39m
-  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it includes the requested id in the not-found message[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\CycleGuardTest[39m
-  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it accepts ids that are not currently in-flight[39m
-  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it exposes the full resolution chain on the cycle exception[39m
-  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it tolerates leaving an id that was never entered[39m
-  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it throws when the same id is entered twice without leaving[39m
-  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it allows re-entering an id after it has been left[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\RequestResolverFactoryTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit creates the request resolver without resolving validation services[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\Architecture\CompiledFactoryArchitectureTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit stores compiled autowiring as regular factories and loads shards[39m[90m…[39m [90m0.01s[39m  
-  [32;1m✓[39;22m[90m [39m[90mit does not expose the removed generated resolver contract[39m
-  [32;1m✓[39;22m[90m [39m[90mit expands only statically knowable concrete dependencies and honours explicit bindings[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\CallableExecutorCacheTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit does not conflate different closure parameter signatures[39m
-  [32;1m✓[39;22m[90m [39m[90mit reuses parameter targets across fresh closures from the same source signature[39m
+  [30;42;1m PASS [39;49;22m[39m Tests\CallableClosureScopeCacheTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps closure parameter metadata isolated by lexical class scope[39m
 
   [30;42;1m PASS [39;49;22m[39m Tests\Resolver\InvokableResolverTest[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition registers the class, making can() and resolve() succeed[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mresolve() with a real PHP84 proxy factory[39m[90m → it returns an instance of the target class (eager for classes without Lazy/Proxy attributes)[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition rejects unsupported definition types[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mresolve() without a proxy factory (eager by default)[39m[90m → it instantiates the registered class directly[39m
   [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mdefinition support[39m[90m → it supportsDefinition is true only for InvokableDefinition[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mcan()[39m[90m → it returns true only for registered class ids[39m
   [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mresolve() with a real PHP84 proxy factory[39m[90m → it handles classes without a constructor (avoids calling __construct on null)[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mresolve() without a proxy factory (eager by default)[39m[90m → it instantiates the registered class directly[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mresolve() with a real PHP84 proxy factory[39m[90m → it returns an instance of the target class (eager for classes without Lazy/Proxy attributes)[39m
   [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mresolve() without a proxy factory (eager by default)[39m[90m → it produces a fresh instance on each resolve call[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mcan()[39m[90m → it returns true only for registered class ids[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition registers the class, making can() and resolve() succeed[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\InvokableResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition rejects unsupported definition types[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\CompositeResolverTest[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it throws InvalidConfigurationException when no resolver supports the definition[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it throws NotFoundException on resolve() when no resolver owns the id[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it invalidates the owner cache when a definition is set[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it delegates to the first resolver that claims the id[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it passes the context through to the owning resolver[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it invalidates the owner cache when a resolver is added[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it caches the owner so a later resolve() does not re-scan can() on other resolvers[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it forwards setDefinition to the first supporting resolver[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it reports can()=false when no resolvers are registered[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it negative-caches misses so a subsequent has()+resolve() does not re-scan[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it returns false from supportsDefinition when no child is definition-aware[39m
+  [30;42;1m PASS [39;49;22m[39m Tests\CycleGuardTest[39m
+  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it exposes the full resolution chain on the cycle exception[39m
+  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it tolerates leaving an id that was never entered[39m
+  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it allows re-entering an id after it has been left[39m
+  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it accepts ids that are not currently in-flight[39m
+  [32;1m✓[39;22m[90m [39m[37mCycleGuard[39m[90m → [39m[37menter / leave[39m[90m → it throws when the same id is entered twice without leaving[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\LazyValidationProviderRetryTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit retries validation provider lookup after a transient failure[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\DelegatorRegistryTest[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it resolves non-callable registrations via the CallableResolver[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it returns the entry unchanged when no delegators are registered[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it passes entry and container to the delegator and returns its result[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it wraps a delegator's foreign exception in DelegatorException with entry id and previous[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it applies delegators in registration order, threading the return value[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it caches resolved callables across repeated apply() calls[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it re-resolves after invalidate() drops the cache[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it keeps raw registrations on invalidate(); apply still runs the delegator[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it re-resolves after register() invalidates the cache[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it lets ContainerExceptionInterface exceptions propagate unchanged[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it uses an already-callable non-Closure delegator directly[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it uses a Closure delegator directly without going through the callable resolver[39m
-  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it wraps a resolution-time foreign exception in DelegatorException[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\CallableInvokerTest[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it wraps PHP engine errors into InvalidCallableException with the original Error as previous[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it passes the params list verbatim (no DI, no reordering)[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it invokes an already-valid [object, method] callable[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it wraps TypeError from wrongly-typed arguments into InvalidCallableException[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it implements CallableInvokerInterface[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it invokes the callable and returns its value[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it lets domain exceptions thrown inside the callable propagate unchanged[39m
-  [32;1m✓[39;22m[90m [39m[37mCallableInvoker[39m[90m → it invokes with an empty params list when the callable takes none[39m
-
-  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Entry\SetUp\ConfigUnwrapperTest[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it lets PSR-11 container exceptions propagate unchanged[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it wraps OutOfBoundsException from the extractor into ResolutionException[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it recognises only Config attribute instances[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it reads a literal key from the configuration[39m
-  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it falls back to the SetUp key when Config::$path is null[39m
+  [30;42;1m PASS [39;49;22m[39m Tests\AliasResolverHardeningTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects an existing malformed alias cycle during a later update[39m
 
   [30;42;1m PASS [39;49;22m[39m Tests\EntryCacheTest[39m
-  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it removes base entries explicitly[39m
-  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it accepts initial base entries without changing null semantics[39m
-  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it reads base values through the single tryGet API including null[39m
-  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it does not expose the removed duplicate getter API[39m
   [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it invalidates requested aliases and every sibling of the canonical id[39m
+  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it accepts initial base entries without changing null semantics[39m
+  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it removes base entries explicitly[39m
+  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it does not expose the removed duplicate getter API[39m
+  [32;1m✓[39;22m[90m [39m[37mEntryCache[39m[90m → it reads base values through the single tryGet API including null[39m
 
-  [30;42;1m PASS [39;49;22m[39m Tests\ContainerTest[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it does not apply delegators registered on the id[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mcycle detection[39m[90m → it throws CircularDependencyException when factories form a cycle[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it throws InvalidConfigurationException for an unsupported definition type[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37malias()[39m[90m → it invalidates cached results for the alias name[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it returns a fresh instance on each call (no caching)[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mdelegators[39m[90m → it applies registered delegators in order to the resolved entry[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37malias()[39m[90m → it registers an alias that resolves to the target entry[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it returns the same instance on repeat get() calls (cached)[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mdelegators[39m[90m → it invalidates cached resolution when a delegator is added[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it propagates NotFoundException for a string the resolver chain cannot handle[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it throws NotFoundException for unknown ids[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it keeps registered class definition state stable after later fluent changes[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it returns false from has() for unknown ids[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it passes user-supplied params to the constructor by name[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it resolves aliases transparently[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mcall()[39m[90m → it invokes the callable with DI-resolved parameters[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mself-registration[39m[90m → it exposes itself under every interface it implements[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it returns the value registered via set()[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mexternal containers[39m[90m → it delegates get() to an external container that owns the id[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it invalidates a cached entry when set() runs for the same id[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it resolves aliases[39m
-  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it accepts a DefinitionInterface and resolves it on get()[39m
+  [30;42;1m PASS [39;49;22m[39m Tests\RequestMapperTest[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mextract() base behaviour (via MapQueryString subclass)[39m[90m → it omits a listed file key when the file is missing[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mextract() base behaviour (via MapQueryString subclass)[39m[90m → it extracts listed request attributes by name[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mprovider property hook[39m[90m → it lazy-initialises to NullCasterProvider on first read when unset[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mtransform() - full pipeline integration[39m[90m → it applies field mapping, defaults and exclude in declaration order[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mtransform() - full pipeline integration[39m[90m → it applies cast via the configured CasterProviderInterface[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mextract() base behaviour (via MapQueryString subclass)[39m[90m → it extracts listed uploaded files by key[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mmap configuration merge[39m[90m → it merges class-level map defaults with constructor-supplied map[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mprovider property hook[39m[90m → it stores an assigned provider[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mextract() base behaviour (via MapQueryString subclass)[39m[90m → it wildcard * extracts every uploaded file[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mtransform() - full pipeline integration[39m[90m → it applies sortMap replacing raw sort/order with orderBy[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mextract() base behaviour (via MapQueryString subclass)[39m[90m → it wildcard * extracts every request attribute[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\RequestMapper[39m[90m → [39m[37mextract() base behaviour (via MapQueryString subclass)[39m[90m → it omits a listed attribute when missing[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\LazyValidationProviderRetryTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit retries validation provider lookup after a transient failure[39m[90m     [39m [90m0.01s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\NestedReferenceDefinitionTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit resolves reference definitions recursively inside constructor arrays[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\RequestDataConflictTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit can explicitly opt into the legacy last-source-wins behavior[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects a query value that conflicts with a request attribute[39m
+  [32;1m✓[39;22m[90m [39m[90mit accepts the same value repeated by two request sources[39m
+  [32;1m✓[39;22m[90m [39m[90mit can explicitly preserve the trusted first source[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects a payload value that conflicts with a request attribute[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Cache\DiCacheGeneratorTest[39m
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it overwrites an existing file with new co[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it writes a PHP file that returns the exact input array[39m
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it preserves the file on unwritable targets (throws before corrupting existing contents)[39m
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it produces a file with <?php opener and declare(strict_types=1)[39m
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it creates intermediate directories as needed[39m
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it throws InvalidConfigurationException when the config contains unserialisable values[39m
+  [32;1m✓[39;22m[90m [39m[37mCache\DiCacheGenerator[39m[90m → it implements DiCacheGeneratorInterface[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Entry\SetUp\ConfigUnwrapperTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it wraps OutOfBoundsExceptio[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it reads a literal key from the configuration[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it recognises only Config attribute instances[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it lets PSR-11 container exceptions propagate unchanged[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\ConfigUnwrapper[39m[90m → it falls back to the SetUp key when Config::$path is null[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\InvokableAliasConflictTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects a keyed invokable that conflicts with an existing alias[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects a conflicting fluent invokable alias registration[39m
+  [32;1m✓[39;22m[90m [39m[90mit accepts a keyed invokable when an existing alias resolves to the same target[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\ContainerBuilderTest[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it uses singular validation for every bulk registration API[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it does not expose removed legacy API[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it rejects unreachable factories and canonical bindings to protected services[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it shares the built container identity with bootstrap values and factories[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it builds one runtime container and resolves fresh objects with explicit context[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it rejects legacy, unknown and malformed dependency configuration[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it normalizes duplicate invokable classes from configuration[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it rejects multiple binding mechanisms for the same canonical id[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it materializes custom pipeline extensions before build returns[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it uses one proxy collaborator behind reflection and the public container facade[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it omits empty and default dependency sections from normalized cache data[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it revalidates a trusted cache after a conflicting runtime binding is added[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it canonicalizes definitions registered through aliases[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it installs core pipeline services atomically and forbids rebinding or decoration[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it keeps local base entries ahead of external containers deterministically[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it breaks mutual external-container has cycles without hiding get failures[39m
+  [32;1m✓[39;22m[90m [39m[37mContainerBuilder[39m[90m → it installs default attribute handlers before materializing custom parameter resolvers[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\TypeHintsTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\TypeHints::classOf()[39m[90m → it returns null for built-in types[39m[90m  [39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mResolver\TypeHints::classOf()[39m[90m → it returns null for a null type[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\TypeHints::classOf()[39m[90m → it returns null for untyped parameters[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\TypeHints::classOf()[39m[90m → it returns null for union types (intentionally unsupported)[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\TypeHints::classOf()[39m[90m → it returns the class/interface name for non-builtin named types[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\FactoryResolverTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mdefinition support[39m[90m → it supportsDefinition is true for FactoryDefinition and ClassDefinition[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it passes resolution context as the third lazy factory argument[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it resolves ReferenceDefinition values in ClassDefinition constructor params via the container[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it invokes methodCalls on the constructed instance in registration order[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it resolves [string, method] by fetching the object from the container[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it lets ContainerExceptionInterface exceptions propagate unchanged[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it exposes config to closure factories through the container value[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition throws InvalidConfigurationException for unsupported types[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it resolves a string-form factory reference through the container[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it invokes a closure factory with a container value[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mdefinition support[39m[90m → it setDefinition registers the factory and makes can() return true[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mdefinition support[39m[90m → it supportsDefinition is false for unrelated definition types[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it delegates to LazyServiceFactoryInterface::lazy when the factory implements it[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mcan()[39m[90m → it reports true only for registered ids[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it wraps foreign Throwables from the factory into ResolutionException[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it unwraps FactoryDefinition and invokes the callable inside[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it builds an instance from a ClassDefinition with constructor params[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\FactoryResolver[39m[90m → [39m[37mresolve()[39m[90m → it passes resolution context as the second factory argument[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\CallableExecutorCacheTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit does not conflate different closure parameter signatures[39m[90m         [39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[90mit reuses parameter targets across fresh closures from the same source signature[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Entry\SetUp\EnvUnwrapperTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37munwrap()[39m[90m → it returns the default when Config/Environment is unavailable[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37munwrap()[39m[90m → it returns the attribute default when the variable is missing[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37munwrap()[39m[90m → it derives the env name from the SetUp key when Env::$name is null[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37msupports()[39m[90m → it recognises Env attribute instances[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37munwrap()[39m[90m → it reads the variable via the explicit name[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37munwrap()[39m[90m → it throws ResolutionException when variable is missing and no default is declared[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37munwrap()[39m[90m → it throws ResolutionException when environment is unavailable and no default is set[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EnvUnwrapper[39m[90m → [39m[37msupports()[39m[90m → it rejects anything that is not an Env instance[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\DelegatorRegistryTest[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it wraps a delegator's foreign exception in DelegatorException with entry id and previous[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it keeps raw registrations on invalidate(); apply still runs the delegator[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it resolves non-callable registrations via the CallableResolver[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it re-resolves after register() invalidates the cache[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it applies delegators in registration order, threading the return value[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it uses an already-callable non-Closure delegator directly[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it uses a Closure delegator directly without going through the callable resolver[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it re-resolves after invalidate() drops the cache[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it wraps a resolution-time foreign exception in DelegatorException[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it lets ContainerExceptionInterface exceptions propagate unchanged[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it caches resolved callables across repeated apply() calls[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it passes entry and container to the delegator and returns its result[39m
+  [32;1m✓[39;22m[90m [39m[37mDelegatorRegistry[39m[90m → [39m[37mapply()[39m[90m → it returns the entry unchanged when no delegators are registered[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\DefinitionTest[39m
+  [32;1m✓[39;22m[90m [39m[37mDefinition[39m[90m → it returns a new class definition when constructor par[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mDefinition[39m[90m → it returns a new class definition when a method call is configured[39m
+  [32;1m✓[39;22m[90m [39m[37mDefinition[39m[90m → it keeps lazy factory objects intact inside factory definitions[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\AmbiguousRequestDtoTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects request mapping to more than one possible DTO class[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\ExternalContainerRegistryTest[39m
+  [32;1m✓[39;22m[90m [39m[37mExternalContainerRegistry[39m[90m → it does not expose redundant lookup or iteration APIs[39m
+  [32;1m✓[39;22m[90m [39m[37mExternalContainerRegistry[39m[90m → it returns the first owning container in stable registration order[39m
+  [32;1m✓[39;22m[90m [39m[37mExternalContainerRegistry[39m[90m → it deduplicates repeated registration of the same instance[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\CompositeResolverConstructionTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects duplicate resolver identities supplied through the constructor[39m
+  [32;1m✓[39;22m[90m [39m[90mit preserves resolver order supplied through the constructor[39m
+  [32;1m✓[39;22m[90m [39m[90mit normalizes named variadic arguments without changing their call order[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\DefinitionReplacementTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit uses the latest runtime definition when its resolver kind changes[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\RequestMapperCollisionTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects overwriting an unmapped input field[39m
+  [32;1m✓[39;22m[90m [39m[90mit supports atomic field swaps[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects two source fields mapped to one target[39m
+  [32;1m✓[39;22m[90m [39m[90mit reads chained mappings from the original input[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\MapAttributesTest[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapRequestPayload[39m[90m → it flattens a parsed body object via get_object_vars[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapQueryString[39m[90m → it extracts the query string parameters into the data array[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapHeaders[39m[90m → it joins multi-value headers with ", "[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapServerParams[39m[90m → it returns an empty array when no server params are set[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapRequestPayload[39m[90m → it treats a null parsed body as an empty array (no merge error)[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapCookies[39m[90m → it extracts the cookie parameters into the data array[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapCookies[39m[90m → it returns an empty array when no cookies are present[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapUploadedFiles[39m[90m → it returns an empty array when there are no uploaded files[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapRequestAttributes[39m[90m → it returns an empty array when no request attributes are set[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapHeaders[39m[90m → it extracts single-value headers as plain strings[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapRequestPayload[39m[90m → it extracts a parsed body array[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapQueryString[39m[90m → it returns an empty array when there are no query parameters[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapUploadedFiles[39m[90m → it extracts the uploaded-files bag into the data array[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapRequestPayload[39m[90m → it preserves selected request attributes with explicit null values[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapRequestAttributes[39m[90m → it extracts the entire request attribute bag[39m
+  [32;1m✓[39;22m[90m [39m[37mAttribute\MapServerParams[39m[90m → it extracts the server params into the data array[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\CallableExecutorTest[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mresolve()[39m[90m → it delegates to the underlying Calla[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mcall()[39m[90m → it invokes a parameterless callable without asking the parameter resolver for anything[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mcall()[39m[90m → it forwards resolver failures as InvalidCallableException[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mcall()[39m[90m → it passes provided parameters to the callable by position[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mcall()[39m[90m → it passes provided parameters to the callable by name[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mcall()[39m[90m → it propagates exceptions thrown inside the callable unchanged[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → [39m[37mcall()[39m[90m → it throws ResolutionException when a parameter cannot be resolved[39m
+  [32;1m✓[39;22m[90m [39m[37mCallableExecutor[39m[90m → it implements CallableExecutorInterface[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Architecture\DevelopmentProductionParityTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps development reflection and production compiled containers[39m[90m… [39m [90m0.02s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\FactorySpecificationValidationTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit accepts a deferred service method factory specification[39m
+  [32;1m✓[39;22m[90m [39m[90mit rejects malformed factory values during container assembly[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\PublicApiSignatureTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "lazy request factory make"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "callable executor resolve"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "container virtual proxy"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "proxy factory lazy object"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "proxy factory virtual proxy"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "container make"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "callable executor call"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "builder add attribute handler"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "cache generator"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "builder compile factories"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "container lazy object"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "alias set"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "callable invoker call"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "builder add parameter resolver"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "callable resolver resolve"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "alias has"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "container call"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "alias resolve"[39m
+  [32;1m✓[39;22m[90m [39m[90mit keeps public named-argument contracts aligned with implementations with dataset "builder configure from cache"[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\ConfigProviderTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit registers the lazy request resolver factory[39m[90m                      [39m [90m0.01s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\RequestParameterTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mwith()[39m[90m → it returns a new array with the request set under the KEY[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mhas()[39m[90m → it returns false when the KEY entry is not a ServerRequestInterface[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mget()[39m[90m → it returns the registered request instance[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mget()[39m[90m → it returns null when the request is absent or invalid[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mhas()[39m[90m → it returns true when the KEY entry is a ServerRequestInterface[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mhas()[39m[90m → it returns false for an empty params array[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → it KEY is the ServerRequestInterface FQN so provided-params carry the contract identity[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestParameter[39m[90m → [39m[37mwith()[39m[90m → it overwrites an existing request at the KEY[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Entry\SetUp\EntryIdUnwrapperTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EntryIdUnwrapper[39m[90m → it fetches the entry from the container using EntryId::$value[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EntryIdUnwrapper[39m[90m → it recognises only EntryId instances[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Entry\SetUp\EntryIdUnwrapper[39m[90m → it propagates NotFoundException when the entry is not registered[39m
 
   [30;42;1m PASS [39;49;22m[39m Tests\Architecture\CompiledFactoryParityTest[39m
-  [32;1m✓[39;22m[90m [39m[90mit keeps constructor context, injection, setup and no-constructor b[39m[90m…[39m [90m0.02s[39m  
+  [32;1m✓[39;22m[90m [39m[90mit keeps constructor context, injection, setup and no-constructor b[39m[90m…[39m [90m0.01s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\NullContainerTest[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it produces a PSR-11 compatible NotFoundExceptionInterface[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it implements PSR-11 ContainerInterface[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it reports every id as absent with dataset "regular id"[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it reports every id as absent with dataset "empty string"[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it reports every id as absent with dataset "class FQCN"[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it includes the requested id in the not-found message[39m
+  [32;1m✓[39;22m[90m [39m[37mNullContainer[39m[90m → it throws NotFoundException on get() regardless of the id[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\RequestMapperPipelineTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mexclude step[39m[90m → it ignores exclude entries that are not present[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mdefaults step[39m[90m → it fills keys that are absent after mapping[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it applies the configured caster to the value under the matching key[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it skips cast when the key is absent from data[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mstep ordering: mapFields -> cast -> defaults -> sortMap -> exclude[39m[90m → it casts against the target key, not the source[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it sets orderBy to null when the sort alias is not in the map[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mdefaults step[39m[90m → it does not overwrite a null value that is already present[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it is a no-op when sortMap is empty[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it replaces sort/order keys with orderBy via the map lookup[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it keeps the value when a mapping keeps the same key name[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it returns data unchanged when no mapping rules are set[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it throws InvalidArgumentException when a required source key is missing[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mstep ordering: mapFields -> cast -> defaults -> sortMap -> exclude[39m[90m → it exclude runs last, removing entries produced by earlier steps (e.g. defaults)[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mexclude step[39m[90m → it drops the listed keys from the final array[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it maps optional keys when they are present[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it applies casts in the order declared (deterministic for multi-key configs)[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it always strips the raw sort and order keys from output[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it silently skips optional source keys marked with "?"[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mmapFields step[39m[90m → it renames source keys to target keys, dropping the source[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mstep ordering: mapFields -> cast -> defaults -> sortMap -> exclude[39m[90m → it applies defaults to the mapped target key (not the source)[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37mcast step[39m[90m → it throws CasterNotFoundException when the caster is not registered[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\Parameter\Request\RequestMapperPipeline[39m[90m → [39m[37msortMap step[39m[90m → it sets orderBy to null when the sort key is missing from data[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\AliasResolverTest[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mresolve()[39m[90m → it reflects a mid-chain update after ca[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37miteration[39m[90m → it reflects later set() calls[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mset()[39m[90m → it throws InvalidConfigurationException for a self-referencing alias[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mconstructor validation[39m[90m → it throws CircularDependencyException for a cycle across the map[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mcaching[39m[90m → it invalidates the resolution cache when a link is updated[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mhas()[39m[90m → it returns true only for registered alias keys, not targets[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mconstructor validation[39m[90m → it accepts a cyclic map when skipValidation is true (deferred detection)[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37munset()[39m[90m → it returns the resolver instance for fluent chaining[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37munset()[39m[90m → it is a no-op for an id that is not a registered alias[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mset()[39m[90m → it leaves the map untouched when the update is rejected for a cycle[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mresolve()[39m[90m → it walks the alias chain to the terminal target[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37munset()[39m[90m → it removes the alias from the registry[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → it implements AliasResolverInterface[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mset()[39m[90m → it throws CircularDependencyException when the new mapping would close a cycle[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mresolve()[39m[90m → it returns the id unchanged when it is not a registered alias[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mcaching[39m[90m → it invalidates the resolution cache on unset()[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mset()[39m[90m → it registers the alias so it resolves to the target[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mconstructor validation[39m[90m → it throws InvalidConfigurationException for self-referencing alias in the map[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37munset()[39m[90m → it stops chain resolution at the removed link[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mresolve()[39m[90m → it defensively throws on cycle even when validation was skipped at construction[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37miteration[39m[90m → it yields the alias->target pairs[39m
+  [32;1m✓[39;22m[90m [39m[37mAliasResolver[39m[90m → [39m[37mset()[39m[90m → it returns the resolver instance for fluent chaining[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\CompositeResolverTest[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface deleg[39m[90m…[39m [90m0.01s[39m  
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it passes the context through to the owning resolver[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it throws NotFoundException on resolve() when no resolver owns the id[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it negative-caches misses so a subsequent has()+resolve() does not re-scan[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it reports can()=false when no resolvers are registered[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it caches the owner so a later resolve() does not re-scan can() on other resolvers[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it invalidates the owner cache when a definition is set[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it delegates to the first resolver that claims the id[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → it invalidates the owner cache when a resolver is added[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it returns false from supportsDefinition when no child is definition-aware[39m
+  [32;1m✓[39;22m[90m [39m[37mResolver\CompositeResolver[39m[90m → [39m[37mDefinitionAwareResolverInterface delegation[39m[90m → it throws InvalidConfigurationException when no resolver supports the definition[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\RequestResolverFactoryTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit creates the request resolver without resolving validation servic[39m[90m…[39m [90m0.01s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\ContainerTest[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it throws InvalidConfigurationException for an unsupported definition type[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mself-registration[39m[90m → it exposes itself under every interface it implements[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it resolves aliases[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it propagates NotFoundException for a string the resolver chain cannot handle[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it passes user-supplied params to the constructor by name[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it returns the same instance on repeat get() calls (cached)[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it returns false from has() for unknown ids[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mdelegators[39m[90m → it invalidates cached resolution when a delegator is added[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37malias()[39m[90m → it registers an alias that resolves to the target entry[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it does not apply delegators registered on the id[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it keeps registered class definition state stable after later fluent changes[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it throws NotFoundException for unknown ids[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mmake()[39m[90m → it returns a fresh instance on each call (no caching)[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37malias()[39m[90m → it invalidates cached results for the alias name[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it accepts a DefinitionInterface and resolves it on get()[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it resolves aliases transparently[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mset()[39m[90m → it invalidates a cached entry when set() runs for the same id[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mexternal containers[39m[90m → it delegates get() to an external container that owns the id[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mget() / has()[39m[90m → it returns the value registered via set()[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mcycle detection[39m[90m → it throws CircularDependencyException when factories form a cycle[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mcall()[39m[90m → it invokes the callable with DI-resolved parameters[39m
+  [32;1m✓[39;22m[90m [39m[37mContainer[39m[90m → [39m[37mdelegators[39m[90m → it applies registered delegators in order to the resolved entry[39m
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Resolver\Parameter\Request\LazyValidationProviderTest[39m
+  [32;1m✓[39;22m[90m [39m[90mit resolves and caches the validation provider only on first use[39m[90m    [39m [90m0.01s[39m  
   [31m────────────────────────────────────────────────────────────────────────────[39m  
   [30;43;1m WARNINGS [39;49;22m [1mTests\CompiledFactoryNamespaceTest[22m [90m>[39m it rejects invalid generat…   
-[39;1m  rmdir(/tmp/componenta-invalid-factory-namespace-0b4ed7d567): No such file or directory[39;22m
+[39;1m  rmdir(/tmp/componenta-invalid-factory-namespace-8b8d2d2660): No such file or directory[39;22m
 
   at [32mtests/CompiledFactoryNamespaceTest.php[39m:[32m30[39m
      26▕     } finally {
@@ -874,8 +1427,8 @@ Script phpstan analyse src --level=max handling the phpstan event returned with 
 
 
   [90mTests:[39m    [33;1m1 warning[39;22m[90m,[39m[39m [39m[32;1m313 passed[39;22m[90m (520 assertions)[39m
-  [90mDuration:[39m [39m0.30s[39m
-  [90mRandom Order Seed:[39m [39m1786452745[39m
+  [90mDuration:[39m [39m0.42s[39m
+  [90mRandom Order Seed:[39m [39m1786452988[39m
 
 ```
 
