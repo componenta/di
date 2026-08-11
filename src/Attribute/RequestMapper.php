@@ -8,7 +8,9 @@ use Componenta\Caster\CasterExceptionInterface;
 use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Caster\NullCasterProvider;
+use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
+use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 use Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline;
 
 /**
@@ -97,6 +99,13 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
     protected array $exclude = [];
 
     /**
+     * How duplicate keys from request attributes, files, and the mapper's
+     * primary source are handled. Rejecting conflicts preserves source trust
+     * boundaries and is the safe default. Identical values are not conflicts.
+     */
+    protected RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject;
+
+    /**
      * Field mapping rules: source key -> target key.
      *
      * Merged from the class-level default and constructor argument.
@@ -107,9 +116,62 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      */
     protected(set) array $map = [];
 
-    public function __construct(array $map = [])
-    {
+    public function __construct(
+        array $map = [],
+        ?RequestDataConflictPolicy $conflictPolicy = null,
+    ) {
         $this->map = array_merge($this->map, $map);
+
+        if ($conflictPolicy !== null) {
+            $this->conflictPolicy = $conflictPolicy;
+        }
+    }
+
+    /**
+     * Merges named extraction sources without silently losing provenance.
+     *
+     * Source order controls FirstWins and LastWins. Reject treats two equal
+     * values as one unambiguous value and rejects only different values.
+     *
+     * @param array<string, array<string|int, mixed>> $sources
+     * @return array<string|int, mixed>
+     */
+    protected function mergeRequestData(array $sources): array
+    {
+        $data = [];
+        $owners = [];
+
+        foreach ($sources as $source => $values) {
+            foreach ($values as $key => $value) {
+                if (!array_key_exists($key, $data)) {
+                    $data[$key] = $value;
+                    $owners[$key] = $source;
+                    continue;
+                }
+
+                if ($data[$key] === $value) {
+                    continue;
+                }
+
+                if ($this->conflictPolicy === RequestDataConflictPolicy::FirstWins) {
+                    continue;
+                }
+
+                if ($this->conflictPolicy === RequestDataConflictPolicy::LastWins) {
+                    $data[$key] = $value;
+                    $owners[$key] = $source;
+                    continue;
+                }
+
+                throw new RequestDataConflictException(
+                    key: $key,
+                    existingSource: $owners[$key],
+                    incomingSource: $source,
+                );
+            }
+        }
+
+        return $data;
     }
 
     /**
