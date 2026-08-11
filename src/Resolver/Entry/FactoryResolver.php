@@ -205,13 +205,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     {
         return function (ContainerValue $container, array $_context = []) use ($definition) {
             $className = $definition->value;
-
-            $resolveValue = static function (mixed $value) use ($container) {
-                if ($value instanceof ReferenceDefinition) {
-                    return $container->get($value->value);
-                }
-                return $value;
-            };
+            $resolveValue = fn(mixed $value): mixed => $this->resolveDefinitionValue(
+                $container,
+                $value,
+            );
 
             // Preserve keys so associative maps unpack as named arguments and
             // list-form maps unpack positionally - PHP handles both via `...`.
@@ -227,6 +224,27 @@ class FactoryResolver implements DefinitionAwareResolverInterface
 
             return $instance;
         };
+    }
+
+    private function resolveDefinitionValue(
+        ContainerValue $container,
+        mixed $value,
+    ): mixed {
+        if ($value instanceof ReferenceDefinition) {
+            return $container->get($value->value);
+        }
+
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $resolved = [];
+
+        foreach ($value as $key => $item) {
+            $resolved[$key] = $this->resolveDefinitionValue($container, $item);
+        }
+
+        return $resolved;
     }
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
