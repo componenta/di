@@ -19,24 +19,7 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 
-/**
- * Resolves container entries using factory callables or class definitions.
- *
- * Lazy strategy is opted-in by the factory itself: a factory class
- * implementing {@see LazyServiceFactoryInterface} signals "I can produce
- * my service in lazy form" and the resolver delegates to its `lazy()`
- * method. All other factories execute eagerly.
- *
- * Factory callables receive the container value and the resolution context.
- * Lazy factories receive the same context as the third lazy() argument.
- *
- * Class-level {@see \Componenta\DI\Attribute\Lazy} / {@see \Componenta\DI\Attribute\Proxy}
- * attributes are honoured by {@see ReflectionResolver} for autowired
- * services. They are intentionally NOT consulted here - a factory is the
- * service's owner, and lazy semantics belong to it, not to the produced
- * class. Mixing both layers would impose a per-resolve reflection cost
- * with no consistency win.
- */
+/** Resolves container entries using factory callables or class definitions. */
 class FactoryResolver implements DefinitionAwareResolverInterface
 {
     /** @var array<string, object> */
@@ -45,9 +28,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
 
-    /**
-     * @param array<string, callable(ContainerValue, array<string|int, mixed>):mixed|string|array|FactoryDefinition|ClassDefinition|CompiledFactoryDefinition> $factories
-     */
+    /** @param array<string, mixed> $factories */
     public function __construct(
         protected array $factories,
         protected readonly ContainerInterface $container,
@@ -58,7 +39,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         protected readonly bool $trustedCompiledFactories = false,
     ) {
         foreach ($factories as $id => $factory) {
-            if (!is_string($id) || $id === '') {
+            if ($id === '') {
                 throw new InvalidConfigurationException(
                     'Factory ids must be non-empty strings.',
                 );
@@ -74,9 +55,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     }
 
     /**
-     * Resolves an entry by executing its factory.
-     *
-     * @throws ResolutionException|ContainerExceptionInterface If factory execution fails.
+     * @param array<string|int, mixed> $context
+     * @throws ResolutionException|ContainerExceptionInterface
      */
     public function resolve(string $id, array $context = []): mixed
     {
@@ -108,10 +88,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         }
     }
 
-    /**
-     * Unwraps definition wrappers and resolves string/array factory references.
-     */
-    private function resolveFactory(string $id): mixed
+    /** @return callable(ContainerValue, array<string|int, mixed>): mixed */
+    private function resolveFactory(string $id): callable
     {
         $factory = $this->factories[$id];
 
@@ -129,9 +107,18 @@ class FactoryResolver implements DefinitionAwareResolverInterface
             }
         }
 
+        if (!is_callable($factory)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Factory service for "%s" resolved to non-callable %s.',
+                $id,
+                get_debug_type($factory),
+            ));
+        }
+
         return $factory;
     }
 
+    /** @return callable(array<string|int, mixed>): mixed */
     private function compiledFactory(CompiledFactoryDefinition $definition): callable
     {
         if ($this->parametersResolver === null || $this->attributeProcessor === null) {
@@ -150,8 +137,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         if ($shard === null) {
             $class = $definition->class;
 
-            // The loader, not every generated file, owns idempotence. This also
-            // permits multiple container instances in one long-running worker.
             if (!class_exists($class, false)) {
                 if (!$this->trustedCompiledFactories && !is_file($file)) {
                     throw new InvalidConfigurationException(sprintf(
@@ -201,17 +186,16 @@ class FactoryResolver implements DefinitionAwareResolverInterface
                 || (strlen($path) >= 3 && ctype_alpha($path[0]) && $path[1] === ':'));
     }
 
+    /** @return callable(ContainerValue, array<string|int, mixed>): object */
     protected function createFactoryFromDefinition(ClassDefinition $definition): callable
     {
-        return function (ContainerValue $container, array $_context = []) use ($definition) {
+        return function (ContainerValue $container, array $_context = []) use ($definition): object {
             $className = $definition->value;
             $resolveValue = fn(mixed $value): mixed => $this->resolveDefinitionValue(
                 $container,
                 $value,
             );
 
-            // Preserve keys so associative maps unpack as named arguments and
-            // list-form maps unpack positionally - PHP handles both via `...`.
             $params = array_map($resolveValue, $definition->constructorParams);
             $instance = $params === []
                 ? new $className()
@@ -253,6 +237,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
 
+        FactorySpecificationValidator::assertValid($id, $definition);
         $this->factories[$id] = $definition;
         unset($this->compiledFactories[$id]);
     }
