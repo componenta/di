@@ -16,12 +16,8 @@ final class LazyFactory implements FactoryInterface
     public function __construct(private readonly ContainerInterface $container) {}
 
     /**
-     * @template T of object
-     *
-     * @param class-string<T>|string $entry
+     * @param class-string|non-empty-string $entry
      * @param array<string|int, mixed> $params
-     *
-     * @return T
      */
     public function make(string $entry, array $params = []): object
     {
