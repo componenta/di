@@ -95,7 +95,13 @@ final readonly class RequestMapperPipeline
     }
 
     /**
-     * Renames keys according to the mapping rules.
+     * Renames keys as one atomic mapping operation.
+     *
+     * Every value is read from the original input before any source key is
+     * removed. This makes swaps and chains deterministic and prevents an
+     * earlier mapping from changing the value read by a later mapping.
+     * Ambiguous target collisions are rejected instead of silently dropping
+     * input.
      *
      * - `'source' => 'target'`  - required: missing source raises.
      * - `'?source' => 'target'` - optional: missing source is silently skipped.
@@ -108,26 +114,72 @@ final readonly class RequestMapperPipeline
      */
     private function mapFields(array $data, array $map): array
     {
-        foreach ($map as $from => $to) {
-            $from = (string) $from;
+        /** @var list<array{from: string, to: string, value: mixed}> $moves */
+        $moves = [];
+        $mappedSources = [];
+        $targetOwners = [];
 
-            if ($from !== '' && $from[0] === self::OPTIONAL_PREFIX) {
+        foreach ($map as $rawFrom => $rawTo) {
+            $from = (string) $rawFrom;
+            $to = (string) $rawTo;
+            $optional = $from !== '' && $from[0] === self::OPTIONAL_PREFIX;
+
+            if ($optional) {
                 $from = substr($from, 1);
+            }
 
-                if (!array_key_exists($from, $data)) {
+            if ($to === '') {
+                throw new InvalidArgumentException('Mapped target key cannot be empty');
+            }
+
+            if (!array_key_exists($from, $data)) {
+                if ($optional) {
                     continue;
                 }
-            } elseif (!array_key_exists($from, $data)) {
+
                 throw new InvalidArgumentException(
                     sprintf('Required key "%s" is missing', $from),
                 );
             }
 
-            $data[$to] = $data[$from];
-
-            if ($from !== $to) {
-                unset($data[$from]);
+            if (isset($targetOwners[$to]) && $targetOwners[$to] !== $from) {
+                throw new InvalidArgumentException(sprintf(
+                    'Mapped target key "%s" is produced by both "%s" and "%s"',
+                    $to,
+                    $targetOwners[$to],
+                    $from,
+                ));
             }
+
+            $targetOwners[$to] = $from;
+            $mappedSources[$from] = true;
+            $moves[] = [
+                'from' => $from,
+                'to' => $to,
+                'value' => $data[$from],
+            ];
+        }
+
+        foreach ($moves as $move) {
+            if ($move['from'] !== $move['to']
+                && array_key_exists($move['to'], $data)
+                && !isset($mappedSources[$move['to']])
+            ) {
+                throw new InvalidArgumentException(sprintf(
+                    'Mapped target key "%s" already exists in input',
+                    $move['to'],
+                ));
+            }
+        }
+
+        foreach ($moves as $move) {
+            if ($move['from'] !== $move['to']) {
+                unset($data[$move['from']]);
+            }
+        }
+
+        foreach ($moves as $move) {
+            $data[$move['to']] = $move['value'];
         }
 
         return $data;
