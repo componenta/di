@@ -14,11 +14,9 @@ final class FactorySpecificationValidator
 {
     public static function assertValid(string $id, mixed $factory): void
     {
-        if ($factory instanceof FactoryDefinition) {
-            return;
-        }
-
-        if ($factory instanceof ClassDefinition) {
+        if ($factory instanceof FactoryDefinition
+            || $factory instanceof ClassDefinition
+        ) {
             return;
         }
 
@@ -64,24 +62,13 @@ final class FactorySpecificationValidator
             return false;
         }
 
-        $owner = $factory[0];
-        $method = $factory[1];
-
-        if (is_object($owner)) {
-            return method_exists($owner, $method);
+        if (is_object($factory[0])) {
+            return method_exists($factory[0], $factory[1]);
         }
 
-        if (!is_string($owner) || $owner === '') {
-            return false;
-        }
-
-        if (class_exists($owner) || interface_exists($owner) || trait_exists($owner)) {
-            return method_exists($owner, $method);
-        }
-
-        // The string may be an opaque service id whose object type is not
-        // knowable until the container resolves it.
-        return true;
+        // A string owner may be an opaque service id. Its object and method
+        // cannot be validated until the container resolves that service.
+        return is_string($factory[0]) && $factory[0] !== '';
     }
 
     private function __construct() {}
