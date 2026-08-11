@@ -10,9 +10,8 @@ use Componenta\DI\Exception\InvalidCallableException;
  * Thin callable-invocation wrapper.
  *
  * Minimal implementation over {@see call_user_func_array()} - performs no
- * resolution, validation, or dependency injection. Callers are expected to
- * hand in an already-valid callable (typically obtained from
- * {@see CallableResolver}) along with the complete, ordered parameter list.
+ * dependency injection. Callers normally hand in a callable obtained from
+ * {@see CallableResolver} along with the complete, ordered parameter list.
  *
  * Exception policy (matches {@see CallableInvokerInterface}):
  *
@@ -22,13 +21,6 @@ use Componenta\DI\Exception\InvalidCallableException;
  *    `ArgumentCountError`, etc.) are translated into
  *    {@see InvalidCallableException} so the caller learns which callable and
  *    parameter set triggered the failure.
- *
- * @example Basic usage
- * ```php
- * $invoker = new CallableInvoker();
- * $result = $invoker->call(fn(int $a, int $b) => $a + $b, [2, 3]);
- * $result = $invoker->call([$controller, 'action'], [$request, $response]);
- * ```
  */
 final class CallableInvoker implements CallableInvokerInterface
 {
@@ -38,12 +30,15 @@ final class CallableInvoker implements CallableInvokerInterface
      * @param mixed $callable A valid callable ready for invocation.
      * @param array<int|string, mixed> $params Complete, ordered parameter list.
      *
-     * @throws InvalidCallableException If the PHP engine reports an invocation
-     *                                  failure (invalid callable, missing /
-     *                                  mistyped arguments).
+     * @throws InvalidCallableException If the callable is invalid or the PHP
+     *                                  engine reports an invocation failure.
      */
     public function call(mixed $callable, array $params = []): mixed
     {
+        if (!is_callable($callable)) {
+            throw InvalidCallableException::forValue($callable);
+        }
+
         try {
             return call_user_func_array($callable, $params);
         } catch (\Error $e) {
