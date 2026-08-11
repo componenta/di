@@ -19,14 +19,7 @@ final class FactorySpecificationValidator
         }
 
         if ($factory instanceof ClassDefinition) {
-            if ($factory->value !== '') {
-                return;
-            }
-
-            throw new InvalidConfigurationException(sprintf(
-                'Class factory definition for "%s" requires a non-empty class name.',
-                $id,
-            ));
+            return;
         }
 
         if ($factory instanceof CompiledFactoryDefinition) {
@@ -71,11 +64,24 @@ final class FactorySpecificationValidator
             return false;
         }
 
-        if (is_object($factory[0])) {
-            return method_exists($factory[0], $factory[1]);
+        $owner = $factory[0];
+        $method = $factory[1];
+
+        if (is_object($owner)) {
+            return method_exists($owner, $method);
         }
 
-        return is_string($factory[0]) && $factory[0] !== '';
+        if (!is_string($owner) || $owner === '') {
+            return false;
+        }
+
+        if (class_exists($owner) || interface_exists($owner) || trait_exists($owner)) {
+            return method_exists($owner, $method);
+        }
+
+        // The string may be an opaque service id whose object type is not
+        // knowable until the container resolves it.
+        return true;
     }
 
     private function __construct() {}
