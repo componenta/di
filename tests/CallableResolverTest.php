@@ -8,23 +8,12 @@ use Componenta\DI\NullContainer;
 
 require_once __DIR__ . '/Fixture/functions.php';
 
+use Componenta\DI\Tests\Fixture\CallableResolverContract;
+use Componenta\DI\Tests\Fixture\CallableResolverContractImplementation;
 use Componenta\DI\Tests\Fixture\InvokableService;
 use Componenta\DI\Tests\Fixture\NonInvokableService;
 use Componenta\DI\Tests\Fixture\ServiceWithMethods;
 use Psr\Container\ContainerInterface;
-
-interface CallableResolverContract
-{
-    public function handle(int $value): string;
-}
-
-final class CallableResolverContractImplementation implements CallableResolverContract
-{
-    public function handle(int $value): string
-    {
-        return 'contract:' . $value;
-    }
-}
 
 function mapContainer(array $entries): ContainerInterface
 {
