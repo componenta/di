@@ -12,6 +12,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
+use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use ReflectionClass;
 use Throwable;
@@ -93,8 +94,17 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         }
 
         $reflection = new ReflectionClass($class);
+        $proxyAttribute = $reflection->getAttributes(Proxy::class)[0] ?? null;
 
-        if ($reflection->getAttributes(Proxy::class) !== []) {
+        if ($proxyAttribute !== null) {
+            $proxy = $proxyAttribute->newInstance();
+
+            if ($proxy->class !== null) {
+                throw new LogicException(
+                    'Class-level #[Proxy] must not specify a proxy class; the marked class is used.',
+                );
+            }
+
             return $this->strategyCache[$class] = CreationStrategy::Proxy;
         }
 
