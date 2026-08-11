@@ -147,6 +147,13 @@ describe('CallableResolver', function () {
                 ->toThrow(InvalidCallableException::class);
         });
 
+        it('rejects a non-string method without leaking a native TypeError', function () {
+            $resolver = new CallableResolver(new NullContainer());
+
+            expect(fn () => $resolver->resolve([ServiceWithMethods::class, 123]))
+                ->toThrow(InvalidCallableException::class);
+        });
+
         it('resolves [class-string, staticMethod] without the container', function () {
             $resolver = new CallableResolver(mapContainer([]));
 
