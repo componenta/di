@@ -128,7 +128,7 @@ describe('Resolver\\FactoryResolver', function () {
             expect($resolver->resolve('svc')->value)->toBe('referenced');
         });
 
-        it('invokes methodCalls on the constructed instance in registration order', function () {
+        it('invokes repeated methodCalls in registration order', function () {
             $recorder = new class () {
                 public array $calls = [];
 
@@ -140,14 +140,11 @@ describe('Resolver\\FactoryResolver', function () {
             $definition = Definition::autowire($recorder::class)
                 ->method('append', ['first'])
                 ->method('append', ['second']);
-            // NOTE: associative map keyed by method name means the last
-            // registration overwrites earlier ones. This test guards that
-            // method() replaces per-method params (documented semantics).
             $resolver = makeFactoryResolver(['svc' => $definition]);
 
             $instance = $resolver->resolve('svc');
 
-            expect($instance->calls)->toBe(['second']);
+            expect($instance->calls)->toBe(['first', 'second']);
         });
 
         it('resolves a string-form factory reference through the container', function () {
