@@ -31,6 +31,7 @@ use Componenta\DI\Resolver\ConfigAttributeResolver;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
+use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
@@ -161,8 +162,9 @@ class ContainerBuilder
                 $builder->invokables[] = $value;
             }
 
-            if (is_string($key) && !isset($builder->aliases[$key])) {
-                $builder->aliases[$key] = $value;
+            if (is_string($key)) {
+                self::assertInvokableAliasCompatible($builder->aliases, $key, $value);
+                $builder->aliases[$key] ??= $value;
             }
         }
 
@@ -243,8 +245,9 @@ class ContainerBuilder
                 $invokables[] = $value;
             }
 
-            if (is_string($key) && !isset($aliases[$key])) {
-                $aliases[$key] = $value;
+            if (is_string($key)) {
+                self::assertInvokableAliasCompatible($aliases, $key, $value);
+                $aliases[$key] ??= $value;
             }
         }
 
@@ -760,6 +763,32 @@ class ContainerBuilder
         }
     }
 
+    /** @param array<string, string> $aliases */
+    private static function assertInvokableAliasCompatible(
+        array $aliases,
+        string $alias,
+        string $target,
+    ): void {
+        if (!array_key_exists($alias, $aliases)) {
+            return;
+        }
+
+        $resolver = new AliasResolver($aliases);
+        $existingTarget = $resolver->resolve($alias);
+        $requestedTarget = $resolver->resolve($target);
+
+        if ($existingTarget === $requestedTarget) {
+            return;
+        }
+
+        throw new InvalidConfigurationException(sprintf(
+            'Invokable alias "%s" conflicts with existing target "%s"; requested "%s".',
+            $alias,
+            $existingTarget,
+            $requestedTarget,
+        ));
+    }
+
     private static function assertBindingIdAvailable(string $id, string $kind): void
     {
         if ($id === '') {
@@ -1057,12 +1086,16 @@ class ContainerBuilder
             ConfigKey::DELEGATORS,
             ConfigKey::SERVICES,
         ] as $key) {
-            foreach ($dependencies[$key] ?? [] as $id => $_value) {
+            foreach ($dependencies[$key] ?? [] as $id => $value) {
                 if (!is_string($id) || $id === '') {
                     throw new InvalidConfigurationException(sprintf(
                         'Container dependency "%s" requires non-empty string ids.',
                         $key,
                     ));
+                }
+
+                if ($key === ConfigKey::FACTORIES) {
+                    FactorySpecificationValidator::assertValid($id, $value);
                 }
             }
         }
@@ -1125,6 +1158,7 @@ class ContainerBuilder
 
         if ($class !== null) {
             self::assertBindingIdAvailable($classOrAlias, 'alias');
+            self::assertInvokableAliasCompatible($this->aliases, $classOrAlias, $class);
             $this->bindingsValidated = false;
         }
 
@@ -1132,8 +1166,8 @@ class ContainerBuilder
             $this->invokables[] = $target;
         }
 
-        if ($class !== null && !isset($this->aliases[$classOrAlias])) {
-            $this->aliases[$classOrAlias] = $class;
+        if ($class !== null) {
+            $this->aliases[$classOrAlias] ??= $class;
         }
 
         return $this;
