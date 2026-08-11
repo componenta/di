@@ -65,13 +65,14 @@ jobs:
           )
 
           replace(
+              'src/LazyObjectFactoryInterface.php',
+              '     * @param callable(T $instance): mixed $initializer\n',
+              '     * @param callable(T $instance): void $initializer\n',
+          )
+          replace(
               'src/ProxyFactory.php',
-              '        return $reflection->newLazyGhost($initializer);\n',
-              '        return $reflection->newLazyGhost(\n'
-              '            static function (object $instance) use ($initializer): void {\n'
-              '                $initializer($instance);\n'
-              '            },\n'
-              '        );\n',
+              '     * @param callable(T): mixed $initializer\n',
+              '     * @param callable(T): void $initializer\n',
           )
 
           replace(
