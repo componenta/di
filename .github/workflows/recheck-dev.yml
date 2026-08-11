@@ -41,7 +41,7 @@ jobs:
           set +e
           work=/tmp/componenta-di-recheck
           rm -rf "$work"
-          mkdir -p "$work"
+          mkdir -p "$work" .automation
 
           composer install --no-interaction --prefer-dist --no-progress \
             > "$work/composer-install.log" 2>&1
@@ -61,39 +61,34 @@ jobs:
               > "$work/php-lint.log" 2>&1
             lint_status=$?
 
-            vendor/bin/phpstan analyse src --level=max --no-progress \
-              > "$work/phpstan.log" 2>&1
+            vendor/bin/phpstan analyse src --level=max --no-progress --error-format=json \
+              > "$work/phpstan.json" 2> "$work/phpstan.stderr"
             phpstan_status=$?
 
-            cat > "$work/php-cs-fixer.php" <<'PHP'
-          <?php
+            python3 <<'PY'
+          import json
+          from pathlib import Path
 
-          declare(strict_types=1);
+          source = Path('/tmp/componenta-di-recheck/phpstan.json')
+          target = Path('.automation/phpstan-errors.tsv')
 
-          $finder = PhpCsFixer\Finder::create()
-              ->in([
-                  __DIR__ . '/../../home/runner/work/di/di/src',
-                  __DIR__ . '/../../home/runner/work/di/di/tests',
-                  __DIR__ . '/../../home/runner/work/di/di/verification',
-                  __DIR__ . '/../../home/runner/work/di/di/benchmarks',
-              ]);
+          try:
+              payload = json.loads(source.read_text() or '{}')
+          except json.JSONDecodeError as error:
+              target.write_text(f'phpstan-json-error\t{error}\n')
+          else:
+              lines = []
+              for path, details in sorted(payload.get('files', {}).items()):
+                  for message in details.get('messages', []):
+                      lines.append(
+                          f"{path}\t{message.get('line', 0)}\t"
+                          f"{message.get('ignorable', False)}\t"
+                          f"{message.get('message', '')}"
+                      )
+              target.write_text('\n'.join(lines) + ('\n' if lines else ''))
+          PY
 
-          return (new PhpCsFixer\Config())
-              ->setRiskyAllowed(true)
-              ->setRules([
-                  '@PER-CS' => true,
-                  'array_syntax' => ['syntax' => 'short'],
-                  'declare_strict_types' => true,
-                  'no_unused_imports' => true,
-                  'ordered_imports' => true,
-                  'single_quote' => true,
-                  'trailing_comma_in_multiline' => true,
-              ])
-              ->setFinder($finder);
-          PHP
-
-            vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no \
-              --config="$work/php-cs-fixer.php" \
+            composer cs-check \
               > "$work/cs-check.log" 2>&1
             cs_status=$?
 
@@ -115,6 +110,7 @@ jobs:
             phpstan_status=125
             cs_status=125
             test_status=125
+            : > .automation/phpstan-errors.tsv
           fi
 
           overall=0
@@ -144,25 +140,38 @@ jobs:
             echo "| composer audit | $audit_status |"
             echo "| PHP lint | $lint_status |"
             echo "| PHPStan level max, full src | $phpstan_status |"
-            echo "| PHP CS Fixer dry-run | $cs_status |"
+            echo "| composer cs-check | $cs_status |"
             echo "| Pest, four deterministic random seeds | $test_status |"
             echo
-            for name in \
-              composer-install \
-              composer-validate \
-              composer-audit \
-              php-lint \
-              phpstan \
-              cs-check \
-              tests
-            do
-              echo "## $name"
-              echo
-              echo '```text'
-              tail -n 1200 "$work/${name}.log" 2>/dev/null || true
-              echo '```'
-              echo
-            done
+            echo '## composer-validate'
+            echo
+            echo '```text'
+            cat "$work/composer-validate.log" 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## composer-audit'
+            echo
+            echo '```text'
+            cat "$work/composer-audit.log" 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## phpstan-stderr'
+            echo
+            echo '```text'
+            cat "$work/phpstan.stderr" 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## cs-check'
+            echo
+            echo '```text'
+            tail -n 600 "$work/cs-check.log" 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## tests'
+            echo
+            echo '```text'
+            tail -n 800 "$work/tests.log" 2>/dev/null || true
+            echo '```'
           } > .automation/recheck-dev-result.md
 
           echo "overall=$overall" >> "$GITHUB_OUTPUT"
@@ -173,7 +182,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .automation/recheck-dev-result.md
+          git add .automation/recheck-dev-result.md .automation/phpstan-errors.tsv
           git commit -m "Record independent dev recheck"
           git push origin HEAD:dev
 
