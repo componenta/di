@@ -10,7 +10,6 @@ use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Fixture\InvokableWithInjectedProperty;
-use Componenta\DI\Tests\Fixture\InvokableWithOptionalDependency;
 
 final class InvokableWithRequiredDependency
 {
@@ -35,12 +34,7 @@ it('rejects an invokable class that cannot be constructed without arguments', fu
     expect(fn() => ContainerBuilder::configureWithDependencies(
         new Config([]),
         [ConfigKey::INVOKABLES => [InvokableWithRequiredDependency::class]],
-    ))->toThrow(InvalidConfigurationException::class, 'declare no constructor parameters');
-});
-
-it('rejects optional constructor parameters because the invokable path does not resolve them', function (): void {
-    expect(fn() => (new ContainerBuilder())->addInvokable(InvokableWithOptionalDependency::class))
-        ->toThrow(InvalidConfigurationException::class, 'declare no constructor parameters');
+    ))->toThrow(InvalidConfigurationException::class, 'require no constructor arguments');
 });
 
 it('rejects an invokable class name that is not loadable', function (): void {
