@@ -6,23 +6,13 @@ namespace Componenta\DI\Resolver;
 
 use ArrayAccess;
 use Componenta\Config\Config as AppConfig;
-use Componenta\Config\DefaultValue;
 use Componenta\Config\ConfigPath;
+use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Config;
 use InvalidArgumentException;
 use OutOfBoundsException;
 
-/**
- * Reads configuration values described by a {@see Config} attribute from a
- * configuration source ({@see AppConfig}, plain array, or {@see ArrayAccess}).
- *
- * The {@see Config} attribute itself is a pure DTO - every lookup decision
- * (path mode, fallback name, default handling, nested traversal) lives here so
- * the attribute can be safely instantiated without dragging extraction
- * responsibilities along.
- *
- * Stateless and side-effect-free: a single shared instance can be reused.
- */
+/** Reads configuration values described by a {@see Config} attribute. */
 final readonly class ConfigValueExtractor
 {
     public const string MODE_IMPLICIT = 'implicit';
@@ -30,19 +20,9 @@ final readonly class ConfigValueExtractor
     public const string MODE_PATH = 'path';
 
     /**
-     * Extracts the value pointed at by the attribute.
-     *
-     * Path mode is decided by {@see Config::$path}:
-     *  - `ConfigPath` instance -> nested traversal (uses {@see AppConfig} fast path
-     *    when the source is an {@see AppConfig}).
-     *  - `string`        -> literal key (no dot splitting).
-     *  - `null`          -> falls back to `$fallbackName` (typically the
-     *    parameter / property name).
-     *
-     * @param ArrayAccess|array<string, mixed> $configData
-     *
-     * @throws InvalidArgumentException When traversal hits a non-accessible value mid-path.
-     * @throws OutOfBoundsException     When the key is missing and no default is configured.
+     * @param array<string, mixed>|ArrayAccess<string, mixed> $configData
+     * @throws InvalidArgumentException When traversal reaches a scalar value.
+     * @throws OutOfBoundsException When a required key is missing.
      */
     public function extract(array|ArrayAccess $configData, Config $attribute, string $fallbackName): mixed
     {
@@ -51,7 +31,7 @@ final readonly class ConfigValueExtractor
                 $configData,
                 self::MODE_PATH,
                 $attribute->path->value,
-                $attribute->path->toArray(),
+                array_values($attribute->path->toArray()),
                 $attribute->default,
                 $fallbackName,
             );
@@ -68,9 +48,7 @@ final readonly class ConfigValueExtractor
     }
 
     /**
-     * Extracts a value from payload metadata produced by the offline planner.
-     *
-     * @param ArrayAccess|array<string, mixed> $configData
+     * @param array<string, mixed>|ArrayAccess<string, mixed> $configData
      * @param list<string> $segments
      */
     public function extractCompiled(
@@ -112,9 +90,6 @@ final readonly class ConfigValueExtractor
         throw new InvalidArgumentException("Unsupported compiled config mode: $mode");
     }
 
-    /**
-     * Native {@see AppConfig} fast path - uses its own {@see ConfigPath} support.
-     */
     private function resolveFromAppConfig(AppConfig $config, ConfigPath $path, mixed $default): mixed
     {
         if ($config->has($path)) {
@@ -129,7 +104,8 @@ final readonly class ConfigValueExtractor
     }
 
     /**
-     * @param array<int, string> $segments
+     * @param array<string, mixed>|ArrayAccess<string, mixed> $configData
+     * @param list<string> $segments
      */
     private function extractNested(array|ArrayAccess $configData, array $segments, mixed $default): mixed
     {
@@ -158,6 +134,7 @@ final readonly class ConfigValueExtractor
         return $entry;
     }
 
+    /** @param array<string, mixed>|ArrayAccess<string, mixed> $configData */
     private function extractLiteral(array|ArrayAccess $configData, string $key, mixed $default): mixed
     {
         if (!$this->hasKey($configData, $key)) {
@@ -171,6 +148,7 @@ final readonly class ConfigValueExtractor
         return $configData[$key];
     }
 
+    /** @param array<string, mixed>|ArrayAccess<string, mixed> $configData */
     private function hasKey(array|ArrayAccess $configData, string $key): bool
     {
         if ($configData instanceof AppConfig) {
@@ -181,6 +159,6 @@ final readonly class ConfigValueExtractor
             return array_key_exists($key, $configData);
         }
 
-        return isset($configData[$key]);
+        return $configData->offsetExists($key);
     }
 }
