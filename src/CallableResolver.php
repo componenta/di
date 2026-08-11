@@ -13,9 +13,9 @@ use Psr\Container\ContainerInterface;
  * Supports multiple callable formats:
  * - Closure: returned as-is
  * - Native callable (array/invokable): returned in its stable native form
+ * - String service ID: fetched from container if callable
  * - String with `::`: static method or instance method via container
- * - String (service ID): fetched from container if callable
- * - Array [class, method]: instance fetched from container
+ * - Array [class/interface, method]: instance fetched from container
  *
  * Performance optimizations:
  * - Valid native callables are not wrapped in transient first-class Closures
@@ -69,12 +69,12 @@ class CallableResolver implements CallableResolverInterface
             return $callable;
         }
 
-        // String - resolve class::method, service, or function.
+        // String - resolve service id, class::method, or function.
         if (is_string($callable)) {
             return $this->resolveString($callable);
         }
 
-        // Array - resolve [class, method].
+        // Array - resolve [class/interface, method].
         if (is_array($callable)) {
             return $this->resolveArray($callable);
         }
@@ -84,10 +84,8 @@ class CallableResolver implements CallableResolverInterface
 
     protected function resolveString(string $callable): callable
     {
-        if (str_contains($callable, '::')) {
-            return $this->resolveClassMethod($callable);
-        }
-
+        // PSR-11 ids are opaque. A registered id wins even when it contains
+        // syntax such as "::" that could otherwise look like a method ref.
         if ($this->container->has($callable)) {
             $entry = $this->container->get($callable);
             if (is_callable($entry)) {
@@ -97,11 +95,15 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forNonInvokable($callable);
         }
 
+        if (str_contains($callable, '::')) {
+            return $this->resolveClassMethod($callable);
+        }
+
         if (function_exists($callable)) {
             return $callable;
         }
 
-        if (class_exists($callable)) {
+        if (class_exists($callable) || interface_exists($callable)) {
             throw InvalidCallableException::forMissingService($callable);
         }
 
@@ -112,7 +114,7 @@ class CallableResolver implements CallableResolverInterface
     {
         [$class, $method] = explode('::', $callable, 2);
 
-        if (!class_exists($class)) {
+        if (!class_exists($class) && !interface_exists($class)) {
             throw InvalidCallableException::forValue($callable);
         }
 
@@ -158,7 +160,7 @@ class CallableResolver implements CallableResolverInterface
         }
 
         if (is_string($objectOrClass)) {
-            if (!class_exists($objectOrClass)) {
+            if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
                 throw InvalidCallableException::forValue($callable);
             }
 
@@ -197,7 +199,7 @@ class CallableResolver implements CallableResolverInterface
     {
         $key = $class . '::' . $method;
 
-        if (!isset($this->staticCache[$key])) {
+        if (!array_key_exists($key, $this->staticCache)) {
             $this->staticCache[$key] = new \ReflectionMethod($class, $method)->isStatic();
         }
 
