@@ -2,13 +2,20 @@
 
 declare(strict_types=1);
 
+use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Tests\Fixture\ServiceWithoutConstructor;
 use Componenta\DI\Tests\Fixture\SimpleService;
+
+final readonly class InvokableProxyAlternative {}
+
+#[Proxy(InvokableProxyAlternative::class)]
+final readonly class InvalidInvokableClassProxy {}
 
 describe('Resolver\\InvokableResolver', function () {
     describe('can()', function () {
@@ -56,6 +63,19 @@ describe('Resolver\\InvokableResolver', function () {
 
             expect($instance)->toBeInstanceOf(ServiceWithoutConstructor::class)
                 ->and($instance->tag)->toBe('empty');
+        });
+
+        it('rejects a concrete proxy override on a class-level Proxy attribute', function () {
+            $resolver = new InvokableResolver(
+                [InvalidInvokableClassProxy::class],
+                new ProxyFactory(),
+            );
+
+            expect(fn () => $resolver->resolve(InvalidInvokableClassProxy::class))
+                ->toThrow(
+                    ResolutionException::class,
+                    'Class-level #[Proxy] must not specify a proxy class',
+                );
         });
     });
 
