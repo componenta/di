@@ -12,12 +12,12 @@ use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
 
-/** Expands explicit roots through statically knowable constructor and injection dependencies. */
+/** Expands explicit roots through statically knowable dependencies. */
 final readonly class AutowireClassGraph
 {
     /**
      * @param iterable<AutowireEntry|class-string> $roots
-     * @param array<string, true> $excluded Existing explicit bindings which must keep ownership.
+     * @param array<string, true> $excluded
      * @return list<class-string>
      */
     public function expand(iterable $roots, array $excluded = []): array
@@ -76,7 +76,10 @@ final readonly class AutowireClassGraph
         return $classes;
     }
 
-    /** @return list<class-string> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<class-string>
+     */
     private function dependencies(ReflectionClass $class): array
     {
         $dependencies = [];
