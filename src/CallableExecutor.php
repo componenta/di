@@ -58,7 +58,7 @@ class CallableExecutor implements CallableExecutorInterface
         $targets = $this->targets($resolved);
 
         if ($targets === []) {
-            return $resolved();
+            return $resolved(...$params);
         }
 
         return $resolved(...$this->parametersResolver->resolveTargets($targets, $params));
