@@ -79,7 +79,7 @@ final readonly class Container implements
             LazyObjectFactoryInterface::class => $this,
             VirtualProxyFactoryInterface::class => $this,
             self::class => $this,
-            AliasResolverInterface::class => $this->aliases,
+            AliasResolverInterface::class => new ContainerAliasResolver($this->aliases, $this),
             CallableExecutorInterface::class => $this->callableExecutor,
         ];
         $validatedBootstrapServices = [];

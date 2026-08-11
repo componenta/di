@@ -161,6 +161,15 @@ class CallableResolver implements CallableResolverInterface
 
         if (is_string($objectOrClass)) {
             if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
+                if ($this->container->has($objectOrClass)) {
+                    $entry = $this->container->get($objectOrClass);
+                    if (is_object($entry) && is_callable([$entry, $method])) {
+                        return [$entry, $method];
+                    }
+
+                    throw InvalidCallableException::forMethod($objectOrClass, $method);
+                }
+
                 throw InvalidCallableException::forValue($callable);
             }
 

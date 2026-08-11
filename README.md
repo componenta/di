@@ -118,6 +118,8 @@ Local entries therefore take precedence over external containers. `has()` conver
 | `toArray()` | Export the current configuration. |
 | `build()` | Build a sealed runtime container. |
 
+A delegator method reference may use a concrete class, an interface, or an opaque service id, for example `[DecoratorInterface::class, 'decorate']` or `['decorator.service', 'decorate']`. In bulk/configuration input, wrap an opaque service-id method reference as `[['decorator.service', 'decorate']]`; the flat `['first', 'second']` form remains a list of two string delegators.
+
 A normal factory receives `Componenta\Config\ContainerValue` and the per-resolution context:
 
 ```php
@@ -199,7 +201,7 @@ Mappers may combine their primary source with selected request attributes and up
 
 ## Callable invocation
 
-`call()` accepts closures, global function names, `"Class::method"` strings, invokable service ids, `[object, 'method']`, and `[class-string, 'method']`. Explicit parameters win over resolver output by name or position. Exceptions thrown by the target callable propagate unchanged.
+`call()` accepts closures, global function names, `"Class::method"` strings, invokable service ids, `[object, 'method']`, and `[class/interface/service-id, 'method']` references. Explicit parameters win over resolver output by name or position. Exceptions thrown by the target callable propagate unchanged.
 
 ## Lazy objects and proxies
 

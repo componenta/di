@@ -941,7 +941,9 @@ class ContainerBuilder
             return $delegator;
         }
 
-        if (self::isCallableArraySpecification($delegator)) {
+        if (self::isCallableArraySpecification($delegator)
+            || self::isDeferredCallableArraySpecification($delegator)
+        ) {
             /** @var CallableReference $delegator */
             return $delegator;
         }
@@ -971,6 +973,16 @@ class ContainerBuilder
         ));
     }
 
+    private static function isDeferredCallableArraySpecification(mixed $value): bool
+    {
+        return is_array($value)
+            && array_keys($value) === [0, 1]
+            && is_string($value[0])
+            && $value[0] !== ''
+            && is_string($value[1])
+            && $value[1] !== '';
+    }
+
     private static function isCallableArraySpecification(mixed $value): bool
     {
         if (!is_array($value)
@@ -987,7 +999,7 @@ class ContainerBuilder
 
         return is_string($value[0])
             && $value[0] !== ''
-            && class_exists($value[0])
+            && (class_exists($value[0]) || interface_exists($value[0]))
             && method_exists($value[0], $value[1]);
     }
 

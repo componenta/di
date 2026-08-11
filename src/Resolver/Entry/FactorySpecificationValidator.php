@@ -25,12 +25,23 @@ final class FactorySpecificationValidator
         }
 
         if ($factory instanceof CompiledFactoryDefinition) {
-            if ($factory->file !== '' && $factory->class !== '' && $factory->method !== '') {
+            if (CompiledFactoryDefinition::decode($factory->encode()) !== null) {
                 return;
             }
 
             throw new InvalidConfigurationException(sprintf(
-                'Compiled factory definition for "%s" requires non-empty file, class and method values.',
+                'Compiled factory definition for "%s" is malformed.',
+                $id,
+            ));
+        }
+
+        if (CompiledFactoryDefinition::isEncodedValue($factory)) {
+            if (CompiledFactoryDefinition::decode($factory) !== null) {
+                return;
+            }
+
+            throw new InvalidConfigurationException(sprintf(
+                'Factory "%s" contains a malformed compiled factory definition.',
                 $id,
             ));
         }
@@ -85,7 +96,22 @@ final class FactorySpecificationValidator
         $magicCall = $class->hasMethod('__call')
             && $class->getMethod('__call')->isPublic();
 
-        foreach ($definition->methodCalls as $call) {
+        foreach ($definition->methodCalls as $index => $call) {
+            if (!is_array($call)
+                || !array_key_exists('method', $call)
+                || !is_string($call['method'])
+                || $call['method'] === ''
+                || !array_key_exists('params', $call)
+                || !is_array($call['params'])
+            ) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Class definition for "%s" contains malformed method call #%d; '
+                    . 'expected array{method: non-empty-string, params: array}.',
+                    $id,
+                    $index,
+                ));
+            }
+
             $method = $call['method'];
 
             if (!$class->hasMethod($method)) {
@@ -132,7 +158,7 @@ final class FactorySpecificationValidator
         }
 
         if (is_object($factory[0])) {
-            return method_exists($factory[0], $factory[1]);
+            return false;
         }
 
         // A string owner may be an opaque service id. Its object and method

@@ -132,11 +132,19 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $file = rtrim($this->compiledFactoryBaseDir, '/\\') . '/' . ltrim($file, '/\\');
         }
 
+        $class = $definition->class;
         $shard = $this->compiledShards[$file] ?? null;
 
-        if ($shard === null) {
-            $class = $definition->class;
+        if ($shard !== null && $shard::class !== $class) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled factory shard "%s" was already loaded as "%s", not "%s".',
+                $file,
+                $shard::class,
+                $class,
+            ));
+        }
 
+        if ($shard === null) {
             if (!class_exists($class, false)) {
                 if (!$this->trustedCompiledFactories && !is_file($file)) {
                     throw new InvalidConfigurationException(sprintf(

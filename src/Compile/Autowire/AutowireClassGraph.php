@@ -11,6 +11,7 @@ use Componenta\DI\Resolver\TypeHints;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionProperty;
 
 /** Expands explicit roots through statically knowable dependencies. */
 final readonly class AutowireClassGraph
@@ -89,7 +90,7 @@ final readonly class AutowireClassGraph
             $this->appendMethodDependencies($dependencies, $constructor);
         }
 
-        foreach ($class->getProperties() as $property) {
+        foreach (self::properties($class) as $property) {
             if ($property->getAttributes(Inject::class) === []) {
                 continue;
             }
@@ -112,6 +113,30 @@ final readonly class AutowireClassGraph
         }
 
         return array_keys($dependencies);
+    }
+
+    /**
+     * ReflectionClass::getProperties() omits private properties declared by
+     * ancestors. AttributeProcessor intentionally includes them, so the
+     * compilation graph must use the same hierarchy view or it will omit
+     * dependencies that generated factories still inject at runtime.
+     *
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionProperty>
+     */
+    private static function properties(ReflectionClass $class): array
+    {
+        $properties = $class->getProperties();
+
+        for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
+            foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
+                if ($property->getDeclaringClass()->getName() === $parent->getName()) {
+                    $properties[] = $property;
+                }
+            }
+        }
+
+        return $properties;
     }
 
     /** @param array<class-string, true> $dependencies */
