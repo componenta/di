@@ -50,7 +50,10 @@ final class RequestResolver implements ParameterResolverInterface
         return in_array(UriInterface::class, $target->typeNames, true);
     }
 
-    /** @throws ValidationExceptionInterface|CasterExceptionInterface */
+    /**
+     * @return array{0: int, 1: mixed}|null
+     * @throws ValidationExceptionInterface|CasterExceptionInterface
+     */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -134,6 +137,7 @@ final class RequestResolver implements ParameterResolverInterface
         );
     }
 
+    /** @return array{0: int, 1: mixed}|null */
     private function resolveByType(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -193,7 +197,10 @@ final class RequestResolver implements ParameterResolverInterface
         return $position === false ? $class : substr($class, $position + 1);
     }
 
-    /** @throws ValidationExceptionInterface */
+    /**
+     * @return array<string|int, mixed>|object
+     * @throws ValidationExceptionInterface
+     */
     private function processMapping(
         ServerRequestInterface $request,
         RequestDataExtractorInterface&MapperInterface $mapper,
@@ -260,7 +267,7 @@ final class RequestResolver implements ParameterResolverInterface
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<string|int, mixed> $data
      * @throws ValidationExceptionInterface
      */
     private function validateData(?string $typeName, array $data): void
