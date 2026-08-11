@@ -252,8 +252,8 @@ final readonly class Container implements
                 throw InvalidConfigurationException::forInvalidDefinition($entry);
             }
 
-            $this->cache->removeBase($canonical);
             $this->resolver->setDefinition($canonical, $entry);
+            $this->cache->removeBase($canonical);
             $this->runtimeDefinitions->mark($canonical);
         } else {
             if ($this->runtimeDefinitions->has($canonical)) {
