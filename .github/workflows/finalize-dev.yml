@@ -1,0 +1,240 @@
+name: Finalize Componenta DI dev
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - .automation/finalize-dev-trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: componenta-di-dev-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Apply verified fixes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual < count:
+                  raise SystemExit(f'{path}: expected at least {count} occurrence(s), found {actual}: {old!r}')
+              p.write_text(text.replace(old, new, count))
+
+          replace(
+              'src/Compile/Factory/FactoryCodeGenerator.php',
+              '    private function reset(ReflectionClass $class): void\n',
+              '    /** @param ReflectionClass<object> $class */\n    private function reset(ReflectionClass $class): void\n',
+          )
+
+          replace(
+              'src/ContainerBuilder.php',
+              '        $builder = static::newBuilder();\n',
+              '        $builder = self::newBuilder();\n',
+          )
+
+          replace(
+              'src/ProxyFactory.php',
+              '        return $reflection->newLazyGhost($initializer);\n',
+              '''        return $reflection->newLazyGhost(
+            static function (object $instance) use ($initializer): void {
+                $initializer($instance);
+            },
+        );
+''',
+          )
+
+          replace(
+              'src/Resolver/ConfigValueExtractor.php',
+              '''            if (!$this->hasKey($entry, $key)) {
+''',
+              '''            /** @var array<string, mixed>|ArrayAccess<string, mixed> $entry */
+            if (!$this->hasKey($entry, $key)) {
+''',
+          )
+
+          replace(
+              'src/Resolver/MakeAttributeResolver.php',
+              '''     *     entry: string,
+''',
+              '''     *     entry: non-empty-string,
+''',
+              2,
+          )
+          replace(
+              'src/Resolver/MakeAttributeResolver.php',
+              '''        $entry = $make->entry ?? $typeName ?? $name;
+
+        return [
+''',
+              '''        $entry = $make->entry ?? $typeName ?? $name;
+
+        if ($entry === '') {
+            throw new LogicException('Make entry must be a non-empty string.');
+        }
+
+        return [
+''',
+          )
+          replace(
+              'src/Resolver/MakeAttributeResolver.php',
+              '''     * @param class-string<T> $proxyClass
+     * @param array<string, mixed> $params
+''',
+              '''     * @param class-string<T> $proxyClass
+     * @param non-empty-string $entry
+     * @param array<string, mixed> $params
+''',
+          )
+          replace(
+              'src/Resolver/MakeAttributeResolver.php',
+              '''     * @param class-string|null $typeName
+     * @return class-string<object>
+     */
+    private static function resolveProxyClass(
+        string $entry,
+''',
+              '''     * @param non-empty-string $entry
+     * @param class-string|null $typeName
+     * @return class-string<object>
+     */
+    private static function resolveProxyClass(
+        string $entry,
+''',
+          )
+
+          p = Path('tests/Resolver/InvokableResolverTest.php')
+          text = p.read_text()
+          text = text.replace('use Componenta\\DI\\Exception\\ResolutionException;\n', '', 1)
+          old = '''        it('rejects a concrete proxy override on a class-level Proxy attribute', function () {
+            $resolver = new InvokableResolver(
+                [InvalidInvokableClassProxy::class],
+                new ProxyFactory(),
+            );
+
+            expect(fn () => $resolver->resolve(InvalidInvokableClassProxy::class))
+                ->toThrow(
+                    ResolutionException::class,
+                    'Class-level #[Proxy] must not specify a proxy class',
+                );
+        });
+'''
+          new = '''        it('rejects a concrete proxy override on a class-level Proxy attribute before resolution', function () {
+            expect(fn () => new InvokableResolver(
+                [InvalidInvokableClassProxy::class],
+                new ProxyFactory(),
+            ))->toThrow(
+                InvalidConfigurationException::class,
+                'Class-level #[Proxy] must not specify a proxy class',
+            );
+        });
+'''
+          if old not in text:
+              raise SystemExit('InvokableResolverTest.php: expected obsolete proxy test block not found')
+          p.write_text(text.replace(old, new, 1))
+
+          p = Path('tests/ConfigProviderTest.php')
+          text = p.read_text()
+          old = '''    $dependencies = $config[ConfigKey::DEPENDENCIES];
+
+    expect($dependencies[ConfigKey::FACTORIES][RequestResolver::class] ?? null)
+        ->toBe(RequestResolverFactory::class)
+        ->and($dependencies[ConfigKey::ATTRIBUTE_HANDLERS])
+        ->toBe([CastableResolver::class, CurrentUserResolver::class])
+        ->and(\\Componenta\\DI\\ConfigKey::dependencyKeys())
+        ->toBe(ConfigKey::dependencyKeys());
+'''
+          new = '''    $dependencies = $config[ConfigKey::DEPENDENCIES];
+    $diDependencyKeys = \\Componenta\\DI\\ConfigKey::dependencyKeys();
+
+    expect($dependencies[ConfigKey::FACTORIES][RequestResolver::class] ?? null)
+        ->toBe(RequestResolverFactory::class)
+        ->and($dependencies[ConfigKey::ATTRIBUTE_HANDLERS])
+        ->toBe([CastableResolver::class, CurrentUserResolver::class])
+        ->and(array_diff($diDependencyKeys, ConfigKey::dependencyKeys()))
+        ->toBe([])
+        ->and($diDependencyKeys)
+        ->not->toContain('generated_entry_resolver_file')
+        ->and($diDependencyKeys)
+        ->not->toContain('generated_entry_resolver_release_fingerprint');
+'''
+          if old not in text:
+              raise SystemExit('ConfigProviderTest.php: expected obsolete dependency-key assertion not found')
+          p.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Apply project code style
+        run: composer cs-fix
+
+      - name: Validate package
+        run: composer validate --strict
+
+      - name: Audit dependencies
+        run: composer audit --no-interaction
+
+      - name: PHP syntax check
+        shell: bash
+        run: |
+          find src tests verification benchmarks -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: Run PHPStan
+        run: composer phpstan
+
+      - name: Run tests
+        run: composer test
+
+      - name: Confirm style is clean after tests
+        run: composer cs-check
+
+      - name: Commit verified result and remove temporary automation
+        shell: bash
+        run: |
+          rm -rf .automation
+          rm -f \
+            .github/workflows/recheck-dev.yml \
+            .github/workflows/apply-recheck-patches.yml \
+            .github/workflows/finalize-dev.yml
+          rm -f composer.lock .php-cs-fixer.cache
+
+          git config user.name "Andrey Shelamkoff"
+          git config user.email "inbox.shelamkoff@gmail.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No verified changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Finalize DI verification fixes"
+          git push origin HEAD:dev
