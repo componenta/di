@@ -7,7 +7,7 @@ namespace Componenta\DI\Exception;
 use InvalidArgumentException;
 
 /** Raised when request mapping receives different values for one key. */
-final class RequestDataConflictException extends InvalidArgumentException
+final class RequestDataConflictException extends InvalidArgumentException implements ExceptionInterface
 {
     public function __construct(
         public readonly string|int $key,
