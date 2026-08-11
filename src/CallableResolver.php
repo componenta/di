@@ -140,6 +140,7 @@ class CallableResolver implements CallableResolverInterface
         throw InvalidCallableException::forMissingService($class);
     }
 
+    /** @param array<mixed> $callable */
     protected function resolveArray(array $callable): callable
     {
         if (count($callable) !== 2) {
@@ -147,6 +148,10 @@ class CallableResolver implements CallableResolverInterface
         }
 
         [$objectOrClass, $method] = $callable;
+
+        if (!is_string($method) || $method === '') {
+            throw InvalidCallableException::forValue($callable);
+        }
 
         if (is_object($objectOrClass)) {
             throw InvalidCallableException::forMethod($objectOrClass::class, $method);
