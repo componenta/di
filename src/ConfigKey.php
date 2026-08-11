@@ -27,10 +27,29 @@ final class ConfigKey
     public const string ATTRIBUTE_HANDLERS_REPLACE
         = \Componenta\Config\ConfigKey::ATTRIBUTE_HANDLERS_REPLACE;
 
-
-    /** @return list<string> */
+    /**
+     * Returns only dependency keys implemented by the 3.x DI runtime.
+     *
+     * Do not delegate this list to componenta/config: that package also keeps
+     * historical keys for compatibility with older consumers. Accepting those
+     * keys here would silently preserve removed generated-resolver settings.
+     *
+     * @return list<string>
+     */
     public static function dependencyKeys(): array
     {
-        return \Componenta\Config\ConfigKey::dependencyKeys();
+        return [
+            self::FACTORIES,
+            self::INVOKABLES,
+            self::ALIASES,
+            self::DELEGATORS,
+            self::SERVICES,
+            self::PARAMETER_RESOLVERS,
+            self::PARAMETER_RESOLVERS_REPLACE,
+            self::ATTRIBUTE_HANDLERS,
+            self::ATTRIBUTE_HANDLERS_REPLACE,
+        ];
     }
+
+    private function __construct() {}
 }
