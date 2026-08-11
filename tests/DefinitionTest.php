@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Definition\FactoryDefinition;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Tests\Fixture\ServiceWithParam;
@@ -28,7 +29,25 @@ describe('Definition', function () {
 
         expect($configured)->not->toBe($definition)
             ->and($definition->methodCalls)->toBe([])
-            ->and($configured->methodCalls)->toBe(['boot' => ['warmup']]);
+            ->and($configured->methodCalls)->toBe([
+                ['method' => 'boot', 'params' => ['warmup']],
+            ]);
+    });
+
+    it('preserves repeated method calls instead of overwriting them', function () {
+        $configured = Definition::autowire(SimpleService::class)
+            ->method('boot', ['first'])
+            ->method('boot', ['second']);
+
+        expect($configured->methodCalls)->toBe([
+            ['method' => 'boot', 'params' => ['first']],
+            ['method' => 'boot', 'params' => ['second']],
+        ]);
+    });
+
+    it('rejects empty class definition method names', function () {
+        expect(fn() => Definition::autowire(SimpleService::class)->method(''))
+            ->toThrow(InvalidConfigurationException::class);
     });
 
     it('keeps lazy factory objects intact inside factory definitions', function () {
