@@ -96,7 +96,7 @@ final class TypeHints
                 'false' => $value === false,
                 'bool' => is_bool($value),
                 'int' => is_int($value),
-                'float' => is_float($value),
+                'float' => is_float($value) || is_int($value),
                 'string' => is_string($value),
                 'array' => is_array($value),
                 'object' => is_object($value),
