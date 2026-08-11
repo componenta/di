@@ -58,7 +58,7 @@ readonly class Init
 {
     /**
      * @param mixed $callable Callable to execute for value initialization.
-     * @param array $params Parameters to pass to the callable.
+     * @param array<string|int, mixed> $params Parameters to pass to the callable.
      */
     public function __construct(
         public mixed $callable,
