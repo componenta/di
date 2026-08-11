@@ -9,6 +9,14 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
+final class KnownFactoryClass
+{
+    public function create(): object
+    {
+        return new stdClass();
+    }
+}
+
 it('rejects malformed factory values during container assembly', function (): void {
     $config = new Config([
         ConfigKey::DEPENDENCIES => [
@@ -34,6 +42,19 @@ it('rejects a concrete object factory method that does not exist', function (): 
 
     expect(fn () => ContainerBuilder::configure($config)->build())
         ->toThrow(InvalidConfigurationException::class, 'Factory "invalid.object.factory"');
+});
+
+it('rejects a missing method on a known factory class', function (): void {
+    $config = new Config([
+        ConfigKey::DEPENDENCIES => [
+            ConfigKey::FACTORIES => [
+                'invalid.class.factory' => [KnownFactoryClass::class, 'missing'],
+            ],
+        ],
+    ]);
+
+    expect(fn () => ContainerBuilder::configure($config)->build())
+        ->toThrow(InvalidConfigurationException::class, 'Factory "invalid.class.factory"');
 });
 
 it('accepts a deferred service method factory specification', function (): void {
