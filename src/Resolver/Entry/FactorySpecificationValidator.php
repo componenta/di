@@ -9,7 +9,6 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
-use ReflectionException;
 
 /** Validates the public configuration forms accepted by FactoryResolver. */
 final class FactorySpecificationValidator
@@ -63,16 +62,17 @@ final class FactorySpecificationValidator
     ): void {
         $className = self::runtimeClassName($definition);
 
-        try {
-            /** @var ReflectionClass<object> $class */
-            $class = new ReflectionClass($className);
-        } catch (ReflectionException $e) {
+        if (!class_exists($className) && !interface_exists($className)) {
             throw new InvalidConfigurationException(sprintf(
                 'Class definition for "%s" targets unavailable class "%s".',
                 $id,
                 $className,
-            ), previous: $e);
+            ));
         }
+
+        /** @var class-string $className */
+        /** @var ReflectionClass<object> $class */
+        $class = new ReflectionClass($className);
 
         if (!$class->isInstantiable()) {
             throw new InvalidConfigurationException(sprintf(
