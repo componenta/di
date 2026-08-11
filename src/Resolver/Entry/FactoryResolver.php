@@ -20,7 +20,7 @@ use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 
 /** Resolves container entries using factory callables or class definitions. */
-class FactoryResolver implements DefinitionAwareResolverInterface
+class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
 {
     /** @var array<string, object> */
     private array $compiledShards = [];
@@ -241,6 +241,11 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         FactorySpecificationValidator::assertValid($id, $definition);
         $this->factories[$id] = $definition;
         unset($this->compiledFactories[$id]);
+    }
+
+    public function removeDefinition(string $id): void
+    {
+        unset($this->factories[$id], $this->compiledFactories[$id]);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
