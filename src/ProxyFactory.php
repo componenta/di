@@ -6,7 +6,13 @@ namespace Componenta\DI;
 
 use ReflectionClass;
 
-/** Default PHP 8.4 native lazy-object and virtual-proxy factory. */
+/**
+ * Default {@see ProxyFactoryInterface} implementation backed by PHP 8.4
+ * native lazy objects.
+ *
+ * - {@see makeLazy()} delegates to {@see ReflectionClass::newLazyGhost()}.
+ * - {@see makeProxy()} delegates to {@see ReflectionClass::newLazyProxy()}.
+ */
 final readonly class ProxyFactory implements ProxyFactoryInterface
 {
     /**
@@ -18,6 +24,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
      */
     public function makeLazy(string $class, callable $initializer): object
     {
+        /** @var ReflectionClass<T> $reflection */
         $reflection = new ReflectionClass($class);
 
         return $reflection->newLazyGhost($initializer);
@@ -32,6 +39,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
      */
     public function makeProxy(string $class, callable $factory): object
     {
+        /** @var ReflectionClass<T> $reflection */
         $reflection = new ReflectionClass($class);
 
         return $reflection->newLazyProxy($factory);
