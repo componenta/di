@@ -32,6 +32,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         private readonly ?ProxyFactoryInterface $proxyFactory = null,
     ) {
         foreach ($invokables as $class) {
+            InvokableSpecificationValidator::assertValid($class);
             $this->invokables[$class] = $class;
         }
     }
@@ -54,13 +55,14 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             return match ($this->detectStrategy($class)) {
                 CreationStrategy::Proxy => $this->proxyFactory->makeProxy(
                     $class,
-                    static fn(object $proxy): object => new $class(),
+                    static fn (object $proxy): object => new $class(),
                 ),
                 CreationStrategy::Lazy => $this->proxyFactory->makeLazy(
                     $class,
                     static function (object $entry) use ($class): void {
-                        $constructor = (new ReflectionClass($class))->getConstructor();
-                        $constructor?->invoke($entry);
+                        /** @var ReflectionClass<object> $reflection */
+                        $reflection = new ReflectionClass($class);
+                        $reflection->getConstructor()?->invoke($entry);
                     },
                 ),
                 CreationStrategy::Eager => new $class(),
@@ -78,12 +80,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
 
-        if ($definition->value === '') {
-            throw new InvalidConfigurationException(
-                'Invokable definition requires a non-empty class name.',
-            );
-        }
-
+        InvokableSpecificationValidator::assertValid($definition->value);
         $this->invokables[$id] = $definition->value;
     }
 
@@ -99,13 +96,14 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             return $this->strategyCache[$class];
         }
 
+        /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
         $proxyAttribute = $reflection->getAttributes(Proxy::class)[0] ?? null;
 
         if ($proxyAttribute !== null) {
             $proxy = $proxyAttribute->newInstance();
 
-            if ($proxy->class !== null) {
+            if (!$proxy instanceof Proxy || $proxy->class !== null) {
                 throw new LogicException(
                     'Class-level #[Proxy] must not specify a proxy class; the marked class is used.',
                 );
