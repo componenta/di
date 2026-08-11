@@ -55,8 +55,8 @@ final class InvokableSpecificationValidator
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
         $constructor = $reflection->getConstructor();
-        $hasConstructorParameters = $constructor !== null
-            && $constructor->getNumberOfParameters() > 0;
+        $hasRequiredConstructorParameters = $constructor !== null
+            && $constructor->getNumberOfRequiredParameters() > 0;
         $proxyAttribute = $reflection->getAttributes(Proxy::class)[0] ?? null;
 
         if ($proxyAttribute !== null) {
@@ -80,15 +80,15 @@ final class InvokableSpecificationValidator
         // Native lazy ghosts can initialize a private no-argument constructor
         // through reflection. Eager entries and virtual proxies need an
         // ordinarily instantiable class because their backing object is built
-        // with `new $class()`. Constructor parameters are rejected even when
-        // optional: the invokable path intentionally performs no parameter
-        // resolution, while reflection/compiled autowiring does.
+        // with `new $class()`. Optional constructor parameters are allowed on
+        // this explicit fast path and use their PHP defaults; required
+        // dependencies belong on the normal reflection/compiled DI path.
         if (!$isStructurallyConcrete
-            || $hasConstructorParameters
+            || $hasRequiredConstructorParameters
             || (!$isLazy && !$reflection->isInstantiable())
         ) {
             throw new InvalidConfigurationException(sprintf(
-                'Invokable class "%s" must be concrete and declare no constructor parameters.',
+                'Invokable class "%s" must be concrete and require no constructor arguments.',
                 $class,
             ));
         }
