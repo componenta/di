@@ -7,7 +7,9 @@ use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Fixture\InvokableWithInjectedProperty;
 
 final class InvokableWithRequiredDependency
 {
@@ -54,4 +56,20 @@ it('keeps private no-argument constructors available to native lazy invokables',
 
     expect($entry)->toBeInstanceOf(ConfiguredPrivateLazyInvokable::class)
         ->and($entry->initialized)->toBeTrue();
+});
+
+it('rejects configured invokables that require the attribute lifecycle pipeline', function (): void {
+    expect(fn() => (new ContainerBuilder())
+        ->addInvokable(InvokableWithInjectedProperty::class)
+        ->build())
+        ->toThrow(InvalidConfigurationException::class, 'attribute lifecycle');
+});
+
+it('rejects runtime invokable definitions that require the attribute lifecycle pipeline', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    expect(fn() => $container->set(
+        'service',
+        Definition::invokable(InvokableWithInjectedProperty::class),
+    ))->toThrow(InvalidConfigurationException::class, 'attribute lifecycle');
 });
