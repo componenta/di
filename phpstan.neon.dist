@@ -2,4 +2,6 @@ parameters:
     level: max
     paths:
         - src
+    stubFiles:
+        - phpstan/FactoryCodeGenerator.stub
     treatPhpDocTypesAsCertain: false
