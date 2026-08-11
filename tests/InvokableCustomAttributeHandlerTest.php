@@ -12,8 +12,6 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Fixture\CustomInvokableLifecycle;
 use Componenta\DI\Tests\Fixture\InvokableWithCustomLifecycle;
-use ReflectionClass;
-use Reflector;
 
 function customInvokableLifecycleHandler(): AttributeHandlerInterface
 {
