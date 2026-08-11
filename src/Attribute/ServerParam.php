@@ -25,7 +25,7 @@ readonly class ServerParam implements ExtractorInterface, CastableInterface
         if ($value === null) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required server parameter "%s" is missing', $this->name)
+                    sprintf('Required server parameter "%s" is missing', $this->name),
                 );
             }
 

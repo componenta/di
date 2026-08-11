@@ -82,7 +82,7 @@ describe('Resolver\\Parameter\\Request\\RequestMapperPipeline', function () {
         });
 
         it('throws InvalidArgumentException when a required source key is missing', function () {
-            expect(fn () => runPipeline(
+            expect(fn() => runPipeline(
                 data: [],
                 map: ['src' => 'target'],
             ))->toThrow(InvalidArgumentException::class, 'Required key "src" is missing');
@@ -158,7 +158,7 @@ describe('Resolver\\Parameter\\Request\\RequestMapperPipeline', function () {
         });
 
         it('throws CasterNotFoundException when the caster is not registered', function () {
-            expect(fn () => runPipeline(
+            expect(fn() => runPipeline(
                 data: ['k' => 'v'],
                 cast: ['k' => 'unknown'],
                 provider: pipelineProvider([]),

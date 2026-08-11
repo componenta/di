@@ -46,7 +46,7 @@ describe('Resolver\\Entry\\SetUp\\EntryIdUnwrapper', function () {
     it('propagates NotFoundException when the entry is not registered', function () {
         $unwrapper = new EntryIdUnwrapper(entryIdUnwrapperContainer([]));
 
-        expect(fn () => $unwrapper->unwrap(new EntryId('absent'), 'k'))
+        expect(fn() => $unwrapper->unwrap(new EntryId('absent'), 'k'))
             ->toThrow(NotFoundException::class);
     });
 });

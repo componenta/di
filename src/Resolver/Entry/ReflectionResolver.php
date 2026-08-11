@@ -6,8 +6,8 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeExecutionPlan;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use Componenta\Reflection\Reflection;
@@ -69,8 +69,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
     private function buildEager(
         ObjectCreationContext $context,
         AttributeExecutionPlan $plan,
-    ): object
-    {
+    ): object {
         try {
             $entry = $context->constructorEnabled
                 ? $this->instanceCreator->create($context->class, $context->parameters)
@@ -89,8 +88,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
     private function buildLazy(
         ObjectCreationContext $context,
         AttributeExecutionPlan $plan,
-    ): object
-    {
+    ): object {
         return $this->proxyFactory->makeLazy(
             $context->class->getName(),
             function (object $entry) use ($context, $plan): void {
@@ -121,8 +119,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
     private function buildVirtualProxy(
         ObjectCreationContext $context,
         AttributeExecutionPlan $plan,
-    ): object
-    {
+    ): object {
         return $this->proxyFactory->makeProxy(
             $context->class->getName(),
             fn(object $proxy): object => $this->buildEager($context->freshAttempt(), $plan),
@@ -133,8 +130,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
         ObjectCreationContext $context,
         object $entry,
         AttributeExecutionPlan $plan,
-    ): void
-    {
+    ): void {
         $context->initialize($entry);
 
         $this->attributes->processPlan(

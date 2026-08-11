@@ -9,7 +9,6 @@ use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -134,7 +133,7 @@ describe('ContainerBuilder', function () {
 
     it('materializes custom pipeline extensions before build returns', function () {
         $materialized = false;
-        $resolver = new class implements \Componenta\DI\Resolver\Parameter\ParameterResolverInterface {
+        $resolver = new class () implements \Componenta\DI\Resolver\Parameter\ParameterResolverInterface {
             public function supports(
                 \Componenta\DI\Resolver\Target\ParameterTarget $target,
             ): bool {
@@ -337,14 +336,14 @@ describe('ContainerBuilder', function () {
                 ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => [
-                        'builder.conflict' => static fn () => new \stdClass(),
+                        'builder.conflict' => static fn() => new \stdClass(),
                     ],
                 ],
             ],
         );
         $builder->addService('builder.conflict', new \stdClass());
 
-        expect(fn () => $builder->build())
+        expect(fn() => $builder->build())
             ->toThrow(InvalidConfigurationException::class);
     });
 

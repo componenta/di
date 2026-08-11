@@ -15,7 +15,7 @@ it('rejects removed generated-entry-resolver configuration keys', function (stri
         ],
     ]);
 
-    expect(fn () => ContainerBuilder::configure($config))
+    expect(fn() => ContainerBuilder::configure($config))
         ->toThrow(InvalidConfigurationException::class, $key);
 })->with([
     SharedConfigKey::GENERATED_ENTRY_RESOLVER_FILE,

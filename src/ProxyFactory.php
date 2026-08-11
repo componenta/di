@@ -18,7 +18,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
     /**
      * @template T of object
      * @param class-string<T> $class
-     * @param callable(T): mixed $initializer
+     * @param callable(T): void $initializer
      * @return T
      * @throws \ReflectionException
      */

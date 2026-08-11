@@ -111,7 +111,10 @@ describe('Attribute\\RequestMapper', function () {
             $caster = new class () implements CasterInterface {
                 public string $name { get => 'int'; }
 
-                public function cast(mixed $value): mixed { return (int) $value; }
+                public function cast(mixed $value): mixed
+                {
+                    return (int) $value;
+                }
             };
             $provider = new class ($caster) implements CasterProviderInterface {
                 public function __construct(private CasterInterface $caster) {}
@@ -173,7 +176,10 @@ describe('Attribute\\RequestMapper', function () {
 
         it('stores an assigned provider', function () {
             $custom = new class () implements CasterProviderInterface {
-                public function provide(string $name): ?CasterInterface { return null; }
+                public function provide(string $name): ?CasterInterface
+                {
+                    return null;
+                }
             };
             $mapper = new MapQueryString();
 

@@ -74,7 +74,7 @@ it('uses an explicit concrete class for interface-typed virtual proxies', functi
     $container = (new ContainerBuilder())
         ->addFactory(
             ProxyInjectionContract::class,
-            static fn (): ProxyInjectionContract => new ProxyInjectionService(),
+            static fn(): ProxyInjectionContract => new ProxyInjectionService(),
         )
         ->build();
 
@@ -88,7 +88,7 @@ it('separates an arbitrary service id from its concrete proxy class', function (
     $container = (new ContainerBuilder())
         ->addFactory(
             'proxy.service',
-            static fn (): ProxyInjectionContract => new ProxyInjectionService('service-id'),
+            static fn(): ProxyInjectionContract => new ProxyInjectionService('service-id'),
         )
         ->build();
 
@@ -101,11 +101,11 @@ it('rejects an interface proxy when no concrete class can be inferred', function
     $container = (new ContainerBuilder())
         ->addFactory(
             ProxyInjectionContract::class,
-            static fn (): ProxyInjectionContract => new ProxyInjectionService(),
+            static fn(): ProxyInjectionContract => new ProxyInjectionService(),
         )
         ->build();
 
-    expect(fn () => $container->make(AmbiguousInterfaceProxyConsumer::class))
+    expect(fn() => $container->make(AmbiguousInterfaceProxyConsumer::class))
         ->toThrow(
             ResolutionException::class,
             'specify #[Proxy(ConcreteClass::class)]',
@@ -115,7 +115,7 @@ it('rejects an interface proxy when no concrete class can be inferred', function
 it('rejects a concrete proxy class incompatible with the declared type', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    expect(fn () => $container->make(IncompatibleInterfaceProxyConsumer::class))
+    expect(fn() => $container->make(IncompatibleInterfaceProxyConsumer::class))
         ->toThrow(
             ResolutionException::class,
             'is incompatible with declared type',
@@ -126,11 +126,11 @@ it('rejects a backing object that is not an instance of the proxy class', functi
     $container = (new ContainerBuilder())
         ->addFactory(
             'wrong.proxy.service',
-            static fn (): object => new stdClass(),
+            static fn(): object => new stdClass(),
         )
         ->build();
     $consumer = $container->make(WrongBackingProxyConsumer::class);
 
-    expect(fn () => $consumer->service->value())
+    expect(fn() => $consumer->service->value())
         ->toThrow(LogicException::class, 'must be an instance of');
 });

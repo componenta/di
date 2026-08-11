@@ -131,7 +131,7 @@ final class MakeAttributeResolver implements
     /**
      * @param class-string|null $typeName
      * @return array{
-     *     entry: string,
+     *     entry: non-empty-string,
      *     params: array<string, mixed>,
      *     proxyClass: class-string<object>|null
      * }
@@ -144,6 +144,10 @@ final class MakeAttributeResolver implements
     ): array {
         $entry = $make->entry ?? $typeName ?? $name;
 
+        if ($entry === '') {
+            throw new LogicException('Make entry must be a non-empty string.');
+        }
+
         return [
             'entry' => $entry,
             'params' => $make->params ?? [],
@@ -154,6 +158,7 @@ final class MakeAttributeResolver implements
     }
 
     /**
+     * @param non-empty-string $entry
      * @param class-string|null $typeName
      * @return class-string<object>
      */
@@ -233,7 +238,7 @@ final class MakeAttributeResolver implements
 
     /**
      * @param array{
-     *     entry: string,
+     *     entry: non-empty-string,
      *     params: array<string, mixed>,
      *     proxyClass: class-string<object>|null
      * } $config
@@ -254,6 +259,7 @@ final class MakeAttributeResolver implements
     /**
      * @template T of object
      * @param class-string<T> $proxyClass
+     * @param non-empty-string $entry
      * @param array<string, mixed> $params
      * @return T
      */

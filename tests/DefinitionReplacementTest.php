@@ -11,7 +11,7 @@ final readonly class ReplacementInvokableService {}
 it('uses the latest runtime definition when its resolver kind changes', function (): void {
     $container = minimalContainer();
 
-    $container->set('service', Definition::factory(static fn () => 'from-factory'));
+    $container->set('service', Definition::factory(static fn() => 'from-factory'));
     expect($container->get('service'))->toBe('from-factory');
 
     $container->set('service', Definition::invokable(ReplacementInvokableService::class));

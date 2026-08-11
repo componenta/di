@@ -140,6 +140,7 @@ final class FactoryCodeGenerator
         );
     }
 
+    /** @param ReflectionClass<object> $class */
     private function reset(ReflectionClass $class): void
     {
         $this->factory = new FactoryCode();
@@ -293,15 +294,15 @@ PHP,
         }
 
         $body[] = sprintf(
-                <<<'PHP'
+            <<<'PHP'
 $creation = new \%s(
     class: self::%s(),
     parameters: $parameters,
 );
 PHP,
-                ObjectCreationContext::class,
-                $this->classHelper(),
-            );
+            ObjectCreationContext::class,
+            $this->classHelper(),
+        );
 
         if ($beforeCode !== '') {
             $body[] = $beforeCode;

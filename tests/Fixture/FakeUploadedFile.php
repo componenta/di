@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Fixture;
 
+use BadMethodCallException;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
-use BadMethodCallException;
 
 /**
  * Minimal UploadedFileInterface fake. Tests use it only as an identity
@@ -30,8 +30,20 @@ final class FakeUploadedFile implements UploadedFileInterface
         throw new BadMethodCallException('moveTo() not supported by fixture');
     }
 
-    public function getSize(): ?int { return null; }
-    public function getError(): int { return $this->error; }
-    public function getClientFilename(): ?string { return $this->clientFilename; }
-    public function getClientMediaType(): ?string { return null; }
+    public function getSize(): ?int
+    {
+        return null;
+    }
+    public function getError(): int
+    {
+        return $this->error;
+    }
+    public function getClientFilename(): ?string
+    {
+        return $this->clientFilename;
+    }
+    public function getClientMediaType(): ?string
+    {
+        return null;
+    }
 }

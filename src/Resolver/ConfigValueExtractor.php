@@ -119,6 +119,7 @@ final readonly class ConfigValueExtractor
                 );
             }
 
+            /** @var array<string, mixed>|ArrayAccess<string, mixed> $entry */
             if (!$this->hasKey($entry, $key)) {
                 if ($default !== DefaultValue::None) {
                     return $default;

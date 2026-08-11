@@ -33,14 +33,14 @@ it('supports atomic field swaps', function (): void {
 });
 
 it('rejects overwriting an unmapped input field', function (): void {
-    expect(fn () => runCollisionMapping(
+    expect(fn() => runCollisionMapping(
         ['a' => 1, 'c' => 3],
         ['a' => 'c'],
     ))->toThrow(InvalidArgumentException::class, 'already exists in input');
 });
 
 it('rejects two source fields mapped to one target', function (): void {
-    expect(fn () => runCollisionMapping(
+    expect(fn() => runCollisionMapping(
         ['a' => 1, 'b' => 2],
         ['a' => 'c', 'b' => 'c'],
     ))->toThrow(InvalidArgumentException::class, 'produced by both');

@@ -12,8 +12,14 @@ use Psr\Container\ContainerInterface;
 function stubContainer(): ContainerInterface
 {
     return new class () implements ContainerInterface {
-        public function get(string $id): mixed { return null; }
-        public function has(string $id): bool { return false; }
+        public function get(string $id): mixed
+        {
+            return null;
+        }
+        public function has(string $id): bool
+        {
+            return false;
+        }
     };
 }
 
@@ -66,9 +72,9 @@ describe('DelegatorRegistry', function () {
 
         it('applies delegators in registration order, threading the return value', function () {
             $registry = new DelegatorRegistry(recordingResolver());
-            $registry->register('svc', fn ($e) => $e . '-1');
-            $registry->register('svc', fn ($e) => $e . '-2');
-            $registry->register('svc', fn ($e) => $e . '-3');
+            $registry->register('svc', fn($e) => $e . '-1');
+            $registry->register('svc', fn($e) => $e . '-2');
+            $registry->register('svc', fn($e) => $e . '-3');
 
             expect($registry->apply('svc', 'base', stubContainer()))
                 ->toBe('base-1-2-3');
@@ -77,7 +83,7 @@ describe('DelegatorRegistry', function () {
         it('uses a Closure delegator directly without going through the callable resolver', function () {
             $resolver = recordingResolver();
             $registry = new DelegatorRegistry($resolver);
-            $registry->register('svc', fn ($e) => $e);
+            $registry->register('svc', fn($e) => $e);
 
             $registry->apply('svc', 'v', stubContainer());
 
@@ -88,7 +94,10 @@ describe('DelegatorRegistry', function () {
             $resolver = recordingResolver();
             $registry = new DelegatorRegistry($resolver);
             $invokable = new class () {
-                public function __invoke($entry) { return $entry . '-invoked'; }
+                public function __invoke($entry)
+                {
+                    return $entry . '-invoked';
+                }
             };
 
             $registry->register('svc', $invokable);
@@ -99,7 +108,7 @@ describe('DelegatorRegistry', function () {
 
         it('resolves non-callable registrations via the CallableResolver', function () {
             $resolver = recordingResolver([
-                'my.delegator' => fn ($e) => $e . '-resolved',
+                'my.delegator' => fn($e) => $e . '-resolved',
             ]);
             $registry = new DelegatorRegistry($resolver);
             $registry->register('svc', 'my.delegator');
@@ -112,7 +121,7 @@ describe('DelegatorRegistry', function () {
 
         it('caches resolved callables across repeated apply() calls', function () {
             $resolver = recordingResolver([
-                'my.delegator' => fn ($e) => $e,
+                'my.delegator' => fn($e) => $e,
             ]);
             $registry = new DelegatorRegistry($resolver);
             $registry->register('svc', 'my.delegator');
@@ -126,13 +135,13 @@ describe('DelegatorRegistry', function () {
 
         it('re-resolves after register() invalidates the cache', function () {
             $resolver = recordingResolver([
-                'my.delegator' => fn ($e) => $e,
+                'my.delegator' => fn($e) => $e,
             ]);
             $registry = new DelegatorRegistry($resolver);
             $registry->register('svc', 'my.delegator');
             $registry->apply('svc', 'v', stubContainer());
 
-            $registry->register('svc', fn ($e) => $e);
+            $registry->register('svc', fn($e) => $e);
             $registry->apply('svc', 'v', stubContainer());
 
             // New chain (string + closure) must be normalised again => +1 call.
@@ -141,7 +150,7 @@ describe('DelegatorRegistry', function () {
 
         it('re-resolves after invalidate() drops the cache', function () {
             $resolver = recordingResolver([
-                'my.delegator' => fn ($e) => $e,
+                'my.delegator' => fn($e) => $e,
             ]);
             $registry = new DelegatorRegistry($resolver);
             $registry->register('svc', 'my.delegator');
@@ -155,7 +164,7 @@ describe('DelegatorRegistry', function () {
 
         it('keeps raw registrations on invalidate(); apply still runs the delegator', function () {
             $registry = new DelegatorRegistry(recordingResolver());
-            $registry->register('svc', fn ($e) => $e . '-x');
+            $registry->register('svc', fn($e) => $e . '-x');
 
             $registry->invalidate('svc');
 
@@ -209,7 +218,7 @@ describe('DelegatorRegistry', function () {
             $registry = new DelegatorRegistry($failing);
             $registry->register('svc', 'unresolvable');
 
-            expect(fn () => $registry->apply('svc', 'v', stubContainer()))
+            expect(fn() => $registry->apply('svc', 'v', stubContainer()))
                 ->toThrow(DelegatorException::class);
         });
     });

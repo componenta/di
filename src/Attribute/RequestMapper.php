@@ -113,7 +113,7 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      *
      * @var array<string, string>
      */
-    protected(set) array $map = [];
+    public protected(set) array $map = [];
 
     /** @param array<string, string> $map */
     public function __construct(

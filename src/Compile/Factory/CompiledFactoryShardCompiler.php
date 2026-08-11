@@ -94,7 +94,8 @@ final readonly class CompiledFactoryShardCompiler
 
     private function code(string $namespace, string $class, string $methods): string
     {
-        return sprintf(<<<'PHP'
+        return sprintf(
+            <<<'PHP'
 <?php
 
 declare(strict_types=1);

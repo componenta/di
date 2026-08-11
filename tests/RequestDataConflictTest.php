@@ -30,7 +30,7 @@ it('rejects a payload value that conflicts with a request attribute', function (
         ->withAttribute('id', 10)
         ->withParsedBody(['id' => 20]);
 
-    expect(fn () => (new PayloadWithRouteId())->extract($request))
+    expect(fn() => (new PayloadWithRouteId())->extract($request))
         ->toThrow(RequestDataConflictException::class, 'request attributes and parsed body');
 });
 
@@ -39,7 +39,7 @@ it('rejects a query value that conflicts with a request attribute', function ():
         ->withAttribute('id', 10)
         ->withQueryParams(['id' => 20]);
 
-    expect(fn () => (new QueryWithRouteId())->extract($request))
+    expect(fn() => (new QueryWithRouteId())->extract($request))
         ->toThrow(RequestDataConflictException::class, 'request attributes and query string');
 });
 
@@ -48,7 +48,7 @@ it('rejects a conflict between shared request attributes and uploaded files', fu
         ->withAttribute('id', 10)
         ->withUploadedFiles(['id' => new FakeUploadedFile()]);
 
-    expect(fn () => (new PayloadWithSharedIdSources())->extract($request))
+    expect(fn() => (new PayloadWithSharedIdSources())->extract($request))
         ->toThrow(RequestDataConflictException::class, 'request attributes and uploaded files');
 });
 

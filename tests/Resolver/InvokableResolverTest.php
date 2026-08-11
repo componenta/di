@@ -6,7 +6,6 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Tests\Fixture\ServiceWithoutConstructor;
@@ -65,17 +64,14 @@ describe('Resolver\\InvokableResolver', function () {
                 ->and($instance->tag)->toBe('empty');
         });
 
-        it('rejects a concrete proxy override on a class-level Proxy attribute', function () {
-            $resolver = new InvokableResolver(
+        it('rejects a concrete proxy override on a class-level Proxy attribute before resolution', function () {
+            expect(fn() => new InvokableResolver(
                 [InvalidInvokableClassProxy::class],
                 new ProxyFactory(),
+            ))->toThrow(
+                InvalidConfigurationException::class,
+                'Class-level #[Proxy] must not specify a proxy class',
             );
-
-            expect(fn () => $resolver->resolve(InvalidInvokableClassProxy::class))
-                ->toThrow(
-                    ResolutionException::class,
-                    'Class-level #[Proxy] must not specify a proxy class',
-                );
         });
     });
 
@@ -84,7 +80,7 @@ describe('Resolver\\InvokableResolver', function () {
             $resolver = new InvokableResolver([]);
 
             expect($resolver->supportsDefinition(new InvokableDefinition(SimpleService::class)))->toBeTrue()
-                ->and($resolver->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeFalse();
+                ->and($resolver->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeFalse();
         });
 
         it('setDefinition registers the class, making can() and resolve() succeed', function () {
@@ -99,7 +95,7 @@ describe('Resolver\\InvokableResolver', function () {
         it('setDefinition rejects unsupported definition types', function () {
             $resolver = new InvokableResolver([]);
 
-            expect(fn () => $resolver->setDefinition('x', new FactoryDefinition(fn () => null)))
+            expect(fn() => $resolver->setDefinition('x', new FactoryDefinition(fn() => null)))
                 ->toThrow(InvalidConfigurationException::class);
         });
     });

@@ -33,7 +33,7 @@ it('rejects request mapping to more than one possible DTO class', function (): v
         (new ServerRequest('POST', '/'))->withParsedBody([]),
     ));
 
-    expect(fn () => $resolver->resolveParameter(new ParameterTarget($parameter), $context))
+    expect(fn() => $resolver->resolveParameter(new ParameterTarget($parameter), $context))
         ->toThrow(
             ResolutionException::class,
             'request DTO mapping requires exactly one class type',

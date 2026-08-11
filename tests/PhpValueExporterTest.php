@@ -22,5 +22,5 @@ it('exports only compiler-safe PHP literals', function (): void {
 
 it('declines objects and closures so the compiler can use its runtime fallback', function (): void {
     expect(PhpValueExporter::export(new stdClass()))->toBeNull()
-        ->and(PhpValueExporter::export(static fn (): int => 1))->toBeNull();
+        ->and(PhpValueExporter::export(static fn(): int => 1))->toBeNull();
 });

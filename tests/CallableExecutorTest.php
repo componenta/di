@@ -39,7 +39,7 @@ describe('CallableExecutor', function () {
                 }
             };
 
-            $result = makeExecutor(parametersResolver: $parametersResolver)->call(fn () => 'done');
+            $result = makeExecutor(parametersResolver: $parametersResolver)->call(fn() => 'done');
 
             expect($result)->toBe('done')
                 ->and($parametersResolver->calls)->toBe(0);
@@ -48,7 +48,7 @@ describe('CallableExecutor', function () {
         it('passes provided parameters to the callable by name', function () {
             $executor = makeExecutor();
 
-            $result = $executor->call(fn (int $a, int $b) => $a - $b, ['a' => 10, 'b' => 3]);
+            $result = $executor->call(fn(int $a, int $b) => $a - $b, ['a' => 10, 'b' => 3]);
 
             expect($result)->toBe(7);
         });
@@ -56,7 +56,7 @@ describe('CallableExecutor', function () {
         it('passes provided parameters to the callable by position', function () {
             $executor = makeExecutor();
 
-            $result = $executor->call(fn (int $a, int $b) => $a - $b, [10, 3]);
+            $result = $executor->call(fn(int $a, int $b) => $a - $b, [10, 3]);
 
             expect($result)->toBe(7);
         });
@@ -64,7 +64,7 @@ describe('CallableExecutor', function () {
         it('throws ResolutionException when a parameter cannot be resolved', function () {
             $executor = makeExecutor();
 
-            expect(fn () => $executor->call(fn (int $missing) => $missing))
+            expect(fn() => $executor->call(fn(int $missing) => $missing))
                 ->toThrow(ResolutionException::class);
         });
 
@@ -72,7 +72,7 @@ describe('CallableExecutor', function () {
             $executor = makeExecutor();
             $boom = new DomainException('from callable');
 
-            expect(fn () => $executor->call(function () use ($boom) {
+            expect(fn() => $executor->call(function () use ($boom) {
                 throw $boom;
             }))->toThrow($boom);
         });
@@ -80,7 +80,7 @@ describe('CallableExecutor', function () {
         it('forwards resolver failures as InvalidCallableException', function () {
             $executor = makeExecutor();
 
-            expect(fn () => $executor->call('this-is-not-a-callable'))
+            expect(fn() => $executor->call('this-is-not-a-callable'))
                 ->toThrow(InvalidCallableException::class);
         });
     });
@@ -93,7 +93,7 @@ describe('CallableExecutor', function () {
                 public function resolve(mixed $callable): callable
                 {
                     $this->inputs[] = $callable;
-                    return fn () => 'resolved';
+                    return fn() => 'resolved';
                 }
             };
             $executor = makeExecutor(callableResolver: $recording);

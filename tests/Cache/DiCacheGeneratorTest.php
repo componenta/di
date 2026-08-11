@@ -100,9 +100,9 @@ describe('Cache\\DiCacheGenerator', function () {
     it('throws InvalidConfigurationException when the config contains unserialisable values', function () {
         $generator = new DiCacheGenerator();
         // Closures cannot be serialised to PHP source by Export::pretty().
-        $config = ['factory' => fn () => 'unserialisable'];
+        $config = ['factory' => fn() => 'unserialisable'];
 
-        expect(fn () => $generator->generate($config, $this->path))
+        expect(fn() => $generator->generate($config, $this->path))
             ->toThrow(InvalidConfigurationException::class);
     });
 });

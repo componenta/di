@@ -70,7 +70,7 @@ describe('Resolver\\CompositeResolver', function () {
         $composite = new CompositeResolver();
         $composite->addResolver(entryResolver([]));
 
-        expect(fn () => $composite->resolve('missing'))
+        expect(fn() => $composite->resolve('missing'))
             ->toThrow(NotFoundException::class);
     });
 
@@ -90,7 +90,10 @@ describe('Resolver\\CompositeResolver', function () {
         $capturing = new class () implements EntryResolverInterface {
             public array $context = [];
 
-            public function can(string $id): bool { return $id === 'svc'; }
+            public function can(string $id): bool
+            {
+                return $id === 'svc';
+            }
             public function resolve(string $id, array $context = []): mixed
             {
                 $this->context = $context;
@@ -153,7 +156,7 @@ describe('Resolver\\CompositeResolver', function () {
             $composite = new CompositeResolver();
             $composite->addResolver(entryResolver([]));
 
-            expect($composite->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeFalse();
+            expect($composite->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeFalse();
         });
 
         it('forwards setDefinition to the first supporting resolver', function () {
@@ -163,7 +166,7 @@ describe('Resolver\\CompositeResolver', function () {
             $composite->addResolver($plain);
             $composite->addResolver($aware);
 
-            $definition = new FactoryDefinition(fn () => 'value');
+            $definition = new FactoryDefinition(fn() => 'value');
             $composite->setDefinition('svc', $definition);
 
             expect($aware->definitions)->toBe(['svc' => $definition]);
@@ -176,7 +179,7 @@ describe('Resolver\\CompositeResolver', function () {
             $composite = new CompositeResolver();
             $composite->addResolver(definitionAwareResolver(supported: [FactoryDefinition::class]));
 
-            expect(fn () => $composite->setDefinition('svc', $unsupportedDefinition))
+            expect(fn() => $composite->setDefinition('svc', $unsupportedDefinition))
                 ->toThrow(InvalidConfigurationException::class);
         });
 
@@ -186,7 +189,7 @@ describe('Resolver\\CompositeResolver', function () {
             $composite->addResolver($aware);
 
             expect($composite->can('svc'))->toBeFalse();
-            $composite->setDefinition('svc', new FactoryDefinition(fn () => 'v'));
+            $composite->setDefinition('svc', new FactoryDefinition(fn() => 'v'));
 
             expect($composite->can('svc'))->toBeTrue();
         });

@@ -22,7 +22,7 @@ it('rejects a keyed invokable that conflicts with an existing alias', function (
         ],
     ]);
 
-    expect(fn () => ContainerBuilder::configure($config))
+    expect(fn() => ContainerBuilder::configure($config))
         ->toThrow(
             InvalidConfigurationException::class,
             'Invokable alias "handler" conflicts',
@@ -49,7 +49,7 @@ it('rejects a conflicting fluent invokable alias registration', function (): voi
     $builder = (new ContainerBuilder())
         ->addAlias('handler', ExistingInvokableAliasTarget::class);
 
-    expect(fn () => $builder->addInvokable(
+    expect(fn() => $builder->addInvokable(
         'handler',
         RequestedInvokableAliasTarget::class,
     ))->toThrow(

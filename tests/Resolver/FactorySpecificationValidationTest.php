@@ -18,7 +18,7 @@ it('rejects malformed factory values during container assembly', function (): vo
         ],
     ]);
 
-    expect(fn () => ContainerBuilder::configure($config)->build())
+    expect(fn() => ContainerBuilder::configure($config)->build())
         ->toThrow(InvalidConfigurationException::class, 'Factory "invalid.factory"');
 });
 
@@ -32,7 +32,7 @@ it('rejects a concrete object factory method that does not exist', function (): 
         ],
     ]);
 
-    expect(fn () => ContainerBuilder::configure($config)->build())
+    expect(fn() => ContainerBuilder::configure($config)->build())
         ->toThrow(InvalidConfigurationException::class, 'Factory "invalid.object.factory"');
 });
 
@@ -65,7 +65,7 @@ it('accepts a class-shaped service id whose runtime object may add the factory m
 it('rejects an incomplete compiled definition registered at runtime', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    expect(fn () => $container->set(
+    expect(fn() => $container->set(
         'invalid.compiled',
         new CompiledFactoryDefinition('', '', ''),
     ))->toThrow(InvalidConfigurationException::class);

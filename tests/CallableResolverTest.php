@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Componenta\DI\CallableResolver;
 use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\NullContainer;
+
 require_once __DIR__ . '/Fixture/functions.php';
 
 use Componenta\DI\Tests\Fixture\InvokableService;
@@ -35,7 +36,7 @@ function mapContainer(array $entries): ContainerInterface
 describe('CallableResolver', function () {
     describe('closures and callable objects', function () {
         it('returns a Closure as-is', function () {
-            $closure = fn () => 'ok';
+            $closure = fn() => 'ok';
 
             $resolver = new CallableResolver(new NullContainer());
 
@@ -80,21 +81,21 @@ describe('CallableResolver', function () {
         it('throws when the class in Class::method does not exist', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve('NoSuchClass::someMethod'))
+            expect(fn() => $resolver->resolve('NoSuchClass::someMethod'))
                 ->toThrow(InvalidCallableException::class);
         });
 
         it('throws with forMethod variant when the method is missing', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve(ServiceWithMethods::class . '::missing'))
+            expect(fn() => $resolver->resolve(ServiceWithMethods::class . '::missing'))
                 ->toThrow(InvalidCallableException::class, 'missing');
         });
 
         it('throws when an instance method is requested but the class is not in the container', function () {
             $resolver = new CallableResolver(mapContainer([]));
 
-            expect(fn () => $resolver->resolve(ServiceWithMethods::class . '::instanceMethod'))
+            expect(fn() => $resolver->resolve(ServiceWithMethods::class . '::instanceMethod'))
                 ->toThrow(InvalidCallableException::class);
         });
     });
@@ -112,7 +113,7 @@ describe('CallableResolver', function () {
         it('throws when the container entry is not callable', function () {
             $resolver = new CallableResolver(mapContainer(['plain' => new NonInvokableService()]));
 
-            expect(fn () => $resolver->resolve('plain'))
+            expect(fn() => $resolver->resolve('plain'))
                 ->toThrow(InvalidCallableException::class, 'not invokable');
         });
 
@@ -127,14 +128,14 @@ describe('CallableResolver', function () {
         it('reports an existing class as a missing service (needs container wiring)', function () {
             $resolver = new CallableResolver(mapContainer([]));
 
-            expect(fn () => $resolver->resolve(InvokableService::class))
+            expect(fn() => $resolver->resolve(InvokableService::class))
                 ->toThrow(InvalidCallableException::class);
         });
 
         it('throws for an unknown string that is neither service nor function nor class', function () {
             $resolver = new CallableResolver(mapContainer([]));
 
-            expect(fn () => $resolver->resolve('totally.unknown.token'))
+            expect(fn() => $resolver->resolve('totally.unknown.token'))
                 ->toThrow(InvalidCallableException::class);
         });
     });
@@ -143,14 +144,14 @@ describe('CallableResolver', function () {
         it('rejects arrays that are not exactly length 2', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve([ServiceWithMethods::class]))
+            expect(fn() => $resolver->resolve([ServiceWithMethods::class]))
                 ->toThrow(InvalidCallableException::class);
         });
 
         it('rejects a non-string method without leaking a native TypeError', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve([ServiceWithMethods::class, 123]))
+            expect(fn() => $resolver->resolve([ServiceWithMethods::class, 123]))
                 ->toThrow(InvalidCallableException::class);
         });
 
@@ -174,35 +175,35 @@ describe('CallableResolver', function () {
         it('throws when [class-string, method] targets an instance method but the container has no entry', function () {
             $resolver = new CallableResolver(mapContainer([]));
 
-            expect(fn () => $resolver->resolve([ServiceWithMethods::class, 'instanceMethod']))
+            expect(fn() => $resolver->resolve([ServiceWithMethods::class, 'instanceMethod']))
                 ->toThrow(InvalidCallableException::class);
         });
 
         it('throws when the class part does not exist', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve(['NoSuchClass', 'someMethod']))
+            expect(fn() => $resolver->resolve(['NoSuchClass', 'someMethod']))
                 ->toThrow(InvalidCallableException::class);
         });
 
         it('throws when the method does not exist on the object', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve([new ServiceWithMethods(), 'nope']))
+            expect(fn() => $resolver->resolve([new ServiceWithMethods(), 'nope']))
                 ->toThrow(InvalidCallableException::class);
         });
 
         it('throws for arrays whose first element is neither object nor string', function () {
             $resolver = new CallableResolver(new NullContainer());
 
-            expect(fn () => $resolver->resolve([42, 'foo']))
+            expect(fn() => $resolver->resolve([42, 'foo']))
                 ->toThrow(InvalidCallableException::class);
         });
     });
 
     describe('unsupported input types', function () {
         it('throws InvalidCallableException for integers', function () {
-            expect(fn () => (new CallableResolver(new NullContainer()))->resolve(123))
+            expect(fn() => (new CallableResolver(new NullContainer()))->resolve(123))
                 ->toThrow(InvalidCallableException::class);
         });
     });

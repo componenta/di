@@ -12,7 +12,7 @@ interface LazyObjectFactoryInterface
     /**
      * @template T of object
      * @param class-string<T> $class
-     * @param callable(T $instance): mixed $initializer
+     * @param callable(T $instance): void $initializer
      * @return T
      *
      * @see ReflectionClass::newLazyGhost()

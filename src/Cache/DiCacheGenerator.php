@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Componenta\DI\Cache;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\VarExport\Export;
 use Componenta\VarExport\Config\ExportConfig;
+use Componenta\VarExport\Export;
 
 /**
  * Default {@see DiCacheGeneratorInterface} implementation.

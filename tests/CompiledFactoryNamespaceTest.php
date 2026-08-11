@@ -15,7 +15,7 @@ it('rejects invalid generated factory namespaces before writing source', functio
         . bin2hex(random_bytes(5));
 
     try {
-        expect(fn () => (new ContainerBuilder())->compileFactories(
+        expect(fn() => (new ContainerBuilder())->compileFactories(
             entries: [CompiledFactoryNamespaceTarget::class],
             directory: $directory,
             namespace: 'Componenta\\Generated; exit;',

@@ -47,7 +47,7 @@ describe('AliasResolver', function () {
                 skipValidation: true,
             );
 
-            expect(fn () => $resolver->resolve('a'))
+            expect(fn() => $resolver->resolve('a'))
                 ->toThrow(CircularDependencyException::class);
         });
     });
@@ -68,7 +68,7 @@ describe('AliasResolver', function () {
         });
 
         it('throws InvalidConfigurationException for a self-referencing alias', function () {
-            expect(fn () => (new AliasResolver())->set('a', 'a'))
+            expect(fn() => (new AliasResolver())->set('a', 'a'))
                 ->toThrow(InvalidConfigurationException::class, 'Self-referencing alias: "a"');
         });
 
@@ -159,7 +159,7 @@ describe('AliasResolver', function () {
 
     describe('constructor validation', function () {
         it('throws InvalidConfigurationException for self-referencing alias in the map', function () {
-            expect(fn () => new AliasResolver(['x' => 'x']))
+            expect(fn() => new AliasResolver(['x' => 'x']))
                 ->toThrow(InvalidConfigurationException::class);
         });
 

@@ -76,7 +76,7 @@ it('stores compiled autowiring as regular factories and loads shards lazily', fu
         ])->not->toHaveKey(CompiledFactoryLeafForTest::class)
             ->and($builder->invokables)->toContain(CompiledFactoryLeafForTest::class)
             ->and(array_unique(array_map(
-                static fn (CompiledFactoryDefinition $factory): string => $factory->file,
+                static fn(CompiledFactoryDefinition $factory): string => $factory->file,
                 $factories,
             )))->toHaveCount(1)
             ->and($source)->toBeString()->not->toContain('if (!class_exists(')

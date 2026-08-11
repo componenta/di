@@ -6,7 +6,7 @@ use Componenta\Caster\NullCasterProvider;
 use Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline;
 
 it('rejects a non-scalar sort alias with a stable mapping exception', function (): void {
-    expect(fn () => (new RequestMapperPipeline())->run(
+    expect(fn() => (new RequestMapperPipeline())->run(
         data: ['sort' => ['unexpected']],
         map: [],
         defaults: [],

@@ -139,7 +139,7 @@ function developmentProductionParitySnapshot(Container $container): array
         'null-present' => $container->has('parity.null'),
         'null-value' => $container->get('parity.null'),
         'call-result' => $container->call(
-            static fn (
+            static fn(
                 DevelopmentProductionParityDependency $dependency,
                 string $value = 'fallback',
             ): string => $dependency::class . ':' . $value,

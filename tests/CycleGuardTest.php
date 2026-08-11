@@ -20,7 +20,7 @@ describe('CycleGuard', function () {
             $guard = new CycleGuard();
             $guard->enter('a');
 
-            expect(fn () => $guard->enter('a'))
+            expect(fn() => $guard->enter('a'))
                 ->toThrow(CircularDependencyException::class);
         });
 
@@ -44,14 +44,14 @@ describe('CycleGuard', function () {
             $guard->enter('a');
             $guard->leave('a');
 
-            expect(fn () => $guard->enter('a'))
+            expect(fn() => $guard->enter('a'))
                 ->not->toThrow(CircularDependencyException::class);
         });
 
         it('tolerates leaving an id that was never entered', function () {
             $guard = new CycleGuard();
 
-            expect(fn () => $guard->leave('never-entered'))
+            expect(fn() => $guard->leave('never-entered'))
                 ->not->toThrow(Throwable::class);
         });
     });

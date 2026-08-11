@@ -51,7 +51,7 @@ describe('Container', function () {
 
     describe('get() / has()', function () {
         it('throws NotFoundException for unknown ids', function () {
-            expect(fn () => minimalContainer()->get('unknown'))
+            expect(fn() => minimalContainer()->get('unknown'))
                 ->toThrow(NotFoundException::class);
         });
 
@@ -71,7 +71,7 @@ describe('Container', function () {
 
         it('returns the same instance on repeat get() calls (cached)', function () {
             $container = minimalBuilder()
-                ->addFactory('svc', fn () => new stdClass())
+                ->addFactory('svc', fn() => new stdClass())
                 ->build();
 
             expect($container->get('svc'))->toBe($container->get('svc'));
@@ -79,7 +79,7 @@ describe('Container', function () {
 
         it('resolves aliases transparently', function () {
             $container = minimalBuilder()
-                ->addFactory('real.service', fn () => 'value')
+                ->addFactory('real.service', fn() => 'value')
                 ->addAlias('short', 'real.service')
                 ->build();
 
@@ -92,7 +92,7 @@ describe('Container', function () {
         it('accepts a DefinitionInterface and resolves it on get()', function () {
             $container = minimalContainer();
 
-            $container->set('svc', Definition::factory(fn () => 'from-definition'));
+            $container->set('svc', Definition::factory(fn() => 'from-definition'));
 
             expect($container->get('svc'))->toBe('from-definition');
         });
@@ -114,13 +114,13 @@ describe('Container', function () {
                 public mixed $value { get => null; }
             };
 
-            expect(fn () => $container->set('svc', $orphan))
+            expect(fn() => $container->set('svc', $orphan))
                 ->toThrow(InvalidConfigurationException::class);
         });
 
         it('invalidates a cached entry when set() runs for the same id', function () {
             $container = minimalBuilder()
-                ->addFactory('svc', fn () => 'first')
+                ->addFactory('svc', fn() => 'first')
                 ->build();
             expect($container->get('svc'))->toBe('first');
 
@@ -143,8 +143,8 @@ describe('Container', function () {
 
         it('invalidates cached results for the alias name', function () {
             $container = minimalBuilder()
-                ->addFactory('a', fn () => 'initial')
-                ->addFactory('b', fn () => 'other')
+                ->addFactory('a', fn() => 'initial')
+                ->addFactory('b', fn() => 'other')
                 ->addAlias('alias', 'a')
                 ->build();
             expect($container->get('alias'))->toBe('initial');
@@ -169,11 +169,11 @@ describe('Container', function () {
     describe('cycle detection', function () {
         it('throws CircularDependencyException when factories form a cycle', function () {
             $container = minimalBuilder()
-                ->addFactory('a', fn (ContainerInterface $c) => $c->get('b'))
-                ->addFactory('b', fn (ContainerInterface $c) => $c->get('a'))
+                ->addFactory('a', fn(ContainerInterface $c) => $c->get('b'))
+                ->addFactory('b', fn(ContainerInterface $c) => $c->get('a'))
                 ->build();
 
-            expect(fn () => $container->get('a'))
+            expect(fn() => $container->get('a'))
                 ->toThrow(CircularDependencyException::class);
         });
     });
@@ -181,21 +181,21 @@ describe('Container', function () {
     describe('delegators', function () {
         it('applies registered delegators in order to the resolved entry', function () {
             $container = minimalBuilder()
-                ->addFactory('counter', fn () => 1)
+                ->addFactory('counter', fn() => 1)
                 ->build();
-            $container->delegator('counter', fn (int $v) => $v + 10);
-            $container->delegator('counter', fn (int $v) => $v * 2);
+            $container->delegator('counter', fn(int $v) => $v + 10);
+            $container->delegator('counter', fn(int $v) => $v * 2);
 
             expect($container->get('counter'))->toBe(22);
         });
 
         it('invalidates cached resolution when a delegator is added', function () {
             $container = minimalBuilder()
-                ->addFactory('svc', fn () => 'base')
+                ->addFactory('svc', fn() => 'base')
                 ->build();
             expect($container->get('svc'))->toBe('base');
 
-            $container->delegator('svc', fn (string $v) => $v . '-decorated');
+            $container->delegator('svc', fn(string $v) => $v . '-decorated');
 
             expect($container->get('svc'))->toBe('base-decorated');
         });
@@ -232,7 +232,7 @@ describe('Container', function () {
         it('does not apply delegators registered on the id', function () {
             $container = minimalBuilder()
                 ->build();
-            $container->delegator(SimpleService::class, fn ($entry) => 'replaced-by-delegator');
+            $container->delegator(SimpleService::class, fn($entry) => 'replaced-by-delegator');
 
             $instance = $container->make(SimpleService::class);
 
@@ -240,7 +240,7 @@ describe('Container', function () {
         });
 
         it('propagates NotFoundException for a string the resolver chain cannot handle', function () {
-            expect(fn () => minimalContainer()->make('not.a.class'))
+            expect(fn() => minimalContainer()->make('not.a.class'))
                 ->toThrow(NotFoundException::class);
         });
     });
@@ -252,7 +252,7 @@ describe('Container', function () {
                 ->build();
 
             // callable is called with explicit override, not from container
-            $result = $container->call(fn (int $value) => $value * 2, ['value' => 21]);
+            $result = $container->call(fn(int $value) => $value * 2, ['value' => 21]);
 
             expect($result)->toBe(42);
         });

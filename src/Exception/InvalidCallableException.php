@@ -26,7 +26,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
          * @var array<int|string, mixed>
          */
         public readonly array $params = [],
-
         ?Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);

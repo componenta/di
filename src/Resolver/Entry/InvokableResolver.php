@@ -55,7 +55,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             return match ($this->detectStrategy($class)) {
                 CreationStrategy::Proxy => $this->proxyFactory->makeProxy(
                     $class,
-                    static fn (object $proxy): object => new $class(),
+                    static fn(object $proxy): object => new $class(),
                 ),
                 CreationStrategy::Lazy => $this->proxyFactory->makeLazy(
                     $class,

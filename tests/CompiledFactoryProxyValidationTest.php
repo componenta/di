@@ -16,7 +16,7 @@ it('does not downgrade an invalid class-level proxy to the invokable path', func
         . bin2hex(random_bytes(5));
 
     try {
-        expect(fn () => (new ContainerBuilder())->compileFactories(
+        expect(fn() => (new ContainerBuilder())->compileFactories(
             entries: [InvalidCompiledClassProxy::class],
             directory: $directory,
         ))->toThrow(

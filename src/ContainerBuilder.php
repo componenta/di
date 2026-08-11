@@ -96,31 +96,31 @@ class ContainerBuilder
     ];
 
     /** @var array<string, mixed> */
-    private(set) array $factories = [];
+    public private(set) array $factories = [];
 
     /** @var list<class-string> */
-    private(set) array $invokables = [];
+    public private(set) array $invokables = [];
 
     /** @var array<string, non-empty-string> */
-    private(set) array $aliases = self::DEFAULT_ALIASES;
+    public private(set) array $aliases = self::DEFAULT_ALIASES;
 
     /** @var array<string, list<DelegatorSpecification>> */
-    private(set) array $delegators = [];
+    public private(set) array $delegators = [];
 
     /** @var array<string, mixed> */
-    private(set) array $services = [];
+    public private(set) array $services = [];
 
     /** @var list<array{0: mixed, 1: int}> */
-    private(set) array $parameterResolvers = [];
+    public private(set) array $parameterResolvers = [];
 
     /** @var list<mixed> */
-    private(set) array $attributeHandlers = [];
+    public private(set) array $attributeHandlers = [];
 
-    private(set) bool $replaceParameterResolvers = false;
+    public private(set) bool $replaceParameterResolvers = false;
 
-    private(set) bool $replaceAttributeHandlers = false;
+    public private(set) bool $replaceAttributeHandlers = false;
 
-    private(set) ?Config $config = null;
+    public private(set) ?Config $config = null;
 
     private ?string $compiledFactoryBaseDir = null;
 
@@ -158,7 +158,7 @@ class ContainerBuilder
     ): static {
         self::assertDependencyShape($dependencies);
 
-        $builder = static::newBuilder();
+        $builder = self::newBuilder();
         $builder->factories = array_merge(
             $builder->factories,
             $dependencies[ConfigKey::FACTORIES] ?? [],
@@ -288,7 +288,7 @@ class ContainerBuilder
 
         $normalized = array_filter(
             $normalized,
-            static fn (mixed $value): bool => $value !== [] && $value !== false,
+            static fn(mixed $value): bool => $value !== [] && $value !== false,
         );
 
         // Cache generation is the trust boundary. Production builds can skip
