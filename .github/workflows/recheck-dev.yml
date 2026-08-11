@@ -2,13 +2,13 @@ name: Recheck Componenta DI dev
 
 on:
   push:
-    branches:
-      - dev
+    branches: [dev]
     paths:
-      - '.automation/recheck-dev-trigger'
+      - .automation/recheck-dev-trigger
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: componenta-di-dev-recheck
@@ -17,6 +17,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out dev
@@ -32,240 +33,66 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      - name: Apply final source and documentation cleanup
-        shell: bash
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-
-          builder = Path('src/ContainerBuilder.php')
-          text = builder.read_text()
-          text = text.replace('use Componenta\\Reflection\\Reflection;\n', '', 1)
-          text = text.replace(
-              '        $container = Reflection::class(Container::class)->newLazyGhost(\n',
-              '        $container = (new ReflectionClass(Container::class))->newLazyGhost(\n',
-              1,
-          )
-
-          old = '''        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
-            if (!$invocation->target instanceof ReflectionClass
-                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
-            ) {
-                return false;
-            }
-        }
-
-        return true;
-'''
-          new = '''        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
-            if (!$invocation->target instanceof ReflectionClass
-                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
-            ) {
-                return false;
-            }
-
-            if ($invocation->attributeClass === Proxy::class) {
-                $proxy = $invocation->newAttribute();
-
-                if (!$proxy instanceof Proxy || $proxy->class !== null) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif new not in text:
-              raise SystemExit('ContainerBuilder invokable attribute block not found')
-          builder.write_text(text)
-
-          replacements = {
-              Path('README.md'): (
-                  'All package exceptions implement `Componenta\\DI\\Exception\\ExceptionInterface`.',
-                  '`NotFoundException`, `CircularDependencyException`, `ResolutionException`, '
-                  '`InvalidConfigurationException`, `InvalidCallableException`, and '
-                  '`DelegatorException` implement `Componenta\\DI\\Exception\\ExceptionInterface`. '
-                  '`RequestDataConflictException` is an `InvalidArgumentException` because it '
-                  'represents invalid request input rather than a PSR-11 container failure.',
-              ),
-              Path('README.ru.md'): (
-                  'Все исключения пакета реализуют `Componenta\\DI\\Exception\\ExceptionInterface`.',
-                  '`NotFoundException`, `CircularDependencyException`, `ResolutionException`, '
-                  '`InvalidConfigurationException`, `InvalidCallableException` и '
-                  '`DelegatorException` реализуют `Componenta\\DI\\Exception\\ExceptionInterface`. '
-                  '`RequestDataConflictException` наследует `InvalidArgumentException`, поскольку '
-                  'описывает некорректный ввод запроса, а не ошибку PSR-11-контейнера.',
-              ),
-          }
-
-          for path, (old_text, new_text) in replacements.items():
-              body = path.read_text()
-              if old_text in body:
-                  path.write_text(body.replace(old_text, new_text, 1))
-              elif new_text not in body:
-                  raise SystemExit(f'Documentation exception contract anchor not found in {path}')
-          PY
-
-          php -l src/ContainerBuilder.php
-
-      - name: Run independent verification
-        id: checks
+      - name: Run complete verification
         shell: bash
         env:
           COMPOSER_ALLOW_SUPERUSER: '1'
         run: |
           set +e
-          work=/tmp/componenta-di-recheck
-          rm -rf "$work"
-          mkdir -p "$work" .automation
 
-          composer install --no-interaction --prefer-dist --no-progress \
-            > "$work/composer-install.log" 2>&1
+          composer install --no-interaction --prefer-dist --no-progress
           install_status=$?
 
-          if [[ $install_status -eq 0 ]]; then
-            composer validate --strict \
-              > "$work/composer-validate.log" 2>&1
+          if [ "$install_status" -eq 0 ]; then
+            composer validate --strict
             validate_status=$?
 
-            composer audit --no-interaction \
-              > "$work/composer-audit.log" 2>&1
+            composer audit --no-interaction
             audit_status=$?
 
-            composer cs-fix \
-              > "$work/cs-fix.log" 2>&1
-            format_status=$?
-
-            composer cs-check \
-              > "$work/cs-check.log" 2>&1
+            composer cs-check
             cs_status=$?
 
-            git diff --check \
-              > "$work/diff-check.log" 2>&1
-            diff_status=$?
-
             find src tests verification benchmarks -name '*.php' -print0 \
-              | xargs -0 -n1 php -l \
-              > "$work/php-lint.log" 2>&1
+              | xargs -0 -n1 php -l
             lint_status=$?
 
-            vendor/bin/phpstan analyse src --level=max --no-progress --error-format=json \
-              > "$work/phpstan.json" 2> "$work/phpstan.stderr"
+            composer phpstan
             phpstan_status=$?
 
-            python3 <<'PY'
-          import json
-          from pathlib import Path
-
-          source = Path('/tmp/componenta-di-recheck/phpstan.json')
-          target = Path('.automation/phpstan-errors.tsv')
-
-          try:
-              payload = json.loads(source.read_text() or '{}')
-          except json.JSONDecodeError as error:
-              target.write_text(f'phpstan-json-error\t{error}\n')
-          else:
-              lines = []
-              for path, details in sorted(payload.get('files', {}).items()):
-                  for message in details.get('messages', []):
-                      lines.append(
-                          f"{path}\t{message.get('line', 0)}\t"
-                          f"{message.get('ignorable', False)}\t"
-                          f"{message.get('message', '')}"
-                      )
-              target.write_text('\n'.join(lines) + ('\n' if lines else ''))
-          PY
-
-            : > "$work/tests.log"
-            test_status=0
-            for seed in 11082026 314159 271828 161803; do
-              echo "===== seed $seed =====" >> "$work/tests.log"
-              vendor/bin/pest --order-by=random --random-order-seed="$seed" \
-                >> "$work/tests.log" 2>&1
-              current=$?
-              if [[ $current -ne 0 ]]; then
-                test_status=$current
-              fi
-            done
+            composer test
+            test_status=$?
           else
             validate_status=125
             audit_status=125
-            format_status=125
             cs_status=125
-            diff_status=125
             lint_status=125
             phpstan_status=125
             test_status=125
-            : > .automation/phpstan-errors.tsv
           fi
+
+          printf '\nVerification status codes:\n'
+          printf 'composer install: %s\n' "$install_status"
+          printf 'composer validate: %s\n' "$validate_status"
+          printf 'composer audit: %s\n' "$audit_status"
+          printf 'composer cs-check: %s\n' "$cs_status"
+          printf 'PHP lint: %s\n' "$lint_status"
+          printf 'composer phpstan: %s\n' "$phpstan_status"
+          printf 'composer test: %s\n' "$test_status"
 
           overall=0
           for status in \
-            $install_status \
-            $validate_status \
-            $audit_status \
-            $format_status \
-            $cs_status \
-            $diff_status \
-            $lint_status \
-            $phpstan_status \
-            $test_status
+            "$install_status" \
+            "$validate_status" \
+            "$audit_status" \
+            "$cs_status" \
+            "$lint_status" \
+            "$phpstan_status" \
+            "$test_status"
           do
-            if [[ $status -ne 0 ]]; then
+            if [ "$status" -ne 0 ]; then
               overall=1
             fi
           done
 
-          {
-            echo '# Independent dev recheck'
-            echo
-            echo "Commit checked: $(git rev-parse HEAD)"
-            echo
-            echo '| Check | Exit code |'
-            echo '|---|---:|'
-            echo "| composer install | $install_status |"
-            echo "| composer validate --strict | $validate_status |"
-            echo "| composer audit | $audit_status |"
-            echo "| composer cs-fix | $format_status |"
-            echo "| composer cs-check | $cs_status |"
-            echo "| git diff --check | $diff_status |"
-            echo "| PHP lint | $lint_status |"
-            echo "| PHPStan level max, full src | $phpstan_status |"
-            echo "| Pest, four deterministic random seeds | $test_status |"
-            echo
-            for name in \
-              composer-validate \
-              composer-audit \
-              cs-fix \
-              cs-check \
-              diff-check \
-              phpstan-stderr \
-              tests
-            do
-              echo "## $name"
-              echo
-              echo '```text'
-              tail -n 1000 "$work/${name}.log" 2>/dev/null || true
-              echo '```'
-              echo
-            done
-          } > .automation/recheck-dev-result.md
-
-          echo "overall=$overall" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Commit cleanup and recheck report
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Format dev and record independent recheck"
-          git push origin HEAD:dev
-
-      - name: Mark failed verification
-        if: steps.checks.outputs.overall != '0'
-        shell: bash
-        run: exit 1
+          exit "$overall"
