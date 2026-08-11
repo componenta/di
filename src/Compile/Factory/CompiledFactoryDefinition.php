@@ -43,6 +43,22 @@ final readonly class CompiledFactoryDefinition implements DefinitionInterface
             return null;
         }
 
-        return new self($parts[0], $parts[1], $parts[2]);
+        [$file, $class, $method] = $parts;
+
+        if (!self::isClassName($class)) {
+            return null;
+        }
+
+        /** @var class-string $class */
+        return new self($file, $class, $method);
+    }
+
+    private static function isClassName(string $class): bool
+    {
+        return preg_match(
+            '/^(?:[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)'
+            . '(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)*$/D',
+            $class,
+        ) === 1;
     }
 }
