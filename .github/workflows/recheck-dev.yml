@@ -1,0 +1,183 @@
+name: Recheck Componenta DI dev
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - '.automation/recheck-dev-trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: componenta-di-dev-recheck
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Run independent verification
+        id: checks
+        shell: bash
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+        run: |
+          set +e
+          work=/tmp/componenta-di-recheck
+          rm -rf "$work"
+          mkdir -p "$work"
+
+          composer install --no-interaction --prefer-dist --no-progress \
+            > "$work/composer-install.log" 2>&1
+          install_status=$?
+
+          if [[ $install_status -eq 0 ]]; then
+            composer validate --strict \
+              > "$work/composer-validate.log" 2>&1
+            validate_status=$?
+
+            composer audit --no-interaction \
+              > "$work/composer-audit.log" 2>&1
+            audit_status=$?
+
+            find src tests verification benchmarks -name '*.php' -print0 \
+              | xargs -0 -n1 php -l \
+              > "$work/php-lint.log" 2>&1
+            lint_status=$?
+
+            vendor/bin/phpstan analyse src --level=max --no-progress \
+              > "$work/phpstan.log" 2>&1
+            phpstan_status=$?
+
+            cat > "$work/php-cs-fixer.php" <<'PHP'
+          <?php
+
+          declare(strict_types=1);
+
+          $finder = PhpCsFixer\Finder::create()
+              ->in([
+                  __DIR__ . '/../../home/runner/work/di/di/src',
+                  __DIR__ . '/../../home/runner/work/di/di/tests',
+                  __DIR__ . '/../../home/runner/work/di/di/verification',
+                  __DIR__ . '/../../home/runner/work/di/di/benchmarks',
+              ]);
+
+          return (new PhpCsFixer\Config())
+              ->setRiskyAllowed(true)
+              ->setRules([
+                  '@PER-CS' => true,
+                  'array_syntax' => ['syntax' => 'short'],
+                  'declare_strict_types' => true,
+                  'no_unused_imports' => true,
+                  'ordered_imports' => true,
+                  'single_quote' => true,
+                  'trailing_comma_in_multiline' => true,
+              ])
+              ->setFinder($finder);
+          PHP
+
+            vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no \
+              --config="$work/php-cs-fixer.php" \
+              > "$work/cs-check.log" 2>&1
+            cs_status=$?
+
+            : > "$work/tests.log"
+            test_status=0
+            for seed in 11082026 314159 271828 161803; do
+              echo "===== seed $seed =====" >> "$work/tests.log"
+              vendor/bin/pest --order-by=random --random-order-seed="$seed" \
+                >> "$work/tests.log" 2>&1
+              current=$?
+              if [[ $current -ne 0 ]]; then
+                test_status=$current
+              fi
+            done
+          else
+            validate_status=125
+            audit_status=125
+            lint_status=125
+            phpstan_status=125
+            cs_status=125
+            test_status=125
+          fi
+
+          overall=0
+          for status in \
+            $install_status \
+            $validate_status \
+            $audit_status \
+            $lint_status \
+            $phpstan_status \
+            $cs_status \
+            $test_status
+          do
+            if [[ $status -ne 0 ]]; then
+              overall=1
+            fi
+          done
+
+          {
+            echo '# Independent dev recheck'
+            echo
+            echo "Commit checked: $(git rev-parse HEAD)"
+            echo
+            echo '| Check | Exit code |'
+            echo '|---|---:|'
+            echo "| composer install | $install_status |"
+            echo "| composer validate --strict | $validate_status |"
+            echo "| composer audit | $audit_status |"
+            echo "| PHP lint | $lint_status |"
+            echo "| PHPStan level max, full src | $phpstan_status |"
+            echo "| PHP CS Fixer dry-run | $cs_status |"
+            echo "| Pest, four deterministic random seeds | $test_status |"
+            echo
+            for name in \
+              composer-install \
+              composer-validate \
+              composer-audit \
+              php-lint \
+              phpstan \
+              cs-check \
+              tests
+            do
+              echo "## $name"
+              echo
+              echo '```text'
+              tail -n 1200 "$work/${name}.log" 2>/dev/null || true
+              echo '```'
+              echo
+            done
+          } > .automation/recheck-dev-result.md
+
+          echo "overall=$overall" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit recheck report
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .automation/recheck-dev-result.md
+          git commit -m "Record independent dev recheck"
+          git push origin HEAD:dev
+
+      - name: Mark failed verification
+        if: steps.checks.outputs.overall != '0'
+        shell: bash
+        run: exit 1
