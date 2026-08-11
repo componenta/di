@@ -11,12 +11,7 @@ use ReflectionClass;
 use ReflectionProperty;
 use Throwable;
 
-/**
- * Mutable state of one object-creation operation.
- *
- * Inputs are readonly. Handlers may change only controlled lifecycle state or
- * write an explicitly attributed property through {@see writeProperty()}.
- */
+/** Mutable state of one object-creation operation. */
 final class ObjectCreationContext
 {
     public private(set) bool $constructorEnabled = true;
@@ -29,6 +24,7 @@ final class ObjectCreationContext
     private array $claimedProperties = [];
 
     /**
+     * @param ReflectionClass<object> $class
      * @param array<string|int, mixed> $parameters
      */
     public function __construct(
@@ -41,9 +37,6 @@ final class ObjectCreationContext
         $this->constructorEnabled = false;
     }
 
-    /**
-     * Selects the first non-eager strategy in handler-priority order.
-     */
     public function selectStrategy(CreationStrategy $strategy): bool
     {
         if ($strategy === CreationStrategy::Eager) {
@@ -59,13 +52,6 @@ final class ObjectCreationContext
         return true;
     }
 
-    /**
-     * Creates isolated mutable state for one lazy/proxy realization attempt.
-     *
-     * PHP retries a lazy initializer after an exception. Lifecycle decisions
-     * are preserved, while the entry and property claims from a failed attempt
-     * must never leak into the next one.
-     */
     public function freshAttempt(): self
     {
         $attempt = clone $this;
@@ -95,13 +81,6 @@ final class ObjectCreationContext
         $this->entry = $entry;
     }
 
-    /**
-     * Claims a property for the highest-priority applicable handler.
-     *
-     * Claiming happens before value resolution so lower-priority handlers can
-     * never perform container lookups, casting or factory calls for an already
-     * owned target.
-     */
     public function claimProperty(ReflectionProperty $property): bool
     {
         if ($this->entry === null) {
@@ -130,12 +109,6 @@ final class ObjectCreationContext
         return true;
     }
 
-    /**
-     * Writes a value through normal PHP property semantics.
-     *
-     * The caller must claim the property first. ReflectionProperty::setValue()
-     * intentionally invokes PHP 8.4 property hooks; raw writes are never used.
-     */
     public function writeProperty(ReflectionProperty $property, mixed $value): void
     {
         if (!isset($this->claimedProperties[self::propertyKey($property)])) {
@@ -164,8 +137,6 @@ final class ObjectCreationContext
         }
 
         try {
-            // Normal reflection assignment intentionally invokes PHP 8.4
-            // property hooks. Raw writes would silently bypass user code.
             $property->setValue($entry, $value);
         } catch (ResolutionException $e) {
             throw $e;
