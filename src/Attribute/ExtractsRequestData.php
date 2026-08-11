@@ -51,6 +51,8 @@ trait ExtractsRequestData
      * Kept as the convenience hook for custom mapper subclasses; unlike the
      * former array_merge implementation, it follows the configured conflict
      * policy and never silently overwrites a different value.
+     *
+     * @return array<string|int, mixed>
      */
     protected function extractSharedData(ServerRequestInterface $request): array
     {
