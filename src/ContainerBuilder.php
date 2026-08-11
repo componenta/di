@@ -34,6 +34,7 @@ use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
+use Componenta\DI\Resolver\Entry\InvokableSpecificationValidator;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
 use Componenta\DI\Resolver\Entry\SetUp\ConfigUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
@@ -146,6 +147,7 @@ class ContainerBuilder
             );
         }
 
+        /** @var array<string, mixed> $dependencies */
         return static::configureWithDependencies($config, $dependencies);
     }
 
@@ -286,7 +288,7 @@ class ContainerBuilder
 
         $normalized = array_filter(
             $normalized,
-            static fn(mixed $value): bool => $value !== [] && $value !== false,
+            static fn (mixed $value): bool => $value !== [] && $value !== false,
         );
 
         // Cache generation is the trust boundary. Production builds can skip
@@ -462,6 +464,7 @@ class ContainerBuilder
     /** @return array<string, mixed> */
     public function toArray(): array
     {
+        /** @var array<string, mixed> $data */
         $data = $this->config?->toArray() ?? [];
         $data[ConfigKey::DEPENDENCIES] = [
             ConfigKey::FACTORIES => $this->factories,
@@ -1092,18 +1095,15 @@ class ContainerBuilder
             throw new InvalidConfigurationException('Invokables must be an array.');
         }
 
-        foreach ($invokables as $key => $class) {
-            if ((!is_int($key) && !is_string($key))
-                || !is_string($class)
-                || $class === ''
-            ) {
+        foreach ($invokables as $class) {
+            if (!is_string($class) || $class === '') {
                 throw new InvalidConfigurationException(sprintf(
                     'Invokable entry must be a non-empty class-string; got %s.',
                     get_debug_type($class),
                 ));
             }
 
-            self::assertInvokableClass($class);
+            InvokableSpecificationValidator::assertValid($class);
         }
 
         $aliases = $dependencies[ConfigKey::ALIASES] ?? [];
@@ -1156,6 +1156,7 @@ class ContainerBuilder
         Config $config,
         array $dependencies,
     ): Config {
+        /** @var array<string, mixed> $data */
         $data = $config->toArray();
         $data[ConfigKey::DEPENDENCIES] = $dependencies;
 
@@ -1212,7 +1213,7 @@ class ContainerBuilder
         }
 
         $target = $class ?? $classOrAlias;
-        self::assertInvokableClass($target);
+        InvokableSpecificationValidator::assertValid($target);
         self::assertBindingIdAvailable($target, 'invokable');
         $this->invalidateBindingValidationFor($target, 'invokable');
 
@@ -1243,10 +1244,6 @@ class ContainerBuilder
                     'Invokable entry must be a non-empty class-string; got %s.',
                     get_debug_type($value),
                 ));
-            }
-
-            if (!is_int($key) && !is_string($key)) {
-                throw new InvalidConfigurationException('Invokable aliases must be strings.');
             }
 
             is_int($key)
@@ -1391,28 +1388,5 @@ class ContainerBuilder
         $this->replaceAttributeHandlers = $replace;
 
         return $this;
-    }
-
-    private static function assertInvokableClass(string $class): void
-    {
-        if (!class_exists($class)) {
-            throw new InvalidConfigurationException(sprintf(
-                'Invokable class "%s" is not loadable.',
-                $class,
-            ));
-        }
-
-        /** @var ReflectionClass<object> $reflection */
-        $reflection = new ReflectionClass($class);
-        $constructor = $reflection->getConstructor();
-
-        if (!$reflection->isInstantiable()
-            || ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0)
-        ) {
-            throw new InvalidConfigurationException(sprintf(
-                'Invokable class "%s" must be concrete and require no constructor arguments.',
-                $class,
-            ));
-        }
     }
 }
