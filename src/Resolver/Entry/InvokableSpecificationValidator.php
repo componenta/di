@@ -15,6 +15,10 @@ use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributeInvocation;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
+use Componenta\DI\Resolver\Attribute\Handler\ProxyHandler;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -43,8 +47,10 @@ final class InvokableSpecificationValidator
     ];
 
     /** @phpstan-assert class-string $class */
-    public static function assertValid(string $class): void
-    {
+    public static function assertValid(
+        string $class,
+        ?AttributeProcessor $attributeProcessor = null,
+    ): void {
         if ($class === '' || !class_exists($class)) {
             throw new InvalidConfigurationException(sprintf(
                 'Invokable class "%s" is not loadable.',
@@ -93,11 +99,83 @@ final class InvokableSpecificationValidator
             ));
         }
 
-        self::assertLifecycleCompatible($reflection);
+        self::assertBuiltinLifecycleCompatible($reflection);
+
+        if ($attributeProcessor !== null) {
+            self::assertAttributePipelineCompatible($reflection, $attributeProcessor);
+        }
+    }
+
+    /**
+     * Returns whether the active attribute pipeline can be skipped safely by
+     * the raw invokable path.
+     *
+     * This checks the actual selected handlers, not just attribute names. A
+     * custom handler that claims #[Lazy], #[Proxy] or any custom attribute is
+     * therefore not silently bypassed by the optimization.
+     *
+     * @param ReflectionClass<object> $reflection
+     */
+    public static function supportsAttributePipeline(
+        ReflectionClass $reflection,
+        AttributeProcessor $attributeProcessor,
+    ): bool {
+        $invocations = $attributeProcessor->invocations($reflection);
+
+        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
+            if (!self::isNativeInvokableInvocation($invocation)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @param ReflectionClass<object> $reflection */
-    private static function assertLifecycleCompatible(ReflectionClass $reflection): void
+    private static function assertAttributePipelineCompatible(
+        ReflectionClass $reflection,
+        AttributeProcessor $attributeProcessor,
+    ): void {
+        $invocations = $attributeProcessor->invocations($reflection);
+
+        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
+            if (self::isNativeInvokableInvocation($invocation)) {
+                continue;
+            }
+
+            throw new InvalidConfigurationException(sprintf(
+                'Invokable class "%s" cannot bypass attribute #[%s] handled by "%s": '
+                . 'the attribute requires the normal DI attribute lifecycle.',
+                $reflection->getName(),
+                $invocation->attributeClass,
+                $invocation->handler::class,
+            ));
+        }
+    }
+
+    private static function isNativeInvokableInvocation(AttributeInvocation $invocation): bool
+    {
+        if (!$invocation->target instanceof ReflectionClass) {
+            return false;
+        }
+
+        if (is_a($invocation->attributeClass, Lazy::class, true)) {
+            return $invocation->handler instanceof LazyHandler;
+        }
+
+        if (!is_a($invocation->attributeClass, Proxy::class, true)
+            || !$invocation->handler instanceof ProxyHandler
+        ) {
+            return false;
+        }
+
+        $proxy = $invocation->newAttribute();
+
+        return $proxy instanceof Proxy && $proxy->class === null;
+    }
+
+    /** @param ReflectionClass<object> $reflection */
+    private static function assertBuiltinLifecycleCompatible(ReflectionClass $reflection): void
     {
         self::assertTargetCompatible($reflection, $reflection->getName());
 
