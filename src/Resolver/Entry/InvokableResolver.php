@@ -41,6 +41,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         return isset($this->invokables[$id]);
     }
 
+    /** @param array<string|int, mixed> $context */
     public function resolve(string $id, array $context = []): object
     {
         $class = $this->invokables[$id];
@@ -58,9 +59,8 @@ class InvokableResolver implements DefinitionAwareResolverInterface
                 CreationStrategy::Lazy => $this->proxyFactory->makeLazy(
                     $class,
                     static function (object $entry) use ($class): void {
-                        if (method_exists($class, '__construct')) {
-                            $entry->__construct();
-                        }
+                        $constructor = (new ReflectionClass($class))->getConstructor();
+                        $constructor?->invoke($entry);
                     },
                 ),
                 CreationStrategy::Eager => new $class(),
@@ -74,8 +74,14 @@ class InvokableResolver implements DefinitionAwareResolverInterface
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
-        if (!$this->supportsDefinition($definition)) {
+        if (!$definition instanceof InvokableDefinition) {
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
+        }
+
+        if ($definition->value === '') {
+            throw new InvalidConfigurationException(
+                'Invokable definition requires a non-empty class name.',
+            );
         }
 
         $this->invokables[$id] = $definition->value;
