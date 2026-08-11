@@ -82,6 +82,14 @@ class CallableExecutor implements CallableExecutorInterface
                     ??= $this->parametersResolver->targets($reflection->getParameters());
         }
 
+        // PHP considers methods handled through __call()/__callStatic() valid
+        // callables even though no ReflectionMethod exists for the requested
+        // dynamic name. There is no concrete signature for DI to inspect, so
+        // invoke these callables with the explicit argument list as-is.
+        if (self::isDynamicMethodCallable($callable)) {
+            return [];
+        }
+
         $key = self::cacheKey($callable);
 
         return $this->callableTargets[$key] ??= $this->parametersResolver->targets(
@@ -102,6 +110,29 @@ class CallableExecutor implements CallableExecutorInterface
             $reflection->getClosureCalledClass()?->getName() ?? '',
             (string) $reflection,
         ]);
+    }
+
+    private static function isDynamicMethodCallable(callable $callable): bool
+    {
+        if (is_array($callable) && count($callable) === 2) {
+            [$owner, $method] = $callable;
+
+            if ((is_object($owner) || is_string($owner)) && is_string($method)) {
+                $class = is_object($owner) ? $owner::class : $owner;
+
+                return !method_exists($class, $method);
+            }
+        }
+
+        if (is_string($callable) && str_contains($callable, '::')) {
+            [$class, $method] = explode('::', $callable, 2);
+
+            return $class !== ''
+                && $method !== ''
+                && !method_exists($class, $method);
+        }
+
+        return false;
     }
 
     private static function cacheKey(callable $callable): string
