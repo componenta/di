@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -24,6 +25,9 @@ final class ConfiguredPrivateLazyInvokable
     }
 }
 
+#[Proxy(stdClass::class)]
+final class InvalidConfiguredClassProxy {}
+
 it('rejects an invokable class that cannot be constructed without arguments', function (): void {
     expect(fn() => ContainerBuilder::configureWithDependencies(
         new Config([]),
@@ -34,6 +38,11 @@ it('rejects an invokable class that cannot be constructed without arguments', fu
 it('rejects an invokable class name that is not loadable', function (): void {
     expect(fn() => (new ContainerBuilder())->addInvokable('Missing\\Invokable\\Service'))
         ->toThrow(InvalidConfigurationException::class, 'is not loadable');
+});
+
+it('rejects a class-level proxy argument on the invokable path', function (): void {
+    expect(fn() => (new ContainerBuilder())->addInvokable(InvalidConfiguredClassProxy::class))
+        ->toThrow(InvalidConfigurationException::class, 'must not specify a proxy class');
 });
 
 it('keeps private no-argument constructors available to native lazy invokables', function (): void {
