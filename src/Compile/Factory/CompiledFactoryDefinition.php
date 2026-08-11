@@ -51,7 +51,7 @@ final readonly class CompiledFactoryDefinition implements DefinitionInterface
 
         [$file, $class, $method] = $parts;
 
-        if (!self::isClassName($class)) {
+        if (!self::isClassName($class) || !self::isMethodName($method)) {
             return null;
         }
 
@@ -65,6 +65,14 @@ final readonly class CompiledFactoryDefinition implements DefinitionInterface
             '/^(?:[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)'
             . '(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)*$/D',
             $class,
+        ) === 1;
+    }
+
+    private static function isMethodName(string $method): bool
+    {
+        return preg_match(
+            '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/D',
+            $method,
         ) === 1;
     }
 }
