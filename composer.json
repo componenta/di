@@ -54,6 +54,9 @@
         }
     },
     "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
         "sort-packages": true,
         "preferred-install": "dist",
         "optimize-autoloader": true
@@ -76,6 +79,9 @@
         "psr/container-implementation": "2.0"
     },
     "extra": {
+        "branch-alias": {
+            "dev-dev": "3.x-dev"
+        },
         "componenta": {
             "config-providers": [
                 "Componenta\\DI\\ConfigProvider"
