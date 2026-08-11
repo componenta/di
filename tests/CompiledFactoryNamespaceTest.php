@@ -27,6 +27,9 @@ it('rejects invalid generated factory namespaces before writing source', functio
         foreach (glob($directory . '/*') ?: [] as $file) {
             @unlink($file);
         }
-        @rmdir($directory);
+
+        if (is_dir($directory)) {
+            @rmdir($directory);
+        }
     }
 });
