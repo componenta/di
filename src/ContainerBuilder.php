@@ -388,6 +388,11 @@ class ContainerBuilder
             $handlerRegistry,
             $container,
         );
+
+        foreach ($this->invokables as $class) {
+            InvokableSpecificationValidator::assertValid($class, $attributeProcessor);
+        }
+
         $parametersResolver->seal();
         $handlerRegistry->seal();
 
@@ -433,10 +438,12 @@ class ContainerBuilder
             /** @var ReflectionClass<object> $reflection */
             $reflection = new ReflectionClass($class);
             $constructor = $reflection->getConstructor();
-            $invocations = $attributes->invocations($reflection);
 
             if (($constructor === null || $constructor->getNumberOfParameters() === 0)
-                && self::supportsInvokableAttributes($invocations)
+                && InvokableSpecificationValidator::supportsAttributePipeline(
+                    $reflection,
+                    $attributes,
+                )
             ) {
                 $this->addInvokable($class);
                 continue;
@@ -503,6 +510,7 @@ class ContainerBuilder
             new InvokableResolver(
                 $this->invokables,
                 $proxyFactory,
+                $attributeProcessor,
             ),
             new ReflectionResolver(
                 new InstanceCreator($parametersResolver),
@@ -695,33 +703,6 @@ class ContainerBuilder
         }
 
         $this->assertSingleBindingPerCanonicalId($aliases);
-    }
-
-    /**
-     * InvokableResolver preserves class-level Lazy and Proxy strategies. Any
-     * other attribute invocation still needs the generated attribute pipeline.
-     *
-     * @param array{before: list<\Componenta\DI\Resolver\Attribute\AttributeInvocation>, after: list<\Componenta\DI\Resolver\Attribute\AttributeInvocation>} $invocations
-     */
-    private static function supportsInvokableAttributes(array $invocations): bool
-    {
-        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
-            if (!$invocation->target instanceof ReflectionClass
-                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
-            ) {
-                return false;
-            }
-
-            if ($invocation->attributeClass === Proxy::class) {
-                $proxy = $invocation->newAttribute();
-
-                if (!$proxy instanceof Proxy || $proxy->class !== null) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
     }
 
     private function invalidateBindingValidationFor(string $id, string $kind): void
