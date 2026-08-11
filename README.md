@@ -187,11 +187,15 @@ Property values are written only by registered attribute handlers. Constructor/c
 | `#[SetUp('method', params)]` | Class: call a setup method after construction; repeatable. |
 | `#[NoConstructor]` | Class: allocate without running the constructor. |
 | `#[Lazy]` | Class: construct as a native lazy ghost. |
-| `#[Proxy]` | Class or injection point: use a virtual proxy. |
+| `#[Proxy(?ConcreteClass::class)]` | Class or injection point: use a virtual proxy; interface-typed or service-id injection points require a concrete proxy class. |
 
 PSR-7 scalar attributes are `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]`, and `#[UploadedFile]`.
 
 Request mappers are `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]`, and `#[MapUploadedFiles]`. They can transform an array or create a class-typed DTO through `FactoryInterface::make()`.
+
+When a validator exists for the DTO class, mapping validates the extracted raw request data before `transform()`. This order is intentional: aliases, casts, defaults, sort mapping, and exclusions must not hide malformed transport input.
+
+Mappers may combine their primary source with selected request attributes and uploaded files. Different values for the same key are rejected by default with `RequestDataConflictException`; identical duplicates are accepted. Pass `conflictPolicy: RequestDataConflictPolicy::FirstWins` or `RequestDataConflictPolicy::LastWins` explicitly only when source precedence is part of the endpoint contract.
 
 ## Callable invocation
 
@@ -215,7 +219,7 @@ $proxy = $container->makeProxy(
 );
 ```
 
-Factory-bound services are eager unless their factory implements `LazyServiceFactoryInterface`. Class-level `#[Lazy]` and `#[Proxy]` apply to reflection/invokable construction, not arbitrary objects returned by factories.
+Factory-bound services are eager unless their factory implements `LazyServiceFactoryInterface`. Class-level `#[Lazy]` and `#[Proxy]` apply to reflection/invokable construction, not arbitrary objects returned by factories. For an interface-typed or service-id injection point, use `#[Proxy(ConcreteClass::class)]` so PHP's native proxy API has a concrete class to instantiate.
 
 ## Extension points
 
@@ -250,7 +254,7 @@ use Componenta\DI\ContainerBuilder;
 
 $builder = ContainerBuilder::configure($config);
 $compiled = $builder->compileFactories(
-    entries: [new AutowireEntry(CreateOrder::class, 'application command')],
+    entries: [new AutowireEntry(CreateOrder::class)],
     directory: __DIR__ . '/var/cache/build',
 );
 
@@ -276,5 +280,6 @@ Application integration normally owns root discovery. `componenta/app` provides 
 | `InvalidConfigurationException` | Configuration or a definition is invalid. |
 | `InvalidCallableException` | A callable cannot be normalized. |
 | `DelegatorException` | A delegator failed. |
+| `RequestDataConflictException` | Request mapping received different values for one key from multiple sources. |
 
 All package exceptions implement `Componenta\DI\Exception\ExceptionInterface`.

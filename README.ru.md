@@ -187,11 +187,15 @@ $container->set(
 | `#[SetUp('method', params)]` | Класс: вызвать метод настройки после создания; атрибут повторяемый. |
 | `#[NoConstructor]` | Класс: создать объект без вызова конструктора. |
 | `#[Lazy]` | Класс: использовать нативный ленивый объект. |
-| `#[Proxy]` | Класс или точка внедрения: использовать виртуальный прокси. |
+| `#[Proxy(?ConcreteClass::class)]` | Класс или точка внедрения: использовать виртуальный прокси; для интерфейса или произвольного ID сервиса требуется конкретный класс прокси. |
 
 Скалярные атрибуты PSR-7: `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]` и `#[UploadedFile]`.
 
 Атрибуты отображения запроса: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]` и `#[MapUploadedFiles]`. Они возвращают преобразованный массив либо создают DTO через `FactoryInterface::make()`.
+
+Если для класса DTO существует валидатор, сначала проверяются извлечённые сырые данные запроса и только затем выполняется `transform()`. Такой порядок намеренный: переименование, преобразование типов, значения по умолчанию, отображение сортировки и исключение полей не должны скрывать некорректный транспортный ввод.
+
+Mapper может объединять основной источник с выбранными атрибутами запроса и загруженными файлами. Разные значения одного ключа по умолчанию приводят к `RequestDataConflictException`; одинаковые дубликаты допустимы. Политику `RequestDataConflictPolicy::FirstWins` или `RequestDataConflictPolicy::LastWins` следует задавать явно только тогда, когда приоритет источников является частью контракта endpoint.
 
 ## Вызов функций и методов
 
@@ -215,7 +219,7 @@ $proxy = $container->makeProxy(
 );
 ```
 
-Сервисы обычных фабрик создаются сразу, если фабрика не реализует `LazyServiceFactoryInterface`. Атрибуты класса `#[Lazy]` и `#[Proxy]` действуют на сборку через рефлексию или invokable-резолвер, но не на произвольные объекты, возвращенные фабрикой.
+Сервисы обычных фабрик создаются сразу, если фабрика не реализует `LazyServiceFactoryInterface`. Атрибуты класса `#[Lazy]` и `#[Proxy]` действуют на сборку через рефлексию или invokable-резолвер, но не на произвольные объекты, возвращенные фабрикой. Для точки внедрения с типом-интерфейсом или произвольным ID сервиса используйте `#[Proxy(ConcreteClass::class)]`, чтобы нативный API PHP получил конкретный класс прокси.
 
 ## Расширение
 
@@ -250,7 +254,7 @@ use Componenta\DI\ContainerBuilder;
 
 $builder = ContainerBuilder::configure($config);
 $compiled = $builder->compileFactories(
-    entries: [new AutowireEntry(CreateOrder::class, 'application command')],
+    entries: [new AutowireEntry(CreateOrder::class)],
     directory: __DIR__ . '/var/cache/build',
 );
 
@@ -276,5 +280,6 @@ $dependencies[ConfigKey::FACTORIES] = array_replace(
 | `InvalidConfigurationException` | Неверна конфигурация или дефиниция. |
 | `InvalidCallableException` | Невозможно преобразовать описание вызова. |
 | `DelegatorException` | Делегатор завершился с ошибкой. |
+| `RequestDataConflictException` | Несколько источников request mapping передали разные значения одного ключа. |
 
 Все исключения пакета реализуют `Componenta\DI\Exception\ExceptionInterface`.
