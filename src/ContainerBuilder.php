@@ -9,7 +9,6 @@ use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Compile\Autowire\AutowireClassGraph;
 use Componenta\DI\Compile\Autowire\AutowireEntry;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
