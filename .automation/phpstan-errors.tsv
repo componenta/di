@@ -1,42 +1,8 @@
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapCookies)	55	True	Method Componenta\DI\Attribute\MapCookies::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapHeaders)	55	True	Method Componenta\DI\Attribute\MapHeaders::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapQueryString)	55	True	Method Componenta\DI\Attribute\MapQueryString::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapRequestAttributes)	55	True	Method Componenta\DI\Attribute\MapRequestAttributes::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapRequestPayload)	55	True	Method Componenta\DI\Attribute\MapRequestPayload::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapServerParams)	55	True	Method Componenta\DI\Attribute\MapServerParams::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/ExtractsRequestData.php (in context of class Componenta\DI\Attribute\MapUploadedFiles)	55	True	Method Componenta\DI\Attribute\MapUploadedFiles::extractSharedData() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/Init.php	63	True	Method Componenta\DI\Attribute\Init::__construct() has parameter $params with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapCookies.php	15	True	Method Componenta\DI\Attribute\MapCookies::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapHeaders.php	15	True	Method Componenta\DI\Attribute\MapHeaders::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapQueryString.php	15	True	Method Componenta\DI\Attribute\MapQueryString::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapRequestAttributes.php	16	True	Method Componenta\DI\Attribute\MapRequestAttributes::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapRequestPayload.php	15	True	Method Componenta\DI\Attribute\MapRequestPayload::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapServerParams.php	15	True	Method Componenta\DI\Attribute\MapServerParams::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/MapUploadedFiles.php	15	True	Method Componenta\DI\Attribute\MapUploadedFiles::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/PayloadParam.php	50	True	Parameter #1 $key of function array_key_exists expects int|string, mixed given.
-/home/runner/work/di/di/src/Attribute/PayloadParam.php	53	True	Parameter #2 ...$values of function sprintf expects bool|float|int|string|null, mixed given.
-/home/runner/work/di/di/src/Attribute/PayloadParam.php	63	True	Method Componenta\DI\Attribute\PayloadParam::getParsedBody() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/QueryParam.php	34	True	Parameter #1 $key of function array_key_exists expects int|string, mixed given.
-/home/runner/work/di/di/src/Attribute/QueryParam.php	37	True	Parameter #2 ...$values of function sprintf expects bool|float|int|string|null, mixed given.
-/home/runner/work/di/di/src/Attribute/RequestAttribute.php	30	True	Parameter #1 $key of function array_key_exists expects int|string, mixed given.
-/home/runner/work/di/di/src/Attribute/RequestAttribute.php	33	True	Parameter #2 ...$values of function sprintf expects bool|float|int|string|null, mixed given.
-/home/runner/work/di/di/src/Attribute/RequestMapper.php	92	True	Property Componenta\DI\Attribute\RequestMapper::$sortMap type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/RequestMapper.php	119	True	Method Componenta\DI\Attribute\RequestMapper::__construct() has parameter $map with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/RequestMapper.php	123	True	Property Componenta\DI\Attribute\RequestMapper::$map (array<string, string>) does not accept array.
-/home/runner/work/di/di/src/Attribute/RequestMapper.php	182	True	Method Componenta\DI\Attribute\RequestMapper::transform() has parameter $data with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/RequestMapper.php	182	True	Method Componenta\DI\Attribute\RequestMapper::transform() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Attribute/RequestMapper.php	185	True	Parameter #1 $data of method Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline::run() expects array<string, mixed>, array given.
-/home/runner/work/di/di/src/Attribute/UploadedFile.php	18	True	Method Componenta\DI\Attribute\UploadedFile::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/CallableInvoker.php	48	True	Parameter #1 $callback of function call_user_func_array expects callable(): mixed, mixed given.
-/home/runner/work/di/di/src/Compile/Autowire/AutowireClassGraph.php	30	True	Call to function is_string() with class-string will always evaluate to true.
-/home/runner/work/di/di/src/Compile/Autowire/AutowireClassGraph.php	30	True	Result of || is always false.
-/home/runner/work/di/di/src/Compile/Autowire/AutowireClassGraph.php	30	True	Strict comparison using === between class-string and '' will always evaluate to false.
 /home/runner/work/di/di/src/Compile/Autowire/AutowireClassGraph.php	80	True	Method Componenta\DI\Compile\Autowire\AutowireClassGraph::dependencies() has parameter $class with generic class ReflectionClass but does not specify its types: T
 /home/runner/work/di/di/src/Compile/Factory/CompiledFactoryDefinition.php	46	True	Parameter #2 $class of class Componenta\DI\Compile\Factory\CompiledFactoryDefinition constructor expects class-string, string given.
 /home/runner/work/di/di/src/Compile/Factory/CompiledFactoryShardCompiler.php	86	True	Parameter $class of class Componenta\DI\Compile\Factory\CompiledFactoryDefinition constructor expects class-string, string given.
 /home/runner/work/di/di/src/Compile/Factory/FactoryCodeGenerator.php	50	True	Property Componenta\DI\Compile\Factory\FactoryCodeGenerator::$class with generic class ReflectionClass does not specify its types: T
 /home/runner/work/di/di/src/Compile/Factory/FactoryCodeGenerator.php	143	True	Method Componenta\DI\Compile\Factory\FactoryCodeGenerator::reset() has parameter $class with generic class ReflectionClass but does not specify its types: T
-/home/runner/work/di/di/src/Compile/Parameter/ParameterResolverCodeGeneratorRegistry.php	30	True	Call to function is_a() with arguments class-string<Componenta\DI\Resolver\Parameter\ParameterResolverInterface>, 'Componenta\\DI\\Resolver\\Parameter\\ParameterResolverInterface' and true will always evaluate to true.
 /home/runner/work/di/di/src/Container.php	58	True	Method Componenta\DI\Container::__construct() has parameter $bootstrapServices with no value type specified in iterable type array.
 /home/runner/work/di/di/src/Container.php	86	True	Call to function is_scalar() with (int|string) will always evaluate to true.
 /home/runner/work/di/di/src/Container.php	290	True	Parameter #2 $context of method Componenta\DI\Resolver\Entry\EntryResolverInterface::resolve() expects array<string, mixed>, array<int|string, mixed> given.
@@ -82,15 +48,11 @@
 /home/runner/work/di/di/src/ContainerBuilder.php	377	True	Parameter #3 $container of method Componenta\DI\ContainerBuilder::fillPipelines() expects Psr\Container\ContainerInterface, object given.
 /home/runner/work/di/di/src/ContainerBuilder.php	382	True	Method Componenta\DI\ContainerBuilder::build() should return Componenta\DI\Container but returns object.
 /home/runner/work/di/di/src/ContainerBuilder.php	450	True	Method Componenta\DI\ContainerBuilder::toArray() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/ContainerBuilder.php	479	True	Parameter #1 $factories of class Componenta\DI\Resolver\Entry\FactoryResolver constructor expects array<string, array|(callable(Componenta\Config\ContainerValue, array<int|string, mixed>): mixed)|Componenta\DI\Compile\Factory\CompiledFactoryDefinition|Componenta\DI\Definition\ClassDefinition|Componenta\DI\Definition\FactoryDefinition|string>, array<string, mixed> given.
-/home/runner/work/di/di/src/ContainerBuilder.php	657	True	Call to function is_string() with string will always evaluate to true.
-/home/runner/work/di/di/src/ContainerBuilder.php	743	True	Call to function is_string() with string will always evaluate to true.
 /home/runner/work/di/di/src/ContainerBuilder.php	906	True	Method Componenta\DI\ContainerBuilder::resolversToMap() return type has no value type specified in iterable type array.
 /home/runner/work/di/di/src/ContainerBuilder.php	926	True	Method Componenta\DI\ContainerBuilder::normalizeDelegatorList() return type has no value type specified in iterable type array.
 /home/runner/work/di/di/src/ContainerBuilder.php	937	True	PHPDoc tag @var for variable $items has no value type specified in iterable type array.
-/home/runner/work/di/di/src/ContainerBuilder.php	937	True	Parameter #1 $array (list<array|(callable(): mixed)|string>) of array_values is already a list, call has no effect.
-/home/runner/work/di/di/src/ContainerBuilder.php	1000	True	Call to function is_string() with string will always evaluate to true.
-/home/runner/work/di/di/src/ContainerBuilder.php	1003	True	Call to function is_scalar() with string will always evaluate to true.
+/home/runner/work/di/di/src/ContainerBuilder.php	937	True	Parameter #1 $array (list) of array_values is already a list, call has no effect.
+/home/runner/work/di/di/src/ContainerBuilder.php	1003	True	Call to function is_scalar() with (int|string) will always evaluate to true.
 /home/runner/work/di/di/src/ContainerBuilder.php	1043	True	Argument of an invalid type mixed supplied for foreach, only iterables are supported.
 /home/runner/work/di/di/src/ContainerBuilder.php	1055	True	Parameter #1 $array of function array_is_list expects array<mixed>, mixed given.
 /home/runner/work/di/di/src/ContainerBuilder.php	1065	True	Argument of an invalid type mixed supplied for foreach, only iterables are supported.
@@ -100,7 +62,6 @@
 /home/runner/work/di/di/src/ContainerBuilder.php	1166	True	Property Componenta\DI\ContainerBuilder::$invokables (list<class-string>) does not accept non-empty-list<non-empty-string>.
 /home/runner/work/di/di/src/ContainerBuilder.php	1176	True	Method Componenta\DI\ContainerBuilder::addInvokables() has parameter $invokables with no value type specified in iterable type array.
 /home/runner/work/di/di/src/ContainerBuilder.php	1186	True	Call to function is_string() with string will always evaluate to true.
-/home/runner/work/di/di/src/ContainerBuilder.php	1186	True	Result of && is always false.
 /home/runner/work/di/di/src/ContainerBuilder.php	1213	True	Method Componenta\DI\ContainerBuilder::addAliases() has parameter $aliases with no value type specified in iterable type array.
 /home/runner/work/di/di/src/ContainerBuilder.php	1236	True	Method Componenta\DI\ContainerBuilder::addDelegator() has parameter $delegator with no value type specified in iterable type array.
 /home/runner/work/di/di/src/ContainerBuilder.php	1249	True	Method Componenta\DI\ContainerBuilder::addDelegators() has parameter $delegators with no value type specified in iterable type array.
@@ -108,10 +69,8 @@
 /home/runner/work/di/di/src/Definition/Definition.php	38	True	Parameter #1 $value of class Componenta\DI\Definition\ClassDefinition constructor expects class-string, string given.
 /home/runner/work/di/di/src/Definition/Definition.php	48	True	Parameter #1 $value of class Componenta\DI\Definition\InvokableDefinition constructor expects class-string, string given.
 /home/runner/work/di/di/src/FactoryInterface.php	35	True	Template type T of method Componenta\DI\FactoryInterface::make() is not referenced in a parameter.
-/home/runner/work/di/di/src/ProxyFactory.php	28	True	Cannot call method newLazyGhost() on ReflectionClass|null.
-/home/runner/work/di/di/src/ProxyFactory.php	28	True	Method Componenta\DI\ProxyFactory::makeLazy() should return T of object but returns object.
-/home/runner/work/di/di/src/ProxyFactory.php	36	True	Cannot call method newLazyProxy() on ReflectionClass|null.
-/home/runner/work/di/di/src/ProxyFactory.php	36	True	Method Componenta\DI\ProxyFactory::makeProxy() should return T of object but returns object.
+/home/runner/work/di/di/src/ProxyFactory.php	29	True	Parameter #1 $initializer of method ReflectionClass<T of object>::newLazyGhost() expects callable(T): void, callable(object): mixed given.
+/home/runner/work/di/di/src/ProxyFactory.php	43	True	Parameter #1 $factory of method ReflectionClass<T of object>::newLazyProxy() expects callable(T): T, callable(object): object given.
 /home/runner/work/di/di/src/Resolver/Attribute/AttributeProcessor.php	30	True	Method Componenta\DI\Resolver\Attribute\AttributeProcessor::process() has parameter $class with generic class ReflectionClass but does not specify its types: T
 /home/runner/work/di/di/src/Resolver/Attribute/AttributeProcessor.php	61	True	Method Componenta\DI\Resolver\Attribute\AttributeProcessor::invocations() has parameter $class with generic class ReflectionClass but does not specify its types: T
 /home/runner/work/di/di/src/Resolver/Attribute/AttributeProcessor.php	71	True	Method Componenta\DI\Resolver\Attribute\AttributeProcessor::plan() has parameter $class with generic class ReflectionClass but does not specify its types: T
@@ -131,37 +90,18 @@
 /home/runner/work/di/di/src/Resolver/ConfigValueExtractor.php	174	True	Method Componenta\DI\Resolver\ConfigValueExtractor::hasKey() has parameter $configData with generic interface ArrayAccess but does not specify its types: TKey, TValue
 /home/runner/work/di/di/src/Resolver/ConfigValueExtractor.php	174	True	Method Componenta\DI\Resolver\ConfigValueExtractor::hasKey() has parameter $configData with no value type specified in iterable type array.
 /home/runner/work/di/di/src/Resolver/Entry/EntryClassEligibility.php	20	True	Method Componenta\DI\Resolver\Entry\EntryClassEligibility::allows() has parameter $class with generic class ReflectionClass but does not specify its types: T
-/home/runner/work/di/di/src/Resolver/Entry/FactoryResolver.php	51	True	Method Componenta\DI\Resolver\Entry\FactoryResolver::__construct() has parameter $factories with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Entry/FactoryResolver.php	61	True	Call to function is_string() with string will always evaluate to true.
-/home/runner/work/di/di/src/Resolver/Entry/FactoryResolver.php	103	True	Trying to invoke mixed but it's not a callable.
-/home/runner/work/di/di/src/Resolver/Entry/FactoryResolver.php	256	True	Property Componenta\DI\Resolver\Entry\FactoryResolver::$factories (array<string, array|(callable(Componenta\Config\ContainerValue, array<int|string, mixed>): mixed)|Componenta\DI\Compile\Factory\CompiledFactoryDefinition|Componenta\DI\Definition\ClassDefinition|Componenta\DI\Definition\FactoryDefinition|string>) does not accept non-empty-array<string, array|(callable(Componenta\Config\ContainerValue, array<int|string, mixed>): mixed)|Componenta\DI\Definition\DefinitionInterface|string>.
-/home/runner/work/di/di/src/Resolver/Entry/FactorySpecificationValidator.php	26	True	Unreachable statement - code above always terminates.
-/home/runner/work/di/di/src/Resolver/Entry/FactorySpecificationValidator.php	33	True	Strict comparison using !== between class-string and '' will always evaluate to true.
-/home/runner/work/di/di/src/Resolver/Entry/InstanceCreator.php	27	True	Method Componenta\DI\Resolver\Entry\InstanceCreator::create() has parameter $reflector with generic class ReflectionClass but does not specify its types: T
-/home/runner/work/di/di/src/Resolver/Entry/InstanceCreator.php	45	True	Method Componenta\DI\Resolver\Entry\InstanceCreator::initialize() has parameter $reflector with generic class ReflectionClass but does not specify its types: T
-/home/runner/work/di/di/src/Resolver/Entry/InstanceCreator.php	54	True	Call to an undefined method object::__construct().
-/home/runner/work/di/di/src/Resolver/Entry/InvokableResolver.php	62	True	Call to an undefined method object::__construct().
-/home/runner/work/di/di/src/Resolver/Entry/InvokableResolver.php	81	True	Property Componenta\DI\Resolver\Entry\InvokableResolver::$invokables (array<string, class-string>) does not accept array<string, mixed>.
 /home/runner/work/di/di/src/Resolver/Entry/ObjectCreationContext.php	34	True	Method Componenta\DI\Resolver\Entry\ObjectCreationContext::__construct() has parameter $class with generic class ReflectionClass but does not specify its types: T
 /home/runner/work/di/di/src/Resolver/Entry/SetUp/ConfigUnwrapper.php	45	True	Parameter #1 $configData of method Componenta\DI\Resolver\ConfigValueExtractor::extract() expects array<string, mixed>|ArrayAccess, mixed given.
 /home/runner/work/di/di/src/Resolver/Entry/SetUpRunner.php	190	True	Method Componenta\DI\Resolver\Entry\SetUpRunner::method() has parameter $class with generic class ReflectionClass but does not specify its types: T
-/home/runner/work/di/di/src/Resolver/EnvNameNormalizer.php	29	True	Parameter #1 $string of function strtoupper expects string, string|null given.
 /home/runner/work/di/di/src/Resolver/Parameter/AutowireByTypeResolver.php	29	True	Method Componenta\DI\Resolver\Parameter\AutowireByTypeResolver::resolveParameter() should return array{int, mixed}|null but returns array|null.
 /home/runner/work/di/di/src/Resolver/Parameter/AutowireByTypeResolver.php	30	True	Parameter #1 $typeName of method Componenta\DI\Resolver\Parameter\AutowireByTypeResolver::resolveType() expects class-string|null, string|null given.
 /home/runner/work/di/di/src/Resolver/Parameter/AutowireByTypeResolver.php	37	True	Method Componenta\DI\Resolver\Parameter\AutowireByTypeResolver::resolveType() return type has no value type specified in iterable type array.
 /home/runner/work/di/di/src/Resolver/Parameter/Request/LazyFactory.php	26	True	Template type T of method Componenta\DI\Resolver\Parameter\Request\LazyFactory::make() is not referenced in a parameter.
 /home/runner/work/di/di/src/Resolver/Parameter/Request/LazyFactory.php	28	True	Method Componenta\DI\Resolver\Parameter\Request\LazyFactory::make() should return T of object but returns object.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/MapperInterface.php	9	True	Method Componenta\DI\Resolver\Parameter\Request\MapperInterface::transform() has parameter $data with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/MapperInterface.php	9	True	Method Componenta\DI\Resolver\Parameter\Request\MapperInterface::transform() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestDataExtractorInterface.php	11	True	Method Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface::extract() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestMapperPipeline.php	57	True	Method Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline::run() has parameter $sortMap with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestMapperPipeline.php	57	True	Method Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline::run() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestParameter.php	39	True	Method Componenta\DI\Resolver\Parameter\Request\RequestParameter::has() has parameter $providedParameters with no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestParameter.php	53	True	Method Componenta\DI\Resolver\Parameter\Request\RequestParameter::get() should return Psr\Http\Message\ServerRequestInterface|null but returns mixed.
 /home/runner/work/di/di/src/Resolver/Parameter/Request/RequestResolver.php	61	True	Method Componenta\DI\Resolver\Parameter\Request\RequestResolver::resolveParameter() should return array{int, mixed}|null but returns array|null.
 /home/runner/work/di/di/src/Resolver/Parameter/Request/RequestResolver.php	137	True	Method Componenta\DI\Resolver\Parameter\Request\RequestResolver::resolveByType() return type has no value type specified in iterable type array.
 /home/runner/work/di/di/src/Resolver/Parameter/Request/RequestResolver.php	197	True	Method Componenta\DI\Resolver\Parameter\Request\RequestResolver::processMapping() return type has no value type specified in iterable type array.
-/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestResolver.php	204	True	Parameter #2 $data of method Componenta\DI\Resolver\Parameter\Request\RequestResolver::validateData() expects array<string, mixed>, array given.
+/home/runner/work/di/di/src/Resolver/Parameter/Request/RequestResolver.php	204	True	Parameter #2 $data of method Componenta\DI\Resolver\Parameter\Request\RequestResolver::validateData() expects array<string, mixed>, array<int|string, mixed> given.
 /home/runner/work/di/di/src/Resolver/Target/ParameterTarget.php	31	True	Property Componenta\DI\Resolver\Target\ParameterTarget::$declaringClass with generic class ReflectionClass does not specify its types: T
 /home/runner/work/di/di/src/Resolver/Target/ParameterTarget.php	112	True	Method Componenta\DI\Resolver\Target\ParameterTarget::firstAttribute() should return (T of object)|null but returns object|null.
 /home/runner/work/di/di/src/Resolver/TypeHints.php	25	True	Method Componenta\DI\Resolver\TypeHints::classOf() has parameter $declaringClass with generic class ReflectionClass but does not specify its types: T
