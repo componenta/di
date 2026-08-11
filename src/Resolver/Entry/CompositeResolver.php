@@ -11,7 +11,7 @@ use Componenta\DI\Exception\ResolutionException;
 use InvalidArgumentException;
 
 /** Ordered entry-resolver chain with positive and negative owner caching. */
-class CompositeResolver implements DefinitionAwareResolverInterface
+class CompositeResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
 {
     /** @var list<EntryResolverInterface> */
     protected array $resolvers = [];
@@ -27,6 +27,15 @@ class CompositeResolver implements DefinitionAwareResolverInterface
      * @var array<string, DefinitionAwareResolverInterface>
      */
     private array $definitionOwners = [];
+
+    /**
+     * Every resolver that has owned a runtime definition for an id. Keeping
+     * the history lets a later stored-value replacement remove stale bindings
+     * from all previous resolver kinds, not only the latest owner.
+     *
+     * @var array<string, array<int, DefinitionAwareResolverInterface>>
+     */
+    private array $definitionOwnerHistory = [];
 
     public function __construct(EntryResolverInterface ...$resolvers)
     {
@@ -90,12 +99,38 @@ class CompositeResolver implements DefinitionAwareResolverInterface
             ) {
                 $resolver->setDefinition($id, $definition);
                 $this->definitionOwners[$id] = $resolver;
+                $this->definitionOwnerHistory[$id][spl_object_id($resolver)] = $resolver;
                 $this->ownerCache[$id] = $resolver;
                 return;
             }
         }
 
         throw InvalidConfigurationException::forInvalidDefinition($definition);
+    }
+
+    public function removeDefinition(string $id): void
+    {
+        $owners = $this->definitionOwnerHistory[$id] ?? [];
+
+        foreach ($owners as $owner) {
+            if (!$owner instanceof DefinitionRemovalInterface) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Resolver "%s" cannot remove runtime definition "%s".',
+                    $owner::class,
+                    $id,
+                ));
+            }
+        }
+
+        foreach ($owners as $owner) {
+            $owner->removeDefinition($id);
+        }
+
+        unset(
+            $this->definitionOwners[$id],
+            $this->definitionOwnerHistory[$id],
+            $this->ownerCache[$id],
+        );
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
