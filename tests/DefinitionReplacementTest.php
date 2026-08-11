@@ -38,3 +38,32 @@ it('does not retain a stale runtime definition after replacing it with a stored 
     expect($container->get('service'))->toBe($replacement)
         ->and(fn() => $container->make('service'))->toThrow(NotFoundException::class);
 });
+
+it('removes stale runtime definitions from every resolver kind before storing a value', function (): void {
+    $container = minimalContainer();
+
+    $container->set(
+        'service',
+        Definition::factory(static fn() => new ReplacementFactoryService()),
+    );
+    $container->set('service', Definition::invokable(ReplacementInvokableService::class));
+    expect($container->make('service'))->toBeInstanceOf(ReplacementInvokableService::class);
+
+    $replacement = new ReplacementStoredService();
+    $container->set('service', $replacement);
+
+    expect($container->get('service'))->toBe($replacement)
+        ->and(fn() => $container->make('service'))->toThrow(NotFoundException::class);
+});
+
+it('keeps configured make semantics when a stored value only overrides get()', function (): void {
+    $container = minimalBuilder()
+        ->addFactory('service', static fn() => new ReplacementFactoryService())
+        ->build();
+
+    $replacement = new ReplacementStoredService();
+    $container->set('service', $replacement);
+
+    expect($container->get('service'))->toBe($replacement)
+        ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
+});
