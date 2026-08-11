@@ -25,64 +25,24 @@ jobs:
           php-version: '8.4'
           coverage: none
 
-      - name: Apply narrow source patches
+      - name: Apply ContainerBuilder patches
         shell: bash
         run: |
           python3 <<'PY'
           from pathlib import Path
 
-          factory = Path('src/Resolver/Entry/FactoryResolver.php')
-          text = factory.read_text()
-          old = '''        if (!$this->supportsDefinition($definition)) {
-            throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
-        }
+          path = Path('src/ContainerBuilder.php')
+          text = path.read_text()
 
-        $this->factories[$id] = $definition;
-'''
-          new = '''        if (!$this->supportsDefinition($definition)) {
-            throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
-        }
-
-        FactorySpecificationValidator::assertValid($id, $definition);
-        $this->factories[$id] = $definition;
-'''
+          old = 'use Componenta\\Reflection\\Reflection;\n'
           if old not in text:
-              raise SystemExit('FactoryResolver setDefinition patch anchor not found')
-          text = text.replace(old, new, 1)
+              raise SystemExit('Reflection import anchor not found')
+          text = text.replace(old, '', 1)
 
-          old = '''        return $factory;
-    }
-
-    private function compiledFactory'''
-          new = '''        if (!is_callable($factory)) {
-            throw new InvalidConfigurationException(sprintf(
-                'Factory service for "%s" resolved to non-callable %s.',
-                $id,
-                get_debug_type($factory),
-            ));
-        }
-
-        return $factory;
-    }
-
-    private function compiledFactory'''
+          old = '        $container = Reflection::class(Container::class)->newLazyGhost(\n'
+          new = '        $container = (new ReflectionClass(Container::class))->newLazyGhost(\n'
           if old not in text:
-              raise SystemExit('FactoryResolver callable patch anchor not found')
-          factory.write_text(text.replace(old, new, 1))
-
-          builder = Path('src/ContainerBuilder.php')
-          text = builder.read_text()
-          text = text.replace(
-              'use Componenta\\Reflection\\Reflection;\n',
-              '',
-              1,
-          )
-          old = '''        $container = Reflection::class(Container::class)->newLazyGhost(
-'''
-          new = '''        $container = (new ReflectionClass(Container::class))->newLazyGhost(
-'''
-          if old not in text:
-              raise SystemExit('ContainerBuilder reflection patch anchor not found')
+              raise SystemExit('Container lazy reflection anchor not found')
           text = text.replace(old, new, 1)
 
           old = '''        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
@@ -114,11 +74,10 @@ jobs:
         return true;
 '''
           if old not in text:
-              raise SystemExit('ContainerBuilder invokable proxy patch anchor not found')
-          builder.write_text(text.replace(old, new, 1))
+              raise SystemExit('Invokable attribute anchor not found')
+          path.write_text(text.replace(old, new, 1))
           PY
 
-          php -l src/Resolver/Entry/FactoryResolver.php
           php -l src/ContainerBuilder.php
 
       - name: Commit patches
@@ -127,6 +86,6 @@ jobs:
           rm -f .automation/apply-recheck-patches
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/Resolver/Entry/FactoryResolver.php src/ContainerBuilder.php .automation/apply-recheck-patches
-          git commit -m "Validate runtime factories and proxy compilation"
+          git add src/ContainerBuilder.php .automation/apply-recheck-patches
+          git commit -m "Validate proxy compilation paths"
           git push origin HEAD:dev
