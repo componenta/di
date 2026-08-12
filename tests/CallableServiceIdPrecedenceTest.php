@@ -14,6 +14,13 @@ final class CallablePrecedenceNativeTarget
     {
         return 'native:' . $value;
     }
+
+    public static function factory(
+        ContainerInterface $_container,
+        array $_context = [],
+    ): string {
+        return 'native-factory';
+    }
 }
 
 final class CallablePrecedenceServiceTarget
@@ -21,6 +28,13 @@ final class CallablePrecedenceServiceTarget
     public function run(string $value): string
     {
         return 'service:' . $value;
+    }
+
+    public function factory(
+        ContainerInterface $_container,
+        array $_context = [],
+    ): string {
+        return 'service-factory';
     }
 }
 
@@ -63,14 +77,14 @@ describe('opaque callable service-id precedence', function () {
         expect(($resolver->resolve($id))('x'))->toBe('opaque:x');
     });
 
-    it('prefers a service owner over a native static method in array form', function () {
+    it('preserves a native static array callable even when its owner is a container id', function () {
         $resolver = new CallableResolver(callablePrecedenceContainer([
             CallablePrecedenceNativeTarget::class => new CallablePrecedenceServiceTarget(),
         ]));
 
         $callable = $resolver->resolve([CallablePrecedenceNativeTarget::class, 'run']);
 
-        expect($callable('x'))->toBe('service:x');
+        expect($callable('x'))->toBe('native:x');
     });
 
     it('routes callable string delegators through the callable resolver', function () {
@@ -94,5 +108,18 @@ describe('opaque callable service-id precedence', function () {
         );
 
         expect($resolver->resolve('entry'))->toBe('service-factory');
+    });
+
+    it('preserves a native static array factory even when its owner is a container id', function () {
+        $container = callablePrecedenceContainer([
+            CallablePrecedenceNativeTarget::class => new CallablePrecedenceServiceTarget(),
+        ]);
+        $resolver = new FactoryResolver(
+            ['entry' => [CallablePrecedenceNativeTarget::class, 'factory']],
+            $container,
+            new ProxyFactory(),
+        );
+
+        expect($resolver->resolve('entry'))->toBe('native-factory');
     });
 });
