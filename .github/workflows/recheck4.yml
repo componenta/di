@@ -29,3 +29,4 @@ jobs:
           tests/CallableExecutorTest.php
           tests/Resolver/Parameter/Request/RequestMapperSortValidationTest.php
           tests/Resolver/Parameter/Request/RequestAttributeAmbiguityTest.php
+          tests/TrustedCacheValidationTest.php
