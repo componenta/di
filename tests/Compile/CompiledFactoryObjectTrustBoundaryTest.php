@@ -9,7 +9,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
-it('does not infer compiled factory trust from an object restored at the cache boundary', function (): void {
+it('does not infer compiled factory path trust from an object restored at the cache boundary', function (): void {
     $root = sys_get_temp_dir() . '/componenta-compiled-object-trust-' . bin2hex(random_bytes(5));
     $base = $root . '/base';
     $outside = $root . '/outside.php';
@@ -42,7 +42,7 @@ it('does not infer compiled factory trust from an object restored at the cache b
     }
 });
 
-it('keeps compiled definitions untrusted after the real cache generator round trip', function (): void {
+it('keeps compiled definitions path-confined after the real cache generator round trip', function (): void {
     $root = sys_get_temp_dir() . '/componenta-compiled-cache-roundtrip-' . bin2hex(random_bytes(5));
     $base = $root . '/base';
     $outside = $root . '/outside.php';
@@ -87,9 +87,9 @@ it('keeps compiled definitions untrusted after the real cache generator round tr
     }
 });
 
-it('keeps a direct programmatic compiled factory object as an explicit trusted escape hatch', function (): void {
-    $class = 'CompiledFactoryProgrammaticTrust_' . bin2hex(random_bytes(6));
-    $file = tempnam(sys_get_temp_dir(), 'componenta-di-trusted-shard-');
+it('keeps direct programmatic compiled factory objects path-flexible while validating code', function (): void {
+    $class = 'CompiledFactoryProgrammatic_' . bin2hex(random_bytes(6));
+    $file = tempnam(sys_get_temp_dir(), 'componenta-di-programmatic-shard-');
 
     expect($file)->not->toBeFalse();
     /** @var non-empty-string $file */
@@ -109,7 +109,7 @@ final class %s
 
     public function create(array $parameters = []): string
     {
-        return 'trusted-programmatic';
+        return 'programmatic';
     }
 }
 
@@ -130,7 +130,7 @@ PHP,
             ],
         )->build();
 
-        expect($container->get('entry'))->toBe('trusted-programmatic');
+        expect($container->get('entry'))->toBe('programmatic');
     } finally {
         @unlink($file);
     }
