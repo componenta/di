@@ -12,7 +12,8 @@ use Psr\Container\ContainerInterface;
  *
  * String specifications are interpreted as opaque PSR-11 ids before native
  * PHP callable syntax. This matters for ids such as `strlen` or `Foo::bar`:
- * when the container owns such an id, the registered service wins.
+ * when the container owns such an exact string id, the registered service wins.
+ * Already-valid non-string callables keep their native PHP representation.
  */
 class CallableResolver implements CallableResolverInterface
 {
@@ -29,19 +30,20 @@ class CallableResolver implements CallableResolverInterface
             return $callable;
         }
 
-        // Strings and string-owned method arrays have DI semantics and must be
-        // resolved before PHP's is_callable() can reinterpret them as native
-        // functions/static methods.
+        // Strings are ambiguous with opaque PSR-11 ids, so exact service-id
+        // lookup must happen before PHP interprets them as functions or static
+        // methods. Native array/invokable callables are already explicit and
+        // retain their normal PHP precedence.
         if (is_string($callable)) {
             return $this->resolveString($callable);
         }
 
-        if (is_array($callable)) {
-            return $this->resolveArray($callable);
-        }
-
         if (is_callable($callable)) {
             return $callable;
+        }
+
+        if (is_array($callable)) {
+            return $this->resolveArray($callable);
         }
 
         throw InvalidCallableException::forValue($callable);
@@ -138,8 +140,9 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forValue($callable);
         }
 
-        // The first tuple element can itself be an opaque service id. Resolve
-        // it before treating a real class name as a native static callable.
+        // At this point the tuple was not already a native callable. Its first
+        // element may therefore be a class/interface instance reference or an
+        // opaque service id that owns the requested method.
         if ($this->container->has($objectOrClass)) {
             $entry = $this->container->get($objectOrClass);
             if (is_object($entry) && is_callable([$entry, $method])) {
@@ -151,11 +154,6 @@ class CallableResolver implements CallableResolverInterface
 
         if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
             throw InvalidCallableException::forValue($callable);
-        }
-
-        // Preserve native static callables provided through __callStatic().
-        if (is_callable([$objectOrClass, $method])) {
-            return [$objectOrClass, $method];
         }
 
         if (!method_exists($objectOrClass, $method)) {
