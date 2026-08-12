@@ -271,7 +271,7 @@ final class DependencyConfiguration
         }
     }
 
-    /** @return list<mixed> */
+    /** @return list<DelegatorSpecification> */
     public static function normalizeDelegatorList(mixed $value, string $id): array
     {
         $items = self::isCallableArraySpecification($value)
@@ -286,6 +286,7 @@ final class DependencyConfiguration
         return $normalized;
     }
 
+    /** @return DelegatorSpecification */
     public static function normalizeDelegatorSpecification(mixed $delegator, string $id): mixed
     {
         if (is_string($delegator) && $delegator !== '') {
