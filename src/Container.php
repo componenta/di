@@ -341,8 +341,9 @@ final readonly class Container implements
             return;
         }
 
+        $affectedDependencies = $this->deferredDependenciesTakenOverBy($container);
         $this->externalContainers->register($container);
-        $this->invalidateDeferredDelegators();
+        $this->invalidateDeferredDelegators($affectedDependencies);
     }
 
     public function alias(string $alias, string $target): void
@@ -438,6 +439,31 @@ final readonly class Container implements
         return $dependencies;
     }
 
+    /** @return list<string> */
+    private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
+    {
+        $dependencies = [];
+
+        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+            try {
+                $canonical = $this->aliases->resolve($dependencyId);
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($this->cache->tryGetBase($canonical, $base)
+                || $this->externalContainers->findOwning($canonical) !== null
+                || !$container->has($canonical)
+            ) {
+                continue;
+            }
+
+            $dependencies[] = $dependencyId;
+        }
+
+        return $dependencies;
+    }
+
     /** @return array<string, string|null> */
     private function deferredDependencyTargets(): array
     {
@@ -456,19 +482,13 @@ final readonly class Container implements
 
     /**
      * Invalidates decorated caches whose deferred callable dependencies were
-     * affected by a namespace mutation. Passing null is reserved for mutations
-     * such as adding an external container where every deferred dependency can
-     * potentially change ownership.
+     * affected by a namespace mutation.
      *
-     * @param iterable<string>|null $dependencyIds
+     * @param iterable<string> $dependencyIds
      */
-    private function invalidateDeferredDelegators(?iterable $dependencyIds = null): void
+    private function invalidateDeferredDelegators(iterable $dependencyIds): void
     {
-        $entries = $dependencyIds === null
-            ? $this->delegators->invalidateDeferred()
-            : $this->delegators->invalidateDependencies($dependencyIds);
-
-        foreach ($entries as $entryId) {
+        foreach ($this->delegators->invalidateDependencies($dependencyIds) as $entryId) {
             try {
                 $canonical = $this->aliases->resolve($entryId);
             } catch (Throwable) {
