@@ -363,12 +363,20 @@ class ContainerBuilder
             throw new InvalidConfigurationException('Runtime DI compiler services are unavailable.');
         }
 
-        $excluded = array_fill_keys([
+        $aliases = new AliasResolver($this->aliases);
+        $excluded = [];
+
+        // Runtime binding registration canonicalizes ids through aliases. AOT
+        // exclusions must use the same namespace or an explicit service stored
+        // under an alias can be compiled again under its concrete target.
+        foreach ([
             ...array_keys($this->factories),
             ...array_keys($this->services),
-            ...array_keys($this->aliases),
             ...$this->invokables,
-        ], true);
+        ] as $id) {
+            $excluded[$aliases->resolve($id)] = true;
+        }
+
         $plan = (new AutowireCompilationPlanner($attributes, $this->aliases))->plan(
             $entries,
             $excluded,
