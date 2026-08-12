@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\Exception\DelegatorException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+use ReflectionMethod;
 use Throwable;
 
 /**
@@ -24,8 +25,12 @@ final class DelegatorRegistry
     /** @var array<string, list<callable>> Normalised callables cache. */
     private array $callables = [];
 
-    /** @var array<string, true> Entry ids with namespace-dependent delegators. */
-    private array $deferredEntries = [];
+    /**
+     * Namespace dependency id -> decorated entry ids that depend on it.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private array $dependents = [];
 
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
@@ -35,8 +40,8 @@ final class DelegatorRegistry
     {
         $this->raw[$id][] = $delegator;
 
-        if (self::isDeferredReference($delegator)) {
-            $this->deferredEntries[$id] = true;
+        foreach (self::dependencyIds($delegator) as $dependencyId) {
+            $this->dependents[$dependencyId][$id] = true;
         }
 
         unset($this->callables[$id]);
@@ -47,31 +52,48 @@ final class DelegatorRegistry
         unset($this->callables[$id]);
     }
 
+    /** @return list<string> */
+    public function deferredDependencies(): array
+    {
+        return array_keys($this->dependents);
+    }
+
     /**
-     * Invalidates every normalised chain containing a deferred service-id
-     * reference and returns the decorated entry ids whose resolved cache must
-     * also be dropped by the container.
+     * Invalidates normalised chains that depend on the supplied namespace ids
+     * and returns the decorated entry ids whose resolved cache must be dropped.
      *
-     * Alias mutation must invalidate the complete deferred set rather than only
-     * references whose raw id equals the changed alias: another reference can
-     * point to an alias that resolves transitively through it. The same rule is
-     * required when a service is replaced or a new external container changes
-     * the PSR-11 namespace visible to CallableResolver.
+     * @param iterable<string> $dependencyIds
+     * @return list<string>
+     */
+    public function invalidateDependencies(iterable $dependencyIds): array
+    {
+        /** @var array<string, true> $entries */
+        $entries = [];
+
+        foreach ($dependencyIds as $dependencyId) {
+            foreach ($this->dependents[$dependencyId] ?? [] as $entry => $_) {
+                $entries[$entry] = true;
+            }
+        }
+
+        foreach ($entries as $entry => $_) {
+            unset($this->callables[$entry]);
+        }
+
+        return array_keys($entries);
+    }
+
+    /**
+     * Invalidates every namespace-dependent delegator chain.
      *
-     * These mutations are control-plane operations, so correctness is preferred
-     * over maintaining a reverse transitive alias graph here.
+     * Used when the complete external PSR-11 namespace changes and no narrower
+     * dependency set can be established safely.
      *
      * @return list<string>
      */
     public function invalidateDeferred(): array
     {
-        $entries = array_keys($this->deferredEntries);
-
-        foreach ($entries as $entry) {
-            unset($this->callables[$entry]);
-        }
-
-        return $entries;
+        return $this->invalidateDependencies($this->deferredDependencies());
     }
 
     /**
@@ -137,16 +159,45 @@ final class DelegatorRegistry
         return $this->callableResolver->resolve($delegator);
     }
 
-    private static function isDeferredReference(mixed $delegator): bool
+    /** @return list<string> */
+    private static function dependencyIds(mixed $delegator): array
     {
         if (is_string($delegator)) {
-            return $delegator !== '';
+            if ($delegator === '') {
+                return [];
+            }
+
+            $ids = [$delegator => true];
+
+            // A non-static Class::method string can depend on the class or
+            // interface service as well as on an exact opaque "Class::method"
+            // id. Track both so replacing/retargeting the owner re-resolves the
+            // cached callable without making unrelated service changes global.
+            if (str_contains($delegator, '::')) {
+                [$owner, $method] = explode('::', $delegator, 2);
+
+                if ($owner !== ''
+                    && $method !== ''
+                    && (class_exists($owner) || interface_exists($owner))
+                    && method_exists($owner, $method)
+                    && !(new ReflectionMethod($owner, $method))->isStatic()
+                ) {
+                    $ids[$owner] = true;
+                }
+            }
+
+            return array_keys($ids);
         }
 
-        return is_array($delegator)
+        if (is_array($delegator)
             && !is_callable($delegator)
             && array_keys($delegator) === [0, 1]
             && is_string($delegator[0])
-            && $delegator[0] !== '';
+            && $delegator[0] !== ''
+        ) {
+            return [$delegator[0]];
+        }
+
+        return [];
     }
 }
