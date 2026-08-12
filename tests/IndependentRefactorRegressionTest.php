@@ -92,6 +92,26 @@ it('keeps unrelated namespace mutations from invalidating a cached deferred deco
         ->and($calls)->toBe(1);
 });
 
+it('re-resolves a deferred callable when that callable service is decorated', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $handler = static fn(string $entry, ContainerInterface $_container): string => $entry . ':handler';
+
+    $container->set('handler', $handler);
+    $container->set('service', 'base');
+    $container->delegator('service', 'handler');
+
+    expect($container->get('service'))->toBe('base:handler');
+
+    $container->delegator(
+        'handler',
+        static fn(callable $entry, ContainerInterface $_container): callable =>
+            static fn(string $value, ContainerInterface $container): string =>
+                $entry($value, $container) . ':decorated',
+    );
+
+    expect($container->get('service'))->toBe('base:handler:decorated');
+});
+
 it('keeps opaque alias roots on the runtime path instead of treating them as missing classes', function (): void {
     $classes = (new AutowireClassGraph([
         IndependentOpaqueAliasContract::class => 'external.service',
