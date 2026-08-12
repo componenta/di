@@ -120,6 +120,8 @@ assert($first !== $second);
 
 Ссылка на метод делегатора может использовать конкретный класс, интерфейс или произвольный id сервиса, например `[DecoratorInterface::class, 'decorate']` или `['decorator.service', 'decorate']`. В bulk/config-конфигурации ссылку с произвольным id сервиса нужно записывать вложенно: `[['decorator.service', 'decorate']]`; плоская форма `['first', 'second']` по-прежнему означает список из двух строковых делегаторов.
 
+Резолвер параметров и обработчик атрибутов можно зарегистрировать как готовый экземпляр, id сервиса, callable-фабрику либо фабрику вида `[service-id, 'method']`. Метод получает контейнер и возвращает расширение. В отличие от bulk-конфигурации делегаторов, описание расширения уже является одним значением, поэтому `['extension.factory', 'create']` не требует дополнительной вложенности.
+
 Обычная фабрика получает `Componenta\Config\ContainerValue` и контекст текущего разрешения:
 
 ```php
@@ -160,15 +162,23 @@ $container->set(
 | `ConfigKey::ALIASES` | `array<string, string>` |
 | `ConfigKey::DELEGATORS` | `array<string, callable|string|array|list<...>>` |
 | `ConfigKey::SERVICES` | `array<string, mixed>` |
-| `ConfigKey::PARAMETER_RESOLVERS` | `array<int, class-string|callable|ParameterResolverInterface>` |
+| `ConfigKey::PARAMETER_RESOLVERS` | `array<int, class-string|callable|array{0:string,1:string}|ParameterResolverInterface>` |
 | `ConfigKey::PARAMETER_RESOLVERS_REPLACE` | `bool` |
-| `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|AttributeHandlerInterface>` |
+| `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|array{0:string,1:string}|AttributeHandlerInterface>` |
 | `ConfigKey::ATTRIBUTE_HANDLERS_REPLACE` | `bool` |
-
 
 Неизвестные ключи и неправильные форматы приводят к `InvalidConfigurationException`.
 
-`configureFromCache($config, $cache, $baseDir)` принимает версионированный конверт кеша или простой массив зависимостей. Если передан `$baseDir`, относительные пути из описаний скомпилированных фабрик вычисляются от него.
+`configureFromCache($config, $cache, $baseDir)` принимает только версионированный конверт постоянного кеша:
+
+```php
+[
+    'version' => ContainerBuilder::CACHE_VERSION,
+    ConfigKey::DEPENDENCIES => $dependencies,
+]
+```
+
+Простой массив зависимостей и прежний маркер `validated` больше не принимаются. Если передан `$baseDir`, относительные пути из описаний скомпилированных фабрик вычисляются от него.
 
 `ConfigProvider` регистрирует необязательные резолверы преобразования типов, текущего пользователя и PSR-7-запроса. Приложение Componenta может обнаружить его через метаданные пакета.
 
@@ -243,7 +253,7 @@ interface ParameterResolverInterface
 
 Обработчик атрибута реализует `AttributeHandlerInterface`, предоставляет неизменяемые свойства `phase` и `priority`, а также методы `supportsAttribute()` и `handle()`. Обработчик, способный создавать PHP-код, дополнительно реализует `CompilableAttributeHandlerInterface`.
 
-После сборки контейнера обе цепочки закрываются от изменений. Попытка изменить полученный из контейнера реестр приводит к ошибке.
+Оба типа расширений можно передавать готовыми либо создавать через сервис/callable-фабрику, включая `['service.id', 'method']`. После сборки контейнера обе цепочки закрываются от изменений. Попытка изменить полученный из контейнера реестр приводит к ошибке.
 
 ## Скомпилированные фабрики в боевом окружении
 
@@ -267,11 +277,11 @@ $dependencies[ConfigKey::FACTORIES] = array_replace(
 );
 ```
 
-Каждый `CompiledFactoryDefinition` содержит относительный путь к шарду, имя сгенерированного класса и метод фабрики. Имя шарда зависит от его содержимого. Файл подключается только при первом запросе одного из его элементов, после чего экземпляр шарда повторно используется контейнером. При запуске SHA-256 исходных файлов не пересчитывается. Для динамических классов сохраняется автоматическая сборка через рефлексию.
+Каждый `CompiledFactoryDefinition` содержит относительный путь к шарду, имя сгенерированного класса и метод фабрики. Имя шарда зависит от его содержимого. Файл подключается только при первом запросе одного из его элементов, после чего экземпляр шарда повторно используется контейнером. При обычной холодной загрузке shard не хешируется перед `require`; если тот же сгенерированный класс уже загружен из другого физического каталога кеша, второй shard допускается только при совпадении SHA-256 обоих файлов. Для динамических классов сохраняется автоматическая сборка через рефлексию.
 
 Корни обычно определяет прикладной слой. `componenta/app` предоставляет сборочный контракт `AutowireEntryContributorInterface` и обрабатывает `#[Autowire]`; интеграции Router, CQRS и boot автоматически добавляют известные им классы.
 
-`DiCacheGeneratorInterface::generate(array $config, string $path)` атомарно записывает переданный массив как PHP-файл. Он не ищет классы и не компилирует фабрики. Кеши сервисов принадлежат экземпляру `Container`, а постоянными файлами кеша и OPcache управляет развертывание.
+`DiCacheGeneratorInterface::generate(array $config, string $path)` атомарно записывает переданный массив как PHP-файл. Он не ищет классы и не компилирует фабрики. Для последующей загрузки через `configureFromCache()` нужно записывать показанный выше версионированный конверт. Кеши сервисов принадлежат экземпляру `Container`, а постоянными файлами кеша и OPcache управляет развертывание.
 ## Исключения
 
 | Исключение | Причина |
