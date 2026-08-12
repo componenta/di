@@ -1,4 +1,4 @@
-name: Sixth pass parity verification
+name: Sixth pass full verification
 
 on:
   push:
@@ -19,6 +19,10 @@ jobs:
           coverage: none
           tools: composer:v2
       - run: composer install --no-interaction --prefer-dist --no-progress
-      - run: vendor/bin/pest tests/Architecture/CompiledPrivateLazyConstructorParityTest.php --colors=always
+      - run: composer validate --strict
+      - run: composer audit --no-interaction
+      - name: PHP syntax check
+        run: find src tests verification benchmarks -name '*.php' -print0 | xargs -0 -n1 php -l
       - run: composer phpstan
+      - run: composer test
       - run: composer cs-check
