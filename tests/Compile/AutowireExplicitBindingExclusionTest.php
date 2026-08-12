@@ -46,7 +46,6 @@ it('excludes the canonical target of an explicitly bound aliased service from AO
             new Config([]),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => $factories,
                     ConfigKey::ALIASES => [
