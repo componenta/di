@@ -70,10 +70,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $definition = $this->factories[$id];
             $compiled = CompiledFactoryDefinition::decode($definition);
             if ($compiled !== null) {
-                $factory = $this->compiledFactory(
-                    $compiled,
-                    $definition instanceof CompiledFactoryDefinition,
-                );
+                $factory = $this->compiledFactory($compiled);
                 $this->factories[$id] = $compiled;
                 $this->compiledFactories[$id] = $factory;
 
@@ -134,21 +131,19 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     }
 
     /** @return callable(array<string|int, mixed>): mixed */
-    private function compiledFactory(
-        CompiledFactoryDefinition $definition,
-        bool $explicitDefinition = false,
-    ): callable {
+    private function compiledFactory(CompiledFactoryDefinition $definition): callable
+    {
         if ($this->parametersResolver === null || $this->attributeProcessor === null) {
             throw new InvalidConfigurationException(
                 'Compiled factories require the runtime parameter and attribute pipelines.',
             );
         }
 
-        // Encoded cache definitions are confined to the configured base before
-        // executable code is loaded. An in-memory CompiledFactoryDefinition is
-        // explicit programmatic configuration and is therefore treated like
-        // the existing trustedCompiledFactories escape hatch.
-        $trusted = $this->trustedCompiledFactories || $explicitDefinition;
+        // Trust is an explicit resolver configuration, never a property of the
+        // PHP representation. Cache exporters can round-trip a readonly
+        // CompiledFactoryDefinition as an object, so treating object instances
+        // as trusted would let cache input bypass base-directory confinement.
+        $trusted = $this->trustedCompiledFactories;
         $file = (new CompiledFactoryPathResolver(
             $this->compiledFactoryBaseDir,
             $trusted,
