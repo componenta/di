@@ -6,6 +6,7 @@ namespace Componenta\DI\Configuration;
 
 use Closure;
 use Componenta\DI\AliasResolver;
+use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -91,7 +92,10 @@ final class DependencyConfiguration
 
     /**
      * Extracts dependencies from either a versioned cache envelope or the
-     * legacy raw dependency array.
+     * legacy raw dependency array. Compiled definitions are normalized to their
+     * encoded representation at this boundary so an object reconstructed by a
+     * PHP cache exporter cannot acquire the programmatic-object trust semantics
+     * used outside configureFromCache().
      *
      * @param array<string, mixed> $cache
      * @return array<string, mixed>
@@ -106,7 +110,7 @@ final class DependencyConfiguration
             || array_key_exists($validatedKey, $cache);
 
         if (!$isEnvelope) {
-            return $cache;
+            return self::encodeCompiledFactoryDefinitions($cache);
         }
 
         self::assertCacheEnvelopeShape($cache, $validatedKey);
@@ -128,6 +132,28 @@ final class DependencyConfiguration
         }
 
         /** @var array<string, mixed> $dependencies */
+        return self::encodeCompiledFactoryDefinitions($dependencies);
+    }
+
+    /**
+     * @param array<string, mixed> $dependencies
+     * @return array<string, mixed>
+     */
+    private static function encodeCompiledFactoryDefinitions(array $dependencies): array
+    {
+        $factories = $dependencies[ConfigKey::FACTORIES] ?? null;
+        if (!is_array($factories)) {
+            return $dependencies;
+        }
+
+        foreach ($factories as $id => $factory) {
+            if ($factory instanceof CompiledFactoryDefinition) {
+                $factories[$id] = $factory->encode();
+            }
+        }
+
+        $dependencies[ConfigKey::FACTORIES] = $factories;
+
         return $dependencies;
     }
 
