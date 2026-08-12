@@ -1,0 +1,25 @@
+name: Fifth pass focused verification
+
+on:
+  push:
+    branches:
+      - verify-dev-recheck-5-focused
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: php -l src/ContainerBuilder.php && php -l src/Resolver/Entry/FactoryResolver.php && php -l tests/CacheEnvelopeValidationTest.php && php -l tests/CompiledFactoryBoundaryValidationTest.php
+      - run: vendor/bin/phpstan analyse --level=max src/ContainerBuilder.php src/Resolver/Entry/FactoryResolver.php
+      - run: vendor/bin/pest tests/CacheEnvelopeValidationTest.php tests/CompiledFactoryBoundaryValidationTest.php --colors=always
+      - run: vendor/bin/php-cs-fixer fix --dry-run --diff src/ContainerBuilder.php src/Resolver/Entry/FactoryResolver.php tests/CacheEnvelopeValidationTest.php tests/CompiledFactoryBoundaryValidationTest.php
