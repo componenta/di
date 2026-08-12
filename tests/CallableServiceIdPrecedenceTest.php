@@ -104,7 +104,7 @@ describe('opaque callable service-id precedence', function () {
         ])));
         $registry->register('entry', [CallablePrecedenceNativeTarget::class, 'run']);
 
-        expect($registry->invalidateDeferred())->toBe([]);
+        expect($registry->deferredDependencies())->toBe([]);
     });
 
     it('prefers a factory service id over a same-named native function', function () {
