@@ -136,11 +136,10 @@ final class DelegatorRegistry
             return $delegator;
         }
 
-        if (is_string($delegator)
-            || (is_array($delegator)
-                && isset($delegator[0])
-                && is_string($delegator[0]))
-        ) {
+        // Strings remain ambiguous with opaque service ids and must be resolved
+        // through CallableResolver. Any already-valid non-string callable is an
+        // explicit PHP callable and does not depend on container namespace.
+        if (is_string($delegator)) {
             return $this->callableResolver->resolve($delegator);
         }
 
@@ -159,6 +158,7 @@ final class DelegatorRegistry
         }
 
         if (is_array($delegator)
+            && !is_callable($delegator)
             && array_keys($delegator) === [0, 1]
             && is_string($delegator[0])
             && $delegator[0] !== ''
