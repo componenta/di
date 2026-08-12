@@ -791,6 +791,7 @@ class ContainerBuilder
                 ? $container->get($config)
                 : (is_callable($config) ? $config($container) : $container->get($config));
         } elseif (is_array($config)
+            && !is_callable($config)
             && array_keys($config) === [0, 1]
             && is_string($config[0])
             && is_string($config[1])
