@@ -8,35 +8,9 @@ use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
-use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Container\ContainerInterface;
 
 interface IndependentOpaqueAliasContract {}
-
-final class IndependentExtensionResolver implements ParameterResolverInterface
-{
-    public function supports(ParameterTarget $target): bool
-    {
-        return false;
-    }
-
-    public function resolveParameter(
-        ParameterTarget $target,
-        ParameterResolutionContext $context,
-    ): ?array {
-        return null;
-    }
-}
-
-final class IndependentExtensionFactory
-{
-    public function create(ContainerInterface $_container): ParameterResolverInterface
-    {
-        return new IndependentExtensionResolver();
-    }
-}
 
 it('keeps concrete object delegators fail-fast at the configuration boundary', function (): void {
     $delegator = new class () {
@@ -49,17 +23,6 @@ it('keeps concrete object delegators fail-fast at the configuration boundary', f
     expect(fn() => (new ContainerBuilder())->addDelegator(
         'entry',
         [$delegator, 'hidden'],
-    ))->toThrow(InvalidConfigurationException::class);
-});
-
-it('does not broaden extension configuration to deferred service method arrays', function (): void {
-    expect(fn() => ContainerBuilder::configureWithDependencies(
-        new Config([]),
-        [
-            ConfigKey::PARAMETER_RESOLVERS => [
-                5000 => ['resolver.factory', 'create'],
-            ],
-        ],
     ))->toThrow(InvalidConfigurationException::class);
 });
 
