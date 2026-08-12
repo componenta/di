@@ -328,12 +328,11 @@ describe('ContainerBuilder', function () {
             ->toHaveKey(ConfigKey::ATTRIBUTE_HANDLERS_REPLACE, true);
     });
 
-    it('revalidates a trusted cache after a conflicting runtime binding is added', function () {
+    it('revalidates persistent cache after a conflicting runtime binding is added', function () {
         $builder = ContainerBuilder::configureFromCache(
             new Config([]),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => [
                         'builder.conflict' => static fn() => new \stdClass(),
