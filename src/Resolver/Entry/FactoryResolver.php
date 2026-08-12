@@ -6,6 +6,7 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
+use Componenta\DI\Compile\Factory\CompiledFactoryPathResolver;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
@@ -18,6 +19,7 @@ use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+use ReflectionClass;
 
 /** Resolves container entries using factory callables or class definitions. */
 class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
@@ -27,6 +29,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
 
     /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
+
+    private ?CompiledFactoryPathResolver $compiledFactoryPaths = null;
 
     /** @param array<string, mixed> $factories */
     public function __construct(
@@ -99,9 +103,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $factory = $this->createFactoryFromDefinition($factory);
         }
 
-        // String specifications and string-owned callable arrays are service
-        // references first. Only fall back to native PHP callable semantics
-        // when the container does not own the referenced id.
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
         } elseif (is_array($factory)
@@ -140,10 +141,13 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             );
         }
 
-        $file = $definition->file;
-        if ($this->compiledFactoryBaseDir !== null && !self::isAbsolutePath($file)) {
-            $file = rtrim($this->compiledFactoryBaseDir, '/\\') . '/' . ltrim($file, '/\\');
-        }
+        // Resolve and confine the executable file before inspecting or loading
+        // its class. This prevents traversal/symlink escapes and also prevents a
+        // preloaded class from bypassing shard-path validation.
+        $file = ($this->compiledFactoryPaths ??= new CompiledFactoryPathResolver(
+            $this->compiledFactoryBaseDir,
+            $this->trustedCompiledFactories,
+        ))->resolve($definition->file);
 
         $class = $definition->class;
         $shard = $this->compiledShards[$file] ?? null;
@@ -159,13 +163,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
 
         if ($shard === null) {
             if (!class_exists($class, false)) {
-                if (!$this->trustedCompiledFactories && !is_file($file)) {
-                    throw new InvalidConfigurationException(sprintf(
-                        'Compiled factory shard "%s" does not exist.',
-                        $file,
-                    ));
-                }
-
                 $loadedClass = require $file;
                 if (!$this->trustedCompiledFactories
                     && (!is_string($loadedClass)
@@ -177,6 +174,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
                         $file,
                     ));
                 }
+            } elseif (!$this->trustedCompiledFactories) {
+                self::assertLoadedFrom($class, $file);
             }
 
             $shard = new $class(
@@ -199,15 +198,22 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
         return $factory;
     }
 
-    private static function isAbsolutePath(string $path): bool
+    /** @param class-string $class */
+    private static function assertLoadedFrom(string $class, string $expectedFile): void
     {
-        return $path !== ''
-            && ($path[0] === '/'
-                || $path[0] === '\\'
-                || (strlen($path) >= 3
-                && ctype_alpha($path[0])
-                && $path[1] === ':'
-                && ($path[2] === '/' || $path[2] === '\\')));
+        $loadedFile = (new ReflectionClass($class))->getFileName();
+        $loadedFile = $loadedFile === false ? false : realpath($loadedFile);
+        $expectedFile = realpath($expectedFile);
+
+        if ($loadedFile === false
+            || $expectedFile === false
+            || $loadedFile !== $expectedFile
+        ) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled factory class "%s" is already loaded from an unexpected file.',
+                $class,
+            ));
+        }
     }
 
     /** @return callable(ContainerValue, array<string|int, mixed>): object */
