@@ -11,15 +11,8 @@ use Psr\Container\ContainerInterface;
 use Throwable;
 
 /**
- * Keeps track of delegator (decorator) callables attached to container
- * entries and applies them in order.
- *
- * Delegators are stored in their raw registration form (Closure, service id,
- * `[class, method]`) and normalised to callables on first use; the resolved
- * callables are cached until the registry is invalidated for that entry.
- *
- * Container-typed exceptions raised by a delegator surface unchanged
- * (PSR-11 contract); other Throwables are wrapped into {@see DelegatorException}.
+ * Keeps track of delegator callables attached to container entries and applies
+ * them in registration order.
  *
  * @internal
  */
@@ -35,34 +28,20 @@ final class DelegatorRegistry
         private readonly CallableResolverInterface $callableResolver,
     ) {}
 
-    /**
-     * Records a new delegator and invalidates the resolved-callable cache for
-     * the entry so subsequent applications re-normalise the chain.
-     */
     public function register(string $id, mixed $delegator): void
     {
         $this->raw[$id][] = $delegator;
         unset($this->callables[$id]);
     }
 
-    /**
-     * Drops the resolved-callable cache for the entry; raw registrations are
-     * preserved. Container invokes this from its invalidation flow so the
-     * chain is re-normalised on next use.
-     */
     public function invalidate(string $id): void
     {
         unset($this->callables[$id]);
     }
 
     /**
-     * Runs every registered delegator on the entry in registration order.
-     *
-     * @param ContainerInterface $container Container reference passed as the
-     *                                      second argument to each delegator.
-     *
-     * @throws DelegatorException If a delegator or its resolution raised a
-     *                            non-container exception.
+     * @param ContainerInterface $container Container passed as the second delegator argument.
+     * @throws DelegatorException
      */
     public function apply(string $id, mixed $entry, ContainerInterface $container): mixed
     {
@@ -85,11 +64,7 @@ final class DelegatorRegistry
         return $entry;
     }
 
-    /**
-     * @return list<callable>
-     *
-     * @throws DelegatorException
-     */
+    /** @return list<callable> */
     private function resolveChain(string $id): array
     {
         $callables = [];
@@ -111,6 +86,17 @@ final class DelegatorRegistry
     {
         if ($delegator instanceof Closure) {
             return $delegator;
+        }
+
+        // String and [string, method] forms can be opaque service references.
+        // They must pass through CallableResolver before is_callable() can
+        // reinterpret them as a native function/static method.
+        if (is_string($delegator)
+            || (is_array($delegator)
+                && isset($delegator[0])
+                && is_string($delegator[0]))
+        ) {
+            return $this->callableResolver->resolve($delegator);
         }
 
         if (is_callable($delegator)) {

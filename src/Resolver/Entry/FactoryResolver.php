@@ -99,6 +99,19 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $factory = $this->createFactoryFromDefinition($factory);
         }
 
+        // String specifications and string-owned callable arrays are service
+        // references first. Only fall back to native PHP callable semantics
+        // when the container does not own the referenced id.
+        if (is_string($factory) && $this->container->has($factory)) {
+            $factory = $this->container->get($factory);
+        } elseif (is_array($factory)
+            && isset($factory[0])
+            && is_string($factory[0])
+            && $this->container->has($factory[0])
+        ) {
+            $factory[0] = $this->container->get($factory[0]);
+        }
+
         if (!is_callable($factory)) {
             if (is_string($factory)) {
                 $factory = $this->container->get($factory);

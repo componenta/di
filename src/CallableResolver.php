@@ -10,43 +10,9 @@ use Psr\Container\ContainerInterface;
 /**
  * Resolves various formats into PHP callables.
  *
- * Supports multiple callable formats:
- * - Closure: returned as-is
- * - Native callable (array/invokable): returned in its stable native form
- * - String service ID: fetched from container if callable
- * - String with `::`: static method or instance method via container
- * - Array [class/interface, method]: instance fetched from container
- *
- * Performance optimizations:
- * - Valid native callables are not wrapped in transient first-class Closures
- * - Static method reflection results are cached
- * - Reflection is only used when necessary (static vs instance check)
- * - Early returns avoid unnecessary checks
- *
- * Keeping the native representation lets {@see CallableExecutor} reuse stable
- * reflection metadata and prevents long-running workers from retaining one
- * generated Closure per invocation.
- *
- * The container is mandatory and supplied through the constructor; supply
- * {@see NullContainer} if no real lookup is needed at the time of construction.
- *
- * @example Static method
- * ```php
- * $callable = $resolver->resolve('MyClass::staticMethod');
- * ```
- *
- * @example Instance method (requires container)
- * ```php
- * $callable = $resolver->resolve('MyService::handle');
- * $callable = $resolver->resolve([MyService::class, 'handle']);
- * ```
- *
- * @example Invokable service
- * ```php
- * $callable = $resolver->resolve(MyHandler::class);
- * ```
- *
- * @throws InvalidCallableException If callable cannot be resolved.
+ * String specifications are interpreted as opaque PSR-11 ids before native
+ * PHP callable syntax. This matters for ids such as `strlen` or `Foo::bar`:
+ * when the container owns such an id, the registered service wins.
  */
 class CallableResolver implements CallableResolverInterface
 {
@@ -59,24 +25,23 @@ class CallableResolver implements CallableResolverInterface
 
     public function resolve(mixed $callable): callable
     {
-        // Closure - return as-is.
         if ($callable instanceof \Closure) {
             return $callable;
         }
 
-        // Already callable - preserve its stable native representation.
-        if (is_callable($callable)) {
-            return $callable;
-        }
-
-        // String - resolve service id, class::method, or function.
+        // Strings and string-owned method arrays have DI semantics and must be
+        // resolved before PHP's is_callable() can reinterpret them as native
+        // functions/static methods.
         if (is_string($callable)) {
             return $this->resolveString($callable);
         }
 
-        // Array - resolve [class/interface, method].
         if (is_array($callable)) {
             return $this->resolveArray($callable);
+        }
+
+        if (is_callable($callable)) {
+            return $callable;
         }
 
         throw InvalidCallableException::forValue($callable);
@@ -84,8 +49,8 @@ class CallableResolver implements CallableResolverInterface
 
     protected function resolveString(string $callable): callable
     {
-        // PSR-11 ids are opaque. A registered id wins even when it contains
-        // syntax such as "::" that could otherwise look like a method ref.
+        // PSR-11 ids are opaque. A registered/resolvable id wins even when it
+        // contains syntax such as "::" or matches a native PHP function.
         if ($this->container->has($callable)) {
             $entry = $this->container->get($callable);
             if (is_callable($entry)) {
@@ -156,54 +121,48 @@ class CallableResolver implements CallableResolverInterface
         }
 
         if (is_object($objectOrClass)) {
+            if (is_callable([$objectOrClass, $method])) {
+                return [$objectOrClass, $method];
+            }
+
             throw InvalidCallableException::forMethod($objectOrClass::class, $method);
         }
 
-        if (is_string($objectOrClass)) {
-            if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
-                if ($this->container->has($objectOrClass)) {
-                    $entry = $this->container->get($objectOrClass);
-                    if (is_object($entry) && is_callable([$entry, $method])) {
-                        return [$entry, $method];
-                    }
-
-                    throw InvalidCallableException::forMethod($objectOrClass, $method);
-                }
-
-                throw InvalidCallableException::forValue($callable);
-            }
-
-            if (!method_exists($objectOrClass, $method)) {
-                throw InvalidCallableException::forMethod($objectOrClass, $method);
-            }
-
-            if ($this->isStaticMethod($objectOrClass, $method)) {
-                if (is_callable($callable)) {
-                    return $callable;
-                }
-
-                throw InvalidCallableException::forMethod($objectOrClass, $method);
-            }
-
-            if ($this->container->has($objectOrClass)) {
-                $entry = $this->container->get($objectOrClass);
-                if (is_object($entry) && is_callable([$entry, $method])) {
-                    return [$entry, $method];
-                }
-
-                throw InvalidCallableException::forMethod($objectOrClass, $method);
-            }
-
-            throw InvalidCallableException::forMissingService($objectOrClass);
+        if (!is_string($objectOrClass) || $objectOrClass === '') {
+            throw InvalidCallableException::forValue($callable);
         }
 
-        throw InvalidCallableException::forValue($callable);
+        // The first tuple element can itself be an opaque service id. Resolve
+        // it before treating a real class name as a native static callable.
+        if ($this->container->has($objectOrClass)) {
+            $entry = $this->container->get($objectOrClass);
+            if (is_object($entry) && is_callable([$entry, $method])) {
+                return [$entry, $method];
+            }
+
+            throw InvalidCallableException::forMethod($objectOrClass, $method);
+        }
+
+        if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
+            throw InvalidCallableException::forValue($callable);
+        }
+
+        if (!method_exists($objectOrClass, $method)) {
+            throw InvalidCallableException::forMethod($objectOrClass, $method);
+        }
+
+        if ($this->isStaticMethod($objectOrClass, $method)) {
+            if (is_callable([$objectOrClass, $method])) {
+                return [$objectOrClass, $method];
+            }
+
+            throw InvalidCallableException::forMethod($objectOrClass, $method);
+        }
+
+        throw InvalidCallableException::forMissingService($objectOrClass);
     }
 
-    /**
-     * Checks if method is static with caching.
-     * @throws \ReflectionException
-     */
+    /** @throws \ReflectionException */
     private function isStaticMethod(string $class, string $method): bool
     {
         $key = $class . '::' . $method;
