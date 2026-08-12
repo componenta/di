@@ -14,7 +14,6 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Container\ContainerInterface;
-use Reflector;
 
 final class ServiceMethodParameterResolver implements ParameterResolverInterface
 {
