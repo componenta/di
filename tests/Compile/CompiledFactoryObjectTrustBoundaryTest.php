@@ -200,3 +200,72 @@ PHP,
         @rmdir($root);
     }
 });
+
+it('rejects an already loaded generated class when the second cache root contains different source', function (): void {
+    $root = sys_get_temp_dir() . '/componenta-different-shard-roots-' . bin2hex(random_bytes(5));
+    $firstBase = $root . '/first';
+    $secondBase = $root . '/second';
+    $file = 'shared.php';
+    $class = 'CompiledFactoryDifferentRoot_' . bin2hex(random_bytes(6));
+    mkdir($firstBase, 0777, true);
+    mkdir($secondBase, 0777, true);
+
+    $source = static function (string $value) use ($class): string {
+        return sprintf(
+            <<<'PHP'
+<?php
+
+final class %s
+{
+    public function __construct(
+        array $parameterResolvers,
+        array $attributeHandlers,
+        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
+    ) {}
+
+    public function create(array $parameters = []): string
+    {
+        return %s;
+    }
+}
+
+return %s::class;
+PHP,
+            $class,
+            var_export($value, true),
+            $class,
+        );
+    };
+    file_put_contents($firstBase . '/' . $file, $source('first'));
+    file_put_contents($secondBase . '/' . $file, $source('second'));
+    $definition = (new CompiledFactoryDefinition($file, $class, 'create'))->encode();
+
+    try {
+        $cache = [
+            'version' => ContainerBuilder::CACHE_VERSION,
+            ConfigKey::DEPENDENCIES => [
+                ConfigKey::FACTORIES => ['entry' => $definition],
+            ],
+        ];
+        $first = ContainerBuilder::configureFromCache(
+            new Config([]),
+            $cache,
+            $firstBase,
+        )->build();
+        $second = ContainerBuilder::configureFromCache(
+            new Config([]),
+            $cache,
+            $secondBase,
+        )->build();
+
+        expect($first->get('entry'))->toBe('first')
+            ->and(fn() => $second->get('entry'))
+            ->toThrow(InvalidConfigurationException::class, 'different shard');
+    } finally {
+        @unlink($firstBase . '/' . $file);
+        @unlink($secondBase . '/' . $file);
+        @rmdir($firstBase);
+        @rmdir($secondBase);
+        @rmdir($root);
+    }
+});
