@@ -194,7 +194,6 @@ it('keeps development reflection and production compiled containers observably e
             new Config($configData),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => $productionDependencies,
             ],
             $directory,
