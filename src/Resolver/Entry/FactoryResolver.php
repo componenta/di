@@ -149,14 +149,16 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             );
         }
 
-        // Direct in-memory definitions are an explicit programmatic escape
-        // hatch. configureFromCache() normalizes object definitions back to the
-        // encoded form before this resolver sees them, so cache provenance can
-        // never acquire trust merely because a PHP exporter rebuilt the object.
-        $trusted = $this->trustedCompiledFactories || $explicitDefinition;
+        // A direct definition is allowed to choose its path like it did before
+        // cache path hardening, but it does not thereby become trusted code.
+        // Only the explicit resolver flag disables returned-class validation.
+        // Cache definitions are encoded at configureFromCache() and therefore
+        // remain both path-confined and origin-checked.
+        $pathTrusted = $this->trustedCompiledFactories || $explicitDefinition;
+        $codeTrusted = $this->trustedCompiledFactories;
         $file = (new CompiledFactoryPathResolver(
             $this->compiledFactoryBaseDir,
-            $trusted,
+            $pathTrusted,
         ))->resolve($definition->file);
 
         $class = $definition->class;
@@ -174,7 +176,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
         if ($shard === null) {
             if (!class_exists($class, false)) {
                 $loadedClass = require $file;
-                if (!$trusted
+                if (!$codeTrusted
                     && (!is_string($loadedClass)
                         || $loadedClass !== $class
                         || !class_exists($class, false))
@@ -184,7 +186,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
                         $file,
                     ));
                 }
-            } elseif (!$trusted) {
+            } elseif (!$codeTrusted && !$explicitDefinition) {
                 self::assertLoadedFrom($class, $file);
             }
 
