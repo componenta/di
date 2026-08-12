@@ -245,6 +245,8 @@ final readonly class Container implements
             ));
         }
 
+        $affectedDependencies = $this->deferredDependenciesResolvingTo($canonical);
+
         if ($entry instanceof DefinitionInterface) {
             if (!$this->resolver instanceof DefinitionAwareResolverInterface
                 || !$this->resolver->supportsDefinition($entry)
@@ -273,6 +275,7 @@ final readonly class Container implements
         }
 
         $this->invalidate($id);
+        $this->invalidateDeferredDelegators($affectedDependencies);
     }
 
     /**
@@ -347,9 +350,25 @@ final readonly class Container implements
             ));
         }
 
+        $before = $this->deferredDependencyTargets();
         $previousCanonical = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
         $this->invalidate($alias, $previousCanonical);
+
+        $changedDependencies = [];
+        foreach ($before as $dependencyId => $previousTarget) {
+            try {
+                $currentTarget = $this->aliases->resolve($dependencyId);
+            } catch (Throwable) {
+                $currentTarget = null;
+            }
+
+            if ($currentTarget !== $previousTarget) {
+                $changedDependencies[] = $dependencyId;
+            }
+        }
+
+        $this->invalidateDeferredDelegators($changedDependencies);
     }
 
     /**
@@ -378,8 +397,7 @@ final readonly class Container implements
     /**
      * Invalidates every cached entry that could have been seeded under the
      * given id - directly, through an alias pointing at it, or through its
-     * canonical target. Container namespace mutations also invalidate every
-     * decorated entry whose delegator chain contains a deferred service id.
+     * canonical target.
      */
     private function invalidate(string $id, ?string $knownCanonical = null): void
     {
@@ -395,23 +413,57 @@ final readonly class Container implements
         if ($canonical !== $id) {
             $this->delegators->invalidate($canonical);
         }
+    }
 
-        $this->invalidateDeferredDelegators($id);
+    /** @return list<string> */
+    private function deferredDependenciesResolvingTo(string $canonical): array
+    {
+        $dependencies = [];
+
+        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+            try {
+                if ($this->aliases->resolve($dependencyId) === $canonical) {
+                    $dependencies[] = $dependencyId;
+                }
+            } catch (Throwable) {
+                // A malformed alias graph cannot establish a stable dependency.
+            }
+        }
+
+        return $dependencies;
+    }
+
+    /** @return array<string, string|null> */
+    private function deferredDependencyTargets(): array
+    {
+        $targets = [];
+
+        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+            try {
+                $targets[$dependencyId] = $this->aliases->resolve($dependencyId);
+            } catch (Throwable) {
+                $targets[$dependencyId] = null;
+            }
+        }
+
+        return $targets;
     }
 
     /**
-     * Deferred callable references are resolved against the live container
-     * namespace. Any namespace mutation can therefore change their target,
-     * including through an alias chain, so their callable and decorated caches
-     * are invalidated together.
+     * Invalidates decorated caches whose deferred callable dependencies were
+     * affected by a namespace mutation. Passing null is reserved for mutations
+     * such as adding an external container where every deferred dependency can
+     * potentially change ownership.
+     *
+     * @param iterable<string>|null $dependencyIds
      */
-    private function invalidateDeferredDelegators(?string $skipEntry = null): void
+    private function invalidateDeferredDelegators(?iterable $dependencyIds = null): void
     {
-        foreach ($this->delegators->invalidateDeferred() as $entryId) {
-            if ($entryId === $skipEntry) {
-                continue;
-            }
+        $entries = $dependencyIds === null
+            ? $this->delegators->invalidateDeferred()
+            : $this->delegators->invalidateDependencies($dependencyIds);
 
+        foreach ($entries as $entryId) {
             try {
                 $canonical = $this->aliases->resolve($entryId);
             } catch (Throwable) {
