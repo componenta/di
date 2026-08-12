@@ -1,4 +1,4 @@
-name: Full audit source snapshot
+name: Full audit seventh-pass probes
 
 on:
   push:
@@ -9,19 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  snapshot:
+  probes:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
         with:
-          fetch-depth: 0
-      - name: Verify exact dev source tree
-        run: git diff --exit-code 88b61f1a170ec89acad1c4b8d9e707e1227194f7 HEAD -- . ':(exclude).github'
-      - name: Create exact dev source archive
-        run: tar --exclude=.git --exclude=.github -czf /tmp/componenta-di-dev-source.tar.gz .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: componenta-di-dev-source
-          path: /tmp/componenta-di-dev-source.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: vendor/bin/pest tests/FullAudit7ProbeTest.php --colors=always
