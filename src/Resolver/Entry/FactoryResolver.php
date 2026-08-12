@@ -70,7 +70,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $definition = $this->factories[$id];
             $compiled = CompiledFactoryDefinition::decode($definition);
             if ($compiled !== null) {
-                $factory = $this->compiledFactory($compiled);
+                $factory = $this->compiledFactory(
+                    $compiled,
+                    $definition instanceof CompiledFactoryDefinition,
+                );
                 $this->factories[$id] = $compiled;
                 $this->compiledFactories[$id] = $factory;
 
@@ -131,19 +134,21 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     }
 
     /** @return callable(array<string|int, mixed>): mixed */
-    private function compiledFactory(CompiledFactoryDefinition $definition): callable
-    {
+    private function compiledFactory(
+        CompiledFactoryDefinition $definition,
+        bool $explicitDefinition = false,
+    ): callable {
         if ($this->parametersResolver === null || $this->attributeProcessor === null) {
             throw new InvalidConfigurationException(
                 'Compiled factories require the runtime parameter and attribute pipelines.',
             );
         }
 
-        // Trust is an explicit resolver configuration, never a property of the
-        // PHP representation. Cache exporters can round-trip a readonly
-        // CompiledFactoryDefinition as an object, so treating object instances
-        // as trusted would let cache input bypass base-directory confinement.
-        $trusted = $this->trustedCompiledFactories;
+        // Direct in-memory definitions are an explicit programmatic escape
+        // hatch. configureFromCache() normalizes object definitions back to the
+        // encoded form before this resolver sees them, so cache provenance can
+        // never acquire trust merely because a PHP exporter rebuilt the object.
+        $trusted = $this->trustedCompiledFactories || $explicitDefinition;
         $file = (new CompiledFactoryPathResolver(
             $this->compiledFactoryBaseDir,
             $trusted,
