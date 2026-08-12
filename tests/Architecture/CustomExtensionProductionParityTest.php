@@ -12,8 +12,6 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use ReflectionProperty;
-use Reflector;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
 final readonly class CustomParityStamp
@@ -46,18 +44,18 @@ final class CustomParityAttributeHandler implements AttributeHandlerInterface
         get => 0;
     }
 
-    public function supportsAttribute(string $attributeClass, Reflector $target): bool
+    public function supportsAttribute(string $attributeClass, \Reflector $target): bool
     {
-        return $target instanceof ReflectionProperty
+        return $target instanceof \ReflectionProperty
             && $attributeClass === CustomParityStamp::class;
     }
 
     public function handle(
         object $attribute,
-        Reflector $target,
+        \Reflector $target,
         ObjectCreationContext $context,
     ): void {
-        if (!$attribute instanceof CustomParityStamp || !$target instanceof ReflectionProperty) {
+        if (!$attribute instanceof CustomParityStamp || !$target instanceof \ReflectionProperty) {
             throw new LogicException('Unexpected custom parity attribute target.');
         }
 
@@ -68,7 +66,7 @@ final class CustomParityAttributeHandler implements AttributeHandlerInterface
 }
 
 #[SetUp('configure', ['value' => 'setup-override'])]
-#[SetUp('finish')]
+#[SetUp('finish', ['value' => 'finish-override'])]
 final class CustomExtensionProductionParityEntry
 {
     #[CustomParityStamp('attribute-handled')]
@@ -87,9 +85,9 @@ final class CustomExtensionProductionParityEntry
         $this->steps[] = 'configure:' . $value;
     }
 
-    public function finish(): void
+    public function finish(string $value): void
     {
-        $this->steps[] = 'finish';
+        $this->steps[] = 'finish:' . $value;
     }
 }
 
@@ -153,7 +151,10 @@ it('keeps runtime fallback extensions and setup semantics identical in compiled 
                 'custom' => 'custom-resolved',
                 'stamp' => 'attribute-handled',
                 'configured' => 'setup-override',
-                'steps' => ['configure:setup-override', 'finish'],
+                'steps' => [
+                    'configure:setup-override',
+                    'finish:finish-override',
+                ],
             ]);
     } finally {
         foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
