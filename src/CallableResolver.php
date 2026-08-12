@@ -61,6 +61,12 @@ class CallableResolver implements CallableResolverInterface
         }
 
         if (str_contains($callable, '::')) {
+            // __callStatic() makes a method callable even though method_exists()
+            // is false. Service-id precedence has already been checked above.
+            if (is_callable($callable)) {
+                return $callable;
+            }
+
             return $this->resolveClassMethod($callable);
         }
 
@@ -147,15 +153,16 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forValue($callable);
         }
 
+        // Preserve native static callables provided through __callStatic().
+        if (is_callable([$objectOrClass, $method])) {
+            return [$objectOrClass, $method];
+        }
+
         if (!method_exists($objectOrClass, $method)) {
             throw InvalidCallableException::forMethod($objectOrClass, $method);
         }
 
         if ($this->isStaticMethod($objectOrClass, $method)) {
-            if (is_callable([$objectOrClass, $method])) {
-                return [$objectOrClass, $method];
-            }
-
             throw InvalidCallableException::forMethod($objectOrClass, $method);
         }
 

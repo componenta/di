@@ -30,8 +30,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
 
-    private ?CompiledFactoryPathResolver $compiledFactoryPaths = null;
-
     /** @param array<string, mixed> $factories */
     public function __construct(
         protected array $factories,
@@ -72,7 +70,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $definition = $this->factories[$id];
             $compiled = CompiledFactoryDefinition::decode($definition);
             if ($compiled !== null) {
-                $factory = $this->compiledFactory($compiled);
+                $factory = $this->compiledFactory(
+                    $compiled,
+                    $definition instanceof CompiledFactoryDefinition,
+                );
                 $this->factories[$id] = $compiled;
                 $this->compiledFactories[$id] = $factory;
 
@@ -133,20 +134,24 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     }
 
     /** @return callable(array<string|int, mixed>): mixed */
-    private function compiledFactory(CompiledFactoryDefinition $definition): callable
-    {
+    private function compiledFactory(
+        CompiledFactoryDefinition $definition,
+        bool $explicitDefinition = false,
+    ): callable {
         if ($this->parametersResolver === null || $this->attributeProcessor === null) {
             throw new InvalidConfigurationException(
                 'Compiled factories require the runtime parameter and attribute pipelines.',
             );
         }
 
-        // Resolve and confine the executable file before inspecting or loading
-        // its class. This prevents traversal/symlink escapes and also prevents a
-        // preloaded class from bypassing shard-path validation.
-        $file = ($this->compiledFactoryPaths ??= new CompiledFactoryPathResolver(
+        // Encoded cache definitions are confined to the configured base before
+        // executable code is loaded. An in-memory CompiledFactoryDefinition is
+        // explicit programmatic configuration and is therefore treated like
+        // the existing trustedCompiledFactories escape hatch.
+        $trusted = $this->trustedCompiledFactories || $explicitDefinition;
+        $file = (new CompiledFactoryPathResolver(
             $this->compiledFactoryBaseDir,
-            $this->trustedCompiledFactories,
+            $trusted,
         ))->resolve($definition->file);
 
         $class = $definition->class;
@@ -164,7 +169,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
         if ($shard === null) {
             if (!class_exists($class, false)) {
                 $loadedClass = require $file;
-                if (!$this->trustedCompiledFactories
+                if (!$trusted
                     && (!is_string($loadedClass)
                         || $loadedClass !== $class
                         || !class_exists($class, false))
@@ -174,7 +179,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
                         $file,
                     ));
                 }
-            } elseif (!$this->trustedCompiledFactories) {
+            } elseif (!$trusted) {
                 self::assertLoadedFrom($class, $file);
             }
 

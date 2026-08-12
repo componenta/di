@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\Compile\Attribute\AttributeCodeGenerationContext;
 use Componenta\DI\Compile\Attribute\GeneratedAttributeCode;
@@ -63,14 +64,34 @@ final class SetUpRunner implements CompilableAttributeHandlerInterface
         }
 
         $method = self::method($target, $attribute);
+        $callable = [
+            $context->entry ?? throw new \LogicException(
+                'SetUp cannot run before object instantiation.',
+            ),
+            $method->getName(),
+        ];
+        $arguments = $this->explicitParameters($attribute);
+
+        if ($this->callableInvoker instanceof CallableExecutorInterface) {
+            $this->callableInvoker->call($callable, $arguments, $context->parameters);
+            return;
+        }
+
+        if ($this->callableInvoker instanceof Container) {
+            $executor = $this->callableInvoker->get(CallableExecutorInterface::class);
+            if (!$executor instanceof CallableExecutorInterface) {
+                throw new \LogicException('Callable executor service is unavailable for SetUp.');
+            }
+
+            $executor->call($callable, $arguments, $context->parameters);
+            return;
+        }
+
+        // Non-DI invokers have no context channel. Preserve their historical
+        // merged parameter behavior.
         $this->callableInvoker->call(
-            [
-                $context->entry ?? throw new \LogicException(
-                    'SetUp cannot run before object instantiation.',
-                ),
-                $method->getName(),
-            ],
-            $this->providedParameters($attribute, $context->parameters),
+            $callable,
+            array_replace($context->parameters, $arguments),
         );
     }
 
@@ -106,21 +127,21 @@ final class SetUpRunner implements CompilableAttributeHandlerInterface
             'SetUp code generation requires ParameterCodeGenerator.',
         );
         $method = self::method($target, $attribute);
-        $providedVariable = '$' . $context->symbolPrefix . 'Provided';
+        $argumentsVariable = '$' . $context->symbolPrefix . 'Arguments';
         $resolutionVariable = '$' . $context->symbolPrefix . 'Parameters';
         $parts = [
             sprintf(
-                '%s = %s->providedParameters(%s, %s->parameters);',
-                $providedVariable,
+                '%s = %s->explicitParameters(%s);',
+                $argumentsVariable,
                 $context->handlerExpression,
                 $context->attributeExpression,
-                $context->creationExpression,
             ),
             sprintf(
-                '%s = new \\%s(%s);',
+                '%s = new \\%s(%s, context: %s->parameters);',
                 $resolutionVariable,
                 ParameterResolutionContext::class,
-                $providedVariable,
+                $argumentsVariable,
+                $context->creationExpression,
             ),
         ];
         $arguments = [];
@@ -162,6 +183,7 @@ final class SetUpRunner implements CompilableAttributeHandlerInterface
             $arguments[] = $argumentVariable;
         }
 
+        $parts[] = sprintf('%s->assertArgumentsConsumed();', $resolutionVariable);
         $parts[] = sprintf(
             '%s->%s(%s);',
             $context->entryExpression,
@@ -176,15 +198,23 @@ final class SetUpRunner implements CompilableAttributeHandlerInterface
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function explicitParameters(SetUp $attribute): array
+    {
+        return $this->unwrapParams($attribute->params);
+    }
+
+    /**
      * Resolves explicit SetUp wrappers and lets attribute values override the
-     * object-creation context, matching the runtime callable pipeline.
+     * object-creation context, preserving the pre-context compatibility API.
      *
      * @param array<string|int, mixed> $context
      * @return array<string|int, mixed>
      */
     public function providedParameters(SetUp $attribute, array $context = []): array
     {
-        return array_replace($context, $this->unwrapParams($attribute->params));
+        return array_replace($context, $this->explicitParameters($attribute));
     }
 
     /** @param ReflectionClass<object> $class */
