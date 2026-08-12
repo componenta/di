@@ -1,4 +1,4 @@
-name: Sixth pass parity probes
+name: Sixth pass parity verification
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  probes:
+  verify:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -19,4 +19,6 @@ jobs:
           coverage: none
           tools: composer:v2
       - run: composer install --no-interaction --prefer-dist --no-progress
-      - run: vendor/bin/pest tests/Recheck6ParityProbeTest.php --colors=always
+      - run: vendor/bin/pest tests/Architecture/CompiledPrivateLazyConstructorParityTest.php --colors=always
+      - run: composer phpstan
+      - run: composer cs-check
