@@ -1,0 +1,40 @@
+name: Fifth pass final full verification
+
+on:
+  push:
+    branches:
+      - verify-dev-recheck-5-full-3
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm tested source tree
+        shell: bash
+        run: git diff --exit-code c567885c866d1ac6409905f7b0756e5317b749c4 -- . ':(exclude).github/workflows/recheck5-full-3.yml'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Validate composer
+        run: composer validate --strict
+      - name: Audit dependencies
+        run: composer audit --no-interaction
+      - name: PHP syntax check
+        shell: bash
+        run: find src tests verification benchmarks -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: PHPStan
+        run: composer phpstan
+      - name: Tests
+        run: composer test
+      - name: Code style
+        run: composer cs-check
