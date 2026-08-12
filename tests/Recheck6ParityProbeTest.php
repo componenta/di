@@ -6,6 +6,8 @@ use Componenta\Config\Config;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Definition\Definition;
+use Componenta\DI\Exception\InvalidConfigurationException;
 
 #[Lazy]
 final class Recheck6PrivateLazyConstructor
@@ -16,6 +18,29 @@ final class Recheck6PrivateLazyConstructor
     {
         $this->initialized = true;
     }
+}
+
+final class Recheck6LazyDependency
+{
+}
+
+#[Lazy]
+final class Recheck6PrivateLazyConstructorWithDependency
+{
+    public bool $initialized;
+
+    private function __construct(
+        public Recheck6LazyDependency $dependency,
+    ) {
+        $this->initialized = true;
+    }
+}
+
+final class Recheck6RequiredInvokableDependency
+{
+    public function __construct(
+        public Recheck6LazyDependency $dependency,
+    ) {}
 }
 
 final class Recheck6UnionConstructor
@@ -77,6 +102,42 @@ it('keeps private lazy constructor behavior between reflection and compiled fact
     } finally {
         recheck6Cleanup($directory);
     }
+});
+
+it('keeps private lazy constructors with dependencies between reflection and compiled factories', function (): void {
+    $reflection = (new ContainerBuilder())->build();
+    [$compiled, $directory] = recheck6CompiledContainer([
+        Recheck6PrivateLazyConstructorWithDependency::class,
+        Recheck6LazyDependency::class,
+    ]);
+
+    try {
+        $reflected = $reflection->make(Recheck6PrivateLazyConstructorWithDependency::class);
+        $generated = $compiled->make(Recheck6PrivateLazyConstructorWithDependency::class);
+
+        expect($reflected->initialized)->toBeTrue()
+            ->and($reflected->dependency)->toBeInstanceOf(Recheck6LazyDependency::class)
+            ->and($generated->initialized)->toBeTrue()
+            ->and($generated->dependency)->toBeInstanceOf(Recheck6LazyDependency::class);
+    } finally {
+        recheck6Cleanup($directory);
+    }
+});
+
+it('keeps a previous factory definition when an invalid invokable replacement is rejected', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $container->set('service', Definition::factory(static fn() => new stdClass()));
+
+    expect($container->make('service'))->toBeInstanceOf(stdClass::class);
+
+    try {
+        $container->set('service', Definition::invokable(Recheck6RequiredInvokableDependency::class));
+        throw new RuntimeException('Expected invalid invokable replacement to be rejected.');
+    } catch (InvalidConfigurationException) {
+        // Expected.
+    }
+
+    expect($container->make('service'))->toBeInstanceOf(stdClass::class);
 });
 
 it('keeps union explicit overrides between reflection and compiled factories', function (): void {
