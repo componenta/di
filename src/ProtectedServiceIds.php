@@ -46,6 +46,12 @@ final class ProtectedServiceIds
         return array_key_exists($id, self::IDS);
     }
 
+    /** @return list<string> */
+    public static function ids(): array
+    {
+        return array_keys(self::IDS);
+    }
+
     /** @return class-string|null */
     public static function bootstrapType(string $id): ?string
     {
