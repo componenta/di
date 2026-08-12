@@ -11,10 +11,9 @@ namespace Componenta\DI\Attribute;
  * a sequence of initialization steps. Methods are called
  * in the order they are declared.
  *
- * Method parameters are resolved through the standard parameter resolution
- * chain. Values from `$params` are explicit invocation arguments; object-
- * creation values remain ambient resolution context and can still be consumed
- * by contextual resolvers.
+ * Method parameters are resolved through the standard
+ * parameter resolution chain, with optional explicit
+ * overrides via the $params array.
  *
  * @example Single setup method
  * ```php
@@ -43,7 +42,7 @@ readonly class SetUp
 {
     /**
      * @param string $method Method name to call after instantiation.
-     * @param array<string, mixed> $params Explicit setup-method arguments.
+     * @param array<string, mixed> $params Explicit parameters (merged with resolved).
      */
     public function __construct(
         public string $method,

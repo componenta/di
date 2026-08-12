@@ -14,7 +14,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 
-/** Inlines type-keyed lookup from explicit arguments and ambient context. */
+/** Inlines lookup of explicitly provided objects registered by type key. */
 final class ArrayTypedResolverCodeGenerator implements ParameterResolverCodeGeneratorInterface
 {
     public function generate(
@@ -37,20 +37,11 @@ final class ArrayTypedResolverCodeGenerator implements ParameterResolverCodeGene
         return GeneratedResolverCode::conditional(sprintf(
             <<<'PHP'
 foreach (%s as %s) {
-    if (array_key_exists(%s, %s->arguments)) {
-        %s = %s->arguments[%s];
-        if (is_object(%s) && %s->accepts(%s)) {
-            %s->consumeArgument(%s);
-            %s = %s;
-            goto %s;
-        }
-    }
-
-    if (!array_key_exists(%s, %s->context)) {
+    if (!array_key_exists(%s, %s->provided)) {
         continue;
     }
 
-    %s = %s->context[%s];
+    %s = %s->provided[%s];
     if (is_object(%s) && %s->accepts(%s)) {
         %s = %s;
         goto %s;
@@ -59,19 +50,6 @@ foreach (%s as %s) {
 PHP,
             $types,
             $typeVariable,
-            $typeVariable,
-            $context->contextExpression,
-            $valueVariable,
-            $context->contextExpression,
-            $typeVariable,
-            $valueVariable,
-            $context->targetExpression,
-            $valueVariable,
-            $context->contextExpression,
-            $typeVariable,
-            $context->argumentVariable,
-            $valueVariable,
-            $context->resolvedLabel,
             $typeVariable,
             $context->contextExpression,
             $valueVariable,

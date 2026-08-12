@@ -12,9 +12,9 @@ use Componenta\DI\Exception\ExceptionInterface;
  *
  * Whether parameters are autowired or used as-is is implementation-defined:
  *
- *  - {@see CallableExecutor} resolves each parameter through the DI parameter
- *    chain. Its more specific {@see CallableExecutorInterface::call()} contract
- *    additionally separates explicit arguments from ambient resolution context.
+ *  - {@see CallableExecutor} (the {@see Container}-backed executor) resolves
+ *    each parameter through the DI parameter chain, with `$params` providing
+ *    overrides by name or position.
  *  - {@see CallableInvoker} is a thin wrapper that calls
  *    {@see call_user_func_array()} verbatim - no resolution, no DI. Useful
  *    for hot paths or non-DI callers (CQRS handlers, tests).
