@@ -20,7 +20,7 @@ final class ConfigKey
     /** Replace the default parameter resolver chain. */
     public const string PARAMETER_RESOLVERS_REPLACE = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS_REPLACE;
 
-    /** Custom runtime attribute handlers in registration order. */
+    /** Custom attribute handlers: service/callable/[service, method]/instance. */
     public const string ATTRIBUTE_HANDLERS = \Componenta\Config\ConfigKey::ATTRIBUTE_HANDLERS;
 
     /** Replace all built-in lifecycle/property handlers. */
