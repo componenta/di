@@ -24,14 +24,8 @@ final class DelegatorRegistry
     /** @var array<string, list<callable>> Normalised callables cache. */
     private array $callables = [];
 
-    /**
-     * Raw callable service id -> decorated entry ids whose normalised chain
-     * depends on that id. Used to invalidate decorated results when container
-     * namespace mutations can change how deferred callables resolve.
-     *
-     * @var array<string, array<string, true>>
-     */
-    private array $dependents = [];
+    /** @var array<string, true> Entry ids with namespace-dependent delegators. */
+    private array $deferredEntries = [];
 
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
@@ -41,8 +35,8 @@ final class DelegatorRegistry
     {
         $this->raw[$id][] = $delegator;
 
-        foreach (self::referenceIds($delegator) as $referenceId) {
-            $this->dependents[$referenceId][$id] = true;
+        if (self::isDeferredReference($delegator)) {
+            $this->deferredEntries[$id] = true;
         }
 
         unset($this->callables[$id]);
@@ -71,20 +65,13 @@ final class DelegatorRegistry
      */
     public function invalidateDeferred(): array
     {
-        /** @var array<string, true> $entries */
-        $entries = [];
+        $entries = array_keys($this->deferredEntries);
 
-        foreach ($this->dependents as $dependents) {
-            foreach ($dependents as $entry => $_) {
-                $entries[$entry] = true;
-            }
-        }
-
-        foreach ($entries as $entry => $_) {
+        foreach ($entries as $entry) {
             unset($this->callables[$entry]);
         }
 
-        return array_keys($entries);
+        return $entries;
     }
 
     /**
@@ -150,22 +137,16 @@ final class DelegatorRegistry
         return $this->callableResolver->resolve($delegator);
     }
 
-    /** @return list<string> */
-    private static function referenceIds(mixed $delegator): array
+    private static function isDeferredReference(mixed $delegator): bool
     {
-        if (is_string($delegator) && $delegator !== '') {
-            return [$delegator];
+        if (is_string($delegator)) {
+            return $delegator !== '';
         }
 
-        if (is_array($delegator)
+        return is_array($delegator)
             && !is_callable($delegator)
             && array_keys($delegator) === [0, 1]
             && is_string($delegator[0])
-            && $delegator[0] !== ''
-        ) {
-            return [$delegator[0]];
-        }
-
-        return [];
+            && $delegator[0] !== '';
     }
 }
