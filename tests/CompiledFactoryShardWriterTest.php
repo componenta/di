@@ -34,3 +34,19 @@ it('reuses an existing shard when its contents match exactly', function (): void
         @unlink($file);
     }
 });
+
+it('syntax-checks an existing matching shard before reusing it', function (): void {
+    $file = sys_get_temp_dir() . '/componenta-invalid-shard-' . bin2hex(random_bytes(6)) . '.php';
+    $code = "<?php\nfunction broken( {\n";
+    file_put_contents($file, $code);
+
+    try {
+        expect(fn() => (new CompiledFactoryShardWriter())->write($file, $code))
+            ->toThrow(
+                RuntimeException::class,
+                'failed PHP compile validation',
+            );
+    } finally {
+        @unlink($file);
+    }
+});
