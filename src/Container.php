@@ -348,7 +348,14 @@ final readonly class Container implements
 
         $previousCanonical = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
+        $dependentEntries = $this->delegators->invalidateDependency($alias);
         $this->invalidate($alias, $previousCanonical);
+
+        foreach ($dependentEntries as $entryId) {
+            if ($entryId !== $alias) {
+                $this->invalidate($entryId);
+            }
+        }
     }
 
     /**

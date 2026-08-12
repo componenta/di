@@ -24,6 +24,15 @@ final class DelegatorRegistry
     /** @var array<string, list<callable>> Normalised callables cache. */
     private array $callables = [];
 
+    /**
+     * Raw callable service id -> decorated entry ids whose normalised chain
+     * depends on that id. Used to invalidate decorated results when an alias
+     * used by a deferred delegator is retargeted.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private array $dependents = [];
+
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
     ) {}
@@ -31,12 +40,35 @@ final class DelegatorRegistry
     public function register(string $id, mixed $delegator): void
     {
         $this->raw[$id][] = $delegator;
+
+        foreach (self::referenceIds($delegator) as $referenceId) {
+            $this->dependents[$referenceId][$id] = true;
+        }
+
         unset($this->callables[$id]);
     }
 
     public function invalidate(string $id): void
     {
         unset($this->callables[$id]);
+    }
+
+    /**
+     * Invalidates every normalised delegator chain that references the supplied
+     * service id and returns the decorated entry ids whose resolved cache must
+     * also be dropped by the container.
+     *
+     * @return list<string>
+     */
+    public function invalidateDependency(string $id): array
+    {
+        $entries = array_keys($this->dependents[$id] ?? []);
+
+        foreach ($entries as $entry) {
+            unset($this->callables[$entry]);
+        }
+
+        return $entries;
     }
 
     /**
@@ -88,9 +120,6 @@ final class DelegatorRegistry
             return $delegator;
         }
 
-        // String and [string, method] forms can be opaque service references.
-        // They must pass through CallableResolver before is_callable() can
-        // reinterpret them as a native function/static method.
         if (is_string($delegator)
             || (is_array($delegator)
                 && isset($delegator[0])
@@ -104,5 +133,23 @@ final class DelegatorRegistry
         }
 
         return $this->callableResolver->resolve($delegator);
+    }
+
+    /** @return list<string> */
+    private static function referenceIds(mixed $delegator): array
+    {
+        if (is_string($delegator) && $delegator !== '') {
+            return [$delegator];
+        }
+
+        if (is_array($delegator)
+            && array_keys($delegator) === [0, 1]
+            && is_string($delegator[0])
+            && $delegator[0] !== ''
+        ) {
+            return [$delegator[0]];
+        }
+
+        return [];
     }
 }
