@@ -37,11 +37,16 @@ final readonly class AutowireClassGraph
                 throw new InvalidArgumentException('Autowire entry must contain a non-empty class-string.');
             }
 
-            // Roots follow the same known alias graph as constructor/property/
-            // SetUp dependencies. Otherwise an interface root is rejected by
-            // eligibility filtering before its configured implementation can
-            // participate in AOT planning.
-            $pending[$this->resolveAlias($class)] = true;
+            // A known alias may terminate at a concrete class, in which case
+            // that implementation participates in AOT. Aliases to opaque
+            // PSR-11/external ids remain runtime-only and must not turn a valid
+            // container configuration into a compilation error.
+            $resolved = $this->resolveAlias($class);
+            if ($resolved !== $class && !self::isLoadable($resolved)) {
+                continue;
+            }
+
+            $pending[$resolved] = true;
         }
 
         $result = [];
@@ -54,11 +59,7 @@ final readonly class AutowireClassGraph
                 continue;
             }
 
-            if (!class_exists($class)
-                && !interface_exists($class)
-                && !trait_exists($class)
-                && !enum_exists($class)
-            ) {
+            if (!self::isLoadable($class)) {
                 throw new InvalidArgumentException(sprintf(
                     'Cannot compile autowire entry "%s": class is not loadable.',
                     $class,
@@ -200,5 +201,13 @@ final readonly class AutowireClassGraph
         }
 
         return $id;
+    }
+
+    private static function isLoadable(string $class): bool
+    {
+        return class_exists($class)
+            || interface_exists($class)
+            || trait_exists($class)
+            || enum_exists($class);
     }
 }
