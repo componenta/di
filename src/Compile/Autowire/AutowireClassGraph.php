@@ -18,6 +18,9 @@ use ReflectionProperty;
 /** Expands explicit roots through statically knowable dependencies. */
 final readonly class AutowireClassGraph
 {
+    /** @param array<string, non-empty-string> $aliases */
+    public function __construct(private array $aliases = []) {}
+
     /**
      * @param iterable<AutowireEntry|class-string> $roots
      * @param array<string, true> $excluded
@@ -104,13 +107,10 @@ final readonly class AutowireClassGraph
                 continue;
             }
 
-            $dependency = TypeHints::classOf($property->getType(), $property->getDeclaringClass());
-            if ($dependency !== null && class_exists($dependency)) {
-                $candidate = new ReflectionClass($dependency);
-                if (EntryClassEligibility::allows($candidate)) {
-                    $dependencies[$candidate->getName()] = true;
-                }
-            }
+            $this->appendDependency(
+                $dependencies,
+                TypeHints::classOf($property->getType(), $property->getDeclaringClass()),
+            );
         }
 
         foreach ($class->getAttributes(
@@ -130,8 +130,7 @@ final readonly class AutowireClassGraph
     /**
      * ReflectionClass::getProperties() omits private properties declared by
      * ancestors. AttributeProcessor intentionally includes them, so the
-     * compilation graph must use the same hierarchy view or it will omit
-     * dependencies that generated factories still inject at runtime.
+     * compilation graph must use the same hierarchy view.
      *
      * @param ReflectionClass<object> $class
      * @return list<ReflectionProperty>
@@ -155,14 +154,47 @@ final readonly class AutowireClassGraph
     private function appendMethodDependencies(array &$dependencies, ReflectionMethod $method): void
     {
         foreach ($method->getParameters() as $parameter) {
-            $dependency = TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass());
-
-            if ($dependency !== null && class_exists($dependency)) {
-                $candidate = new ReflectionClass($dependency);
-                if (EntryClassEligibility::allows($candidate)) {
-                    $dependencies[$candidate->getName()] = true;
-                }
-            }
+            $this->appendDependency(
+                $dependencies,
+                TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass()),
+            );
         }
+    }
+
+    /** @param array<class-string, true> $dependencies */
+    private function appendDependency(array &$dependencies, ?string $dependency): void
+    {
+        if ($dependency === null) {
+            return;
+        }
+
+        $dependency = $this->resolveAlias($dependency);
+        if (!class_exists($dependency)) {
+            return;
+        }
+
+        $candidate = new ReflectionClass($dependency);
+        if (EntryClassEligibility::allows($candidate)) {
+            $dependencies[$candidate->getName()] = true;
+        }
+    }
+
+    private function resolveAlias(string $id): string
+    {
+        $seen = [];
+
+        while (isset($this->aliases[$id])) {
+            if (isset($seen[$id])) {
+                throw new InvalidArgumentException(sprintf(
+                    'Cannot compile autowire graph through cyclic alias "%s".',
+                    $id,
+                ));
+            }
+
+            $seen[$id] = true;
+            $id = $this->aliases[$id];
+        }
+
+        return $id;
     }
 }
