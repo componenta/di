@@ -1,0 +1,25 @@
+name: Full audit source snapshot
+
+on:
+  push:
+    branches:
+      - verify-dev-full-audit-7
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source parent
+        run: test "$(git rev-parse HEAD^)" = "88b61f1a170ec89acad1c4b8d9e707e1227194f7"
+      - name: Create exact dev source archive
+        run: tar --exclude=.git --exclude=.github -czf /tmp/componenta-di-dev-source.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: componenta-di-dev-source
+          path: /tmp/componenta-di-dev-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
