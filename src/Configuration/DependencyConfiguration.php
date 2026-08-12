@@ -297,9 +297,14 @@ final class DependencyConfiguration
             return $delegator;
         }
 
-        if (self::isCallableArraySpecification($delegator)
-            || self::isDeferredCallableArraySpecification($delegator)
+        if (is_array($delegator)
+            && array_keys($delegator) === [0, 1]
+            && (is_object($delegator[0])
+                || (is_string($delegator[0]) && $delegator[0] !== ''))
+            && is_string($delegator[1])
+            && $delegator[1] !== ''
         ) {
+            /** @var CallableReference $delegator */
             return $delegator;
         }
 
