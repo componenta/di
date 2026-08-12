@@ -38,7 +38,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
         protected readonly ?ParametersResolver $parametersResolver = null,
         protected readonly ?AttributeProcessor $attributeProcessor = null,
         protected readonly ?string $compiledFactoryBaseDir = null,
-        protected readonly bool $trustedCompiledFactories = false,
     ) {
         foreach ($factories as $id => $factory) {
             if ($id === '') {
@@ -149,16 +148,12 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             );
         }
 
-        // A direct definition is allowed to choose its path like it did before
-        // cache path hardening, but it does not thereby become trusted code.
-        // Only the explicit resolver flag disables returned-class validation.
-        // Cache definitions are encoded at configureFromCache() and therefore
-        // remain both path-confined and origin-checked.
-        $pathTrusted = $this->trustedCompiledFactories || $explicitDefinition;
-        $codeTrusted = $this->trustedCompiledFactories;
+        // A direct programmatic definition may choose its path. Cache-loaded
+        // definitions remain confined to the configured base directory. Both
+        // forms still validate the generated class before executing its method.
         $file = (new CompiledFactoryPathResolver(
             $this->compiledFactoryBaseDir,
-            $pathTrusted,
+            $explicitDefinition,
         ))->resolve($definition->file);
 
         $class = $definition->class;
@@ -176,17 +171,16 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
         if ($shard === null) {
             if (!class_exists($class, false)) {
                 $loadedClass = require $file;
-                if (!$codeTrusted
-                    && (!is_string($loadedClass)
-                        || $loadedClass !== $class
-                        || !class_exists($class, false))
+                if (!is_string($loadedClass)
+                    || $loadedClass !== $class
+                    || !class_exists($class, false)
                 ) {
                     throw new InvalidConfigurationException(sprintf(
                         'Compiled factory shard "%s" returned an unexpected class.',
                         $file,
                     ));
                 }
-            } elseif (!$codeTrusted && !$explicitDefinition) {
+            } elseif (!$explicitDefinition) {
                 self::assertLoadedFromEquivalentShard($class, $file);
             }
 
