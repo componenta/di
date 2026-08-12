@@ -187,7 +187,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
                     ));
                 }
             } elseif (!$codeTrusted && !$explicitDefinition) {
-                self::assertLoadedFrom($class, $file);
+                self::assertLoadedFromEquivalentShard($class, $file);
             }
 
             $shard = new $class(
@@ -211,18 +211,34 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     }
 
     /** @param class-string $class */
-    private static function assertLoadedFrom(string $class, string $expectedFile): void
-    {
+    private static function assertLoadedFromEquivalentShard(
+        string $class,
+        string $expectedFile,
+    ): void {
         $loadedFile = (new ReflectionClass($class))->getFileName();
         $loadedFile = $loadedFile === false ? false : realpath($loadedFile);
         $expectedFile = realpath($expectedFile);
 
-        if ($loadedFile === false
-            || $expectedFile === false
-            || $loadedFile !== $expectedFile
-        ) {
+        if ($loadedFile === false || $expectedFile === false) {
             throw new InvalidConfigurationException(sprintf(
                 'Compiled factory class "%s" is already loaded from an unexpected file.',
+                $class,
+            ));
+        }
+
+        if ($loadedFile === $expectedFile) {
+            return;
+        }
+
+        $loadedHash = hash_file('sha256', $loadedFile);
+        $expectedHash = hash_file('sha256', $expectedFile);
+
+        if (!is_string($loadedHash)
+            || !is_string($expectedHash)
+            || !hash_equals($loadedHash, $expectedHash)
+        ) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled factory class "%s" is already loaded from a different shard.',
                 $class,
             ));
         }
