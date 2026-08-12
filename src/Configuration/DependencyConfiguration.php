@@ -94,7 +94,7 @@ final class DependencyConfiguration
      * Extracts dependencies from either a versioned cache envelope or the
      * legacy raw dependency array. Compiled definitions are normalized to their
      * encoded representation at this boundary so an object reconstructed by a
-     * PHP cache exporter cannot acquire the programmatic-object trust semantics
+     * PHP cache exporter cannot acquire the programmatic-object path semantics
      * used outside configureFromCache().
      *
      * @param array<string, mixed> $cache
@@ -315,20 +315,16 @@ final class DependencyConfiguration
     /** @return DelegatorSpecification */
     public static function normalizeDelegatorSpecification(mixed $delegator, string $id): mixed
     {
+        if (is_callable($delegator)) {
+            return $delegator;
+        }
+
         if (is_string($delegator) && $delegator !== '') {
             return $delegator;
         }
 
-        if ($delegator instanceof Closure || is_callable($delegator)) {
-            return $delegator;
-        }
-
-        if (is_array($delegator)
-            && array_keys($delegator) === [0, 1]
-            && (is_object($delegator[0])
-                || (is_string($delegator[0]) && $delegator[0] !== ''))
-            && is_string($delegator[1])
-            && $delegator[1] !== ''
+        if (self::isCallableArraySpecification($delegator)
+            || self::isDeferredCallableArraySpecification($delegator)
         ) {
             /** @var CallableReference $delegator */
             return $delegator;
@@ -346,9 +342,8 @@ final class DependencyConfiguration
         if ($extension instanceof ParameterResolverInterface
             || $extension instanceof AttributeHandlerInterface
             || $extension instanceof Closure
-            || (is_string($extension) && $extension !== '')
             || is_callable($extension)
-            || self::isDeferredCallableArraySpecification($extension)
+            || (is_string($extension) && $extension !== '')
         ) {
             return;
         }
