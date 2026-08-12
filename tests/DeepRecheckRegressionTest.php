@@ -11,6 +11,9 @@ use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Entry\FactoryResolver;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Fixture\DelegatorContract;
 use Componenta\DI\Tests\Fixture\DelegatorContractImplementation;
 use Componenta\DI\Tests\Fixture\PrivateInjectedChild;
@@ -146,16 +149,27 @@ PHP,
     file_put_contents($file, $source);
 
     try {
-        $container = ContainerBuilder::configureWithDependencies(
-            new Config([]),
-            [ConfigKey::FACTORIES => [
+        $runtime = minimalBuilder()->build();
+        $parameters = $runtime->get(ParametersResolver::class);
+        $attributes = $runtime->get(AttributeProcessor::class);
+
+        expect($parameters)->toBeInstanceOf(ParametersResolver::class)
+            ->and($attributes)->toBeInstanceOf(AttributeProcessor::class);
+
+        $resolver = new FactoryResolver(
+            [
                 'first' => new CompiledFactoryDefinition($file, $class, 'create'),
                 'second' => new CompiledFactoryDefinition($file, $class . 'Mismatch', 'create'),
-            ]],
-        )->build();
+            ],
+            $runtime,
+            $runtime,
+            $parameters,
+            $attributes,
+            trustedCompiledFactories: true,
+        );
 
-        expect($container->get('first'))->toBe('first-shard');
-        expect(fn() => $container->get('second'))
+        expect($resolver->resolve('first'))->toBe('first-shard');
+        expect(fn() => $resolver->resolve('second'))
             ->toThrow(InvalidConfigurationException::class);
     } finally {
         @unlink($file);
