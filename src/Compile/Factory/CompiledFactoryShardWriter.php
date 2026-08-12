@@ -73,6 +73,8 @@ final readonly class CompiledFactoryShardWriter
                 $file,
             ));
         }
+
+        $this->lint($file);
     }
 
     private function lint(string $file): void
