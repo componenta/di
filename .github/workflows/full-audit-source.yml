@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 4
       - name: Verify exact dev source tree
         run: git diff --exit-code 88b61f1a170ec89acad1c4b8d9e707e1227194f7 HEAD -- . ':(exclude).github'
       - name: Create exact dev source archive
