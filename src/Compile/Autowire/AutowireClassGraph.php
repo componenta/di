@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Componenta\DI\Compile\Autowire;
 
 use Componenta\DI\Attribute\Inject;
+use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Resolver\Entry\EntryClassEligibility;
 use Componenta\DI\Resolver\TypeHints;
 use InvalidArgumentException;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -84,14 +86,21 @@ final readonly class AutowireClassGraph
     private function dependencies(ReflectionClass $class): array
     {
         $dependencies = [];
+        $constructorDisabled = $class->getAttributes(
+            NoConstructor::class,
+            ReflectionAttribute::IS_INSTANCEOF,
+        ) !== [];
         $constructor = $class->getConstructor();
 
-        if ($constructor !== null) {
+        if (!$constructorDisabled && $constructor !== null) {
             $this->appendMethodDependencies($dependencies, $constructor);
         }
 
         foreach (self::properties($class) as $property) {
-            if ($property->getAttributes(Inject::class) === []) {
+            if ($property->getAttributes(
+                Inject::class,
+                ReflectionAttribute::IS_INSTANCEOF,
+            ) === []) {
                 continue;
             }
 
@@ -104,7 +113,10 @@ final readonly class AutowireClassGraph
             }
         }
 
-        foreach ($class->getAttributes(SetUp::class) as $attribute) {
+        foreach ($class->getAttributes(
+            SetUp::class,
+            ReflectionAttribute::IS_INSTANCEOF,
+        ) as $attribute) {
             $setup = $attribute->newInstance();
 
             if ($class->hasMethod($setup->method)) {
