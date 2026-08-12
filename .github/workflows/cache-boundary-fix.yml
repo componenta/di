@@ -1,0 +1,87 @@
+name: Apply cache boundary fix
+
+on:
+  push:
+    branches: [verify-dev-recheck-4]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch cache trust boundary
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/ContainerBuilder.php')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "    /** The generated cache has already passed complete binding validation. */\n"
+                  "    private bool $bindingsValidated = false;\n\n"
+                  "    /** Compiled shard paths and class names came from the generated cache. */\n"
+                  "    private bool $compiledFactoriesTrusted = false;\n",
+                  "    /** Current builder state has passed complete binding validation. */\n"
+                  "    private bool $bindingsValidated = false;\n",
+              ),
+              (
+                  "        $builder = static::configureWithDependencies($config, $dependencies);\n"
+                  "        $builder->compiledFactoryBaseDir = $baseDir;\n"
+                  "        $builder->bindingsValidated = ($cache[self::CACHE_VALIDATED_KEY] ?? false) === true;\n"
+                  "        $builder->compiledFactoriesTrusted = $builder->bindingsValidated;\n\n"
+                  "        return $builder;\n",
+                  "        $builder = static::configureWithDependencies($config, $dependencies);\n"
+                  "        $builder->compiledFactoryBaseDir = $baseDir;\n\n"
+                  "        // A marker stored inside the cache cannot establish trust in the\n"
+                  "        // same cache payload. Reassert the binding graph invariants at the\n"
+                  "        // load boundary, then trust only this builder's validated state.\n"
+                  "        $builder->assertNoReservedBindings();\n"
+                  "        $builder->bindingsValidated = true;\n\n"
+                  "        return $builder;\n",
+              ),
+              (
+                  "        // Cache generation is the trust boundary. Production builds can skip\n"
+                  "        // this full graph validation after loading the resulting artifact.\n",
+                  "        // Cache generation rejects invalid graphs early. Cache loading repeats\n"
+                  "        // the binding-invariant check because cache metadata is only advisory.\n",
+              ),
+              (
+                  "                $attributeProcessor,\n"
+                  "                $this->compiledFactoryBaseDir,\n"
+                  "                $this->compiledFactoriesTrusted,\n"
+                  "            ),\n",
+                  "                $attributeProcessor,\n"
+                  "                $this->compiledFactoryBaseDir,\n"
+                  "            ),\n",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count == 0:
+                  continue
+              if count != 1:
+                  raise SystemExit(f'expected one match, got {count}: {old[:80]!r}')
+              text = text.replace(old, new)
+
+          path.write_text(text)
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet -- src/ContainerBuilder.php; then
+            exit 0
+          fi
+          git diff --check
+          git config user.name "Andrey Shelamkoff"
+          git config user.email "inbox.shelamkoff@gmail.com"
+          git add src/ContainerBuilder.php
+          git commit -m "Revalidate cached dependency bindings"
+          git push origin HEAD:verify-dev-recheck-4
