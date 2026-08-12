@@ -78,6 +78,11 @@ class ParametersResolver
     }
 
     /**
+     * Resolves object-construction parameters. Extra values remain tolerated on
+     * this lower-level path for backward compatibility with Factory::make().
+     * Callable execution uses {@see resolveTargets()} and validates that every
+     * explicit argument was consumed.
+     *
      * @param list<ReflectionParameter> $parameters
      * @param array<string|int, mixed> $providedParameters
      * @return array<int, mixed>
@@ -86,9 +91,10 @@ class ParametersResolver
         array $parameters,
         array $providedParameters = [],
     ): array {
-        return $this->resolveTargets(
+        return $this->resolveTargetList(
             $this->targets($parameters),
-            $providedParameters,
+            new ParameterResolutionContext($providedParameters),
+            false,
         );
     }
 
@@ -108,19 +114,47 @@ class ParametersResolver
     }
 
     /**
+     * Resolves a callable signature from explicit arguments plus ambient
+     * resolution context. Unknown explicit arguments are rejected after the
+     * complete resolver chain has run, preventing typos from silently falling
+     * back to autowiring or declared defaults.
+     *
      * @param list<ParameterTarget> $targets
-     * @param array<string|int, mixed> $providedParameters
+     * @param array<string|int, mixed> $arguments
+     * @param array<string|int, mixed> $context
      * @return array<int, mixed>
      */
     public function resolveTargets(
         array $targets,
-        array $providedParameters = [],
+        array $arguments = [],
+        array $context = [],
     ): array {
-        $context = new ParameterResolutionContext($providedParameters);
+        return $this->resolveTargetList(
+            $targets,
+            new ParameterResolutionContext(
+                $arguments,
+                context: $context,
+            ),
+            true,
+        );
+    }
 
+    /**
+     * @param list<ParameterTarget> $targets
+     * @return array<int, mixed>
+     */
+    private function resolveTargetList(
+        array $targets,
+        ParameterResolutionContext $context,
+        bool $assertArgumentsConsumed,
+    ): array {
         foreach ($targets as $target) {
             [$position, $value] = $this->resolveParameter($target, $context);
             $context->resolve($position, $value);
+        }
+
+        if ($assertArgumentsConsumed) {
+            $context->assertArgumentsConsumed();
         }
 
         return $context->resolved;

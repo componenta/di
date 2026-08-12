@@ -64,7 +64,7 @@ final class RequestResolver implements ParameterResolverInterface
             return $this->resolveByType($target, $context);
         }
 
-        $request = RequestParameter::get($context->provided);
+        $request = $this->request($context);
 
         if ($request === null) {
             throw ResolutionException::forParameter(
@@ -152,7 +152,7 @@ final class RequestResolver implements ParameterResolverInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): array {
-        $request = RequestParameter::get($context->provided);
+        $request = $this->request($context);
 
         if ($request === null) {
             throw ResolutionException::forParameter(
@@ -167,6 +167,24 @@ final class RequestResolver implements ParameterResolverInterface
         }
 
         return [$target->position, $request->getUri()];
+    }
+
+    private function request(ParameterResolutionContext $context): ?ServerRequestInterface
+    {
+        $request = RequestParameter::get($context->context);
+        if ($request !== null) {
+            return $request;
+        }
+
+        // Backward-compatible bridge for callers that historically placed the
+        // request in the second argument array. New callable code should pass
+        // ambient request data through CallableExecutor's third argument.
+        $request = RequestParameter::get($context->arguments);
+        if ($request !== null) {
+            $context->consumeArgument(RequestParameter::KEY);
+        }
+
+        return $request;
     }
 
     private function getAttribute(ParameterTarget $target): ?object

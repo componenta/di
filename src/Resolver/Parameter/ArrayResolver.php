@@ -19,10 +19,12 @@ final class ArrayResolver implements ParameterResolverInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        if (array_key_exists($target->name, $context->provided)) {
-            $value = $context->provided[$target->name];
+        if (array_key_exists($target->name, $context->arguments)) {
+            $value = $context->arguments[$target->name];
 
             if ($target->accepts($value)) {
+                $context->consumeArgument($target->name);
+
                 return [$target->position, $value];
             }
 
@@ -37,10 +39,12 @@ final class ArrayResolver implements ParameterResolverInterface
             );
         }
 
-        if (array_key_exists($target->position, $context->provided)) {
-            $value = $context->provided[$target->position];
+        if (array_key_exists($target->position, $context->arguments)) {
+            $value = $context->arguments[$target->position];
 
             if ($target->accepts($value)) {
+                $context->consumeArgument($target->position);
+
                 return [$target->position, $value];
             }
 

@@ -10,9 +10,13 @@ use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\NullContainer;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
+use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
+use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Fixture\MagicInstanceCallable;
 use Componenta\DI\Tests\Fixture\MagicStaticCallable;
+
+final class CallableExecutorContextValue {}
 
 function makeExecutor(
     ?CallableResolverInterface $callableResolver = null,
@@ -60,7 +64,7 @@ describe('CallableExecutor', function () {
             expect($result)->toBe(['first', 'second']);
         });
 
-        it('passes provided parameters to the callable by name', function () {
+        it('passes explicit arguments to the callable by name', function () {
             $executor = makeExecutor();
 
             $result = $executor->call(fn(int $a, int $b) => $a - $b, ['a' => 10, 'b' => 3]);
@@ -68,12 +72,67 @@ describe('CallableExecutor', function () {
             expect($result)->toBe(7);
         });
 
-        it('passes provided parameters to the callable by position', function () {
+        it('passes explicit arguments to the callable by position', function () {
             $executor = makeExecutor();
 
             $result = $executor->call(fn(int $a, int $b) => $a - $b, [10, 3]);
 
             expect($result)->toBe(7);
+        });
+
+        it('resolves type-keyed values from the third context argument', function () {
+            $value = new CallableExecutorContextValue();
+            $executor = makeExecutor(parametersResolver: new ParametersResolver(
+                new ArrayResolver(),
+                new ArrayTypedResolver(),
+            ));
+
+            $result = $executor->call(
+                fn(CallableExecutorContextValue $contextValue) => $contextValue,
+                [],
+                [CallableExecutorContextValue::class => $value],
+            );
+
+            expect($result)->toBe($value);
+        });
+
+        it('keeps type-keyed explicit argument overrides backward compatible', function () {
+            $value = new CallableExecutorContextValue();
+            $executor = makeExecutor(parametersResolver: new ParametersResolver(
+                new ArrayResolver(),
+                new ArrayTypedResolver(),
+            ));
+
+            $result = $executor->call(
+                fn(CallableExecutorContextValue $contextValue) => $contextValue,
+                [CallableExecutorContextValue::class => $value],
+            );
+
+            expect($result)->toBe($value);
+        });
+
+        it('does not treat unused ambient context values as explicit arguments', function () {
+            $executor = makeExecutor();
+
+            $result = $executor->call(
+                fn(int $value) => $value,
+                ['value' => 7],
+                ['trace-id' => 'abc'],
+            );
+
+            expect($result)->toBe(7);
+        });
+
+        it('rejects unknown named arguments instead of silently falling back to defaults', function () {
+            $executor = makeExecutor(parametersResolver: new ParametersResolver(
+                new ArrayResolver(),
+                new DefaultValueResolver(),
+            ));
+
+            expect(fn() => $executor->call(
+                fn(string $name = 'default') => $name,
+                ['nmae' => 'John'],
+            ))->toThrow(ResolutionException::class, 'Unused explicit argument: $nmae.');
         });
 
         it('invokes dynamic instance callables using explicit arguments', function () {

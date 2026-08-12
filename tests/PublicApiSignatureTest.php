@@ -7,6 +7,7 @@ use Componenta\DI\AliasResolverInterface;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Cache\DiCacheGeneratorInterface;
 use Componenta\DI\CallableExecutor;
+use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\CallableInvoker;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolver;
@@ -61,9 +62,9 @@ it('keeps public named-argument contracts aligned with implementations', functio
     ],
     'callable executor call' => [
         CallableExecutor::class,
-        CallableInvokerInterface::class,
+        CallableExecutorInterface::class,
         'call',
-        ['callable', 'params'],
+        ['callable', 'arguments', 'context'],
     ],
     'callable invoker call' => [
         CallableInvoker::class,

@@ -17,29 +17,22 @@ use Throwable;
  * parameter gap, attributed-property injection gap, or missing class - surfaces
  * as a single type with named constructors discriminating the cause.
  *
- * Build instances through the {@see ::forParameter()}, {@see ::forProperty()},
- * {@see ::forService()}, {@see ::forMissingService()} and {@see ::forNonObject()}
- * factories; they produce Symfony-style messages and attach the relevant
- * reflection/service context as readonly fields.
+ * Build instances through the named constructors below; they produce
+ * Symfony-style messages and attach the relevant reflection/service context as
+ * readonly fields.
  */
 final class ResolutionException extends RuntimeException implements ExceptionInterface
 {
     public function __construct(
         string $message,
 
-        /**
-         * Parameter that could not be resolved (parameter failures).
-         */
+        /** Parameter that could not be resolved (parameter failures). */
         public readonly ?ReflectionParameter $parameter = null,
 
-        /**
-         * Property that could not be resolved (property failures).
-         */
+        /** Property that could not be resolved (property failures). */
         public readonly ?ReflectionProperty $property = null,
 
-        /**
-         * Service id that failed to resolve (service failures).
-         */
+        /** Service id that failed to resolve (service failures). */
         public readonly ?string $serviceId = null,
 
         /**
@@ -96,8 +89,34 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
     }
 
     /**
-     * Property could not be resolved.
+     * Explicit callable arguments remained unused after resolution.
+     *
+     * @param array<string|int, mixed> $arguments
+     * @param array<int, mixed>        $resolvedParameters
      */
+    public static function forUnusedArguments(
+        array $arguments,
+        array $resolvedParameters = [],
+    ): self {
+        $keys = array_map(
+            static fn(string|int $key): string => is_int($key)
+                ? sprintf('#%d', $key)
+                : '$' . $key,
+            array_keys($arguments),
+        );
+
+        return new self(
+            sprintf(
+                'Unused explicit argument%s: %s.',
+                count($keys) === 1 ? '' : 's',
+                implode(', ', $keys),
+            ),
+            providedParameters: $arguments,
+            resolvedParameters: $resolvedParameters,
+        );
+    }
+
+    /** Property could not be resolved. */
     public static function forProperty(
         ReflectionProperty $property,
         ?string $reason = null,
@@ -130,9 +149,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    /**
-     * The id refers to a class that does not exist and cannot be autowired.
-     */
+    /** The id refers to a class that does not exist and cannot be autowired. */
     public static function forMissingService(string $id): self
     {
         return new self(
@@ -141,9 +158,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    /**
-     * A resolver produced a non-object where an instance was expected.
-     */
+    /** A resolver produced a non-object where an instance was expected. */
     public static function forNonObject(string $id, string $actualType): self
     {
         return new self(
@@ -157,9 +172,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    /**
-     * Builds the trailing "": reason[ (previous: ...)]" fragment of a message.
-     */
+    /** Builds the trailing ": reason[ (previous: ...)]" fragment of a message. */
     private static function buildSuffix(?string $reason, ?Throwable $previous): string
     {
         if ($reason !== null && $previous !== null) {
@@ -180,7 +193,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
     private static function formatFunctionName(ReflectionParameter $parameter): string
     {
         $function = $parameter->getDeclaringFunction();
-        $class    = $parameter->getDeclaringClass();
+        $class = $parameter->getDeclaringClass();
 
         if ($class !== null) {
             return sprintf('%s::%s()', $class->getName(), $function->getName());

@@ -17,17 +17,27 @@ use WeakMap;
 /**
  * Executes callables with dependency injection.
  *
- * Resolves callable representations and invokes them with auto-wired parameters.
- * Parameters can be provided explicitly or resolved from container.
+ * Explicit invocation arguments are resolved independently from ambient
+ * resolution context. This keeps caller mistakes observable while still
+ * allowing request/framework state to participate in DI resolution.
  *
  * @example Basic usage
  * ```php
  * $executor->call(fn(LoggerInterface $logger) => $logger->info('Hello'));
  * ```
  *
- * @example With explicit parameters
+ * @example With explicit arguments
  * ```php
  * $executor->call([UserService::class, 'create'], ['name' => 'John']);
+ * ```
+ *
+ * @example With ambient context
+ * ```php
+ * $executor->call(
+ *     $controller,
+ *     arguments: ['id' => 42],
+ *     context: [ServerRequestInterface::class => $request],
+ * );
  * ```
  */
 class CallableExecutor implements CallableExecutorInterface
@@ -49,19 +59,29 @@ class CallableExecutor implements CallableExecutorInterface
     /**
      * Exceptions thrown by the callable itself propagate unchanged.
      *
+     * @param array<string|int, mixed> $arguments Explicit callable arguments.
+     * @param array<string|int, mixed> $context Ambient values available to DI resolvers.
+     *
      * @throws InvalidCallableException If the callable cannot be resolved.
-     * @throws ResolutionException      If a parameter cannot be resolved.
+     * @throws ResolutionException      If a parameter cannot be resolved or an explicit argument is unused.
      */
-    public function call(mixed $callable, array $params = []): mixed
-    {
+    public function call(
+        mixed $callable,
+        array $arguments = [],
+        array $context = [],
+    ): mixed {
         $resolved = $this->callableResolver->resolve($callable);
         $targets = $this->targets($resolved);
 
         if ($targets === []) {
-            return $resolved(...$params);
+            return $resolved(...$arguments);
         }
 
-        return $resolved(...$this->parametersResolver->resolveTargets($targets, $params));
+        return $resolved(...$this->parametersResolver->resolveTargets(
+            $targets,
+            $arguments,
+            $context,
+        ));
     }
 
     /** @return list<ParameterTarget> */
