@@ -84,19 +84,6 @@ final class DelegatorRegistry
     }
 
     /**
-     * Invalidates every namespace-dependent delegator chain.
-     *
-     * Used when the complete external PSR-11 namespace changes and no narrower
-     * dependency set can be established safely.
-     *
-     * @return list<string>
-     */
-    public function invalidateDeferred(): array
-    {
-        return $this->invalidateDependencies($this->deferredDependencies());
-    }
-
-    /**
      * @param ContainerInterface $container Container passed as the second delegator argument.
      * @throws DelegatorException
      */
