@@ -25,22 +25,34 @@ it('rejects a cache envelope with dependencies but no version', function (): voi
     ))->toThrow(InvalidConfigurationException::class);
 });
 
-it('rejects a malformed cache validation marker', function (): void {
+it('rejects the removed validated cache marker', function (): void {
     expect(fn() => ContainerBuilder::configureFromCache(
         new Config([]),
         [
             'version' => ContainerBuilder::CACHE_VERSION,
-            ContainerBuilder::CACHE_VALIDATED_KEY => 'yes',
+            'validated' => true,
             ConfigKey::DEPENDENCIES => [],
         ],
+    ))->toThrow(InvalidConfigurationException::class, 'validated');
+});
+
+it('rejects the removed raw dependency cache format', function (): void {
+    expect(fn() => ContainerBuilder::configureFromCache(
+        new Config([]),
+        [ConfigKey::SERVICES => ['cache.raw' => 42]],
     ))->toThrow(InvalidConfigurationException::class);
 });
 
-it('keeps accepting a raw dependency array', function (): void {
+it('accepts the versioned persistent cache envelope', function (): void {
     $builder = ContainerBuilder::configureFromCache(
         new Config([]),
-        [ConfigKey::SERVICES => ['cache.raw' => 42]],
+        [
+            'version' => ContainerBuilder::CACHE_VERSION,
+            ConfigKey::DEPENDENCIES => [
+                ConfigKey::SERVICES => ['cache.versioned' => 42],
+            ],
+        ],
     );
 
-    expect($builder->build()->get('cache.raw'))->toBe(42);
+    expect($builder->build()->get('cache.versioned'))->toBe(42);
 });
