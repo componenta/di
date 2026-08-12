@@ -135,3 +135,68 @@ PHP,
         @unlink($file);
     }
 });
+
+it('reuses an already loaded generated class from an identical shard in another cache root', function (): void {
+    $root = sys_get_temp_dir() . '/componenta-identical-shard-roots-' . bin2hex(random_bytes(5));
+    $firstBase = $root . '/first';
+    $secondBase = $root . '/second';
+    $file = 'shared.php';
+    $class = 'CompiledFactorySharedRoot_' . bin2hex(random_bytes(6));
+    mkdir($firstBase, 0777, true);
+    mkdir($secondBase, 0777, true);
+
+    $source = sprintf(
+        <<<'PHP'
+<?php
+
+final class %s
+{
+    public function __construct(
+        array $parameterResolvers,
+        array $attributeHandlers,
+        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
+    ) {}
+
+    public function create(array $parameters = []): string
+    {
+        return 'shared-shard';
+    }
+}
+
+return %s::class;
+PHP,
+        $class,
+        $class,
+    );
+    file_put_contents($firstBase . '/' . $file, $source);
+    file_put_contents($secondBase . '/' . $file, $source);
+    $definition = (new CompiledFactoryDefinition($file, $class, 'create'))->encode();
+
+    try {
+        $cache = [
+            'version' => ContainerBuilder::CACHE_VERSION,
+            ConfigKey::DEPENDENCIES => [
+                ConfigKey::FACTORIES => ['entry' => $definition],
+            ],
+        ];
+        $first = ContainerBuilder::configureFromCache(
+            new Config([]),
+            $cache,
+            $firstBase,
+        )->build();
+        $second = ContainerBuilder::configureFromCache(
+            new Config([]),
+            $cache,
+            $secondBase,
+        )->build();
+
+        expect($first->get('entry'))->toBe('shared-shard')
+            ->and($second->get('entry'))->toBe('shared-shard');
+    } finally {
+        @unlink($firstBase . '/' . $file);
+        @unlink($secondBase . '/' . $file);
+        @rmdir($firstBase);
+        @rmdir($secondBase);
+        @rmdir($root);
+    }
+});
