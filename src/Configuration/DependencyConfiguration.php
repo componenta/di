@@ -91,11 +91,11 @@ final class DependencyConfiguration
     }
 
     /**
-     * Extracts dependencies from either a versioned cache envelope or the
-     * legacy raw dependency array. Compiled definitions are normalized to their
-     * encoded representation at this boundary so an object reconstructed by a
-     * PHP cache exporter cannot acquire the programmatic-object path semantics
-     * used outside configureFromCache().
+     * Extracts dependencies from the versioned persistent-cache envelope.
+     * Compiled definitions are normalized to their encoded representation at
+     * this boundary so an object reconstructed by a PHP cache exporter cannot
+     * acquire the programmatic-object path semantics used outside
+     * configureFromCache().
      *
      * @param array<string, mixed> $cache
      * @return array<string, mixed>
@@ -103,17 +103,8 @@ final class DependencyConfiguration
     public static function dependenciesFromCache(
         array $cache,
         int $expectedVersion,
-        string $validatedKey,
     ): array {
-        $isEnvelope = array_key_exists('version', $cache)
-            || array_key_exists(ConfigKey::DEPENDENCIES, $cache)
-            || array_key_exists($validatedKey, $cache);
-
-        if (!$isEnvelope) {
-            return self::encodeCompiledFactoryDefinitions($cache);
-        }
-
-        self::assertCacheEnvelopeShape($cache, $validatedKey);
+        self::assertCacheEnvelopeShape($cache);
 
         $version = $cache['version'];
         if ($version !== $expectedVersion) {
@@ -344,12 +335,13 @@ final class DependencyConfiguration
             || $extension instanceof Closure
             || is_callable($extension)
             || (is_string($extension) && $extension !== '')
+            || self::isDeferredCallableArraySpecification($extension)
         ) {
             return;
         }
 
         throw new InvalidConfigurationException(sprintf(
-            '%s specification must be an instance, callable or non-empty service id; got %s.',
+            '%s specification must be an instance, callable, non-empty service id or [service-id, method]; got %s.',
             ucfirst($kind),
             get_debug_type($extension),
         ));
@@ -382,11 +374,10 @@ final class DependencyConfiguration
     }
 
     /** @param array<string, mixed> $cache */
-    private static function assertCacheEnvelopeShape(array $cache, string $validatedKey): void
+    private static function assertCacheEnvelopeShape(array $cache): void
     {
         $allowed = [
             'version' => true,
-            $validatedKey => true,
             ConfigKey::DEPENDENCIES => true,
         ];
 
@@ -403,16 +394,6 @@ final class DependencyConfiguration
             throw new InvalidConfigurationException(
                 'Container cache envelope must declare a version.',
             );
-        }
-
-        if (array_key_exists($validatedKey, $cache)
-            && !is_bool($cache[$validatedKey])
-        ) {
-            throw new InvalidConfigurationException(sprintf(
-                'Container cache "%s" marker must be bool; got %s.',
-                $validatedKey,
-                get_debug_type($cache[$validatedKey]),
-            ));
         }
     }
 
