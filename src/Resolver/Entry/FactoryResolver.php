@@ -104,9 +104,14 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $factory = $this->createFactoryFromDefinition($factory);
         }
 
+        // Exact string ids are ambiguous with native function/static-method
+        // strings, so an owning PSR-11 service wins. Already-valid array
+        // callables are explicit PHP callables and must not be reinterpreted as
+        // service owners merely because a class id is autowireable.
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
         } elseif (is_array($factory)
+            && !is_callable($factory)
             && isset($factory[0])
             && is_string($factory[0])
             && $this->container->has($factory[0])
