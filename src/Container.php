@@ -392,6 +392,7 @@ final readonly class Container implements
 
         $this->delegators->register($id, $delegator);
         $this->invalidate($id);
+        $this->invalidateDeferredDelegators([$id]);
     }
 
     /**
