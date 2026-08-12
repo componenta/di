@@ -37,7 +37,11 @@ final readonly class AutowireClassGraph
                 throw new InvalidArgumentException('Autowire entry must contain a non-empty class-string.');
             }
 
-            $pending[$class] = true;
+            // Roots follow the same known alias graph as constructor/property/
+            // SetUp dependencies. Otherwise an interface root is rejected by
+            // eligibility filtering before its configured implementation can
+            // participate in AOT planning.
+            $pending[$this->resolveAlias($class)] = true;
         }
 
         $result = [];

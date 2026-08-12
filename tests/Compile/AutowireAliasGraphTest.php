@@ -28,3 +28,14 @@ it('follows known interface aliases to concrete AOT dependencies', function () {
         ->toContain(AutowireAliasGraphImplementation::class)
         ->toContain(AutowireAliasGraphLeaf::class);
 });
+
+it('resolves a known alias before filtering an AOT root for eligibility', function () {
+    $classes = (new AutowireClassGraph([
+        AutowireAliasGraphContract::class => AutowireAliasGraphImplementation::class,
+    ]))->expand([AutowireAliasGraphContract::class]);
+
+    expect($classes)
+        ->not->toContain(AutowireAliasGraphContract::class)
+        ->toContain(AutowireAliasGraphImplementation::class)
+        ->toContain(AutowireAliasGraphLeaf::class);
+});
