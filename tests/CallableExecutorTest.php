@@ -11,6 +11,8 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\NullContainer;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Tests\Fixture\MagicInstanceCallable;
+use Componenta\DI\Tests\Fixture\MagicStaticCallable;
 
 function makeExecutor(
     ?CallableResolverInterface $callableResolver = null,
@@ -72,6 +74,16 @@ describe('CallableExecutor', function () {
             $result = $executor->call(fn(int $a, int $b) => $a - $b, [10, 3]);
 
             expect($result)->toBe(7);
+        });
+
+        it('invokes dynamic instance callables using explicit arguments', function () {
+            expect(makeExecutor()->call([new MagicInstanceCallable(), 'dynamic'], [1, 2]))
+                ->toBe(['dynamic', [1, 2]]);
+        });
+
+        it('invokes dynamic static callables using explicit arguments', function () {
+            expect(makeExecutor()->call(MagicStaticCallable::class . '::dynamic', [3, 4]))
+                ->toBe(['dynamic', [3, 4]]);
         });
 
         it('throws ResolutionException when a parameter cannot be resolved', function () {

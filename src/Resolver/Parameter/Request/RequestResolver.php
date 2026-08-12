@@ -171,13 +171,33 @@ final class RequestResolver implements ParameterResolverInterface
 
     private function getAttribute(ParameterTarget $target): ?object
     {
+        $attributes = [];
+
         foreach ($target->attributeClasses as $attributeClass) {
-            if ($this->isRequestAttribute($attributeClass)) {
-                return $target->firstAttribute($attributeClass);
+            if (!$this->isRequestAttribute($attributeClass)) {
+                continue;
+            }
+
+            $attribute = $target->firstAttribute($attributeClass);
+            if ($attribute !== null) {
+                $attributes[] = $attribute;
             }
         }
 
-        return null;
+        if (count($attributes) > 1) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: sprintf(
+                    'multiple request extraction attributes are ambiguous: %s',
+                    implode(', ', array_map(
+                        fn(object $attribute): string => '#[' . $this->attributeShortName($attribute) . ']',
+                        $attributes,
+                    )),
+                ),
+            );
+        }
+
+        return $attributes[0] ?? null;
     }
 
     /** @param class-string $class */

@@ -123,11 +123,8 @@ class ContainerBuilder
 
     private ?string $compiledFactoryBaseDir = null;
 
-    /** The generated cache has already passed complete binding validation. */
+    /** Current builder state has passed complete binding validation. */
     private bool $bindingsValidated = false;
-
-    /** Compiled shard paths and class names came from the generated cache. */
-    private bool $compiledFactoriesTrusted = false;
 
     /** @var array<class-string, ParameterResolverInterface&AttributeHandlerInterface>|null */
     private ?array $sharedResolvers = null;
@@ -233,8 +230,12 @@ class ContainerBuilder
         /** @var array<string, mixed> $dependencies */
         $builder = static::configureWithDependencies($config, $dependencies);
         $builder->compiledFactoryBaseDir = $baseDir;
-        $builder->bindingsValidated = ($cache[self::CACHE_VALIDATED_KEY] ?? false) === true;
-        $builder->compiledFactoriesTrusted = $builder->bindingsValidated;
+
+        // A marker stored inside the cache cannot establish trust in the
+        // same cache payload. Reassert the binding graph invariants at the
+        // load boundary, then trust only this builder's validated state.
+        $builder->assertNoReservedBindings();
+        $builder->bindingsValidated = true;
 
         return $builder;
     }
@@ -290,8 +291,8 @@ class ContainerBuilder
             static fn(mixed $value): bool => $value !== [] && $value !== false,
         );
 
-        // Cache generation is the trust boundary. Production builds can skip
-        // this full graph validation after loading the resulting artifact.
+        // Cache generation rejects invalid graphs early. Cache loading repeats
+        // the binding-invariant check because cache metadata is only advisory.
         $validator = static::configureWithDependencies(new Config([]), $normalized);
         $validator->assertNoReservedBindings();
 
@@ -504,7 +505,6 @@ class ContainerBuilder
                 $parametersResolver,
                 $attributeProcessor,
                 $this->compiledFactoryBaseDir,
-                $this->compiledFactoriesTrusted,
             ),
             new InvokableResolver(
                 $this->invokables,

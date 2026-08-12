@@ -19,3 +19,18 @@ it('rejects a non-scalar sort alias with a stable mapping exception', function (
         'Sort alias must be a string or integer',
     );
 });
+
+it('rejects an explicitly null sort alias instead of treating it as missing', function (): void {
+    expect(fn() => (new RequestMapperPipeline())->run(
+        data: ['sort' => null],
+        map: [],
+        defaults: [],
+        cast: [],
+        sortMap: ['newest' => ['createdAt' => 'desc']],
+        exclude: [],
+        provider: new NullCasterProvider(),
+    ))->toThrow(
+        InvalidArgumentException::class,
+        'Sort alias must be a string or integer',
+    );
+});
