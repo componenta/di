@@ -17,23 +17,8 @@ final readonly class CompiledFactoryShardWriter
         }
 
         if (is_file($file)) {
-            $existing = file_get_contents($file);
-
-            if ($existing === false) {
-                throw new RuntimeException(sprintf(
-                    'Cannot read existing generated factory shard "%s".',
-                    $file,
-                ));
-            }
-
-            if ($existing === $code) {
-                return;
-            }
-
-            throw new RuntimeException(sprintf(
-                'Generated factory shard "%s" already exists with unexpected contents.',
-                $file,
-            ));
+            $this->assertExistingContents($file, $code);
+            return;
         }
 
         $temporary = tempnam($directory, basename($file) . '.tmp.');
@@ -49,8 +34,16 @@ final readonly class CompiledFactoryShardWriter
             $this->lint($temporary);
             @chmod($temporary, 0644);
 
-            if (!@rename($temporary, $file) && !is_file($file)) {
-                throw new RuntimeException(sprintf('Cannot activate generated factory shard "%s".', $file));
+            if (!@rename($temporary, $file)) {
+                if (!is_file($file)) {
+                    throw new RuntimeException(sprintf('Cannot activate generated factory shard "%s".', $file));
+                }
+
+                // Another writer may have won the race on platforms where
+                // rename() does not replace an existing destination. The
+                // content-addressed path is safe to reuse only when the bytes
+                // are exactly the artifact we intended to publish.
+                $this->assertExistingContents($file, $code);
             }
 
             if (function_exists('opcache_invalidate')) {
@@ -60,6 +53,25 @@ final readonly class CompiledFactoryShardWriter
             if (is_file($temporary)) {
                 @unlink($temporary);
             }
+        }
+    }
+
+    private function assertExistingContents(string $file, string $code): void
+    {
+        $existing = file_get_contents($file);
+
+        if ($existing === false) {
+            throw new RuntimeException(sprintf(
+                'Cannot read existing generated factory shard "%s".',
+                $file,
+            ));
+        }
+
+        if ($existing !== $code) {
+            throw new RuntimeException(sprintf(
+                'Generated factory shard "%s" already exists with unexpected contents.',
+                $file,
+            ));
         }
     }
 
