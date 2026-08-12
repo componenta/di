@@ -472,17 +472,39 @@ PHP,
                 $parts[] = $parameterCode;
             }
 
-            $parts[] = sprintf(
-                <<<'PHP'
+            $initializeExisting = $constructor->isPublic()
+                ? sprintf(
+                    <<<'PHP'
 if ($entry !== null) {
     $entry->__construct(%s);
 
     return $entry;
 }
+PHP,
+                    implode(', ', $arguments),
+                )
+                : sprintf(
+                    <<<'PHP'
+if ($entry !== null) {
+    $constructor = self::%s()->getConstructor()
+        ?? throw new \LogicException('Compiled lazy initializer lost its constructor.');
+
+    $constructor->invokeArgs($entry, [%s]);
+
+    return $entry;
+}
+PHP,
+                    $this->classHelper(),
+                    implode(', ', $arguments),
+                );
+
+            $parts[] = sprintf(
+                <<<'PHP'
+%s
 
 return new \%s(%s);
 PHP,
-                implode(', ', $arguments),
+                $initializeExisting,
                 $this->className,
                 implode(', ', $arguments),
             );
