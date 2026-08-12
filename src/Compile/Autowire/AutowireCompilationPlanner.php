@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Autowire;
 
+use Componenta\DI\ProtectedServiceIds;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\InvokableSpecificationValidator;
 use ReflectionClass;
@@ -23,6 +24,10 @@ final readonly class AutowireCompilationPlanner
      */
     public function plan(iterable $entries, array $excluded = []): AutowireCompilationPlan
     {
+        foreach (ProtectedServiceIds::ids() as $id) {
+            $excluded[$id] = true;
+        }
+
         $classes = (new AutowireClassGraph($this->aliases))->expand($entries, $excluded);
         $invokables = [];
         $factories = [];
