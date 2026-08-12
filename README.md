@@ -120,6 +120,8 @@ Local entries therefore take precedence over external containers. `has()` conver
 
 A delegator method reference may use a concrete class, an interface, or an opaque service id, for example `[DecoratorInterface::class, 'decorate']` or `['decorator.service', 'decorate']`. In bulk/configuration input, wrap an opaque service-id method reference as `[['decorator.service', 'decorate']]`; the flat `['first', 'second']` form remains a list of two string delegators.
 
+Parameter resolvers and attribute handlers may be registered as an instance, a service id, a callable factory, or a `[service-id, 'method']` factory. The method receives the container and returns the extension. Unlike bulk delegators, an extension specification is already one value, so `['extension.factory', 'create']` needs no additional nesting.
+
 A normal factory receives `Componenta\Config\ContainerValue` and the per-resolution context:
 
 ```php
@@ -160,15 +162,23 @@ Available definitions are `factory()`, `autowire()`, `reference()`, and `invokab
 | `ConfigKey::ALIASES` | `array<string, string>` |
 | `ConfigKey::DELEGATORS` | `array<string, callable|string|array|list<...>>` |
 | `ConfigKey::SERVICES` | `array<string, mixed>` |
-| `ConfigKey::PARAMETER_RESOLVERS` | `array<int, class-string|callable|ParameterResolverInterface>` |
+| `ConfigKey::PARAMETER_RESOLVERS` | `array<int, class-string|callable|array{0:string,1:string}|ParameterResolverInterface>` |
 | `ConfigKey::PARAMETER_RESOLVERS_REPLACE` | `bool` |
-| `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|AttributeHandlerInterface>` |
+| `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|array{0:string,1:string}|AttributeHandlerInterface>` |
 | `ConfigKey::ATTRIBUTE_HANDLERS_REPLACE` | `bool` |
-
 
 Unknown keys and malformed shapes are rejected with `InvalidConfigurationException`.
 
-`configureFromCache($config, $cache, $baseDir)` accepts either a versioned cache envelope or a raw dependency array. When `$baseDir` is provided, relative paths in compiled factory definitions are resolved against it.
+`configureFromCache($config, $cache, $baseDir)` accepts only the versioned persistent-cache envelope:
+
+```php
+[
+    'version' => ContainerBuilder::CACHE_VERSION,
+    ConfigKey::DEPENDENCIES => $dependencies,
+]
+```
+
+Raw dependency arrays and the former `validated` cache marker are not accepted. When `$baseDir` is provided, relative paths in compiled factory definitions are resolved against it.
 
 `ConfigProvider` registers optional casting, current-user, and PSR-7 request resolvers. Componenta application bootstrap can discover it through package metadata.
 
@@ -243,7 +253,7 @@ A successful result is `[position, value]`; `null` lets the next resolver try. H
 
 An attribute handler implements `AttributeHandlerInterface`, exposes immutable `phase` and `priority` properties, and defines `supportsAttribute()` plus `handle()`. Handlers that can emit generated PHP may additionally implement `CompilableAttributeHandlerInterface`.
 
-The builder seals both extension registries after assembly. Mutating a resolved registry at runtime is rejected.
+Both extension types can be supplied directly or materialized from a service/callable factory, including `['service.id', 'method']`. The builder seals both extension registries after assembly. Mutating a resolved registry at runtime is rejected.
 
 ## Production compiled factories
 
@@ -267,11 +277,11 @@ $dependencies[ConfigKey::FACTORIES] = array_replace(
 );
 ```
 
-Each `CompiledFactoryDefinition` contains a relative shard file, generated class, and factory method. Shards have content-addressed names, are loaded only when one of their entries is first resolved, and are then reused by that container. No source SHA-256 is recalculated during bootstrap. Dynamic classes continue through reflection autowiring.
+Each `CompiledFactoryDefinition` contains a relative shard file, generated class, and factory method. Shards have content-addressed names, are loaded only when one of their entries is first resolved, and are then reused by that container. A normal cold load does not hash the shard before `require`; if the same generated class is already loaded from another physical cache root, the loader accepts it only when both shard files have the same SHA-256. Dynamic classes continue through reflection autowiring.
 
 Application integration normally owns root discovery. `componenta/app` provides the build-only `AutowireEntryContributorInterface` flow and recognizes `#[Autowire]`; Router, CQRS, and boot discovery contribute their known runtime entry classes automatically.
 
-`DiCacheGeneratorInterface::generate(array $config, string $path)` atomically writes the exact supplied array as PHP. It does not discover classes or compile factories. Runtime entry caches remain inside each `Container` instance; persistent cache files and OPcache are deployment concerns.
+`DiCacheGeneratorInterface::generate(array $config, string $path)` atomically writes the exact supplied array as PHP. It does not discover classes or compile factories. To load the result with `configureFromCache()`, generate the versioned cache envelope shown above. Runtime entry caches remain inside each `Container` instance; persistent cache files and OPcache are deployment concerns.
 ## Exceptions
 
 | Exception | Meaning |
