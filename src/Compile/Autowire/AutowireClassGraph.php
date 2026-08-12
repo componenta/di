@@ -7,7 +7,9 @@ namespace Componenta\DI\Compile\Autowire;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\EntryClassEligibility;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\TypeHints;
 use InvalidArgumentException;
 use ReflectionAttribute;
@@ -71,7 +73,9 @@ final readonly class AutowireClassGraph
             }
 
             $reflection = new ReflectionClass($class);
-            if (!EntryClassEligibility::allows($reflection)) {
+            if (!EntryClassEligibility::allows($reflection)
+                || self::isBootstrapExtension($reflection)
+            ) {
                 continue;
             }
 
@@ -183,9 +187,18 @@ final readonly class AutowireClassGraph
         }
 
         $candidate = new ReflectionClass($dependency);
-        if (EntryClassEligibility::allows($candidate)) {
+        if (EntryClassEligibility::allows($candidate)
+            && !self::isBootstrapExtension($candidate)
+        ) {
             $dependencies[$candidate->getName()] = true;
         }
+    }
+
+    /** @param ReflectionClass<object> $class */
+    private static function isBootstrapExtension(ReflectionClass $class): bool
+    {
+        return $class->implementsInterface(ParameterResolverInterface::class)
+            || $class->implementsInterface(AttributeHandlerInterface::class);
     }
 
     private function resolveAlias(string $id): string
