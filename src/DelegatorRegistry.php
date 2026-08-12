@@ -26,8 +26,8 @@ final class DelegatorRegistry
 
     /**
      * Raw callable service id -> decorated entry ids whose normalised chain
-     * depends on that id. Used to invalidate decorated results when an alias
-     * used by a deferred delegator is retargeted.
+     * depends on that id. Used to invalidate decorated results when container
+     * namespace mutations can change how deferred callables resolve.
      *
      * @var array<string, array<string, true>>
      */
@@ -54,21 +54,37 @@ final class DelegatorRegistry
     }
 
     /**
-     * Invalidates every normalised delegator chain that references the supplied
-     * service id and returns the decorated entry ids whose resolved cache must
+     * Invalidates every normalised chain containing a deferred service-id
+     * reference and returns the decorated entry ids whose resolved cache must
      * also be dropped by the container.
+     *
+     * Alias mutation must invalidate the complete deferred set rather than only
+     * references whose raw id equals the changed alias: another reference can
+     * point to an alias that resolves transitively through it. The same rule is
+     * required when a service is replaced or a new external container changes
+     * the PSR-11 namespace visible to CallableResolver.
+     *
+     * These mutations are control-plane operations, so correctness is preferred
+     * over maintaining a reverse transitive alias graph here.
      *
      * @return list<string>
      */
-    public function invalidateDependency(string $id): array
+    public function invalidateDeferred(): array
     {
-        $entries = array_keys($this->dependents[$id] ?? []);
+        /** @var array<string, true> $entries */
+        $entries = [];
 
-        foreach ($entries as $entry) {
+        foreach ($this->dependents as $dependents) {
+            foreach ($dependents as $entry => $_) {
+                $entries[$entry] = true;
+            }
+        }
+
+        foreach ($entries as $entry => $_) {
             unset($this->callables[$entry]);
         }
 
-        return $entries;
+        return array_keys($entries);
     }
 
     /**

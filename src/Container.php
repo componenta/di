@@ -335,6 +335,7 @@ final readonly class Container implements
         }
 
         $this->externalContainers->register($container);
+        $this->invalidateDeferredDelegators();
     }
 
     public function alias(string $alias, string $target): void
@@ -348,14 +349,7 @@ final readonly class Container implements
 
         $previousCanonical = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
-        $dependentEntries = $this->delegators->invalidateDependency($alias);
         $this->invalidate($alias, $previousCanonical);
-
-        foreach ($dependentEntries as $entryId) {
-            if ($entryId !== $alias) {
-                $this->invalidate($entryId);
-            }
-        }
     }
 
     /**
@@ -384,7 +378,8 @@ final readonly class Container implements
     /**
      * Invalidates every cached entry that could have been seeded under the
      * given id - directly, through an alias pointing at it, or through its
-     * canonical target.
+     * canonical target. Container namespace mutations also invalidate every
+     * decorated entry whose delegator chain contains a deferred service id.
      */
     private function invalidate(string $id, ?string $knownCanonical = null): void
     {
@@ -399,6 +394,36 @@ final readonly class Container implements
 
         if ($canonical !== $id) {
             $this->delegators->invalidate($canonical);
+        }
+
+        $this->invalidateDeferredDelegators($id);
+    }
+
+    /**
+     * Deferred callable references are resolved against the live container
+     * namespace. Any namespace mutation can therefore change their target,
+     * including through an alias chain, so their callable and decorated caches
+     * are invalidated together.
+     */
+    private function invalidateDeferredDelegators(?string $skipEntry = null): void
+    {
+        foreach ($this->delegators->invalidateDeferred() as $entryId) {
+            if ($entryId === $skipEntry) {
+                continue;
+            }
+
+            try {
+                $canonical = $this->aliases->resolve($entryId);
+            } catch (Throwable) {
+                $canonical = $entryId;
+            }
+
+            $this->cache->invalidate($entryId, $canonical);
+            $this->delegators->invalidate($entryId);
+
+            if ($canonical !== $entryId) {
+                $this->delegators->invalidate($canonical);
+            }
         }
     }
 }
