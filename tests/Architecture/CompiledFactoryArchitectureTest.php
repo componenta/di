@@ -87,7 +87,6 @@ it('stores compiled autowiring as regular factories and loads shards lazily', fu
             new Config([]),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => $factories,
                     ConfigKey::INVOKABLES => $builder->invokables,
@@ -106,7 +105,6 @@ it('stores compiled autowiring as regular factories and loads shards lazily', fu
             new Config([]),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => $factories,
                     ConfigKey::INVOKABLES => $builder->invokables,
