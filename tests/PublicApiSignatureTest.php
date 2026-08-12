@@ -64,7 +64,7 @@ it('keeps public named-argument contracts aligned with implementations', functio
         CallableExecutor::class,
         CallableExecutorInterface::class,
         'call',
-        ['callable', 'arguments', 'context'],
+        ['callable', 'params', 'context'],
     ],
     'callable invoker call' => [
         CallableInvoker::class,

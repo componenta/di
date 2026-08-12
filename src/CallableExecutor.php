@@ -35,7 +35,7 @@ use WeakMap;
  * ```php
  * $executor->call(
  *     $controller,
- *     arguments: ['id' => 42],
+ *     params: ['id' => 42],
  *     context: [ServerRequestInterface::class => $request],
  * );
  * ```
@@ -59,7 +59,7 @@ class CallableExecutor implements CallableExecutorInterface
     /**
      * Exceptions thrown by the callable itself propagate unchanged.
      *
-     * @param array<string|int, mixed> $arguments Explicit callable arguments.
+     * @param array<string|int, mixed> $params Explicit callable arguments.
      * @param array<string|int, mixed> $context Ambient values available to DI resolvers.
      *
      * @throws InvalidCallableException If the callable cannot be resolved.
@@ -67,19 +67,19 @@ class CallableExecutor implements CallableExecutorInterface
      */
     public function call(
         mixed $callable,
-        array $arguments = [],
+        array $params = [],
         array $context = [],
     ): mixed {
         $resolved = $this->callableResolver->resolve($callable);
         $targets = $this->targets($resolved);
 
         if ($targets === []) {
-            return $resolved(...$arguments);
+            return $resolved(...$params);
         }
 
         return $resolved(...$this->parametersResolver->resolveTargets(
             $targets,
-            $arguments,
+            $params,
             $context,
         ));
     }
