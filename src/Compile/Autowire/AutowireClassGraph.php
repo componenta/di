@@ -59,7 +59,11 @@ final readonly class AutowireClassGraph
                 continue;
             }
 
-            if (!self::isLoadable($class)) {
+            if (!class_exists($class)
+                && !interface_exists($class)
+                && !trait_exists($class)
+                && !enum_exists($class)
+            ) {
                 throw new InvalidArgumentException(sprintf(
                     'Cannot compile autowire entry "%s": class is not loadable.',
                     $class,
