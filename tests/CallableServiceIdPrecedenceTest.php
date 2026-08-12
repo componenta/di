@@ -98,6 +98,15 @@ describe('opaque callable service-id precedence', function () {
         expect($registry->apply('entry', 'base', $container))->toBe('base-service');
     });
 
+    it('does not track native static array delegators as deferred service references', function () {
+        $registry = new DelegatorRegistry(new CallableResolver(callablePrecedenceContainer([
+            CallablePrecedenceNativeTarget::class => new CallablePrecedenceServiceTarget(),
+        ])));
+        $registry->register('entry', [CallablePrecedenceNativeTarget::class, 'run']);
+
+        expect($registry->invalidateDeferred())->toBe([]);
+    });
+
     it('prefers a factory service id over a same-named native function', function () {
         $factory = static fn(ContainerInterface $_container): string => 'service-factory';
         $container = callablePrecedenceContainer(['strlen' => $factory]);
