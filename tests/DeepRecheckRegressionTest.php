@@ -165,7 +165,6 @@ PHP,
             $runtime,
             $parameters,
             $attributes,
-            trustedCompiledFactories: true,
         );
 
         expect($resolver->resolve('first'))->toBe('first-shard');
