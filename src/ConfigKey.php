@@ -14,7 +14,7 @@ final class ConfigKey
     public const string DELEGATORS = \Componenta\Config\ConfigKey::DELEGATORS;
     public const string SERVICES = \Componenta\Config\ConfigKey::SERVICES;
 
-    /** Custom parameter resolvers: priority => service/callable/instance. */
+    /** Custom parameter resolvers: priority => service/callable/[service, method]/instance. */
     public const string PARAMETER_RESOLVERS = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS;
 
     /** Replace the default parameter resolver chain. */
