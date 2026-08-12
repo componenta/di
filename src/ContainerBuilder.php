@@ -205,10 +205,14 @@ class ContainerBuilder
         array $cache,
         ?string $baseDir = null,
     ): static {
-        if (array_key_exists('version', $cache)
+        $isEnvelope = array_key_exists('version', $cache)
             || array_key_exists(ConfigKey::DEPENDENCIES, $cache)
-        ) {
-            $version = $cache['version'] ?? self::CACHE_VERSION;
+            || array_key_exists(self::CACHE_VALIDATED_KEY, $cache);
+
+        if ($isEnvelope) {
+            self::assertCacheEnvelopeShape($cache);
+
+            $version = $cache['version'];
             if ($version !== self::CACHE_VERSION) {
                 throw new InvalidConfigurationException(sprintf(
                     'Unsupported container cache version "%s"; expected "%d".',
@@ -1001,6 +1005,41 @@ class ContainerBuilder
             && $value[0] !== ''
             && (class_exists($value[0]) || interface_exists($value[0]))
             && method_exists($value[0], $value[1]);
+    }
+
+    /** @param array<string, mixed> $cache */
+    private static function assertCacheEnvelopeShape(array $cache): void
+    {
+        $allowed = [
+            'version' => true,
+            self::CACHE_VALIDATED_KEY => true,
+            ConfigKey::DEPENDENCIES => true,
+        ];
+
+        foreach ($cache as $key => $_value) {
+            if (!is_string($key) || !isset($allowed[$key])) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Unsupported container cache key "%s".',
+                    (string) $key,
+                ));
+            }
+        }
+
+        if (!array_key_exists('version', $cache)) {
+            throw new InvalidConfigurationException(
+                'Container cache envelope must declare a version.',
+            );
+        }
+
+        if (array_key_exists(self::CACHE_VALIDATED_KEY, $cache)
+            && !is_bool($cache[self::CACHE_VALIDATED_KEY])
+        ) {
+            throw new InvalidConfigurationException(sprintf(
+                'Container cache "%s" marker must be bool; got %s.',
+                self::CACHE_VALIDATED_KEY,
+                get_debug_type($cache[self::CACHE_VALIDATED_KEY]),
+            ));
+        }
     }
 
     /**
