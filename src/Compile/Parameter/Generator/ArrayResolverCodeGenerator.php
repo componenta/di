@@ -15,7 +15,7 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use ReflectionNamedType;
 
-/** Inlines name/position runtime overrides. */
+/** Inlines explicit invocation-argument lookup by name or position. */
 final class ArrayResolverCodeGenerator implements ParameterResolverCodeGeneratorInterface
 {
     public function generate(
@@ -60,10 +60,12 @@ final class ArrayResolverCodeGenerator implements ParameterResolverCodeGenerator
         ParameterCodeGenerationContext $context,
         bool $requiresTypeCheck,
     ): string {
-        $provided = $context->contextExpression . '->provided';
+        $arguments = $context->contextExpression . '->arguments';
         $value = $context->resultVariable;
         $assign = sprintf(
-            "%s = %s;\ngoto %s;",
+            "%s->consumeArgument(%s);\n%s = %s;\ngoto %s;",
+            $context->contextExpression,
+            $key,
             $context->argumentVariable,
             $value,
             $context->resolvedLabel,
@@ -78,9 +80,9 @@ if (array_key_exists(%s, %s)) {
 }
 PHP,
                 $key,
-                $provided,
+                $arguments,
                 $value,
-                $provided,
+                $arguments,
                 $key,
                 self::indent($assign),
             );
@@ -104,9 +106,9 @@ if (array_key_exists(%s, %s)) {
 }
 PHP,
             $key,
-            $provided,
+            $arguments,
             $value,
-            $provided,
+            $arguments,
             $key,
             $context->targetExpression,
             $value,
