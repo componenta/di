@@ -14,9 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-      - name: Verify source parent
-        run: test "$(git rev-parse HEAD^)" = "88b61f1a170ec89acad1c4b8d9e707e1227194f7"
+          fetch-depth: 3
+      - name: Verify exact dev source tree
+        run: git diff --exit-code 88b61f1a170ec89acad1c4b8d9e707e1227194f7 HEAD -- . ':(exclude).github'
       - name: Create exact dev source archive
         run: tar --exclude=.git --exclude=.github -czf /tmp/componenta-di-dev-source.tar.gz .
       - uses: actions/upload-artifact@v4
