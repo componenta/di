@@ -1,0 +1,45 @@
+name: Fourth pass full exact-tree verification 2
+
+on:
+  push:
+    branches: [verify-dev-recheck-4-full-2]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm tested source tree
+        shell: bash
+        run: |
+          git diff --exit-code fa7564e69ebb4bd5823b46f7f30c705829d5bf89 -- . ':(exclude).github/workflows/recheck4-full-2.yml'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Validate composer
+        run: composer validate --strict
+      - name: Audit dependencies
+        run: composer audit --no-interaction
+      - name: PHP syntax check
+        shell: bash
+        run: |
+          find src tests verification benchmarks -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+      - name: PHPStan
+        run: composer phpstan
+      - name: Tests
+        run: composer test
+      - name: Code style
+        run: composer cs-check
