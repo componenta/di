@@ -23,4 +23,9 @@ jobs:
           COMPOSER_ALLOW_SUPERUSER: '1'
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: Run fourth-pass regressions
-        run: vendor/bin/pest tests/Recheck4RegressionTest.php
+        run: >-
+          vendor/bin/pest
+          tests/CompiledFactoryShardWriterTest.php
+          tests/CallableExecutorTest.php
+          tests/Resolver/Parameter/Request/RequestMapperSortValidationTest.php
+          tests/Resolver/Parameter/Request/RequestAttributeAmbiguityTest.php
