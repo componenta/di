@@ -116,12 +116,9 @@ class CallableExecutor implements CallableExecutorInterface
     {
         if (is_array($callable) && count($callable) === 2) {
             [$owner, $method] = $callable;
+            $class = is_object($owner) ? $owner::class : $owner;
 
-            if ((is_object($owner) || is_string($owner)) && is_string($method)) {
-                $class = is_object($owner) ? $owner::class : $owner;
-
-                return !method_exists($class, $method);
-            }
+            return !method_exists($class, $method);
         }
 
         if (is_string($callable) && str_contains($callable, '::')) {
