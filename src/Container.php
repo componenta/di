@@ -337,6 +337,10 @@ final readonly class Container implements
             );
         }
 
+        if ($this->externalContainers->contains($container)) {
+            return;
+        }
+
         $this->externalContainers->register($container);
         $this->invalidateDeferredDelegators();
     }
