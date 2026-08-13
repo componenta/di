@@ -650,7 +650,7 @@ class ContainerBuilder
         }
     }
 
-    private function assertSingleBindingPerCanonicalId(AliasResolverInterface $aliases): void
+    private function assertSingleBindingPerCanonicalId(AliasResolver $aliases): void
     {
         /** @var array<string, array{kind: string, id: string}> $owners */
         $owners = [];
