@@ -146,9 +146,10 @@ final readonly class Container implements
      * 1. Decorated cache (by requested id).
      * 2. Alias resolution to canonical id.
      * 3. Local base cache by canonical id.
-     * 4. External PSR-11 containers (inside the cycle guard).
-     * 5. Resolver chain.
-     * 6. Delegators applied on top of the produced value.
+     * 4. Explicit runtime definitions installed through set().
+     * 5. External PSR-11 containers (inside the cycle guard).
+     * 6. Resolver chain.
+     * 7. Delegators applied on top of the produced value.
      *
      * @throws NotFoundException           If no resolver can handle the entry.
      * @throws CircularDependencyException If a cycle is detected.
@@ -174,7 +175,9 @@ final readonly class Container implements
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
         if (!$this->cache->tryGetBase($entryId, $entry)) {
-            $external = $this->externalContainers->findOwning($entryId);
+            $external = $this->runtimeDefinitions->has($entryId)
+                ? null
+                : $this->externalContainers->findOwning($entryId);
 
             if ($external !== null) {
                 $entry = $external->get($entryId);
@@ -203,6 +206,10 @@ final readonly class Container implements
 
             try {
                 if ($this->cache->tryGetBase($entryId, $base)) {
+                    return true;
+                }
+
+                if ($this->runtimeDefinitions->has($entryId)) {
                     return true;
                 }
 
