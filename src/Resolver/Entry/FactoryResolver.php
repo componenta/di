@@ -12,6 +12,7 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
@@ -66,6 +67,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
      */
     public function resolve(string $id, array $context = []): mixed
     {
+        if (!$this->can($id)) {
+            throw NotFoundException::forService($id);
+        }
+
         try {
             if (isset($this->compiledFactories[$id])) {
                 return ($this->compiledFactories[$id])($context);
