@@ -259,13 +259,10 @@ class ContainerBuilder
         $parametersResolver = new ParametersResolver();
         $handlerRegistry = new AttributeHandlerRegistry();
         $attributeProcessor = new AttributeProcessor($handlerRegistry);
-        $aliases = new AliasResolver(
-            [
-                ...$this->aliases,
-                'config' => Config::class,
-            ],
-            skipValidation: $this->aliases === self::DEFAULT_ALIASES,
-        );
+        $aliases = new AliasResolver([
+            ...$this->aliases,
+            'config' => Config::class,
+        ]);
         $proxyFactory = $this->createProxyFactory();
         $bootstrap = new ContainerBootstrapState();
 
