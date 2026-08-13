@@ -101,12 +101,6 @@ it('keeps public named-argument contracts aligned with implementations', functio
         'resolve',
         ['id'],
     ],
-    'alias set' => [
-        AliasResolver::class,
-        AliasResolverInterface::class,
-        'set',
-        ['alias', 'target'],
-    ],
     'alias has' => [
         AliasResolver::class,
         AliasResolverInterface::class,
@@ -138,3 +132,8 @@ it('keeps public named-argument contracts aligned with implementations', functio
         ['handler'],
     ],
 ]);
+
+it('keeps AliasResolverInterface read-only', function () {
+    expect(method_exists(AliasResolverInterface::class, 'set'))->toBeFalse()
+        ->and(method_exists(AliasResolver::class, 'set'))->toBeTrue();
+});
