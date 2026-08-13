@@ -15,9 +15,8 @@ interface AliasResolverInterface
     /**
      * Resolves an identifier to its target.
      *
-     * @throws CircularDependencyException If the alias chain forms a cycle
-     *                                     (only relevant when validation was
-     *                                     skipped at construction time).
+     * @throws CircularDependencyException If a malformed mutable alias graph
+     *                                     is encountered defensively.
      */
     public function resolve(string $id): string;
 
