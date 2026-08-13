@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI;
 
 use Closure;
+use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\DelegatorException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
@@ -25,11 +26,7 @@ final class DelegatorRegistry
     /** @var array<string, list<callable>> Normalised callables cache. */
     private array $callables = [];
 
-    /**
-     * Namespace dependency id -> decorated entry ids that depend on it.
-     *
-     * @var array<string, array<string, true>>
-     */
+    /** @var array<string, array<string, true>> */
     private array $dependents = [];
 
     public function __construct(
@@ -38,6 +35,10 @@ final class DelegatorRegistry
 
     public function register(string $id, mixed $delegator): void
     {
+        $delegator = DependencyConfiguration::normalizeDelegatorSpecification(
+            $delegator,
+            $id,
+        );
         $this->raw[$id][] = $delegator;
 
         foreach (self::dependencyIds($delegator) as $dependencyId) {
@@ -59,9 +60,6 @@ final class DelegatorRegistry
     }
 
     /**
-     * Invalidates normalised chains that depend on the supplied namespace ids
-     * and returns the decorated entry ids whose resolved cache must be dropped.
-     *
      * @param iterable<string> $dependencyIds
      * @return list<string>
      */
@@ -132,9 +130,6 @@ final class DelegatorRegistry
             return $delegator;
         }
 
-        // Strings remain ambiguous with opaque service ids and must be resolved
-        // through CallableResolver. Any already-valid non-string callable is an
-        // explicit PHP callable and does not depend on container namespace.
         if (is_string($delegator)) {
             return $this->callableResolver->resolve($delegator);
         }
@@ -156,10 +151,6 @@ final class DelegatorRegistry
 
             $ids = [$delegator => true];
 
-            // A non-static Class::method string can depend on the class or
-            // interface service as well as on an exact opaque "Class::method"
-            // id. Track both so replacing/retargeting the owner re-resolves the
-            // cached callable without making unrelated service changes global.
             if (str_contains($delegator, '::')) {
                 [$owner, $method] = explode('::', $delegator, 2);
 

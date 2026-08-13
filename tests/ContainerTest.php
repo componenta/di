@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Fixture/container_helpers.php';
 
 use Componenta\DI\CallableInvokerInterface;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -99,7 +100,7 @@ describe('Container', function () {
 
         it('keeps registered class definition state stable after later fluent changes', function () {
             $container = minimalContainer();
-            $definition = Definition::autowire(ServiceWithParam::class)
+            $definition = ClassDefinition::create(ServiceWithParam::class)
                 ->constructor(['value' => 'registered']);
 
             $container->set('svc', $definition);
@@ -203,8 +204,7 @@ describe('Container', function () {
 
     describe('make()', function () {
         it('returns a fresh instance on each call (no caching)', function () {
-            $container = minimalBuilder()
-                ->build();
+            $container = minimalBuilder()->build();
 
             $a = $container->make(SimpleService::class);
             $b = $container->make(SimpleService::class);
@@ -213,8 +213,7 @@ describe('Container', function () {
         });
 
         it('passes user-supplied params to the constructor by name', function () {
-            $container = minimalBuilder()
-                ->build();
+            $container = minimalBuilder()->build();
 
             $instance = $container->make(ServiceWithParam::class, ['value' => 'hello']);
 
@@ -230,8 +229,7 @@ describe('Container', function () {
         });
 
         it('does not apply delegators registered on the id', function () {
-            $container = minimalBuilder()
-                ->build();
+            $container = minimalBuilder()->build();
             $container->delegator(SimpleService::class, fn($entry) => 'replaced-by-delegator');
 
             $instance = $container->make(SimpleService::class);
@@ -251,7 +249,6 @@ describe('Container', function () {
                 ->addService('value', 21)
                 ->build();
 
-            // callable is called with explicit override, not from container
             $result = $container->call(fn(int $value) => $value * 2, ['value' => 21]);
 
             expect($result)->toBe(42);

@@ -80,7 +80,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-dev": "3.x-dev"
+            "dev-dev": "4.x-dev"
         },
         "componenta": {
             "config-providers": [

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\Definition\Definition;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
@@ -13,7 +13,7 @@ use Psr\Container\ContainerInterface;
 
 describe('Definition', function () {
     it('returns a new class definition when constructor params are configured', function () {
-        $definition = Definition::autowire(ServiceWithParam::class);
+        $definition = ClassDefinition::create(ServiceWithParam::class);
 
         $configured = $definition->constructor(['value' => 'configured']);
 
@@ -23,7 +23,7 @@ describe('Definition', function () {
     });
 
     it('returns a new class definition when a method call is configured', function () {
-        $definition = Definition::autowire(SimpleService::class);
+        $definition = ClassDefinition::create(SimpleService::class);
 
         $configured = $definition->method('boot', ['warmup']);
 
@@ -35,7 +35,7 @@ describe('Definition', function () {
     });
 
     it('preserves repeated method calls instead of overwriting them', function () {
-        $configured = Definition::autowire(SimpleService::class)
+        $configured = ClassDefinition::create(SimpleService::class)
             ->method('boot', ['first'])
             ->method('boot', ['second']);
 
@@ -46,7 +46,7 @@ describe('Definition', function () {
     });
 
     it('rejects empty class definition method names', function () {
-        expect(fn() => Definition::autowire(SimpleService::class)->method(''))
+        expect(fn() => ClassDefinition::create(SimpleService::class)->method(''))
             ->toThrow(InvalidConfigurationException::class);
     });
 
@@ -66,5 +66,9 @@ describe('Definition', function () {
         $definition = new FactoryDefinition($factory);
 
         expect($definition->value)->toBe($factory);
+    });
+
+    it('does not expose the misleading autowire definition helper', function () {
+        expect(method_exists(\Componenta\DI\Definition\Definition::class, 'autowire'))->toBeFalse();
     });
 });

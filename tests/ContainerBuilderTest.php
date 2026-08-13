@@ -10,7 +10,7 @@ use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
-use Componenta\DI\Definition\Definition;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\ProxyFactoryInterface;
@@ -237,7 +237,7 @@ describe('ContainerBuilder', function () {
 
         $container->set(
             'builder.entry',
-            Definition::autowire(BuilderGeneratedEntry::class)
+            ClassDefinition::create(BuilderGeneratedEntry::class)
                 ->constructor(['value' => 44]),
         );
 

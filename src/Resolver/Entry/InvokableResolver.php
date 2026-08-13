@@ -18,7 +18,7 @@ use Psr\Container\ContainerExceptionInterface;
 use ReflectionClass;
 use Throwable;
 
-/** Resolves registered no-argument classes without reflection autowiring. */
+/** Resolves registered classes whose constructors require no arguments. */
 class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
 {
     /** @var array<string, class-string> */
@@ -51,23 +51,23 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
 
         try {
             if ($this->proxyFactory === null) {
-                return new $class();
+                return new $class(...$context);
             }
 
             return match ($this->detectStrategy($class)) {
                 CreationStrategy::Proxy => $this->proxyFactory->makeProxy(
                     $class,
-                    static fn(object $proxy): object => new $class(),
+                    static fn(object $proxy): object => new $class(...$context),
                 ),
                 CreationStrategy::Lazy => $this->proxyFactory->makeLazy(
                     $class,
-                    static function (object $entry) use ($class): void {
+                    static function (object $entry) use ($class, $context): void {
                         /** @var ReflectionClass<object> $reflection */
                         $reflection = new ReflectionClass($class);
-                        $reflection->getConstructor()?->invoke($entry);
+                        $reflection->getConstructor()?->invokeArgs($entry, $context);
                     },
                 ),
-                CreationStrategy::Eager => new $class(),
+                CreationStrategy::Eager => new $class(...$context),
             };
         } catch (ContainerExceptionInterface $e) {
             throw $e;

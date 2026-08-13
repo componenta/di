@@ -9,7 +9,7 @@ use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\Compile\Autowire\AutowireCompilationPlanner;
+use Componenta\DI\Compile\Autowire\AutowireClassGraph;
 use Componenta\DI\Compile\Autowire\AutowireEntry;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
@@ -57,9 +57,9 @@ use ReflectionClass;
  * Builds the runtime container and its resolver/attribute pipelines.
  *
  * Declarative dependency validation/normalization is delegated to
- * DependencyConfiguration; AOT class discovery/classification is delegated to
- * AutowireCompilationPlanner. Runtime composition remains the responsibility
- * of this builder.
+ * DependencyConfiguration; AOT class discovery/expansion is delegated to
+ * AutowireClassGraph. Runtime composition remains the responsibility of this
+ * builder.
  *
  * @phpstan-type CallableReference array{0: object|non-empty-string, 1: non-empty-string}
  * @phpstan-type DelegatorSpecification callable|non-empty-string|CallableReference
@@ -156,13 +156,19 @@ class ContainerBuilder
             $builder->aliases,
             $dependencies[ConfigKey::ALIASES] ?? [],
         );
-        $builder->services = $dependencies[ConfigKey::SERVICES] ?? [];
+        $builder->services = array_merge(
+            $builder->services,
+            $dependencies[ConfigKey::SERVICES] ?? [],
+        );
 
         foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $delegatorList) {
-            $builder->delegators[$id] = DependencyConfiguration::normalizeDelegatorList(
-                $delegatorList,
-                $id,
-            );
+            $builder->delegators[$id] = [
+                ...($builder->delegators[$id] ?? []),
+                ...DependencyConfiguration::normalizeDelegatorList(
+                    $delegatorList,
+                    $id,
+                ),
+            ];
         }
 
         foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $key => $value) {
@@ -181,7 +187,21 @@ class ContainerBuilder
         }
 
         foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
-            $builder->parameterResolvers[] = [$resolver, $priority];
+            $replaced = false;
+
+            foreach ($builder->parameterResolvers as $index => [, $registeredPriority]) {
+                if ($registeredPriority !== $priority) {
+                    continue;
+                }
+
+                $builder->parameterResolvers[$index] = [$resolver, $priority];
+                $replaced = true;
+                break;
+            }
+
+            if (!$replaced) {
+                $builder->parameterResolvers[] = [$resolver, $priority];
+            }
         }
 
         foreach ($dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [] as $handler) {
@@ -190,10 +210,10 @@ class ContainerBuilder
 
         $builder->replaceParameterResolvers = $dependencies[
             ConfigKey::PARAMETER_RESOLVERS_REPLACE
-        ] ?? false;
+        ] ?? $builder->replaceParameterResolvers;
         $builder->replaceAttributeHandlers = $dependencies[
             ConfigKey::ATTRIBUTE_HANDLERS_REPLACE
-        ] ?? false;
+        ] ?? $builder->replaceAttributeHandlers;
         $builder->config = self::configWithDependencies($config, $dependencies);
 
         return $builder;
@@ -212,8 +232,6 @@ class ContainerBuilder
         $builder = static::configureWithDependencies($config, $dependencies);
         $builder->compiledFactoryBaseDir = $baseDir;
 
-        // Persistent cache metadata is never trusted to establish graph
-        // invariants. Reassert them at the load boundary.
         $builder->assertNoReservedBindings();
         $builder->bindingsValidated = true;
 
@@ -231,8 +249,6 @@ class ContainerBuilder
             self::DEFAULT_ALIASES,
         );
 
-        // Cache generation rejects invalid binding graphs early. Cache loading
-        // repeats the invariant check because cache metadata is advisory only.
         $validator = static::configureWithDependencies(new Config([]), $normalized);
         $validator->assertNoReservedBindings();
 
@@ -306,8 +322,6 @@ class ContainerBuilder
         );
         $bootstrap->initialize($entryResolver, $callableExecutor);
 
-        // Trigger the one-shot lazy constructor only after every collaborator
-        // captured by the initializer has been assigned.
         $container->get(Config::class);
 
         foreach ($this->services as $id => $service) {
@@ -361,9 +375,10 @@ class ContainerBuilder
         $aliases = new AliasResolver($this->aliases);
         $excluded = [];
 
-        // Runtime binding registration canonicalizes ids through aliases. AOT
-        // exclusions must use the same namespace or an explicit service stored
-        // under an alias can be compiled again under its concrete target.
+        foreach (ProtectedServiceIds::ids() as $id) {
+            $excluded[$id] = true;
+        }
+
         foreach ([
             ...array_keys($this->factories),
             ...array_keys($this->services),
@@ -372,18 +387,12 @@ class ContainerBuilder
             $excluded[$aliases->resolve($id)] = true;
         }
 
-        $plan = (new AutowireCompilationPlanner($attributes, $this->aliases))->plan(
+        $classes = (new AutowireClassGraph($this->aliases))->expand(
             $entries,
             $excluded,
         );
 
-        // Planning itself is side-effect free. Applying the fast-path decision
-        // to the builder is explicit here rather than hidden in discovery.
-        foreach ($plan->invokables as $class) {
-            $this->addInvokable($class);
-        }
-
-        if ($plan->factories === []) {
+        if ($classes === []) {
             return [];
         }
 
@@ -392,7 +401,7 @@ class ContainerBuilder
         $factoryCode = new FactoryCodeGenerator($parameterCode, $attributes);
 
         return (new CompiledFactoryShardCompiler($factoryCode))->compile(
-            $plan->factories,
+            $classes,
             $directory,
             $maxShardBytes,
             $namespace,
@@ -450,14 +459,6 @@ class ContainerBuilder
         );
     }
 
-    /**
-     * Builds both extension pipelines in dependency-safe order.
-     *
-     * Default parameter resolvers are required to autowire custom handlers;
-     * default attribute handlers are required to initialize custom parameter
-     * resolvers materialized through the container. Register both default
-     * layers before either custom layer.
-     */
     protected function fillPipelines(
         ParametersResolver $parameters,
         AttributeHandlerRegistry $handlers,
@@ -781,7 +782,6 @@ class ContainerBuilder
         if ($config instanceof Closure) {
             $extension = $config($container);
         } elseif (is_string($config)) {
-            // An opaque PSR-11 id wins over a same-named native function.
             $extension = $container->has($config)
                 ? $container->get($config)
                 : (is_callable($config) ? $config($container) : $container->get($config));
@@ -857,9 +857,6 @@ class ContainerBuilder
     /** @return static */
     private static function newBuilder(): static
     {
-        // Extensibility is intentional: subclasses customize protected factory
-        // hooks and may initialize their own state in the constructor.
-        // @phpstan-ignore new.static
         return new static();
     }
 

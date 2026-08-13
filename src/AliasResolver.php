@@ -24,10 +24,16 @@ final class AliasResolver implements AliasResolverInterface
     /** @param array<string, string> $map Alias to target map. */
     public function __construct(array $map = [])
     {
-        // Incremental validation: replay the map as a series of insertions.
-        // This gives O(total alias-chain length) instead of O(N²) per insert.
         $this->map = [];
         foreach ($map as $alias => $target) {
+            if (!is_string($alias) || !is_string($target)) {
+                throw new InvalidConfigurationException(
+                    'Alias ids and targets must be strings.',
+                );
+            }
+
+            self::assertNonEmpty($alias, $target);
+
             if ($alias === $target) {
                 throw InvalidConfigurationException::forSelfReferencingAlias($alias);
             }
@@ -77,6 +83,8 @@ final class AliasResolver implements AliasResolverInterface
 
     public function set(string $alias, string $target): static
     {
+        self::assertNonEmpty($alias, $target);
+
         if ($alias === $target) {
             throw InvalidConfigurationException::forSelfReferencingAlias($alias);
         }
@@ -91,6 +99,17 @@ final class AliasResolver implements AliasResolverInterface
     public function has(string $alias): bool
     {
         return isset($this->map[$alias]);
+    }
+
+    private static function assertNonEmpty(string $alias, string $target): void
+    {
+        if ($alias === '') {
+            throw new InvalidConfigurationException('Alias id must be a non-empty string.');
+        }
+
+        if ($target === '') {
+            throw new InvalidConfigurationException('Alias target must be a non-empty DI id.');
+        }
     }
 
     /**

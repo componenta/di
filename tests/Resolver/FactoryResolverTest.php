@@ -109,7 +109,7 @@ describe('Resolver\\FactoryResolver', function () {
         });
 
         it('builds an instance from a ClassDefinition with constructor params', function () {
-            $definition = Definition::autowire(ServiceWithParam::class)
+            $definition = ClassDefinition::create(ServiceWithParam::class)
                 ->constructor(['value' => 'hello']);
             $resolver = makeFactoryResolver(['svc' => $definition]);
 
@@ -119,9 +119,24 @@ describe('Resolver\\FactoryResolver', function () {
                 ->and($instance->value)->toBe('hello');
         });
 
+        it('lets runtime context override configured ClassDefinition constructor params', function () {
+            $definition = ClassDefinition::create(ServiceWithParam::class)
+                ->constructor(['value' => 'configured']);
+            $resolver = makeFactoryResolver(['svc' => $definition]);
+
+            expect($resolver->resolve('svc', ['value' => 'runtime'])->value)->toBe('runtime');
+        });
+
+        it('uses runtime context when ClassDefinition has no configured constructor params', function () {
+            $definition = ClassDefinition::create(ServiceWithParam::class);
+            $resolver = makeFactoryResolver(['svc' => $definition]);
+
+            expect($resolver->resolve('svc', ['value' => 'runtime'])->value)->toBe('runtime');
+        });
+
         it('resolves ReferenceDefinition values in ClassDefinition constructor params via the container', function () {
             $container = smallContainer(['value.key' => 'referenced']);
-            $definition = Definition::autowire(ServiceWithParam::class)
+            $definition = ClassDefinition::create(ServiceWithParam::class)
                 ->constructor(['value' => Definition::reference('value.key')]);
             $resolver = makeFactoryResolver(['svc' => $definition], container: $container);
 
@@ -137,7 +152,7 @@ describe('Resolver\\FactoryResolver', function () {
                     $this->calls[] = $v;
                 }
             };
-            $definition = Definition::autowire($recorder::class)
+            $definition = ClassDefinition::create($recorder::class)
                 ->method('append', ['first'])
                 ->method('append', ['second']);
             $resolver = makeFactoryResolver(['svc' => $definition]);
@@ -208,12 +223,8 @@ describe('Resolver\\FactoryResolver', function () {
                     $this->seenContext = $context;
 
                     return new class ($context) {
-                        /**
-                         * @param array<string|int, mixed> $context
-                         */
-                        public function __construct(
-                            public array $context,
-                        ) {}
+                        /** @param array<string|int, mixed> $context */
+                        public function __construct(public array $context) {}
                     };
                 }
 

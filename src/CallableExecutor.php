@@ -19,16 +19,6 @@ use WeakMap;
  *
  * Resolves callable representations and invokes them with auto-wired parameters.
  * Parameters can be provided explicitly or resolved from container.
- *
- * @example Basic usage
- * ```php
- * $executor->call(fn(LoggerInterface $logger) => $logger->info('Hello'));
- * ```
- *
- * @example With explicit parameters
- * ```php
- * $executor->call([UserService::class, 'create'], ['name' => 'John']);
- * ```
  */
 class CallableExecutor implements CallableExecutorInterface
 {
@@ -41,27 +31,28 @@ class CallableExecutor implements CallableExecutorInterface
     /** @var array<string, list<ParameterTarget>> */
     private array $callableTargets = [];
 
+    private readonly CallableInvoker $invoker;
+
     public function __construct(
         protected readonly CallableResolverInterface $callableResolver,
         protected readonly ParametersResolver $parametersResolver,
-    ) {}
+    ) {
+        $this->invoker = new CallableInvoker();
+    }
 
     /**
-     * Exceptions thrown by the callable itself propagate unchanged.
-     *
-     * @throws InvalidCallableException If the callable cannot be resolved.
+     * @throws InvalidCallableException If the callable cannot be resolved or invoked.
      * @throws ResolutionException      If a parameter cannot be resolved.
      */
     public function call(mixed $callable, array $params = []): mixed
     {
         $resolved = $this->callableResolver->resolve($callable);
         $targets = $this->targets($resolved);
+        $arguments = $targets === []
+            ? $params
+            : $this->parametersResolver->resolveTargets($targets, $params);
 
-        if ($targets === []) {
-            return $resolved(...$params);
-        }
-
-        return $resolved(...$this->parametersResolver->resolveTargets($targets, $params));
+        return $this->invoker->call($resolved, $arguments);
     }
 
     /** @return list<ParameterTarget> */
@@ -82,10 +73,6 @@ class CallableExecutor implements CallableExecutorInterface
                     ??= $this->parametersResolver->targets($reflection->getParameters());
         }
 
-        // PHP considers methods handled through __call()/__callStatic() valid
-        // callables even though no ReflectionMethod exists for the requested
-        // dynamic name. There is no concrete signature for DI to inspect, so
-        // invoke these callables with the explicit argument list as-is.
         if (self::isDynamicMethodCallable($callable)) {
             return [];
         }
@@ -97,12 +84,6 @@ class CallableExecutor implements CallableExecutorInterface
         );
     }
 
-    /**
-     * ReflectionFunction::__toString() does not include the closure's lexical
-     * or called class. Those scopes affect `self`, `parent`, and `static`
-     * parameter types, especially for closures declared in traits and reused
-     * by multiple classes, so they are part of the reusable metadata key.
-     */
     private static function closureSignature(ReflectionFunction $reflection): string
     {
         return implode("\0", [

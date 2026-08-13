@@ -15,12 +15,6 @@ final class Definition
         return new FactoryDefinition($factory);
     }
 
-    /** @param class-string $className */
-    public static function autowire(string $className): ClassDefinition
-    {
-        return new ClassDefinition($className);
-    }
-
     public static function reference(string $entryId): ReferenceDefinition
     {
         return new ReferenceDefinition($entryId);

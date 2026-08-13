@@ -56,7 +56,7 @@ it('expands only statically knowable concrete dependencies and honours explicit 
         ]);
 });
 
-it('stores compiled autowiring as regular factories and loads shards lazily', function (): void {
+it('returns the complete compiled graph as regular factories and loads shards lazily', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-factory-shards-' . bin2hex(random_bytes(5));
 
     try {
@@ -72,13 +72,13 @@ it('stores compiled autowiring as regular factories and loads shards lazily', fu
         $source = file_get_contents($directory . '/' . $definition->file);
 
         expect($factories)->toHaveKeys([
+            CompiledFactoryLeafForTest::class,
             CompiledFactoryRootForTest::class,
-        ])->not->toHaveKey(CompiledFactoryLeafForTest::class)
-            ->and($builder->invokables)->toContain(CompiledFactoryLeafForTest::class)
+        ])->and($builder->invokables)->toBe([])
             ->and(array_unique(array_map(
                 static fn(CompiledFactoryDefinition $factory): string => $factory->file,
                 $factories,
-            )))->toHaveCount(1)
+            )))->toHaveCount(2)
             ->and($source)->toBeString()->not->toContain('if (!class_exists(')
             ->and(strlen($definition->file))->toBe(strlen(CompiledFactoryShardCompiler::FILE_PREFIX) + 32 + 4)
             ->and(class_exists($definition->class, false))->toBeFalse();
@@ -89,7 +89,6 @@ it('stores compiled autowiring as regular factories and loads shards lazily', fu
                 'version' => ContainerBuilder::CACHE_VERSION,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => $factories,
-                    ConfigKey::INVOKABLES => $builder->invokables,
                 ],
             ],
             $directory,
@@ -107,7 +106,6 @@ it('stores compiled autowiring as regular factories and loads shards lazily', fu
                 'version' => ContainerBuilder::CACHE_VERSION,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => $factories,
-                    ConfigKey::INVOKABLES => $builder->invokables,
                 ],
             ],
             $directory,

@@ -103,10 +103,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             $factory = $this->createFactoryFromDefinition($factory);
         }
 
-        // Exact string ids are ambiguous with native function/static-method
-        // strings, so an owning PSR-11 service wins. Already-valid array
-        // callables are explicit PHP callables and must not be reinterpreted as
-        // service owners merely because a class id is autowireable.
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
         } elseif (is_array($factory)
@@ -148,9 +144,6 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
             );
         }
 
-        // A direct programmatic definition may choose its path. Cache-loaded
-        // definitions remain confined to the configured base directory. Both
-        // forms still validate the generated class before executing its method.
         $file = (new CompiledFactoryPathResolver(
             $this->compiledFactoryBaseDir,
             $explicitDefinition,
@@ -241,20 +234,25 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     /** @return callable(ContainerValue, array<string|int, mixed>): object */
     protected function createFactoryFromDefinition(ClassDefinition $definition): callable
     {
-        return function (ContainerValue $container, array $_context = []) use ($definition): object {
+        return function (ContainerValue $container, array $context = []) use ($definition): object {
             $className = $definition->value;
-            $resolveValue = fn(mixed $value): mixed => $this->resolveDefinitionValue(
-                $container,
-                $value,
-            );
+            $constructorParams = array_replace($definition->constructorParams, $context);
+            $params = $this->resolveDefinitionValue($container, $constructorParams);
 
-            $params = array_map($resolveValue, $definition->constructorParams);
+            if (!is_array($params)) {
+                throw new InvalidConfigurationException('Resolved class constructor parameters must be an array.');
+            }
+
             $instance = $params === []
                 ? new $className()
                 : new $className(...$params);
 
             foreach ($definition->methodCalls as $call) {
-                $resolvedParams = array_map($resolveValue, $call['params']);
+                $resolvedParams = $this->resolveDefinitionValue($container, $call['params']);
+                if (!is_array($resolvedParams)) {
+                    throw new InvalidConfigurationException('Resolved class method parameters must be an array.');
+                }
+
                 $method = $call['method'];
                 $instance->$method(...$resolvedParams);
             }

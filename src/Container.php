@@ -198,11 +198,6 @@ final readonly class Container implements
             return true;
         }
 
-        // Only container-typed failures collapse to "absent"; real bugs
-        // (e.g. TypeError in a resolver's can()) propagate. A distinct guard
-        // key prevents mutually delegated containers from recursively probing
-        // each other's has() forever without interfering with service-cycle
-        // diagnostics used by get().
         try {
             $entryId = $this->aliases->resolve($id);
             $guardId = "\0has:" . $entryId;
@@ -226,17 +221,9 @@ final readonly class Container implements
         }
     }
 
-    /**
-     * Registers an entry or definition.
-     *
-     * Aliases are resolved before the base cache write so that a value set
-     * under an alias name lands at the canonical id. Definitions use the same
-     * canonical id as ordinary values.
-     *
-     * @throws InvalidConfigurationException If the definition type is not supported.
-     */
     public function set(string $id, mixed $entry): void
     {
+        self::assertMutableId($id, 'entry');
         $canonical = $this->aliases->resolve($id);
 
         if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
@@ -279,19 +266,6 @@ final readonly class Container implements
         $this->invalidateDeferredDelegators($affectedDependencies);
     }
 
-    /**
-     * Performs an uncached object resolution with dependency injection.
-     *
-     * The container does not consult or populate shared-entry caches, apply
-     * delegators, or query external containers on this path. Object identity is
-     * controlled by the selected resolver or user factory.
-     *
-     * Aliases are still resolved so callers can pass either an alias or the
-     * canonical id.
-     *
-     * @param array<string|int, mixed> $params
-     * @throws ResolutionException If instantiation fails.
-     */
     public function make(string $entry, array $params = []): object
     {
         $resolved = $this->aliases->resolve($entry);
@@ -311,25 +285,21 @@ final readonly class Container implements
         return $instance;
     }
 
-    /** Invokes a callable with dependency injection. */
     public function call(mixed $callable, array $params = []): mixed
     {
         return $this->callableExecutor->call($callable, $params);
     }
 
-    /** @inheritDoc */
     public function makeLazy(string $class, callable $initializer): object
     {
         return $this->proxyFactory->makeLazy($class, $initializer);
     }
 
-    /** @inheritDoc */
     public function makeProxy(string $class, callable $factory): object
     {
         return $this->proxyFactory->makeProxy($class, $factory);
     }
 
-    /** Registers an external PSR-11 container as a delegated lookup source. */
     public function addContainer(ContainerInterface $container): void
     {
         if ($container === $this) {
@@ -377,17 +347,9 @@ final readonly class Container implements
         $this->invalidateDeferredDelegators($changedDependencies);
     }
 
-    /**
-     * Registers a delegator (decorator) for an entry.
-     *
-     * Multiple delegators are applied in registration order. Non-closure forms
-     * are resolved through the callable resolver on first use.
-     *
-     * @param callable|string|array{0: object|string, 1: string} $delegator
-     * @throws DelegatorException If the delegator itself throws at invocation time.
-     */
     public function delegator(string $id, callable|string|array $delegator): void
     {
+        self::assertMutableId($id, 'delegator');
         $canonical = $this->aliases->resolve($id);
         if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
             throw new InvalidConfigurationException(sprintf(
@@ -401,11 +363,16 @@ final readonly class Container implements
         $this->invalidateDeferredDelegators([$id]);
     }
 
-    /**
-     * Invalidates every cached entry that could have been seeded under the
-     * given id - directly, through an alias pointing at it, or through its
-     * canonical target.
-     */
+    private static function assertMutableId(string $id, string $kind): void
+    {
+        if ($id === '') {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot register %s with an empty DI id.',
+                $kind,
+            ));
+        }
+    }
+
     private function invalidate(string $id, ?string $knownCanonical = null): void
     {
         try {
@@ -433,7 +400,6 @@ final readonly class Container implements
                     $dependencies[] = $dependencyId;
                 }
             } catch (Throwable) {
-                // A malformed alias graph cannot establish a stable dependency.
             }
         }
 
@@ -481,12 +447,7 @@ final readonly class Container implements
         return $targets;
     }
 
-    /**
-     * Invalidates decorated caches whose deferred callable dependencies were
-     * affected by a namespace mutation.
-     *
-     * @param iterable<string> $dependencyIds
-     */
+    /** @param iterable<string> $dependencyIds */
     private function invalidateDeferredDelegators(iterable $dependencyIds): void
     {
         foreach ($this->delegators->invalidateDependencies($dependencyIds) as $entryId) {
