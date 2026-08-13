@@ -173,7 +173,7 @@ final class RequestResolver implements ParameterResolverInterface
     {
         $attributes = [];
 
-        foreach ($target->attributeReflectors as $reflectionAttribute) {
+        foreach ($target->reflection->getAttributes() as $reflectionAttribute) {
             /** @var class-string $attributeClass */
             $attributeClass = $reflectionAttribute->getName();
 
