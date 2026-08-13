@@ -100,8 +100,14 @@ final class ObjectCreationContext
             ));
         }
 
-        if ($property->isStatic()
-            || (!$allowPromoted && $property->isPromoted())
+        if ($property->isStatic()) {
+            throw ResolutionException::forProperty(
+                $property,
+                reason: 'static properties are not supported by DI property handlers',
+            );
+        }
+
+        if ((!$allowPromoted && $property->isPromoted())
             || ($property->isReadOnly() && $property->isInitialized($this->entry))
         ) {
             return false;
