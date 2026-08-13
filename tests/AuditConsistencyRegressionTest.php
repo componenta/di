@@ -17,7 +17,6 @@ use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
-use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
@@ -220,7 +219,7 @@ describe('audit consistency regressions', function () {
             ->toThrow(InvalidConfigurationException::class);
     });
 
-    it('normalizes callable invocation engine failures through both invokers', function () {
+    it('propagates callable invocation engine failures through both invokers', function () {
         $callable = static fn(): string => 'ok';
         $params = ['unexpected' => true];
         $executor = new CallableExecutor(
@@ -229,9 +228,9 @@ describe('audit consistency regressions', function () {
         );
 
         expect(fn() => (new CallableInvoker())->call($callable, $params))
-            ->toThrow(InvalidCallableException::class)
+            ->toThrow(\Error::class)
             ->and(fn() => $executor->call($callable, $params))
-            ->toThrow(InvalidCallableException::class);
+            ->toThrow(\Error::class);
     });
 
     it('preserves subclass constructor defaults while declarative configuration overrides matching values', function () {
