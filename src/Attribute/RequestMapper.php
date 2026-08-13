@@ -130,8 +130,8 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
     /**
      * Merges named extraction sources without silently losing provenance.
      *
-     * Source order controls FirstWins and LastWins. Reject treats two equal
-     * values as one unambiguous value and rejects only different values.
+     * Source order controls FirstWins. Reject treats two equal values as one
+     * unambiguous value and rejects only different values.
      *
      * @param array<string, array<string|int, mixed>> $sources
      * @return array<string|int, mixed>
@@ -154,12 +154,6 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
                 }
 
                 if ($this->conflictPolicy === RequestDataConflictPolicy::FirstWins) {
-                    continue;
-                }
-
-                if ($this->conflictPolicy === RequestDataConflictPolicy::LastWins) {
-                    $data[$key] = $value;
-                    $owners[$key] = $source;
                     continue;
                 }
 
