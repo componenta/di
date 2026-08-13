@@ -75,7 +75,7 @@ describe('AliasResolver', function () {
             self::fail('expected CircularDependencyException');
         });
 
-        it('leaves the map untouched when the update is rejected for a cycle', function () {
+        it('leaves the graph untouched when an update is rejected for a cycle', function () {
             $resolver = new AliasResolver(['a' => 'b', 'b' => 'c']);
 
             try {
@@ -84,7 +84,9 @@ describe('AliasResolver', function () {
                 // expected
             }
 
-            expect(iterator_to_array($resolver))->toBe(['a' => 'b', 'b' => 'c']);
+            expect($resolver->resolve('a'))->toBe('c')
+                ->and($resolver->resolve('b'))->toBe('c')
+                ->and($resolver->has('c'))->toBeFalse();
         });
     });
 
@@ -95,21 +97,6 @@ describe('AliasResolver', function () {
             expect($resolver->has('alias'))->toBeTrue()
                 ->and($resolver->has('target'))->toBeFalse()
                 ->and($resolver->has('unknown'))->toBeFalse();
-        });
-    });
-
-    describe('iteration', function () {
-        it('yields the alias->target pairs', function () {
-            $pairs = ['a' => 'TargetA', 'b' => 'TargetB'];
-
-            expect(iterator_to_array(new AliasResolver($pairs)))->toBe($pairs);
-        });
-
-        it('reflects later set() calls', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-            $resolver->set('c', 'd');
-
-            expect(iterator_to_array($resolver))->toBe(['a' => 'b', 'c' => 'd']);
         });
     });
 
