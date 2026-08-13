@@ -33,7 +33,6 @@ use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
-use Componenta\DI\Resolver\Entry\InvokableSpecificationValidator;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
 use Componenta\DI\Resolver\Entry\SetUp\ConfigUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
@@ -340,10 +339,6 @@ class ContainerBuilder
             $container,
         );
 
-        foreach ($this->invokables as $class) {
-            InvokableSpecificationValidator::assertValid($class, $attributeProcessor);
-        }
-
         $parametersResolver->seal();
         $handlerRegistry->seal();
 
@@ -446,11 +441,7 @@ class ContainerBuilder
                 $attributeProcessor,
                 $this->compiledFactoryBaseDir,
             ),
-            new InvokableResolver(
-                $this->invokables,
-                $proxyFactory,
-                $attributeProcessor,
-            ),
+            new InvokableResolver($this->invokables),
             new ReflectionResolver(
                 new InstanceCreator($parametersResolver),
                 $attributeProcessor,
@@ -903,7 +894,6 @@ class ContainerBuilder
         }
 
         $target = $class ?? $classOrAlias;
-        InvokableSpecificationValidator::assertValid($target);
         self::assertBindingIdAvailable($target, 'invokable');
         $this->invalidateBindingValidationFor($target, 'invokable');
 
