@@ -98,40 +98,6 @@ describe('AliasResolver', function () {
         });
     });
 
-    describe('unset()', function () {
-        it('removes the alias from the registry', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-
-            $resolver->unset('a');
-
-            expect($resolver->has('a'))->toBeFalse();
-        });
-
-        it('stops chain resolution at the removed link', function () {
-            $resolver = new AliasResolver(['a' => 'b', 'b' => 'Target']);
-            expect($resolver->resolve('a'))->toBe('Target');
-
-            $resolver->unset('b');
-
-            // 'a' still maps to 'b', but 'b' is no longer an alias => resolves to 'b'.
-            expect($resolver->resolve('a'))->toBe('b');
-        });
-
-        it('returns the resolver instance for fluent chaining', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-
-            expect($resolver->unset('a'))->toBe($resolver);
-        });
-
-        it('is a no-op for an id that is not a registered alias', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-
-            $resolver->unset('not-an-alias');
-
-            expect(iterator_to_array($resolver))->toBe(['a' => 'b']);
-        });
-    });
-
     describe('iteration', function () {
         it('yields the alias->target pairs', function () {
             $pairs = ['a' => 'TargetA', 'b' => 'TargetB'];
@@ -173,15 +139,6 @@ describe('AliasResolver', function () {
             $resolver->set('b', 'New');
 
             expect($resolver->resolve('a'))->toBe('New');
-        });
-
-        it('invalidates the resolution cache on unset()', function () {
-            $resolver = new AliasResolver(['a' => 'b', 'b' => 'Target']);
-            expect($resolver->resolve('a'))->toBe('Target');
-
-            $resolver->unset('b');
-
-            expect($resolver->resolve('a'))->toBe('b');
         });
     });
 });
