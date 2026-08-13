@@ -21,6 +21,12 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
     public function __construct(array $invokables = [])
     {
         foreach ($invokables as $class) {
+            if (!is_string($class) || $class === '') {
+                throw new InvalidConfigurationException(
+                    'Invokable class must be a non-empty string.',
+                );
+            }
+
             $this->invokables[$class] = $class;
         }
     }
@@ -50,6 +56,12 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
     {
         if (!$definition instanceof InvokableDefinition) {
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
+        }
+
+        if ($definition->value === '') {
+            throw new InvalidConfigurationException(
+                'Invokable definition class must be a non-empty string.',
+            );
         }
 
         $this->invokables[$id] = $definition->value;
