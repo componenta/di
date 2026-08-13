@@ -16,6 +16,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Parameter\ExplicitParametersResolver;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
@@ -30,6 +31,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
 
+    private readonly ExplicitParametersResolver $explicitParametersResolver;
+
     /** @param array<string, mixed> $factories */
     public function __construct(
         protected array $factories,
@@ -39,6 +42,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
         protected readonly ?AttributeProcessor $attributeProcessor = null,
         protected readonly ?string $compiledFactoryBaseDir = null,
     ) {
+        $this->explicitParametersResolver = new ExplicitParametersResolver();
+
         foreach ($factories as $id => $factory) {
             if ($id === '') {
                 throw new InvalidConfigurationException(
@@ -236,16 +241,29 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
     {
         return function (ContainerValue $container, array $context = []) use ($definition): object {
             $className = $definition->value;
-            $constructorParams = array_replace($definition->constructorParams, $context);
-            $params = $this->resolveDefinitionValue($container, $constructorParams);
+            $configuredParams = $this->resolveDefinitionValue(
+                $container,
+                $definition->constructorParams,
+            );
 
-            if (!is_array($params)) {
+            if (!is_array($configuredParams)) {
                 throw new InvalidConfigurationException('Resolved class constructor parameters must be an array.');
             }
 
-            $instance = $params === []
-                ? new $className()
-                : new $className(...$params);
+            /** @var ReflectionClass<object> $reflection */
+            $reflection = new ReflectionClass($className);
+            $constructor = $reflection->getConstructor();
+
+            if ($constructor === null) {
+                $instance = $reflection->newInstance();
+            } else {
+                $params = $this->explicitParametersResolver->resolveWithOverrides(
+                    $constructor->getParameters(),
+                    $configuredParams,
+                    $context,
+                );
+                $instance = $reflection->newInstanceArgs($params);
+            }
 
             foreach ($definition->methodCalls as $call) {
                 $resolvedParams = $this->resolveDefinitionValue($container, $call['params']);
