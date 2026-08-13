@@ -75,7 +75,7 @@ it('keeps the previous stored value when a replacement definition is invalid', f
 
     expect(fn() => $container->set(
         'service',
-        Definition::autowire(DateTimeInterface::class),
+        Definition::create(DateTimeInterface::class),
     ))->toThrow(InvalidConfigurationException::class)
         ->and($container->get('service'))->toBe($previous);
 });
