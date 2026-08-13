@@ -1,14 +1,8 @@
 # Componenta DI
 
-PSR-11-контейнер внедрения зависимостей для PHP 8.4+. Библиотека предоставляет кеширование общих сервисов, автоматическую сборку через рефлексию, создание новых объектов, вызов функций и методов с разрешением аргументов, внедрение параметров и свойств через атрибуты, отображение PSR-7-запросов в DTO, нативные ленивые объекты, виртуальные прокси, псевдонимы, делегаторы, подключение внешних контейнеров и сгенерированные резолверы сервисов.
+PSR-11-контейнер внедрения зависимостей для PHP 8.4+ с autowiring, фабриками, invokable-классами, alias, delegator, внешними контейнерами, атрибутами, PSR-7 request mapping, lazy objects, proxy и AOT-фабриками.
 
 **[English](README.md)** | **[Русский](README.ru.md)**
-
-## Граница ответственности
-
-`componenta/di` отвечает за разрешение зависимостей во время выполнения. Библиотека не сканирует приложение и не выбирает его поставщиков конфигурации. Поиск классов, компиляция конфигурации, подготовка файлов кеша при развертывании и запуск приложения относятся к прикладному слою, обычно к `componenta/app`.
-
-Свойства заполняются только через атрибуты и их обработчики. Предварительная компиляция создаёт обычные фабрики; для динамических классов сохраняется сборка через рефлексию.
 
 ## Установка
 
@@ -16,159 +10,74 @@ PSR-11-контейнер внедрения зависимостей для PHP
 composer require componenta/di
 ```
 
-Требуется PHP 8.4 или новее.
+Требуется PHP 8.4+.
 
-| Пакет | Назначение |
-|---|---|
-| `psr/container` | Контракты PSR-11. |
-| `psr/http-message` | PSR-7-запросы, HTTP-атрибуты и отображение в DTO. |
-| `componenta/config` | Конфигурация, переменные окружения и `ContainerValue` для фабрик. |
-| `componenta/caster` | `#[Cast]` и преобразование значений запроса. |
-| `componenta/validation` | Необязательная проверка DTO запроса. |
-| `componenta/reflection` | Работа с рефлексией и ленивыми объектами PHP 8.4. |
-| `componenta/priority-list` | Регистрация резолверов параметров по приоритету. |
-| `componenta/var-export` | Создание PHP-файлов кеша конфигурации. |
-
-## Основное поведение
-
-- `get(string $id)` возвращает общий закешированный сервис.
-- `make(string $entry, array $params = [])` всегда создает новый объект и не использует кеш сервисов.
-- `call(mixed $callable, array $params = [])` разрешает недостающие аргументы и вызывает функцию или метод.
-- Аргументы конструктора и вызываемого метода можно передавать в `$params` по имени или позиции.
-- `make(Target::class, ['value' => 'provided'])` передает `value` параметру конструктора или метода настройки. Обычное публичное свойство с таким именем не записывается.
-- Свойства с атрибутами обрабатываются отдельной цепочкой обработчиков атрибутов.
-
-## Быстрый старт
+## Основной API
 
 ```php
-use App\Logging\FileLogger;
-use App\Logging\LoggerInterface;
-use App\Service\UserService;
-use Componenta\DI\ContainerBuilder;
-
 $container = (new ContainerBuilder())
-    ->addService(LoggerInterface::class, new FileLogger('/var/log/app.log'))
+    ->addService(LoggerInterface::class, new FileLogger())
     ->addAlias('logger', LoggerInterface::class)
     ->build();
 
 $logger = $container->get('logger');
-$first = $container->make(UserService::class, ['userId' => 7]);
-$second = $container->make(UserService::class, ['userId' => 7]);
-
-assert($first !== $second);
+$fresh = $container->make(UserService::class, ['userId' => 7]);
+$result = $container->call($callable, ['id' => 7]);
 ```
 
-Если для идентификатора нет явной привязки, резолвер на основе рефлексии может собрать подходящий класс, когда все параметры его конструктора разрешимы.
+- `get()` разрешает общий сервис и кеширует результат.
+- `make()` создаёт новый объект и не использует shared cache, внешние контейнеры и delegators.
+- `call()` нормализует callable, разрешает недостающие аргументы и вызывает его.
+- `$params` передаются параметрам конструктора/callable по имени или позиции; обычные публичные свойства из `$params` не заполняются.
+
+Если нет явной привязки, reflection resolver может собрать подходящий класс.
 
 ## Публичные контракты
 
-Имена параметров входят в публичный контракт: PHP позволяет передавать именованные аргументы.
+`Container` реализует `Psr\Container\ContainerInterface`, `FactoryInterface`, `CallableInvokerInterface` и `ProxyFactoryInterface`. Отдельно доступны `CallableResolverInterface`, `CallableExecutorInterface`, `LazyObjectFactoryInterface` и `VirtualProxyFactoryInterface`.
 
-| Контракт | Сигнатура | Назначение |
-|---|---|---|
-| `Psr\Container\ContainerInterface` | `get(string $id)`, `has(string $id)` | Получение общих сервисов. |
-| `FactoryInterface` | `make(string $entry, array $params = [])` | Создание нового объекта. |
-| `CallableInvokerInterface` | `call(mixed $callable, array $params = [])` | Вызов с разрешением аргументов. |
-| `CallableResolverInterface` | `resolve(mixed $callable)` | Преобразование описания вызова в `callable`. |
-| `CallableExecutorInterface` | `resolve(...)` и `call(...)` | Обе возможности работы с вызовами. |
-| `LazyObjectFactoryInterface` | `makeLazy(string $class, callable $initializer)` | Создание нативного ленивого объекта. |
-| `VirtualProxyFactoryInterface` | `makeProxy(string $class, callable $factory)` | Создание виртуального прокси. |
-| `ProxyFactoryInterface` | оба ленивых метода | Общий контракт двух способов ленивой загрузки. |
+Конкретный `Container` также предоставляет `set()`, `alias()`, `delegator()` и `addContainer()` для bootstrap/runtime-конфигурации.
 
-Конкретный `Container` также предоставляет `set()`, `alias()`, `delegator()` и `addContainer()` для кода начальной настройки. Обычному сервису следует передавать самый узкий подходящий интерфейс.
+## Порядок `get()`
 
-## Порядок разрешения
+1. Декорированный cache для запрошенного id.
+2. Разрешение alias.
+3. Защита от циклической зависимости.
+4. Локальный base cache.
+5. Внешние PSR-11-контейнеры.
+6. Локальная resolver-chain.
+7. Delegators и decorated cache.
 
-`Container::get($id)` работает так:
-
-1. Возвращает уже закешированный декорированный результат для запрошенного идентификатора.
-2. Преобразует псевдоним в канонический идентификатор.
-3. Включает защиту от циклической зависимости.
-4. Возвращает локальный базовый сервис, если он уже есть в кеше.
-5. Если локального сервиса нет, обращается к зарегистрированным внешним PSR-11-контейнерам.
-6. Если внешний контейнер не владеет идентификатором, запускает локальную цепочку резолверов и кеширует базовый результат.
-7. Применяет делегаторы и кеширует декорированный результат.
-
-Локальные сервисы имеют приоритет над внешними контейнерами. `has()` преобразует в `false` только ошибки контейнера; ошибки программирования внутри резолвера не скрываются.
-
-`make()` разрешает псевдонимы, но намеренно пропускает кеш сервисов, внешние контейнеры и делегаторы. Результат обязан быть объектом.
+Уже материализованный локальный сервис имеет приоритет. В остальных случаях внешний контейнер проверяется до ещё не выполненной локальной resolver-chain. `has()` скрывает только container-level ошибки разрешения, но не ошибки программирования.
 
 ## ContainerBuilder
 
-`ContainerBuilder` — основной способ собрать контейнер.
+Основные методы: `addFactory()`, `addInvokable()`, `addAlias()`, `addDelegator()`, `addService()`, их bulk-варианты, `addParameterResolver()`, `addAttributeHandler()`, `compileFactories()`, `toArray()` и `build()`.
 
-| Метод | Действие |
-|---|---|
-| `addFactory(string $id, callable $factory)` | Регистрирует фабрику. |
-| `addFactories(array $factories)` | Регистрирует фабрики списком. |
-| `addInvokable(string $classOrAlias, ?string $class = null)` | Регистрирует класс; форма с двумя аргументами также создает псевдоним. |
-| `addInvokables(array $invokables)` | Регистрирует классы списком. |
-| `addAlias(string $alias, string $target)` | Регистрирует псевдоним. |
-| `addAliases(array $aliases)` | Регистрирует псевдонимы списком. |
-| `addDelegator(string $id, callable|string|array $delegator)` | Регистрирует декоратор. |
-| `addDelegators(array $delegators)` | Регистрирует декораторы списком. |
-| `addService(string $id, mixed $service)` | Регистрирует готовое общее значение. |
-| `addServices(array $services)` | Регистрирует готовые значения списком. |
-| `addParameterResolver(mixed $resolver, int $priority = 0)` | Расширяет цепочку параметров. |
-| `replaceParameterResolvers(bool $replace = true)` | Отключает стандартные резолверы параметров. |
-| `addAttributeHandler(mixed $handler)` | Расширяет цепочку атрибутов. |
-| `replaceAttributeHandlers(bool $replace = true)` | Отключает стандартные обработчики атрибутов. |
-| `compileFactories(iterable $entries, string $directory, ?ParameterResolverCodeGeneratorRegistry $generators = null, int $maxShardBytes = 131072, string $namespace = 'Componenta\DI\Generated')` | Компилирует известные корни автоматической сборки и их конкретные зависимости в шарды фабрик. |
-| `toArray()` | Экспортирует текущую конфигурацию. |
-| `build()` | Собирает контейнер и закрывает цепочки расширения от изменений. |
+Delegator может быть callable, class/interface method reference или ссылкой на произвольный service id. В bulk/config input opaque method reference записывается вложенно: `[['decorator.service', 'decorate']]`.
 
-Ссылка на метод делегатора может использовать конкретный класс, интерфейс или произвольный id сервиса, например `[DecoratorInterface::class, 'decorate']` или `['decorator.service', 'decorate']`. В bulk/config-конфигурации ссылку с произвольным id сервиса нужно записывать вложенно: `[['decorator.service', 'decorate']]`; плоская форма `['first', 'second']` по-прежнему означает список из двух строковых делегаторов.
-
-Резолвер параметров и обработчик атрибутов можно зарегистрировать как готовый экземпляр, id сервиса, callable-фабрику либо фабрику вида `[service-id, 'method']`. Метод получает контейнер и возвращает расширение. В отличие от bulk-конфигурации делегаторов, описание расширения уже является одним значением, поэтому `['extension.factory', 'create']` не требует дополнительной вложенности.
-
-Обычная фабрика получает `Componenta\Config\ContainerValue` и контекст текущего разрешения:
-
-```php
-$builder->addFactory(
-    MailerInterface::class,
-    static fn (ContainerValue $container, array $context): MailerInterface =>
-        new SmtpMailer($container->get(SmtpConfig::class)),
-);
-```
-
-`ContainerValue` реализует `ContainerInterface` и добавляет типизированные методы чтения контейнера и конфигурации.
+Parameter resolvers и attribute handlers можно передавать экземплярами, service id и callable-фабриками. После `build()` extension registries закрываются от изменений.
 
 ## Дефиниции
 
-`Definition` создает неизменяемые описания сервисов:
+`Definition` содержит helpers `factory()`, `reference()` и `invokable()`. Для настройки конструктора и setup-вызовов используется `ClassDefinition`:
 
 ```php
-use Componenta\DI\Definition\Definition;
+use Componenta\DI\Definition\ClassDefinition;
 
 $container->set(
     ReportService::class,
-    Definition::autowire(ReportService::class)
+    ClassDefinition::create(ReportService::class)
         ->constructor(['format' => 'pdf'])
         ->method('boot'),
 );
 ```
 
-Доступны `factory()`, `autowire()`, `reference()` и `invokable()`. `ReferenceDefinition` предназначена для аргументов конструктора или метода настройки внутри описания класса.
-
 ## Конфигурация
 
-`Container::create(Config $config)` и `ContainerBuilder::configure(Config $config)` читают `ConfigKey::DEPENDENCIES`.
+`Container::create()` и `ContainerBuilder::configure()` читают `ConfigKey::DEPENDENCIES`. Поддерживаются factories, invokables, aliases, delegators, services, parameter resolvers и attribute handlers. Неизвестные ключи/форматы приводят к `InvalidConfigurationException`.
 
-| Ключ | Формат |
-|---|---|
-| `ConfigKey::FACTORIES` | `array<string, callable|string|array|FactoryDefinition|ClassDefinition|CompiledFactoryDefinition>` |
-| `ConfigKey::INVOKABLES` | `list<class-string>` или `array<string, class-string>` |
-| `ConfigKey::ALIASES` | `array<string, string>` |
-| `ConfigKey::DELEGATORS` | `array<string, callable|string|array|list<...>>` |
-| `ConfigKey::SERVICES` | `array<string, mixed>` |
-| `ConfigKey::PARAMETER_RESOLVERS` | `array<int, class-string|callable|array{0:string,1:string}|ParameterResolverInterface>` |
-| `ConfigKey::PARAMETER_RESOLVERS_REPLACE` | `bool` |
-| `ConfigKey::ATTRIBUTE_HANDLERS` | `list<class-string|callable|array{0:string,1:string}|AttributeHandlerInterface>` |
-| `ConfigKey::ATTRIBUTE_HANDLERS_REPLACE` | `bool` |
-
-Неизвестные ключи и неправильные форматы приводят к `InvalidConfigurationException`.
-
-`configureFromCache($config, $cache, $baseDir)` принимает только версионированный конверт постоянного кеша:
+Persistent cache загружается только из versioned envelope:
 
 ```php
 [
@@ -177,120 +86,42 @@ $container->set(
 ]
 ```
 
-Простой массив зависимостей и прежний маркер `validated` больше не принимаются. Если передан `$baseDir`, относительные пути из описаний скомпилированных фабрик вычисляются от него.
+Старый raw dependency cache и маркер `validated` не поддерживаются. Relative compiled-factory paths при заданном `$baseDir` ограничиваются этим каталогом.
 
-`ConfigProvider` регистрирует необязательные резолверы преобразования типов, текущего пользователя и PSR-7-запроса. Приложение Componenta может обнаружить его через метаданные пакета.
+## Атрибуты и request mapping
 
-## Атрибуты
+Основные атрибуты: `#[Inject]`, `#[EntryId]`, `#[Config]`, `#[Env]`, `#[Make]`, `#[Init]`, `#[Cast]`, `#[CurrentUser]`, `#[SetUp]`, `#[NoConstructor]`, `#[Lazy]`, `#[Proxy]`.
 
-Значение свойства записывает только зарегистрированный обработчик атрибута. Параметры конструктора и вызываемого метода обрабатывают резолверы параметров; атрибуты, допустимые и для параметров, и для свойств, участвуют в обеих цепочках.
+`#[Lazy]` и class-level `#[Proxy]` нельзя одновременно применять к одному классу.
 
-| Атрибут | Назначение |
-|---|---|
-| `#[Inject]` | Свойство: получить сервис по объявленному классу или интерфейсу. |
-| `#[EntryId('id')]` | Параметр или свойство: получить сервис по явному идентификатору. |
-| `#[Config('path')]` | Параметр или свойство: прочитать конфигурацию. |
-| `#[Env('NAME')]` | Параметр или свойство: прочитать переменную окружения с необязательным значением по умолчанию. |
-| `#[Make(Service::class)]` | Параметр или свойство: создать новый объект. |
-| `#[Init(callable, params)]` | Свойство: вычислить значение вызываемым обработчиком. |
-| `#[Cast(...)]` | Параметр или свойство: преобразовать значение. |
-| `#[CurrentUser]` | Параметр или свойство: получить текущего пользователя. |
-| `#[SetUp('method', params)]` | Класс: вызвать метод настройки после создания; атрибут повторяемый. |
-| `#[NoConstructor]` | Класс: создать объект без вызова конструктора. |
-| `#[Lazy]` | Класс: использовать нативный ленивый объект. |
-| `#[Proxy(?ConcreteClass::class)]` | Класс или точка внедрения: использовать виртуальный прокси; для интерфейса или произвольного ID сервиса требуется конкретный класс прокси. |
+PSR-7 extraction: `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]`, `#[UploadedFile]`.
 
-Скалярные атрибуты PSR-7: `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]` и `#[UploadedFile]`.
+Mappers: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]`, `#[MapUploadedFiles]`.
 
-Атрибуты отображения запроса: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]` и `#[MapUploadedFiles]`. Они возвращают преобразованный массив либо создают DTO через `FactoryInterface::make()`.
+Если DTO валидируется, сначала проверяются исходные transport-data, затем выполняется mapper transform. Это не позволяет casts/defaults/exclusions скрыть некорректный input. Конфликт разных значений одного ключа по умолчанию приводит к `RequestDataConflictException`; `FirstWins` включается явно.
 
-Если для класса DTO существует валидатор, сначала проверяются извлечённые сырые данные запроса и только затем выполняется `transform()`. Такой порядок намеренный: переименование, преобразование типов, значения по умолчанию, отображение сортировки и исключение полей не должны скрывать некорректный транспортный ввод.
+## Callable
 
-Mapper может объединять основной источник с выбранными атрибутами запроса и загруженными файлами. Разные значения одного ключа по умолчанию приводят к `RequestDataConflictException`; одинаковые дубликаты допустимы. Политику `RequestDataConflictPolicy::FirstWins` следует задавать явно только тогда, когда порядок источников mapper является частью модели доверия endpoint.
+`call()` поддерживает closures, функции, `"Class::method"`, callable service id, `[object, 'method']`, `[class/interface/service-id, 'method']`.
 
-## Вызов функций и методов
+Ошибки разрешения/нормализации представлены DI-исключениями. После начала целевого вызова PHP engine errors и исключения самого callable проходят без обёртки с исходным типом и stack trace.
 
-`call()` принимает замыкания, имена глобальных функций, строки `"Class::method"`, идентификаторы вызываемых сервисов, `[object, 'method']` и ссылки `[class/interface/service-id, 'method']`. Явные параметры имеют приоритет над резолверами по имени или позиции. Исключения целевой функции не изменяются.
+## Lazy, proxy и invokable
 
-## Ленивые объекты и прокси
+`makeLazy()` создаёт native lazy ghost, `makeProxy()` — native virtual proxy. Class-level `#[Lazy]`/`#[Proxy]` участвуют в reflection autowiring и взаимно исключаются.
 
-Инициализатор ленивого объекта изменяет переданный неинициализированный объект. Фабрика виртуального прокси возвращает настоящий объект:
+Явный invokable намеренно создаётся обычным zero-argument `new`: attribute lifecycle и context из `make()` для него не выполняются.
 
-```php
-$lazy = $container->makeLazy(
-    Service::class,
-    static function (Service $instance): void {
-        $instance->__construct();
-    },
-);
+Для interface/opaque-id proxy injection в `#[Proxy(ConcreteClass::class)]` указывается concrete class.
 
-$proxy = $container->makeProxy(
-    Service::class,
-    static fn (object $proxy): Service => new Service(),
-);
-```
+## Compiled factories
 
-Сервисы обычных фабрик создаются сразу, если фабрика не реализует `LazyServiceFactoryInterface`. Атрибуты класса `#[Lazy]` и `#[Proxy]` действуют на сборку через рефлексию или invokable-резолвер, но не на произвольные объекты, возвращенные фабрикой. Для точки внедрения с типом-интерфейсом или произвольным ID сервиса используйте `#[Proxy(ConcreteClass::class)]`, чтобы нативный API PHP получил конкретный класс прокси.
+`compileFactories()` компилирует известные autowiring roots и статически известные concrete dependencies (`constructor`, `#[Inject]`, `#[SetUp]`) в обычные factory definitions. Явные services/factories/invokables сохраняют ownership.
 
-## Расширение
+Shard-файлы имеют content-addressed имена и загружаются по требованию. Недоверенные пути ограничиваются cache base directory; traversal и symlink за пределы корня отклоняются. Динамические классы продолжают разрешаться через reflection.
 
-Резолвер параметра реализует:
+`DiCacheGeneratorInterface::generate()` только атомарно записывает переданную конфигурацию как PHP и не выполняет discovery/компиляцию.
 
-```php
-interface ParameterResolverInterface
-{
-    public function supports(ParameterTarget $target): bool;
-
-    public function resolveParameter(
-        ParameterTarget $target,
-        ParameterResolutionContext $context,
-    ): ?array;
-}
-```
-
-Успешный результат имеет вид `[position, value]`, а `null` передает управление следующему резолверу. Сначала выполняется резолвер с большим приоритетом.
-
-Обработчик атрибута реализует `AttributeHandlerInterface`, предоставляет неизменяемые свойства `phase` и `priority`, а также методы `supportsAttribute()` и `handle()`. Обработчик, способный создавать PHP-код, дополнительно реализует `CompilableAttributeHandlerInterface`.
-
-Оба типа расширений можно передавать готовыми либо создавать через сервис/callable-фабрику, включая `['service.id', 'method']`. После сборки контейнера обе цепочки закрываются от изменений. Попытка изменить полученный из контейнера реестр приводит к ошибке.
-
-## Скомпилированные фабрики в боевом окружении
-
-Известные корни автоматической сборки компилируются в обычные элементы `ConfigKey::FACTORIES`. Компилятор проходит по конкретным зависимостям конструктора, `#[Inject]` и `#[SetUp]`. Готовые сервисы, invokable-классы и явно настроенные фабрики сохраняют приоритет и не заменяются.
-
-```php
-use Componenta\DI\Compile\Autowire\AutowireEntry;
-use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
-
-$builder = ContainerBuilder::configure($config);
-$compiled = $builder->compileFactories(
-    entries: [new AutowireEntry(CreateOrder::class)],
-    directory: __DIR__ . '/var/cache/build',
-);
-
-$dependencies = $config->get(ConfigKey::DEPENDENCIES, []);
-$dependencies[ConfigKey::FACTORIES] = array_replace(
-    $compiled,
-    $dependencies[ConfigKey::FACTORIES] ?? [], // явные фабрики имеют приоритет
-);
-```
-
-Каждый `CompiledFactoryDefinition` содержит относительный путь к шарду, имя сгенерированного класса и метод фабрики. Имя шарда зависит от его содержимого. Файл подключается только при первом запросе одного из его элементов, после чего экземпляр шарда повторно используется контейнером. При обычной холодной загрузке shard не хешируется перед `require`; если тот же сгенерированный класс уже загружен из другого физического каталога кеша, второй shard допускается только при совпадении SHA-256 обоих файлов. Для динамических классов сохраняется автоматическая сборка через рефлексию.
-
-Корни обычно определяет прикладной слой. `componenta/app` предоставляет сборочный контракт `AutowireEntryContributorInterface` и обрабатывает `#[Autowire]`; интеграции Router, CQRS и boot автоматически добавляют известные им классы.
-
-`DiCacheGeneratorInterface::generate(array $config, string $path)` атомарно записывает переданный массив как PHP-файл. Он не ищет классы и не компилирует фабрики. Для последующей загрузки через `configureFromCache()` нужно записывать показанный выше версионированный конверт. Кеши сервисов принадлежат экземпляру `Container`, а постоянными файлами кеша и OPcache управляет развертывание.
 ## Исключения
 
-| Исключение | Причина |
-|---|---|
-| `NotFoundException` | Ни один резолвер не поддерживает идентификатор. |
-| `CircularDependencyException` | Обнаружен цикл зависимостей. |
-| `ResolutionException` | Не удалось разрешить объект, параметр, свойство, фабрику или конструктор. |
-| `InvalidConfigurationException` | Неверна конфигурация или дефиниция. |
-| `InvalidCallableException` | Невозможно преобразовать описание вызова. |
-| `DelegatorException` | Делегатор завершился с ошибкой. |
-| `RequestDataConflictException` | Несколько источников request mapping передали разные значения одного ключа. |
-
-Все исключения пакета реализуют `Componenta\DI\Exception\ExceptionInterface`.
+Все исключения реализуют `Componenta\DI\Exception\ExceptionInterface`. Основные: `NotFoundException`, `CircularDependencyException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException`, `RequestDataConflictException`.
