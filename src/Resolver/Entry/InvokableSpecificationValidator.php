@@ -65,6 +65,19 @@ final class InvokableSpecificationValidator
             && $constructor->getNumberOfRequiredParameters() > 0;
         $proxyAttribute = $reflection->getAttributes(Proxy::class)[0] ?? null;
 
+        if ($constructor !== null) {
+            foreach ($constructor->getParameters() as $parameter) {
+                if (!$parameter->isVariadic() && !$parameter->isPassedByReference()) {
+                    continue;
+                }
+
+                throw new InvalidConfigurationException(sprintf(
+                    'Invokable class "%s" cannot use variadic or by-reference constructor parameters.',
+                    $class,
+                ));
+            }
+        }
+
         if ($proxyAttribute !== null) {
             $proxy = $proxyAttribute->newInstance();
 
