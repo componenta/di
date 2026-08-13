@@ -73,28 +73,14 @@ describe('Cache\\DiCacheGenerator', function () {
         }
     });
 
-    it('preserves the file on unwritable targets (throws before corrupting existing contents)', function () {
+    it('replaces an existing file without retaining previous contents', function () {
         $generator = new DiCacheGenerator();
-        // Pre-populate with a known value.
         file_put_contents($this->path, '<?php return ["previous" => true];');
-        $previousContents = file_get_contents($this->path);
 
-        // Valid generate must succeed; we can't easily force a write failure
-        // portably, but we can assert the success path overwrites atomically.
         $generator->generate(['fresh' => true], $this->path);
 
-        expect(require $this->path)->toBe(['fresh' => true]);
-        // Previous contents must not be stitched into the new file.
-        expect(file_get_contents($this->path))->not->toContain('previous');
-    });
-
-    it('overwrites an existing file with new contents', function () {
-        $generator = new DiCacheGenerator();
-        $generator->generate(['first' => 1], $this->path);
-
-        $generator->generate(['second' => 2], $this->path);
-
-        expect(require $this->path)->toBe(['second' => 2]);
+        expect(require $this->path)->toBe(['fresh' => true])
+            ->and(file_get_contents($this->path))->not->toContain('previous');
     });
 
     it('throws InvalidConfigurationException when the config contains unserialisable values', function () {
