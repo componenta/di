@@ -20,7 +20,7 @@ use Componenta\DI\Tests\Fixture\PrivateInjectedChild;
 use Componenta\DI\Tests\Fixture\PrivateInjectedDependency;
 use Componenta\DI\Tests\Fixture\RepeatedTypedConstructor;
 
-test('mutating the public alias resolver keeps container caches coherent', function () {
+test('public alias resolver observes container-managed alias mutations', function () {
     $first = new stdClass();
     $second = new stdClass();
     $container = minimalBuilder()
@@ -29,13 +29,16 @@ test('mutating the public alias resolver keeps container caches coherent', funct
         ->addAlias('current', 'first')
         ->build();
 
-    expect($container->get('current'))->toBe($first);
-
     $aliases = $container->get(AliasResolverInterface::class);
-    expect($aliases)->toBeInstanceOf(AliasResolverInterface::class);
-    $aliases->set('current', 'second');
 
-    expect($container->get('current'))->toBe($second);
+    expect($aliases)->toBeInstanceOf(AliasResolverInterface::class)
+        ->and($aliases->resolve('current'))->toBe('first')
+        ->and($container->get('current'))->toBe($first);
+
+    $container->alias('current', 'second');
+
+    expect($aliases->resolve('current'))->toBe('second')
+        ->and($container->get('current'))->toBe($second);
 });
 
 test('builder accepts an interface instance method as a delegator reference', function () {
