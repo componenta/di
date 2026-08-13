@@ -66,7 +66,7 @@ it('accepts a class-shaped service id whose runtime object may add the factory m
 
 it('rejects an unavailable ClassDefinition when it is registered', function (): void {
     $container = (new ContainerBuilder())->build();
-    $definition = Definition::autowire('Componenta\\DI\\Tests\\MissingClassDefinitionTarget');
+    $definition = Definition::create('Componenta\\DI\\Tests\\MissingClassDefinitionTarget');
 
     expect(fn() => $container->set('missing.class.definition', $definition))
         ->toThrow(
@@ -77,7 +77,7 @@ it('rejects an unavailable ClassDefinition when it is registered', function (): 
 
 it('rejects a non-instantiable ClassDefinition when it is registered', function (): void {
     $container = (new ContainerBuilder())->build();
-    $definition = Definition::autowire(DateTimeInterface::class);
+    $definition = Definition::create(DateTimeInterface::class);
 
     expect(fn() => $container->set('invalid.class.definition', $definition))
         ->toThrow(
@@ -88,7 +88,7 @@ it('rejects a non-instantiable ClassDefinition when it is registered', function 
 
 it('rejects a missing ClassDefinition method when it is registered', function (): void {
     $container = (new ContainerBuilder())->build();
-    $definition = Definition::autowire(SimpleService::class)
+    $definition = Definition::create(SimpleService::class)
         ->method('missingMethod');
 
     expect(fn() => $container->set('invalid.class.method', $definition))
