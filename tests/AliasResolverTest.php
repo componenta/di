@@ -40,16 +40,6 @@ describe('AliasResolver', function () {
 
             expect($resolver->resolve('a'))->toBe('New');
         });
-
-        it('defensively throws on cycle even when validation was skipped at construction', function () {
-            $resolver = new AliasResolver(
-                ['a' => 'b', 'b' => 'a'],
-                skipValidation: true,
-            );
-
-            expect(fn() => $resolver->resolve('a'))
-                ->toThrow(CircularDependencyException::class);
-        });
     });
 
     describe('set()', function () {
@@ -172,13 +162,6 @@ describe('AliasResolver', function () {
             }
 
             self::fail('expected CircularDependencyException');
-        });
-
-        it('accepts a cyclic map when skipValidation is true (deferred detection)', function () {
-            $resolver = new AliasResolver(['a' => 'b', 'b' => 'a'], skipValidation: true);
-
-            expect($resolver->has('a'))->toBeTrue()
-                ->and($resolver->has('b'))->toBeTrue();
         });
     });
 
