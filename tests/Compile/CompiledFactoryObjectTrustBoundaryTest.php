@@ -136,6 +136,68 @@ PHP,
     }
 });
 
+it('rejects a preloaded class from a different shard for a direct programmatic definition', function (): void {
+    $root = sys_get_temp_dir() . '/componenta-programmatic-preloaded-' . bin2hex(random_bytes(5));
+    $firstFile = $root . '/first.php';
+    $secondFile = $root . '/second.php';
+    $class = 'CompiledFactoryProgrammaticPreloaded_' . bin2hex(random_bytes(6));
+    mkdir($root, 0777, true);
+
+    $source = static function (string $value) use ($class): string {
+        return sprintf(
+            <<<'PHP'
+<?php
+
+final class %s
+{
+    public function __construct(
+        array $parameterResolvers,
+        array $attributeHandlers,
+        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
+    ) {}
+
+    public function create(array $parameters = []): string
+    {
+        return %s;
+    }
+}
+
+return %s::class;
+PHP,
+            $class,
+            var_export($value, true),
+            $class,
+        );
+    };
+
+    file_put_contents($firstFile, $source('first'));
+    file_put_contents($secondFile, $source('second'));
+
+    try {
+        expect(require $firstFile)->toBe($class);
+
+        $container = ContainerBuilder::configureWithDependencies(
+            new Config([]),
+            [
+                ConfigKey::FACTORIES => [
+                    'entry' => new CompiledFactoryDefinition(
+                        $secondFile,
+                        $class,
+                        'create',
+                    ),
+                ],
+            ],
+        )->build();
+
+        expect(fn() => $container->get('entry'))
+            ->toThrow(InvalidConfigurationException::class, 'different shard');
+    } finally {
+        @unlink($firstFile);
+        @unlink($secondFile);
+        @rmdir($root);
+    }
+});
+
 it('reuses an already loaded generated class from an identical shard in another cache root', function (): void {
     $root = sys_get_temp_dir() . '/componenta-identical-shard-roots-' . bin2hex(random_bytes(5));
     $firstBase = $root . '/first';
