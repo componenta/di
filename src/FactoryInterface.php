@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Componenta\DI\Exception\CircularDependencyException;
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 
 /** Creates object instances with dependency injection. */
@@ -20,7 +22,9 @@ interface FactoryInterface
      * @param class-string|non-empty-string $entry Class name or service identifier.
      * @param array<string|int, mixed> $params Resolution context forwarded to
      *                                         the selected resolver or factory.
-     * @throws ResolutionException If instantiation fails.
+     * @throws NotFoundException If no resolver owns the entry.
+     * @throws CircularDependencyException If fresh resolution forms a dependency cycle.
+     * @throws ResolutionException If instantiation fails or does not produce an object.
      */
     public function make(string $entry, array $params = []): object;
 }
