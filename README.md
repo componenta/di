@@ -71,13 +71,14 @@ The concrete `Container` additionally exposes `set()`, `alias()`, `delegator()` 
 2. Resolve aliases to the canonical id.
 3. Enter circular-dependency protection.
 4. Return a locally cached base entry when present.
-5. Ask registered external PSR-11 containers.
-6. If none owns the id, run the local resolver chain and cache the base result.
-7. Apply delegators registered for the requested id and cache the decorated result.
+5. Honor an explicit runtime definition previously installed through `Container::set()`.
+6. Ask registered external PSR-11 containers.
+7. If none owns the id, run the local resolver chain and cache the base result.
+8. Apply delegators registered for the requested id and cache the decorated result.
 
-Already materialized local base entries therefore take precedence. Otherwise external containers are consulted before the unresolved local resolver chain. `has()` converts container-level resolution failures to `false`; programming errors remain visible.
+Prebuilt/materialized local values and explicit runtime definitions therefore take local ownership. Otherwise external containers are consulted before unresolved configured factories, invokables and reflection fallback. `has()` follows the same ownership rule, converts container-level resolution failures to `false`, and leaves programming errors visible.
 
-`make()` resolves aliases but deliberately skips shared caches, external containers and delegators.
+`make()` resolves aliases but deliberately skips shared caches, external containers and delegators. Fresh-resolution dependency cycles are detected by the same cycle guard used by shared resolution.
 
 ## ContainerBuilder
 
@@ -94,7 +95,9 @@ Already materialized local base entries therefore take precedence. Otherwise ext
 - `toArray()`
 - `build()`
 
-A delegator method reference may use a class, interface or opaque service id, for example `[DecoratorInterface::class, 'decorate']` or `['decorator.service', 'decorate']`. In bulk/config input, an opaque service-method delegator must be nested as `[['decorator.service', 'decorate']]`; the flat `['first', 'second']` form means two string delegators.
+`addService()` and `ConfigKey::SERVICES` register prebuilt shared values verbatim. An object that implements `DefinitionInterface` is still a stored service value on this builder path; definitions are installed intentionally through `Container::set($id, $definition)` or the factory/invokable configuration sections.
+
+A delegator method reference may use a class, interface or opaque service id, for example `[DecoratorInterface::class, 'decorate']` or `['decorator.service', 'decorate']`. In bulk/config input, an opaque service-method delegator must be nested as `[['decorator.service', 'decorate']]`; the flat `['first', 'second']` form means two string delegators unless it is an actual class/interface method reference.
 
 Parameter resolvers and attribute handlers may be supplied as instances, service ids, callable factories or `[service-id, 'method']` factories. The builder seals both extension registries after assembly.
 
@@ -123,7 +126,7 @@ $container->set(
 );
 ```
 
-Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments.
+Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments. Runtime invokable definitions enforce the same non-empty class-string shape as declarative invokable configuration.
 
 ## Configuration
 
@@ -165,13 +168,15 @@ Built-in attribute behavior includes:
 | `#[Config('path')]` | Read application configuration. |
 | `#[Env('NAME')]` | Read an environment value. |
 | `#[Make(Service::class)]` | Create a fresh object. |
-| `#[Init(callable, params)]` | Initialize a property from a callable. |
+| `#[Init(callable, params)]` | Initialize a property from a callable. Mutable promoted properties are supported. |
 | `#[Cast(...)]` | Cast a resolved value. |
 | `#[CurrentUser]` | Inject the current user when its provider is configured. |
 | `#[SetUp('method', params)]` | Run a setup method after construction; repeatable. |
 | `#[NoConstructor]` | Allocate a class without calling its constructor. |
 | `#[Lazy]` | Use a native lazy ghost. Mutually exclusive with class-level `#[Proxy]`. |
 | `#[Proxy(?ConcreteClass::class)]` | Use a virtual proxy. Class-level use is mutually exclusive with `#[Lazy]`. |
+
+Built-in DI property handlers reject static properties instead of silently ignoring their attributes. Initialized readonly promoted properties remain constructor-owned and are not overwritten by property handlers.
 
 Scalar PSR-7 extraction attributes are `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]` and `#[UploadedFile]`.
 
