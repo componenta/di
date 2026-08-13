@@ -88,8 +88,10 @@ final class ObjectCreationContext
         $this->entry = $entry;
     }
 
-    public function claimProperty(ReflectionProperty $property): bool
-    {
+    public function claimProperty(
+        ReflectionProperty $property,
+        bool $allowPromoted = false,
+    ): bool {
         if ($this->entry === null) {
             throw new LogicException(sprintf(
                 'Cannot claim property "%s" before "%s" is initialized.',
@@ -99,7 +101,7 @@ final class ObjectCreationContext
         }
 
         if ($property->isStatic()
-            || $property->isPromoted()
+            || (!$allowPromoted && $property->isPromoted())
             || ($property->isReadOnly() && $property->isInitialized($this->entry))
         ) {
             return false;
@@ -133,7 +135,6 @@ final class ObjectCreationContext
         ));
 
         if ($property->isStatic()
-            || $property->isPromoted()
             || ($property->isReadOnly() && $property->isInitialized($entry))
         ) {
             throw new LogicException(sprintf(
