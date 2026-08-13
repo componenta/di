@@ -74,7 +74,6 @@ assert($first !== $second);
 | `LazyObjectFactoryInterface` | `makeLazy(string $class, callable $initializer)` | Создание нативного ленивого объекта. |
 | `VirtualProxyFactoryInterface` | `makeProxy(string $class, callable $factory)` | Создание виртуального прокси. |
 | `ProxyFactoryInterface` | оба ленивых метода | Общий контракт двух способов ленивой загрузки. |
-| `AliasResolverInterface` | `resolve`, `set`, `has` | Низкоуровневая работа с псевдонимами. |
 
 Конкретный `Container` также предоставляет `set()`, `alias()`, `delegator()` и `addContainer()` для кода начальной настройки. Обычному сервису следует передавать самый узкий подходящий интерфейс.
 
