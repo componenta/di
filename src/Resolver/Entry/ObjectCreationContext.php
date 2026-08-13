@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use LogicException;
@@ -37,19 +38,25 @@ final class ObjectCreationContext
         $this->constructorEnabled = false;
     }
 
-    public function selectStrategy(CreationStrategy $strategy): bool
+    public function selectStrategy(CreationStrategy $strategy): void
     {
         if ($strategy === CreationStrategy::Eager) {
-            return $this->strategy === CreationStrategy::Eager;
+            if ($this->strategy !== CreationStrategy::Eager) {
+                throw $this->conflictingStrategy($strategy);
+            }
+
+            return;
         }
 
-        if ($this->strategy !== CreationStrategy::Eager) {
-            return false;
+        if ($this->strategy === CreationStrategy::Eager) {
+            $this->strategy = $strategy;
+
+            return;
         }
 
-        $this->strategy = $strategy;
-
-        return true;
+        if ($this->strategy !== $strategy) {
+            throw $this->conflictingStrategy($strategy);
+        }
     }
 
     public function freshAttempt(): self
@@ -143,6 +150,16 @@ final class ObjectCreationContext
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($property, previous: $e);
         }
+    }
+
+    private function conflictingStrategy(CreationStrategy $strategy): InvalidConfigurationException
+    {
+        return new InvalidConfigurationException(sprintf(
+            'Creation strategies "%s" and "%s" cannot be combined for "%s".',
+            $this->strategy->value,
+            $strategy->value,
+            $this->class->getName(),
+        ));
     }
 
     private static function propertyKey(ReflectionProperty $property): string
