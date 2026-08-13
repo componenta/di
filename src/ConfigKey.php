@@ -28,7 +28,7 @@ final class ConfigKey
         = \Componenta\Config\ConfigKey::ATTRIBUTE_HANDLERS_REPLACE;
 
     /**
-     * Returns only dependency keys implemented by the 3.x DI runtime.
+     * Returns only dependency keys implemented by the current DI runtime.
      *
      * Do not delegate this list to componenta/config: that package also keeps
      * historical keys for compatibility with older consumers. Accepting those
