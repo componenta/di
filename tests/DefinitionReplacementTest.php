@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Fixture/container_helpers.php';
 
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
@@ -75,7 +76,7 @@ it('keeps the previous stored value when a replacement definition is invalid', f
 
     expect(fn() => $container->set(
         'service',
-        Definition::create(DateTimeInterface::class),
+        ClassDefinition::create(DateTimeInterface::class),
     ))->toThrow(InvalidConfigurationException::class)
         ->and($container->get('service'))->toBe($previous);
 });
