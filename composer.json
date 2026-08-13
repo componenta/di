@@ -50,7 +50,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Componenta\\DI\\Tests\\": "tests/"
+            "Componenta\\DI\\Tests\\Fixture\\": "tests/Fixture/"
         }
     },
     "config": {
