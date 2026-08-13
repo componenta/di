@@ -3,27 +3,18 @@
 declare(strict_types=1);
 
 use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\ProxyFactory;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 
 #[Lazy]
 final class PrivateLazyInvokableConstructor
 {
-    public bool $initialized;
-
-    private function __construct()
-    {
-        $this->initialized = true;
-    }
+    private function __construct() {}
 }
 
-it('initializes a private no-argument constructor through reflection', function (): void {
-    $resolver = new InvokableResolver(
-        [PrivateLazyInvokableConstructor::class],
-        new ProxyFactory(),
-    );
+it('does not bypass private constructors for explicit invokables', function (): void {
+    $resolver = new InvokableResolver([PrivateLazyInvokableConstructor::class]);
 
-    $entry = $resolver->resolve(PrivateLazyInvokableConstructor::class);
-
-    expect($entry->initialized)->toBeTrue();
+    expect(fn() => $resolver->resolve(PrivateLazyInvokableConstructor::class))
+        ->toThrow(ResolutionException::class);
 });
