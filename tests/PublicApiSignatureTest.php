@@ -93,7 +93,7 @@ it('keeps public named-argument contracts aligned with implementations', functio
         DiCacheGenerator::class,
         DiCacheGeneratorInterface::class,
         'generate',
-        ['config', 'path'],
+        ['dependencies', 'path'],
     ],
     'alias resolve' => [
         AliasResolver::class,
