@@ -346,6 +346,7 @@ final readonly class Container implements
         $this->invalidateDeferredDelegators($changedDependencies);
     }
 
+    /** @param callable|string|array{0: object|string, 1: string} $delegator */
     public function delegator(string $id, callable|string|array $delegator): void
     {
         self::assertMutableId($id, 'delegator');
