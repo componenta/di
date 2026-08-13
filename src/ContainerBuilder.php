@@ -857,6 +857,8 @@ class ContainerBuilder
     /** @return static */
     private static function newBuilder(): static
     {
+        // Extensibility is intentional: subclasses may initialize state in constructors.
+        // @phpstan-ignore new.static
         return new static();
     }
 
