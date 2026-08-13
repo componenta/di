@@ -80,6 +80,7 @@ final readonly class Container implements
             VirtualProxyFactoryInterface::class => $this,
             self::class => $this,
             AliasResolverInterface::class => new ContainerAliasResolver($this->aliases, $this),
+            CallableResolverInterface::class => $this->callableExecutor,
             CallableExecutorInterface::class => $this->callableExecutor,
         ];
         $validatedBootstrapServices = [];
