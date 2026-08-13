@@ -102,6 +102,15 @@ describe('CallableExecutor', function () {
             }))->toThrow($boom);
         });
 
+        it('propagates engine errors thrown inside the callable unchanged', function () {
+            $executor = makeExecutor();
+            $boom = new TypeError('from callable body');
+
+            expect(fn() => $executor->call(function () use ($boom) {
+                throw $boom;
+            }))->toThrow($boom);
+        });
+
         it('forwards resolver failures as InvalidCallableException', function () {
             $executor = makeExecutor();
 
