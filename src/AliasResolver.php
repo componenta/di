@@ -12,8 +12,10 @@ use Componenta\DI\Exception\InvalidConfigurationException;
  *
  * Uses path compression so every alias encountered in a successfully resolved
  * chain becomes an O(1) lookup until the map changes.
+ *
+ * @internal
  */
-final class AliasResolver implements AliasResolverInterface
+final class AliasResolver
 {
     /** @var array<string, string> Cache of fully resolved aliases. */
     private array $resolved = [];

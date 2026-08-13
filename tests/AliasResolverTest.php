@@ -3,15 +3,10 @@
 declare(strict_types=1);
 
 use Componenta\DI\AliasResolver;
-use Componenta\DI\AliasResolverInterface;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
 describe('AliasResolver', function () {
-    it('implements AliasResolverInterface', function () {
-        expect(new AliasResolver())->toBeInstanceOf(AliasResolverInterface::class);
-    });
-
     describe('resolve()', function () {
         it('returns the id unchanged when it is not a registered alias', function () {
             expect((new AliasResolver())->resolve('service'))->toBe('service');

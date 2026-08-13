@@ -32,7 +32,6 @@ final class ProtectedServiceIds
         FactoryInterface::class => false,
         CallableInvokerInterface::class => false,
         CallableResolverInterface::class => false,
-        AliasResolverInterface::class => false,
         CallableExecutorInterface::class => false,
         ProxyFactoryInterface::class => false,
         LazyObjectFactoryInterface::class => false,

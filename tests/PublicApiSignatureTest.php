@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\AliasResolver;
-use Componenta\DI\AliasResolverInterface;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Cache\DiCacheGeneratorInterface;
 use Componenta\DI\CallableExecutor;
@@ -95,18 +93,6 @@ it('keeps public named-argument contracts aligned with implementations', functio
         'generate',
         ['dependencies', 'path'],
     ],
-    'alias resolve' => [
-        AliasResolver::class,
-        AliasResolverInterface::class,
-        'resolve',
-        ['id'],
-    ],
-    'alias has' => [
-        AliasResolver::class,
-        AliasResolverInterface::class,
-        'has',
-        ['alias'],
-    ],
     'builder configure from cache' => [
         ContainerBuilder::class,
         ContainerBuilder::class,
@@ -133,7 +119,8 @@ it('keeps public named-argument contracts aligned with implementations', functio
     ],
 ]);
 
-it('keeps AliasResolverInterface read-only', function () {
-    expect(method_exists(AliasResolverInterface::class, 'set'))->toBeFalse()
-        ->and(method_exists(AliasResolver::class, 'set'))->toBeTrue();
+it('does not expose an alias resolver contract', function () {
+    expect(interface_exists('Componenta\\DI\\AliasResolverInterface'))->toBeFalse()
+        ->and((new ContainerBuilder())->build()->has('Componenta\\DI\\AliasResolverInterface'))
+        ->toBeFalse();
 });

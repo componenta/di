@@ -24,7 +24,7 @@ use Throwable;
  * collaborator so responsibilities stay sharp and testable.
  *
  *  - {@see EntryResolverInterface}        - chain that actually builds entries.
- *  - {@see AliasResolverInterface}        - alias -> canonical id resolution.
+ *  - {@see AliasResolver}                 - internal alias -> canonical id resolution.
  *  - {@see CallableExecutorInterface}     - resolve-and-invoke pipeline.
  *  - {@see ProxyFactoryInterface}         - produces lazy objects / virtual proxies.
  *  - {@see EntryCache}                    - two-tier base/decorated cache.
@@ -78,7 +78,6 @@ final readonly class Container implements
             LazyObjectFactoryInterface::class => $this,
             VirtualProxyFactoryInterface::class => $this,
             self::class => $this,
-            AliasResolverInterface::class => $this->aliases,
             CallableResolverInterface::class => $this->callableExecutor,
             CallableExecutorInterface::class => $this->callableExecutor,
         ];
