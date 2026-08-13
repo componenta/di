@@ -119,31 +119,6 @@ final class InvokableSpecificationValidator
         }
     }
 
-    /**
-     * Returns whether the active attribute pipeline can be skipped safely by
-     * the raw invokable path.
-     *
-     * This checks the actual selected handlers, not just attribute names. A
-     * custom handler that claims #[Lazy], #[Proxy] or any custom attribute is
-     * therefore not silently bypassed by the optimization.
-     *
-     * @param ReflectionClass<object> $reflection
-     */
-    public static function supportsAttributePipeline(
-        ReflectionClass $reflection,
-        AttributeProcessor $attributeProcessor,
-    ): bool {
-        $invocations = $attributeProcessor->invocations($reflection);
-
-        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
-            if (!self::isNativeInvokableInvocation($invocation)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     /** @param ReflectionClass<object> $reflection */
     private static function assertAttributePipelineCompatible(
         ReflectionClass $reflection,
@@ -157,7 +132,7 @@ final class InvokableSpecificationValidator
             }
 
             throw new InvalidConfigurationException(sprintf(
-                'Invokable class "%s" cannot bypass attribute #[%s] handled by "%s": '
+                'Invokable class "%s" cannot skip attribute #[%s] handled by "%s": '
                 . 'the attribute requires the normal DI attribute lifecycle.',
                 $reflection->getName(),
                 $invocation->attributeClass,
