@@ -180,7 +180,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
                         $file,
                     ));
                 }
-            } elseif (!$explicitDefinition) {
+            } else {
                 self::assertLoadedFromEquivalentShard($class, $file);
             }
 
