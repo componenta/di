@@ -13,14 +13,11 @@ use Componenta\DI\Exception\InvalidCallableException;
  * dependency injection. Callers normally hand in a callable obtained from
  * {@see CallableResolver} along with the complete, ordered parameter list.
  *
- * Exception policy (matches {@see CallableInvokerInterface}):
- *
- *  - Exceptions raised inside the callable itself propagate unchanged so the
- *    caller can handle domain errors directly.
- *  - PHP engine errors ({@see \Error} hierarchy - `TypeError`,
- *    `ArgumentCountError`, etc.) are translated into
- *    {@see InvalidCallableException} so the caller learns which callable and
- *    parameter set triggered the failure.
+ * Invalid callable values are normalized to {@see InvalidCallableException}.
+ * Once invocation begins, throwables raised by PHP or by the target callable
+ * propagate unchanged. The invoker cannot reliably distinguish an argument
+ * binding TypeError from a TypeError raised inside the callable body without
+ * reimplementing PHP's invocation semantics.
  */
 final class CallableInvoker implements CallableInvokerInterface
 {
@@ -30,8 +27,7 @@ final class CallableInvoker implements CallableInvokerInterface
      * @param mixed $callable A valid callable ready for invocation.
      * @param array<int|string, mixed> $params Complete, ordered parameter list.
      *
-     * @throws InvalidCallableException If the callable is invalid or the PHP
-     *                                  engine reports an invocation failure.
+     * @throws InvalidCallableException If the value is not callable.
      */
     public function call(mixed $callable, array $params = []): mixed
     {
@@ -39,13 +35,6 @@ final class CallableInvoker implements CallableInvokerInterface
             throw InvalidCallableException::forValue($callable);
         }
 
-        try {
-            return call_user_func_array($callable, $params);
-        } catch (\Error $e) {
-            // Engine-level invocation failure; user-level exceptions (domain
-            // errors thrown by the callable body) propagate past this catch
-            // unchanged per the interface contract.
-            throw InvalidCallableException::forInvocation($callable, $params, $e);
-        }
+        return call_user_func_array($callable, $params);
     }
 }
