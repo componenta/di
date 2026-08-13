@@ -267,20 +267,25 @@ final readonly class Container implements
     public function make(string $entry, array $params = []): object
     {
         $resolved = $this->aliases->resolve($entry);
+        $this->cycleGuard->enter($resolved);
 
         try {
-            $instance = $this->resolver->resolve($resolved, $params);
-        } catch (ContainerExceptionInterface $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw ResolutionException::forService($entry, $e);
-        }
+            try {
+                $instance = $this->resolver->resolve($resolved, $params);
+            } catch (ContainerExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw ResolutionException::forService($entry, $e);
+            }
 
-        if (!is_object($instance)) {
-            throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
-        }
+            if (!is_object($instance)) {
+                throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
+            }
 
-        return $instance;
+            return $instance;
+        } finally {
+            $this->cycleGuard->leave($resolved);
+        }
     }
 
     public function call(mixed $callable, array $params = []): mixed
