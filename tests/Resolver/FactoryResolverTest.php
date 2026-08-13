@@ -62,6 +62,11 @@ describe('Resolver\\FactoryResolver', function () {
     });
 
     describe('resolve()', function () {
+        it('throws NotFoundException for an id it does not own', function () {
+            expect(fn() => makeFactoryResolver([])->resolve('missing'))
+                ->toThrow(NotFoundException::class);
+        });
+
         it('invokes a closure factory with a container value', function () {
             $container = smallContainer();
             $resolver = makeFactoryResolver([
