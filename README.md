@@ -207,7 +207,7 @@ Request mappers are `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`
 
 When a validator exists for the DTO class, mapping validates the extracted raw request data before `transform()`. This order is intentional: aliases, casts, defaults, sort mapping, and exclusions must not hide malformed transport input.
 
-Mappers may combine their primary source with selected request attributes and uploaded files. Different values for the same key are rejected by default with `RequestDataConflictException`; identical duplicates are accepted. Pass `conflictPolicy: RequestDataConflictPolicy::FirstWins` or `RequestDataConflictPolicy::LastWins` explicitly only when source precedence is part of the endpoint contract.
+Mappers may combine their primary source with selected request attributes and uploaded files. Different values for the same key are rejected by default with `RequestDataConflictException`; identical duplicates are accepted. Pass `conflictPolicy: RequestDataConflictPolicy::FirstWins` explicitly only when the mapper's source order is part of the endpoint trust contract.
 
 ## Callable invocation
 
