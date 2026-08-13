@@ -31,6 +31,7 @@ final class ProtectedServiceIds
         ContainerInterface::class => false,
         FactoryInterface::class => false,
         CallableInvokerInterface::class => false,
+        CallableResolverInterface::class => false,
         AliasResolverInterface::class => false,
         CallableExecutorInterface::class => false,
         ProxyFactoryInterface::class => false,
