@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeExecutionPlan;
@@ -29,12 +30,12 @@ final readonly class ReflectionResolver implements EntryResolverInterface
             && EntryClassEligibility::allows($class);
     }
 
-    /** @throws ResolutionException */
+    /** @throws NotFoundException|ResolutionException */
     public function resolve(string $id, array $context = []): object
     {
         $reflector = Reflection::class($id);
         if ($reflector === null || !EntryClassEligibility::allows($reflector)) {
-            throw ResolutionException::forMissingService($id);
+            throw NotFoundException::forService($id);
         }
 
         try {

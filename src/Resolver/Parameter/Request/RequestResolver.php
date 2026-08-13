@@ -17,6 +17,7 @@ use Componenta\Validation\Context;
 use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Exception\ValidationExceptionInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
 use ReflectionIntersectionType;
@@ -24,6 +25,7 @@ use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionType;
 use ReflectionUnionType;
+use Throwable;
 
 /** Resolves parameters from a PSR-7 request. */
 final class RequestResolver implements ParameterResolverInterface
@@ -58,30 +60,41 @@ final class RequestResolver implements ParameterResolverInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        $attribute = $this->getAttribute($target);
+        try {
+            $attribute = $this->getAttribute($target);
 
-        if ($attribute === null) {
-            return $this->resolveByType($target, $context);
-        }
+            if ($attribute === null) {
+                return $this->resolveByType($target, $context);
+            }
 
-        $request = RequestParameter::get($context->provided);
+            $request = RequestParameter::get($context->provided);
 
-        if ($request === null) {
+            if ($request === null) {
+                throw ResolutionException::forParameter(
+                    $target->reflection,
+                    reason: sprintf(
+                        'PSR-7 request is required for #[%s]',
+                        $this->attributeShortName($attribute),
+                    ),
+                    providedParameters: $context->provided,
+                    resolvedParameters: $context->resolved,
+                );
+            }
+
+            return [
+                $target->position,
+                $this->extractValue($request, $attribute, $target->reflection),
+            ];
+        } catch (ValidationExceptionInterface|CasterExceptionInterface|ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
             throw ResolutionException::forParameter(
                 $target->reflection,
-                reason: sprintf(
-                    'PSR-7 request is required for #[%s]',
-                    $this->attributeShortName($attribute),
-                ),
+                previous: $e,
                 providedParameters: $context->provided,
                 resolvedParameters: $context->resolved,
             );
         }
-
-        return [
-            $target->position,
-            $this->extractValue($request, $attribute, $target->reflection),
-        ];
     }
 
     /** @throws ValidationExceptionInterface|CasterExceptionInterface */
