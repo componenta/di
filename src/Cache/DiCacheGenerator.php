@@ -43,6 +43,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
 
         if (file_put_contents($tmp, $contents, LOCK_EX) === false) {
+            @unlink($tmp);
             throw new InvalidConfigurationException(
                 sprintf('Failed to write DI cache temp file: %s', $tmp),
             );
