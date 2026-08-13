@@ -61,7 +61,7 @@ final readonly class Container implements
      */
     public function __construct(
         private EntryResolverInterface    $resolver,
-        private AliasResolverInterface    $aliases,
+        private AliasResolver             $aliases,
         private CallableExecutorInterface $callableExecutor,
         ?EntryCache $cache = null,
         ?DelegatorRegistry $delegators = null,
@@ -78,7 +78,7 @@ final readonly class Container implements
             LazyObjectFactoryInterface::class => $this,
             VirtualProxyFactoryInterface::class => $this,
             self::class => $this,
-            AliasResolverInterface::class => new ContainerAliasResolver($this->aliases, $this),
+            AliasResolverInterface::class => $this->aliases,
             CallableResolverInterface::class => $this->callableExecutor,
             CallableExecutorInterface::class => $this->callableExecutor,
         ];
