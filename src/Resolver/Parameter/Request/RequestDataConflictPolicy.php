@@ -12,7 +12,4 @@ enum RequestDataConflictPolicy: string
 
     /** Keep the value from the first source in mapper-defined source order. */
     case FirstWins = 'first_wins';
-
-    /** Keep the value from the last source, matching the legacy merge behavior. */
-    case LastWins = 'last_wins';
 }
