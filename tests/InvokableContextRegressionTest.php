@@ -18,12 +18,10 @@ final class InvokableContextDependency {}
 
 final class InvokableContextTypedArgument
 {
-    public function __construct(
-        public ?InvokableContextDependency $dependency = null,
-    ) {}
+    public function __construct(public ?InvokableContextDependency $dependency = null) {}
 }
 
-it('ignores unrelated make context for invokables without constructors', function (): void {
+it('ignores make context for an explicit invokable', function (): void {
     $container = (new ContainerBuilder())
         ->addInvokable(InvokableContextNoConstructor::class)
         ->build();
@@ -34,35 +32,31 @@ it('ignores unrelated make context for invokables without constructors', functio
     ))->toBeInstanceOf(InvokableContextNoConstructor::class);
 });
 
-it('resolves invokable constructor overrides by name and position while preserving defaults', function (): void {
+it('uses native defaults instead of make context', function (): void {
     $container = (new ContainerBuilder())
         ->addInvokable(InvokableContextOptionalArguments::class)
         ->build();
 
-    $named = $container->make(
-        InvokableContextOptionalArguments::class,
-        ['second' => 'named'],
-    );
-    $positional = $container->make(
-        InvokableContextOptionalArguments::class,
-        [0 => 'positional'],
-    );
+    $named = $container->make(InvokableContextOptionalArguments::class, ['second' => 'named']);
+    $positional = $container->make(InvokableContextOptionalArguments::class, [0 => 'positional']);
 
     expect($named->first)->toBe('first-default')
-        ->and($named->second)->toBe('named')
-        ->and($positional->first)->toBe('positional')
+        ->and($named->second)->toBe('second-default')
+        ->and($positional->first)->toBe('first-default')
         ->and($positional->second)->toBe('second-default');
 });
 
-it('accepts explicit invokable object overrides keyed by declared type', function (): void {
+it('does not use type-key make context for an explicit invokable', function (): void {
     $dependency = new InvokableContextDependency();
     $container = (new ContainerBuilder())
         ->addInvokable(InvokableContextTypedArgument::class)
         ->build();
 
-    expect($container->make(
+    $entry = $container->make(
         InvokableContextTypedArgument::class,
         [InvokableContextDependency::class => $dependency],
-    )->dependency)->toBe($dependency)
+    );
+
+    expect($entry->dependency)->toBeNull()
         ->and($container->get(InvokableContextTypedArgument::class)->dependency)->toBeNull();
 });
