@@ -278,6 +278,10 @@ class ContainerBuilder
             ...$this->aliases,
             'config' => Config::class,
         ]);
+        $cache = new EntryCache();
+        foreach ($this->services as $id => $service) {
+            $cache->putBase($aliases->resolve($id), $service);
+        }
         $proxyFactory = $this->createProxyFactory();
         $bootstrap = new ContainerBootstrapState();
 
@@ -287,6 +291,7 @@ class ContainerBuilder
             static function (Container $container) use (
                 $bootstrap,
                 $aliases,
+                $cache,
                 $proxyFactory,
                 $config,
                 $environment,
@@ -298,6 +303,7 @@ class ContainerBuilder
                     resolver: $bootstrap->entryResolver(),
                     aliases: $aliases,
                     callableExecutor: $bootstrap->callableExecutor(),
+                    cache: $cache,
                     proxyFactory: $proxyFactory,
                     bootstrapServices: [
                         Config::class => $config,
@@ -322,10 +328,6 @@ class ContainerBuilder
         $bootstrap->initialize($entryResolver, $callableExecutor);
 
         $container->get(Config::class);
-
-        foreach ($this->services as $id => $service) {
-            $container->set($id, $service);
-        }
 
         foreach ($this->delegators as $id => $delegatorList) {
             foreach ($delegatorList as $delegator) {
