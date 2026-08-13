@@ -22,7 +22,6 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\NullContainer;
-use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -34,7 +33,6 @@ use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
-use ReflectionClass;
 use ReflectionFunction;
 
 final class AuditOptionalInvokable
@@ -60,22 +58,6 @@ final class AuditClassDefinitionTarget
 }
 
 final class AuditAotZeroArgumentEntry {}
-
-final class AuditImmediateProxyFactory implements ProxyFactoryInterface
-{
-    public function makeLazy(string $class, callable $initializer): object
-    {
-        $entry = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-        $initializer($entry);
-
-        return $entry;
-    }
-
-    public function makeProxy(string $class, callable $factory): object
-    {
-        return $factory((new ReflectionClass($class))->newInstanceWithoutConstructor());
-    }
-}
 
 final class AuditNeverResolver implements ParameterResolverInterface
 {
@@ -120,7 +102,7 @@ final readonly class AuditRepeatableExtractor implements ExtractorInterface
 }
 
 describe('audit consistency regressions', function () {
-    it('forwards make context through explicit invokable entries', function () {
+    it('does not forward make context through explicit invokable entries', function () {
         $container = (new ContainerBuilder())
             ->addInvokable(AuditOptionalInvokable::class)
             ->build();
@@ -129,31 +111,28 @@ describe('audit consistency regressions', function () {
             ->and($container->make(
                 AuditOptionalInvokable::class,
                 ['value' => 'runtime'],
-            )->value)->toBe('runtime');
+            )->value)->toBe('default');
     });
 
-    it('forwards invokable context through eager lazy and proxy creation strategies', function () {
-        $resolver = new InvokableResolver(
-            [
-                AuditOptionalInvokable::class,
-                AuditLazyOptionalInvokable::class,
-                AuditProxyOptionalInvokable::class,
-            ],
-            new AuditImmediateProxyFactory(),
-        );
+    it('ignores invokable context and creation-strategy attributes', function () {
+        $resolver = new InvokableResolver([
+            AuditOptionalInvokable::class,
+            AuditLazyOptionalInvokable::class,
+            AuditProxyOptionalInvokable::class,
+        ]);
 
         expect($resolver->resolve(
             AuditOptionalInvokable::class,
             ['value' => 'eager'],
-        )->value)->toBe('eager')
+        )->value)->toBe('default')
             ->and($resolver->resolve(
                 AuditLazyOptionalInvokable::class,
                 ['value' => 'lazy'],
-            )->value)->toBe('lazy')
+            )->value)->toBe('default')
             ->and($resolver->resolve(
                 AuditProxyOptionalInvokable::class,
                 ['value' => 'proxy'],
-            )->value)->toBe('proxy');
+            )->value)->toBe('default');
     });
 
     it('forwards make context through ClassDefinition factories and lets it override configured params', function () {
