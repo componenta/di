@@ -25,19 +25,9 @@ final class AliasResolver implements AliasResolverInterface, IteratorAggregate
     /** @var array<string, string> */
     private array $map;
 
-    /**
-     * @param array<string, string> $map Alias to target map.
-     * @param bool $skipValidation Skip circular reference validation.
-     */
-    public function __construct(
-        array $map = [],
-        bool $skipValidation = false,
-    ) {
-        if ($skipValidation) {
-            $this->map = $map;
-            return;
-        }
-
+    /** @param array<string, string> $map Alias to target map. */
+    public function __construct(array $map = [])
+    {
         // Incremental validation: replay the map as a series of insertions.
         // This gives O(total alias-chain length) instead of O(N²) per insert.
         $this->map = [];
