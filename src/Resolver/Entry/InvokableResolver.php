@@ -13,17 +13,13 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
-use Componenta\DI\Resolver\Parameter\ArrayResolver;
-use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
-use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
-use Componenta\DI\Resolver\Parameter\NullableResolver;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Parameter\ExplicitParametersResolver;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use ReflectionClass;
 use Throwable;
 
-/** Resolves registered classes whose constructors require no arguments. */
+/** Resolves explicitly registered constructor-light classes. */
 class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
 {
     /** @var array<string, class-string> */
@@ -32,7 +28,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
     /** @var array<class-string, CreationStrategy> */
     private array $strategyCache = [];
 
-    private readonly ParametersResolver $contextResolver;
+    private readonly ExplicitParametersResolver $contextResolver;
 
     /** @param list<class-string> $invokables */
     public function __construct(
@@ -40,12 +36,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
         private readonly ?ProxyFactoryInterface $proxyFactory = null,
         private readonly ?AttributeProcessor $attributeProcessor = null,
     ) {
-        $this->contextResolver = new ParametersResolver(
-            new ArrayResolver(),
-            new ArrayTypedResolver(),
-            new DefaultValueResolver(),
-            new NullableResolver(),
-        );
+        $this->contextResolver = new ExplicitParametersResolver();
 
         foreach ($invokables as $class) {
             InvokableSpecificationValidator::assertValid($class, $this->attributeProcessor);
