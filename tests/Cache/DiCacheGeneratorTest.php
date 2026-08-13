@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Componenta\Config\Config;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Cache\DiCacheGeneratorInterface;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
 function tempCachePath(string $suffix = '.php'): string
@@ -26,25 +29,32 @@ describe('Cache\\DiCacheGenerator', function () {
         expect(new DiCacheGenerator())->toBeInstanceOf(DiCacheGeneratorInterface::class);
     });
 
-    it('writes a PHP file that returns the exact input array', function () {
+    it('writes a versioned cache envelope that configureFromCache can load', function () {
         $generator = new DiCacheGenerator();
-        $config = [
-            'factories' => ['svc' => 'FactoryClass'],
-            'aliases'   => ['a' => 'b'],
-            'attribute_handlers' => ['HandlerClass'],
+        $dependencies = [
+            ConfigKey::SERVICES => ['cached.service' => 'cached-value'],
+            ConfigKey::ALIASES => ['cached.alias' => 'cached.service'],
         ];
 
-        $generator->generate($config, $this->path);
+        $generator->generate($dependencies, $this->path);
+        $cache = require $this->path;
 
-        $returned = require $this->path;
+        expect($cache['version'])->toBe(ContainerBuilder::CACHE_VERSION)
+            ->and($cache)->toHaveKey(ConfigKey::DEPENDENCIES);
 
-        expect($returned)->toBe($config);
+        $container = ContainerBuilder::configureFromCache(
+            new Config([]),
+            $cache,
+            dirname($this->path),
+        )->build();
+
+        expect($container->get('cached.alias'))->toBe('cached-value');
     });
 
     it('produces a file with <?php opener and declare(strict_types=1)', function () {
         $generator = new DiCacheGenerator();
 
-        $generator->generate(['k' => 'v'], $this->path);
+        $generator->generate([ConfigKey::SERVICES => ['k' => 'v']], $this->path);
 
         $contents = file_get_contents($this->path);
         expect($contents)->toStartWith("<?php")
@@ -58,7 +68,7 @@ describe('Cache\\DiCacheGenerator', function () {
         $nested = $rootDir . '/nested/deep/cache.php';
 
         try {
-            $generator->generate(['created' => true], $nested);
+            $generator->generate([ConfigKey::SERVICES => ['created' => true]], $nested);
 
             expect(file_exists($nested))->toBeTrue();
         } finally {
@@ -77,18 +87,27 @@ describe('Cache\\DiCacheGenerator', function () {
         $generator = new DiCacheGenerator();
         file_put_contents($this->path, '<?php return ["previous" => true];');
 
-        $generator->generate(['fresh' => true], $this->path);
+        $generator->generate([ConfigKey::SERVICES => ['fresh' => true]], $this->path);
+        $cache = require $this->path;
 
-        expect(require $this->path)->toBe(['fresh' => true])
+        expect($cache[ConfigKey::DEPENDENCIES][ConfigKey::SERVICES]['fresh'])->toBeTrue()
             ->and(file_get_contents($this->path))->not->toContain('previous');
     });
 
-    it('throws InvalidConfigurationException when the config contains unserialisable values', function () {
+    it('rejects invalid dependency shapes before writing a cache', function () {
         $generator = new DiCacheGenerator();
-        // Closures cannot be serialised to PHP source by Export::pretty().
-        $config = ['factory' => fn() => 'unserialisable'];
 
-        expect(fn() => $generator->generate($config, $this->path))
+        expect(fn() => $generator->generate(['unsupported' => []], $this->path))
+            ->toThrow(InvalidConfigurationException::class);
+    });
+
+    it('throws InvalidConfigurationException when dependencies contain unserialisable values', function () {
+        $generator = new DiCacheGenerator();
+        $dependencies = [
+            ConfigKey::SERVICES => ['bad' => fn() => 'unserialisable'],
+        ];
+
+        expect(fn() => $generator->generate($dependencies, $this->path))
             ->toThrow(InvalidConfigurationException::class);
     });
 });
