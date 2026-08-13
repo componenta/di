@@ -74,7 +74,6 @@ Parameter names are part of the public API because PHP named arguments may use t
 | `LazyObjectFactoryInterface` | `makeLazy(string $class, callable $initializer)` | Native lazy ghost creation. |
 | `VirtualProxyFactoryInterface` | `makeProxy(string $class, callable $factory)` | Native virtual proxy creation. |
 | `ProxyFactoryInterface` | both lazy methods | A combined lazy-object contract. |
-| `AliasResolverInterface` | `resolve`, `set`, `has` | Low-level alias management. |
 
 The concrete `Container` additionally exposes `set()`, `alias()`, `delegator()`, and `addContainer()` for bootstrap code. Ordinary services should depend on the narrow contract they use.
 
