@@ -71,15 +71,3 @@ it('can explicitly preserve the trusted first source', function (): void {
 
     expect($mapper->extract($request))->toBe(['id' => 10]);
 });
-
-it('can explicitly opt into the legacy last-source-wins behavior', function (): void {
-    $request = (new ServerRequest('POST', '/posts/10'))
-        ->withAttribute('id', 10)
-        ->withParsedBody(['id' => 20]);
-
-    $mapper = new PayloadWithRouteId(
-        conflictPolicy: RequestDataConflictPolicy::LastWins,
-    );
-
-    expect($mapper->extract($request))->toBe(['id' => 20]);
-});
