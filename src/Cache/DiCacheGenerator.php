@@ -4,28 +4,27 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Cache;
 
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\VarExport\Config\ExportConfig;
 use Componenta\VarExport\Export;
 
-/**
- * Default {@see DiCacheGeneratorInterface} implementation.
- *
- * Serialises configuration via {@see Export::pretty()} (short-array
- * syntax, indented, trailing commas) and writes atomically through a
- * temporary file. Invalidates the OPcache entry for the target path
- * so the next request picks up the fresh contents without an FPM
- * restart in dev.
- */
+/** Default persistent-container cache writer. */
 final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 {
-    public function generate(array $config, string $path): void
+    public function generate(array $dependencies, string $path): void
     {
         $this->ensureDirectory(dirname($path));
 
+        $cache = [
+            'version' => ContainerBuilder::CACHE_VERSION,
+            ConfigKey::DEPENDENCIES => ContainerBuilder::normalizeDependencies($dependencies),
+        ];
+
         try {
             $exported = Export::pretty(
-                $config,
+                $cache,
                 ExportConfig::pretty()->withTrailingComma(),
             );
         } catch (\Throwable $e) {
@@ -36,10 +35,6 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         }
 
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
-
-        // Atomic write - the temp + rename pattern guarantees a concurrent
-        // reader either sees the previous contents or the full new file,
-        // never a partial write.
         $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
 
         if (file_put_contents($tmp, $contents, LOCK_EX) === false) {
@@ -56,8 +51,6 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             );
         }
 
-        // OPcache holds the previous bytecode by inode/path; invalidate so
-        // the next `require` re-reads the updated file.
         if (function_exists('opcache_invalidate')) {
             @opcache_invalidate($path, true);
         }
