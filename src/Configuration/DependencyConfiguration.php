@@ -11,7 +11,6 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
-use Componenta\DI\Resolver\Entry\InvokableSpecificationValidator;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
 /**
@@ -239,8 +238,6 @@ final class DependencyConfiguration
                     get_debug_type($class),
                 ));
             }
-
-            InvokableSpecificationValidator::assertValid($class);
         }
 
         $aliases = $dependencies[ConfigKey::ALIASES] ?? [];
