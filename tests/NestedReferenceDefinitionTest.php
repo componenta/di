@@ -22,7 +22,7 @@ it('resolves reference definitions recursively inside constructor arrays', funct
 
     $container->set(
         NestedReferenceConsumer::class,
-        Definition::autowire(NestedReferenceConsumer::class)
+        Definition::create(NestedReferenceConsumer::class)
             ->constructor([
                 'dependencies' => [
                     'primary' => [
