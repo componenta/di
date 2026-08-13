@@ -17,18 +17,12 @@ it('does not infer compiled factory path trust from an object restored at the ca
     file_put_contents($outside, '<?php throw new RuntimeException("must not execute");');
 
     try {
-        $definition = new CompiledFactoryDefinition(
-            $outside,
-            stdClass::class,
-            'create',
-        );
+        $definition = new CompiledFactoryDefinition($outside, stdClass::class, 'create');
         $container = ContainerBuilder::configureFromCache(
             new Config([]),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ConfigKey::DEPENDENCIES => [
-                    ConfigKey::FACTORIES => ['entry' => $definition],
-                ],
+                ConfigKey::DEPENDENCIES => [ConfigKey::FACTORIES => ['entry' => $definition]],
             ],
             $base,
         )->build();
@@ -53,15 +47,8 @@ it('keeps compiled definitions path-confined after the real cache generator roun
     try {
         (new DiCacheGenerator())->generate(
             [
-                'version' => ContainerBuilder::CACHE_VERSION,
-                ConfigKey::DEPENDENCIES => [
-                    ConfigKey::FACTORIES => [
-                        'entry' => new CompiledFactoryDefinition(
-                            $outside,
-                            stdClass::class,
-                            'create',
-                        ),
-                    ],
+                ConfigKey::FACTORIES => [
+                    'entry' => new CompiledFactoryDefinition($outside, stdClass::class, 'create'),
                 ],
             ],
             $cacheFile,
@@ -71,11 +58,7 @@ it('keeps compiled definitions path-confined after the real cache generator roun
         expect($cache[ConfigKey::DEPENDENCIES][ConfigKey::FACTORIES]['entry'])
             ->toBeInstanceOf(CompiledFactoryDefinition::class);
 
-        $container = ContainerBuilder::configureFromCache(
-            new Config([]),
-            $cache,
-            $base,
-        )->build();
+        $container = ContainerBuilder::configureFromCache(new Config([]), $cache, $base)->build();
 
         expect(fn() => $container->get('entry'))
             ->toThrow(InvalidConfigurationException::class, 'relative path');
@@ -90,46 +73,22 @@ it('keeps compiled definitions path-confined after the real cache generator roun
 it('keeps direct programmatic compiled factory objects path-flexible while validating code', function (): void {
     $class = 'CompiledFactoryProgrammatic_' . bin2hex(random_bytes(6));
     $file = tempnam(sys_get_temp_dir(), 'componenta-di-programmatic-shard-');
-
     expect($file)->not->toBeFalse();
     /** @var non-empty-string $file */
-    file_put_contents(
-        $file,
-        sprintf(
-            <<<'PHP'
+    file_put_contents($file, sprintf(<<<'PHP'
 <?php
-
 final class %s
 {
-    public function __construct(
-        array $parameterResolvers,
-        array $attributeHandlers,
-        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
-    ) {}
-
-    public function create(array $parameters = []): string
-    {
-        return 'programmatic';
-    }
+    public function __construct(array $parameterResolvers, array $attributeHandlers, \Componenta\DI\ProxyFactoryInterface $proxyFactory) {}
+    public function create(array $parameters = []): string { return 'programmatic'; }
 }
-
 return %s::class;
-PHP,
-            $class,
-            $class,
-        ),
-    );
+PHP, $class, $class));
 
     try {
-        $container = ContainerBuilder::configureWithDependencies(
-            new Config([]),
-            [
-                ConfigKey::FACTORIES => [
-                    'entry' => new CompiledFactoryDefinition($file, $class, 'create'),
-                ],
-            ],
-        )->build();
-
+        $container = ContainerBuilder::configureWithDependencies(new Config([]), [
+            ConfigKey::FACTORIES => ['entry' => new CompiledFactoryDefinition($file, $class, 'create')],
+        ])->build();
         expect($container->get('entry'))->toBe('programmatic');
     } finally {
         @unlink($file);
@@ -144,51 +103,26 @@ it('rejects a preloaded class from a different shard for a direct programmatic d
     mkdir($root, 0777, true);
 
     $source = static function (string $value) use ($class): string {
-        return sprintf(
-            <<<'PHP'
+        return sprintf(<<<'PHP'
 <?php
-
 final class %s
 {
-    public function __construct(
-        array $parameterResolvers,
-        array $attributeHandlers,
-        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
-    ) {}
-
-    public function create(array $parameters = []): string
-    {
-        return %s;
-    }
+    public function __construct(array $parameterResolvers, array $attributeHandlers, \Componenta\DI\ProxyFactoryInterface $proxyFactory) {}
+    public function create(array $parameters = []): string { return %s; }
 }
-
 return %s::class;
-PHP,
-            $class,
-            var_export($value, true),
-            $class,
-        );
+PHP, $class, var_export($value, true), $class);
     };
-
     file_put_contents($firstFile, $source('first'));
     file_put_contents($secondFile, $source('second'));
 
     try {
         expect(require $firstFile)->toBe($class);
-
-        $container = ContainerBuilder::configureWithDependencies(
-            new Config([]),
-            [
-                ConfigKey::FACTORIES => [
-                    'entry' => new CompiledFactoryDefinition(
-                        $secondFile,
-                        $class,
-                        'create',
-                    ),
-                ],
+        $container = ContainerBuilder::configureWithDependencies(new Config([]), [
+            ConfigKey::FACTORIES => [
+                'entry' => new CompiledFactoryDefinition($secondFile, $class, 'create'),
             ],
-        )->build();
-
+        ])->build();
         expect(fn() => $container->get('entry'))
             ->toThrow(InvalidConfigurationException::class, 'different shard');
     } finally {
@@ -207,29 +141,15 @@ it('reuses an already loaded generated class from an identical shard in another 
     mkdir($firstBase, 0777, true);
     mkdir($secondBase, 0777, true);
 
-    $source = sprintf(
-        <<<'PHP'
+    $source = sprintf(<<<'PHP'
 <?php
-
 final class %s
 {
-    public function __construct(
-        array $parameterResolvers,
-        array $attributeHandlers,
-        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
-    ) {}
-
-    public function create(array $parameters = []): string
-    {
-        return 'shared-shard';
-    }
+    public function __construct(array $parameterResolvers, array $attributeHandlers, \Componenta\DI\ProxyFactoryInterface $proxyFactory) {}
+    public function create(array $parameters = []): string { return 'shared-shard'; }
 }
-
 return %s::class;
-PHP,
-        $class,
-        $class,
-    );
+PHP, $class, $class);
     file_put_contents($firstBase . '/' . $file, $source);
     file_put_contents($secondBase . '/' . $file, $source);
     $definition = (new CompiledFactoryDefinition($file, $class, 'create'))->encode();
@@ -237,21 +157,10 @@ PHP,
     try {
         $cache = [
             'version' => ContainerBuilder::CACHE_VERSION,
-            ConfigKey::DEPENDENCIES => [
-                ConfigKey::FACTORIES => ['entry' => $definition],
-            ],
+            ConfigKey::DEPENDENCIES => [ConfigKey::FACTORIES => ['entry' => $definition]],
         ];
-        $first = ContainerBuilder::configureFromCache(
-            new Config([]),
-            $cache,
-            $firstBase,
-        )->build();
-        $second = ContainerBuilder::configureFromCache(
-            new Config([]),
-            $cache,
-            $secondBase,
-        )->build();
-
+        $first = ContainerBuilder::configureFromCache(new Config([]), $cache, $firstBase)->build();
+        $second = ContainerBuilder::configureFromCache(new Config([]), $cache, $secondBase)->build();
         expect($first->get('entry'))->toBe('shared-shard')
             ->and($second->get('entry'))->toBe('shared-shard');
     } finally {
@@ -273,30 +182,15 @@ it('rejects an already loaded generated class when the second cache root contain
     mkdir($secondBase, 0777, true);
 
     $source = static function (string $value) use ($class): string {
-        return sprintf(
-            <<<'PHP'
+        return sprintf(<<<'PHP'
 <?php
-
 final class %s
 {
-    public function __construct(
-        array $parameterResolvers,
-        array $attributeHandlers,
-        \Componenta\DI\ProxyFactoryInterface $proxyFactory,
-    ) {}
-
-    public function create(array $parameters = []): string
-    {
-        return %s;
-    }
+    public function __construct(array $parameterResolvers, array $attributeHandlers, \Componenta\DI\ProxyFactoryInterface $proxyFactory) {}
+    public function create(array $parameters = []): string { return %s; }
 }
-
 return %s::class;
-PHP,
-            $class,
-            var_export($value, true),
-            $class,
-        );
+PHP, $class, var_export($value, true), $class);
     };
     file_put_contents($firstBase . '/' . $file, $source('first'));
     file_put_contents($secondBase . '/' . $file, $source('second'));
@@ -305,21 +199,10 @@ PHP,
     try {
         $cache = [
             'version' => ContainerBuilder::CACHE_VERSION,
-            ConfigKey::DEPENDENCIES => [
-                ConfigKey::FACTORIES => ['entry' => $definition],
-            ],
+            ConfigKey::DEPENDENCIES => [ConfigKey::FACTORIES => ['entry' => $definition]],
         ];
-        $first = ContainerBuilder::configureFromCache(
-            new Config([]),
-            $cache,
-            $firstBase,
-        )->build();
-        $second = ContainerBuilder::configureFromCache(
-            new Config([]),
-            $cache,
-            $secondBase,
-        )->build();
-
+        $first = ContainerBuilder::configureFromCache(new Config([]), $cache, $firstBase)->build();
+        $second = ContainerBuilder::configureFromCache(new Config([]), $cache, $secondBase)->build();
         expect($first->get('entry'))->toBe('first')
             ->and(fn() => $second->get('entry'))
             ->toThrow(InvalidConfigurationException::class, 'different shard');
