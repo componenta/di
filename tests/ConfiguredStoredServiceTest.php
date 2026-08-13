@@ -7,7 +7,12 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\DefinitionInterface;
 
-final readonly class ConfiguredStoredService implements DefinitionInterface {}
+final class ConfiguredStoredService implements DefinitionInterface
+{
+    public mixed $value {
+        get => 'stored';
+    }
+}
 
 test('services configuration preserves prebuilt values', function () {
     $service = new ConfiguredStoredService();

@@ -5,7 +5,12 @@ declare(strict_types=1);
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\DefinitionInterface;
 
-final readonly class StoredDefinitionService implements DefinitionInterface {}
+final class StoredDefinitionService implements DefinitionInterface
+{
+    public mixed $value {
+        get => 'stored';
+    }
+}
 
 test('addService stores DefinitionInterface objects as values', function () {
     $service = new StoredDefinitionService();
