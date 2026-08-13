@@ -44,17 +44,22 @@ $result = $container->call($callable, ['id' => 7]);
 2. Разрешение alias.
 3. Защита от циклической зависимости.
 4. Локальный base cache.
-5. Внешние PSR-11-контейнеры.
-6. Локальная resolver-chain.
-7. Delegators и decorated cache.
+5. Явная runtime definition, ранее установленная через `Container::set()`.
+6. Внешние PSR-11-контейнеры.
+7. Локальная resolver-chain.
+8. Delegators и decorated cache.
 
-Уже материализованный локальный сервис имеет приоритет. В остальных случаях внешний контейнер проверяется до ещё не выполненной локальной resolver-chain. `has()` скрывает только container-level ошибки разрешения, но не ошибки программирования.
+Готовые/уже материализованные локальные значения и явные runtime definitions имеют локальный ownership. В остальных случаях внешний контейнер проверяется до ещё не выполненных configured factories, invokables и reflection fallback. `has()` использует тот же порядок ownership, скрывает только container-level ошибки разрешения и не скрывает ошибки программирования.
+
+`make()` разрешает alias, но намеренно пропускает shared cache, внешние контейнеры и delegators. Циклы fresh-resolution обнаруживаются тем же `CycleGuard`, что и циклы shared resolution.
 
 ## ContainerBuilder
 
 Основные методы: `addFactory()`, `addInvokable()`, `addAlias()`, `addDelegator()`, `addService()`, их bulk-варианты, `addParameterResolver()`, `addAttributeHandler()`, `compileFactories()`, `toArray()` и `build()`.
 
-Delegator может быть callable, class/interface method reference или ссылкой на произвольный service id. В bulk/config input opaque method reference записывается вложенно: `[['decorator.service', 'decorate']]`.
+`addService()` и `ConfigKey::SERVICES` регистрируют готовые shared values без переинтерпретации. Объект, реализующий `DefinitionInterface`, в секции services остаётся обычным значением. Definition намеренно устанавливается через `Container::set($id, $definition)` либо через factories/invokables configuration.
+
+Delegator может быть callable, class/interface method reference или ссылкой на произвольный service id. В bulk/config input opaque method reference записывается вложенно: `[['decorator.service', 'decorate']]`; плоская пара строк означает два строковых delegator, если она не является реальной ссылкой на class/interface method.
 
 Parameter resolvers и attribute handlers можно передавать экземплярами, service id и callable-фабриками. После `build()` extension registries закрываются от изменений.
 
@@ -72,6 +77,8 @@ $container->set(
         ->method('boot'),
 );
 ```
+
+Runtime `InvokableDefinition` проверяет тот же базовый shape, что и declarative invokables: class-string не может быть пустым.
 
 ## Конфигурация
 
@@ -92,7 +99,7 @@ Persistent cache загружается только из versioned envelope:
 
 Основные атрибуты: `#[Inject]`, `#[EntryId]`, `#[Config]`, `#[Env]`, `#[Make]`, `#[Init]`, `#[Cast]`, `#[CurrentUser]`, `#[SetUp]`, `#[NoConstructor]`, `#[Lazy]`, `#[Proxy]`.
 
-`#[Lazy]` и class-level `#[Proxy]` нельзя одновременно применять к одному классу.
+`#[Lazy]` и class-level `#[Proxy]` нельзя одновременно применять к одному классу. Mutable promoted property может быть явно переинициализирована через property-only `#[Init]`; initialized readonly promoted property остаётся constructor-owned. Built-in DI property handlers отклоняют static properties вместо молчаливого игнорирования атрибута.
 
 PSR-7 extraction: `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]`, `#[UploadedFile]`.
 
