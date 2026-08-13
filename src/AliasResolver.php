@@ -97,14 +97,6 @@ final class AliasResolver implements AliasResolverInterface, IteratorAggregate
         return isset($this->map[$alias]);
     }
 
-    public function unset(string $alias): static
-    {
-        unset($this->map[$alias]);
-        $this->resolved = [];
-
-        return $this;
-    }
-
     public function getIterator(): Traversable
     {
         yield from $this->map;
