@@ -2,33 +2,40 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
-use Componenta\DI\ExternalContainerRegistry;
 use Psr\Container\ContainerInterface;
 
-test('external container registry is allocated only on first registration', function () {
-    $container = (new ContainerBuilder())->build();
-    $property = new ReflectionProperty(Container::class, 'externalContainers');
-
-    expect($property->getValue($container))->toBeNull();
-
-    $container->addContainer(new class () implements ContainerInterface {
+it('uses the first registered external container that owns the requested id', function () {
+    $first = new class () implements ContainerInterface {
         public function get(string $id): mixed
         {
-            throw new RuntimeException($id);
+            return 'first';
         }
 
         public function has(string $id): bool
         {
-            return false;
+            return $id === 'shared';
         }
-    });
+    };
+    $second = new class () implements ContainerInterface {
+        public function get(string $id): mixed
+        {
+            return 'second';
+        }
 
-    expect($property->getValue($container))->toBeInstanceOf(ExternalContainerRegistry::class);
+        public function has(string $id): bool
+        {
+            return $id === 'shared';
+        }
+    };
+    $container = (new ContainerBuilder())->build();
+    $container->addContainer($first);
+    $container->addContainer($second);
+
+    expect($container->get('shared'))->toBe('first');
 });
 
-test('external lookup uses only the original requested id before local aliases', function () {
+it('external lookup uses only the original requested id before local aliases', function () {
     $external = new class () implements ContainerInterface {
         /** @var list<string> */
         public array $hasIds = [];
@@ -55,7 +62,7 @@ test('external lookup uses only the original requested id before local aliases',
         ->and($external->hasIds)->toBe(['shortcut']);
 });
 
-test('external container wins when it owns the original requested id', function () {
+it('external container wins when it owns the original requested id', function () {
     $external = new class () implements ContainerInterface {
         /** @var list<string> */
         public array $hasIds = [];
