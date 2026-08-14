@@ -45,7 +45,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     ) {
         $this->explicitParametersResolver = new ExplicitParametersResolver();
 
-        foreach ($factories as $id => $factory) {
+        foreach ($this->factories as $id => $factory) {
             if ($id === '') {
                 throw new InvalidConfigurationException(
                     'Factory ids must be non-empty strings.',
@@ -53,6 +53,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface
             }
 
             FactorySpecificationValidator::assertValid($id, $factory);
+
+            if ($factory instanceof FactoryDefinition) {
+                $this->factories[$id] = $factory->value;
+            }
         }
     }
 
@@ -106,9 +110,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     {
         $factory = $this->factories[$id];
 
-        if ($factory instanceof FactoryDefinition) {
-            $factory = $factory->value;
-        } elseif ($factory instanceof ClassDefinition) {
+        if ($factory instanceof ClassDefinition) {
             $factory = $this->createFactoryFromDefinition($factory);
         }
 
@@ -311,7 +313,9 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         FactorySpecificationValidator::assertValid($id, $definition);
-        $this->factories[$id] = $definition;
+        $this->factories[$id] = $definition instanceof FactoryDefinition
+            ? $definition->value
+            : $definition;
         unset($this->compiledFactories[$id]);
     }
 
