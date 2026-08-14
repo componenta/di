@@ -4,29 +4,41 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Cache;
 
+use Componenta\DI\Compile\Definition\DefinitionCompiler;
+use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\VarExport\Config\ExportConfig;
-use Componenta\VarExport\Export;
+use Componenta\VarExport\VarExporter;
 
 /** Default persistent-container cache writer. */
 final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 {
+    private DefinitionCompilerInterface $definitionCompiler;
+
+    public function __construct(?DefinitionCompilerInterface $definitionCompiler = null)
+    {
+        $this->definitionCompiler = $definitionCompiler ?? DefinitionCompiler::createDefault();
+    }
+
     public function generate(array $dependencies, string $path): void
     {
         $this->ensureDirectory(dirname($path));
 
+        $dependencies = ContainerBuilder::normalizeDependencies($dependencies);
+        $dependencies = $this->definitionCompiler->compile($dependencies);
         $cache = [
             'version' => ContainerBuilder::CACHE_VERSION,
-            ConfigKey::DEPENDENCIES => ContainerBuilder::normalizeDependencies($dependencies),
+            ConfigKey::DEPENDENCIES => $dependencies,
         ];
 
         try {
-            $exported = Export::pretty(
-                $cache,
-                ExportConfig::pretty()->withTrailingComma(),
-            );
+            $config = ExportConfig::pretty()->withTrailingComma();
+            $exported = (new VarExporter(
+                $config,
+                objectExporter: new DiCacheObjectExporter($config),
+            ))->export($cache);
         } catch (\Throwable $e) {
             throw new InvalidConfigurationException(
                 sprintf('Failed to serialise DI cache for "%s": %s', $path, $e->getMessage()),
