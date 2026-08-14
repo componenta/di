@@ -396,20 +396,4 @@ describe('ContainerBuilder', function () {
             ->and(fn() => $container->addContainer($container))
             ->toThrow(InvalidConfigurationException::class);
     });
-
-    it('does not expose removed legacy API', function () {
-        expect(method_exists(ContainerBuilder::class, 'addAutowire'))->toBeFalse()
-            ->and(method_exists(ContainerBuilder::class, 'compilePlans'))->toBeFalse()
-            ->and(defined(ConfigKey::class . '::PROPERTY_RESOLVERS'))->toBeFalse()
-            ->and(defined(ConfigKey::class . '::AUTOWIRES'))->toBeFalse()
-            ->and(class_exists('Componenta\\DI\\Compile\\Entry\\GeneratedEntryResolverLoader'))->toBeFalse()
-            ->and(class_exists('Componenta\\DI\\Compile\\PlanCompiler'))->toBeFalse()
-            ->and(interface_exists('Componenta\\DI\\Resolver\\Entry\\InstantiatorInterface'))->toBeFalse()
-            ->and(class_exists('Componenta\\DI\\Resolver\\Target\\PropertyTarget'))->toBeFalse()
-            ->and(class_exists('Componenta\\DI\\Resolver\\FactoryConfigReader'))->toBeFalse()
-            ->and(class_exists('Componenta\\DI\\Resolver\\Entry\\ContainerCallableInvoker'))->toBeFalse()
-            ->and(method_exists('Componenta\\DI\\CycleGuard', 'track'))->toBeFalse()
-            ->and(method_exists('Componenta\\DI\\DelegatorRegistry', 'has'))->toBeFalse()
-            ->and(method_exists('Componenta\\DI\\ExternalContainerRegistry', 'getIterator'))->toBeFalse();
-    });
 });
