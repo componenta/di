@@ -7,12 +7,11 @@ require_once __DIR__ . '/Fixture/container_helpers.php';
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Tests\Fixture\ReplacementFactoryService;
 use Componenta\DI\Tests\Fixture\ReplacementInvokableService;
 use Componenta\DI\Tests\Fixture\ReplacementStoredService;
 
-it('uses the latest runtime definition when its resolver kind changes', function (): void {
+it('uses the latest definition when its resolver kind changes', function (): void {
     $container = minimalContainer();
 
     $container->set('service', Definition::factory(static fn() => 'from-factory'));
@@ -24,7 +23,7 @@ it('uses the latest runtime definition when its resolver kind changes', function
         ->and($container->make('service'))->toBeInstanceOf(ReplacementInvokableService::class);
 });
 
-it('does not retain a stale runtime definition after replacing it with a stored value', function (): void {
+it('keeps a factory definition configured when a stored value overrides shared get', function (): void {
     $container = minimalContainer();
 
     $container->set(
@@ -37,10 +36,10 @@ it('does not retain a stale runtime definition after replacing it with a stored 
     $container->set('service', $replacement);
 
     expect($container->get('service'))->toBe($replacement)
-        ->and(fn() => $container->make('service'))->toThrow(NotFoundException::class);
+        ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
 });
 
-it('removes stale runtime definitions from every resolver kind before storing a value', function (): void {
+it('keeps the latest resolver definition when a stored value overrides shared get', function (): void {
     $container = minimalContainer();
 
     $container->set(
@@ -54,7 +53,7 @@ it('removes stale runtime definitions from every resolver kind before storing a 
     $container->set('service', $replacement);
 
     expect($container->get('service'))->toBe($replacement)
-        ->and(fn() => $container->make('service'))->toThrow(NotFoundException::class);
+        ->and($container->make('service'))->toBeInstanceOf(ReplacementInvokableService::class);
 });
 
 it('keeps configured make semantics when a stored value only overrides get()', function (): void {
@@ -69,7 +68,7 @@ it('keeps configured make semantics when a stored value only overrides get()', f
         ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
 });
 
-it('restores configured make semantics after removing a runtime definition overlay', function (): void {
+it('keeps a definition reconfiguration after a stored value is set', function (): void {
     $container = minimalBuilder()
         ->addFactory('service', static fn() => new ReplacementFactoryService())
         ->build();
@@ -81,7 +80,7 @@ it('restores configured make semantics after removing a runtime definition overl
     $container->set('service', $replacement);
 
     expect($container->get('service'))->toBe($replacement)
-        ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
+        ->and($container->make('service'))->toBeInstanceOf(ReplacementInvokableService::class);
 });
 
 it('keeps the previous stored value when a replacement definition is invalid', function (): void {
