@@ -10,6 +10,7 @@ use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
 use Componenta\VarExport\VarExporter;
 
@@ -29,6 +30,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         $dependencies = ContainerBuilder::normalizeDependencies($dependencies);
         $dependencies = $this->definitionCompiler->compile($dependencies);
+        $this->assertCompiledFactories($dependencies);
         $cache = [
             'version' => ContainerBuilder::CACHE_VERSION,
             ConfigKey::DEPENDENCIES => $dependencies,
@@ -69,6 +71,23 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         if (function_exists('opcache_invalidate')) {
             @opcache_invalidate($path, true);
+        }
+    }
+
+    /** @param array<string, mixed> $dependencies */
+    private function assertCompiledFactories(array $dependencies): void
+    {
+        $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
+        if (!is_array($factories)) {
+            throw new InvalidConfigurationException('Factories must be an array after definition compilation.');
+        }
+
+        foreach ($factories as $id => $factory) {
+            if ($factory instanceof GeneratedDefinitionCode) {
+                continue;
+            }
+
+            FactorySpecificationValidator::assertValid($id, $factory);
         }
     }
 
