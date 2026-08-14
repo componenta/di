@@ -250,10 +250,6 @@ final class Container implements
             $this->resolver->setDefinition($canonical, $entry);
             $this->cache->removeBase($canonical);
         } else {
-            if ($this->resolver instanceof DefinitionAwareResolverInterface) {
-                $this->resolver->removeDefinition($canonical);
-            }
-
             $this->cache->putBase($canonical, $entry);
         }
 
