@@ -12,7 +12,7 @@ final readonly class RuntimeDefinitionOwnershipValue
     public function __construct(public string $source) {}
 }
 
-test('runtime definitions installed through set take precedence over external containers', function () {
+test('external containers take precedence over runtime definitions for shared get', function () {
     $external = new class () implements ContainerInterface {
         public int $hasCalls = 0;
 
@@ -37,7 +37,7 @@ test('runtime definitions installed through set take precedence over external co
     $external->hasCalls = 0;
 
     expect($container->has('runtime.owned'))->toBeTrue()
-        ->and($external->hasCalls)->toBe(0)
-        ->and($container->get('runtime.owned')->source)->toBe('local')
+        ->and($external->hasCalls)->toBe(1)
+        ->and($container->get('runtime.owned')->source)->toBe('external')
         ->and($container->make('runtime.owned')->source)->toBe('local');
 });
