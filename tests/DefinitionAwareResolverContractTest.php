@@ -3,63 +3,55 @@
 declare(strict_types=1);
 
 use Componenta\DI\Definition\Definition;
+use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\NullContainer;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\FactoryResolver;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 
-final class RuntimeDefinitionContractConfiguredInvokable {}
-final class RuntimeDefinitionContractOverrideInvokable {}
+final class DefinitionContractConfiguredInvokable {}
+final class DefinitionContractOverrideInvokable {}
 
-test('factory runtime definitions overlay configured bindings and removal restores them', function (): void {
+test('factory definitions configure the same state as constructor configuration', function (): void {
     $resolver = new FactoryResolver(
-        ['configured' => static fn() => (object) ['source' => 'configured']],
+        [
+            'configured' => static fn() => (object) ['source' => 'configured'],
+            'definition' => Definition::factory(
+                static fn() => (object) ['source' => 'declarative-definition'],
+            ),
+        ],
         new NullContainer(),
         new ProxyFactory(),
     );
 
-    $resolver->removeDefinition('configured');
-    expect($resolver->resolve('configured')->source)->toBe('configured');
+    expect($resolver->resolve('configured')->source)->toBe('configured')
+        ->and($resolver->resolve('definition')->source)->toBe('declarative-definition');
 
     $resolver->setDefinition(
         'configured',
-        Definition::factory(static fn() => (object) ['source' => 'runtime']),
+        Definition::factory(static fn() => (object) ['source' => 'reconfigured']),
     );
-    expect($resolver->resolve('configured')->source)->toBe('runtime');
 
-    $resolver->removeDefinition('configured');
-    expect($resolver->resolve('configured')->source)->toBe('configured');
-
-    $resolver->setDefinition(
-        'runtime-only',
-        Definition::factory(static fn() => new stdClass()),
-    );
-    $resolver->removeDefinition('runtime-only');
-    expect($resolver->can('runtime-only'))->toBeFalse();
+    expect($resolver->resolve('configured')->source)->toBe('reconfigured');
 });
 
-test('invokable runtime definitions overlay configured bindings and removal restores them', function (): void {
-    $id = RuntimeDefinitionContractConfiguredInvokable::class;
-    $resolver = new InvokableResolver([$id]);
+test('invokable definitions configure the same state as invokable class shorthand', function (): void {
+    $configured = DefinitionContractConfiguredInvokable::class;
+    $resolver = new InvokableResolver([
+        $configured,
+        new InvokableDefinition(DefinitionContractOverrideInvokable::class),
+    ]);
 
-    $resolver->removeDefinition($id);
-    expect($resolver->resolve($id))->toBeInstanceOf(RuntimeDefinitionContractConfiguredInvokable::class);
-
-    $resolver->setDefinition(
-        $id,
-        Definition::invokable(RuntimeDefinitionContractOverrideInvokable::class),
-    );
-    expect($resolver->resolve($id))->toBeInstanceOf(RuntimeDefinitionContractOverrideInvokable::class);
-
-    $resolver->removeDefinition($id);
-    expect($resolver->resolve($id))->toBeInstanceOf(RuntimeDefinitionContractConfiguredInvokable::class);
+    expect($resolver->resolve($configured))->toBeInstanceOf(DefinitionContractConfiguredInvokable::class)
+        ->and($resolver->resolve(DefinitionContractOverrideInvokable::class))
+        ->toBeInstanceOf(DefinitionContractOverrideInvokable::class);
 
     $resolver->setDefinition(
-        'runtime-only',
-        Definition::invokable(RuntimeDefinitionContractOverrideInvokable::class),
+        $configured,
+        Definition::invokable(DefinitionContractOverrideInvokable::class),
     );
-    $resolver->removeDefinition('runtime-only');
-    expect($resolver->can('runtime-only'))->toBeFalse();
+
+    expect($resolver->resolve($configured))->toBeInstanceOf(DefinitionContractOverrideInvokable::class);
 });
 
 test('removed runtime definition helper types are not part of the package', function (): void {
