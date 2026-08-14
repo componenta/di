@@ -32,37 +32,37 @@ use Throwable;
  *  - {@see ExternalContainerRegistry}     - delegated PSR-11 containers.
  *  - {@see CycleGuard}                    - circular-dependency detection.
  */
-final readonly class Container implements
+final class Container implements
     ContainerInterface,
     FactoryInterface,
     CallableInvokerInterface,
     ProxyFactoryInterface
 {
-    private EntryCache $cache;
+    private readonly EntryCache $cache;
 
-    private DelegatorRegistry $delegators;
+    private readonly DelegatorRegistry $delegators;
 
-    private ExternalContainerRegistry $externalContainers;
+    private ?ExternalContainerRegistry $externalContainers = null;
 
-    private CycleGuard $cycleGuard;
+    private readonly CycleGuard $cycleGuard;
 
-    private ProxyFactoryInterface $proxyFactory;
+    private readonly ProxyFactoryInterface $proxyFactory;
 
-    private RuntimeDefinitionRegistry $runtimeDefinitions;
+    private readonly RuntimeDefinitionRegistry $runtimeDefinitions;
 
     /**
      * Collaborators are wired via the constructor - no post-injection.
      *
-     * The internal state holders are optional in the signature so tests and
-     * bespoke bootstrap code can plug in replacements; the builder always
-     * passes fresh instances.
+     * Internal state holders are optional so tests and bespoke bootstrap code
+     * can plug in replacements. The external-container registry remains null
+     * until an external container is actually registered.
      *
      * @param array<array-key, mixed> $bootstrapServices
      */
     public function __construct(
-        private EntryResolverInterface    $resolver,
-        private AliasResolver             $aliases,
-        private CallableExecutorInterface $callableExecutor,
+        private readonly EntryResolverInterface    $resolver,
+        private readonly AliasResolver             $aliases,
+        private readonly CallableExecutorInterface $callableExecutor,
         ?EntryCache $cache = null,
         ?DelegatorRegistry $delegators = null,
         ?ExternalContainerRegistry $externalContainers = null,
@@ -126,10 +126,10 @@ final readonly class Container implements
             }
         }
 
-        $this->delegators         = $delegators ?? new DelegatorRegistry($this->callableExecutor);
-        $this->externalContainers = $externalContainers ?? new ExternalContainerRegistry();
-        $this->cycleGuard         = $cycleGuard ?? new CycleGuard();
-        $this->proxyFactory       = $proxyFactory ?? new ProxyFactory();
+        $this->delegators = $delegators ?? new DelegatorRegistry($this->callableExecutor);
+        $this->externalContainers = $externalContainers;
+        $this->cycleGuard = $cycleGuard ?? new CycleGuard();
+        $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
         $this->runtimeDefinitions = new RuntimeDefinitionRegistry();
     }
 
@@ -143,13 +143,16 @@ final readonly class Container implements
      * Retrieves an entry by identifier.
      *
      * Resolution order:
-     * 1. Decorated cache (by requested id).
-     * 2. Alias resolution to canonical id.
-     * 3. Local base cache by canonical id.
-     * 4. Explicit runtime definitions installed through set().
-     * 5. External PSR-11 containers (inside the cycle guard).
-     * 6. Resolver chain.
-     * 7. Delegators applied on top of the produced value.
+     * 1. External PSR-11 containers receive the original requested id.
+     * 2. Decorated local cache by requested id.
+     * 3. Local alias resolution to the canonical id.
+     * 4. Local base cache by canonical id.
+     * 5. Local resolver chain.
+     * 6. Local delegators and decorated cache.
+     *
+     * Local aliases are never forwarded to external containers. External
+     * entries are returned directly; the external container owns their
+     * caching and lifecycle.
      *
      * @throws NotFoundException           If no resolver can handle the entry.
      * @throws CircularDependencyException If a cycle is detected.
@@ -157,6 +160,18 @@ final readonly class Container implements
      */
     public function get(string $id): mixed
     {
+        $externalGuard = "\0external:" . $id;
+        $this->cycleGuard->enter($externalGuard);
+
+        try {
+            $external = $this->externalContainers?->findOwning($id);
+            if ($external !== null) {
+                return $external->get($id);
+            }
+        } finally {
+            $this->cycleGuard->leave($externalGuard);
+        }
+
         if ($this->cache->tryGetResolved($id, $entry)) {
             return $entry;
         }
@@ -171,20 +186,12 @@ final readonly class Container implements
         }
     }
 
-    /** Core resolution step run inside the cycle guard. */
+    /** Core local resolution step run inside the cycle guard. */
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
         if (!$this->cache->tryGetBase($entryId, $entry)) {
-            $external = $this->runtimeDefinitions->has($entryId)
-                ? null
-                : $this->externalContainers->findOwning($entryId);
-
-            if ($external !== null) {
-                $entry = $external->get($entryId);
-            } else {
-                $entry = $this->resolver->resolve($entryId);
-                $this->cache->putBase($entryId, $entry);
-            }
+            $entry = $this->resolver->resolve($entryId);
+            $this->cache->putBase($entryId, $entry);
         }
 
         $entry = $this->delegators->apply($requestedId, $entry, $this);
@@ -195,25 +202,22 @@ final readonly class Container implements
 
     public function has(string $id): bool
     {
-        if ($this->cache->tryGetResolved($id, $resolved)) {
-            return true;
-        }
-
         try {
-            $entryId = $this->aliases->resolve($id);
-            $guardId = "\0has:" . $entryId;
+            $guardId = "\0has:" . $id;
             $this->cycleGuard->enter($guardId);
 
             try {
+                if ($this->externalContainers?->findOwning($id) !== null) {
+                    return true;
+                }
+
+                if ($this->cache->tryGetResolved($id, $resolved)) {
+                    return true;
+                }
+
+                $entryId = $this->aliases->resolve($id);
+
                 if ($this->cache->tryGetBase($entryId, $base)) {
-                    return true;
-                }
-
-                if ($this->runtimeDefinitions->has($entryId)) {
-                    return true;
-                }
-
-                if ($this->externalContainers->findOwning($entryId) !== null) {
                     return true;
                 }
 
@@ -318,12 +322,12 @@ final readonly class Container implements
             );
         }
 
-        if ($this->externalContainers->contains($container)) {
+        if ($this->externalContainers?->contains($container) === true) {
             return;
         }
 
         $affectedDependencies = $this->deferredDependenciesTakenOverBy($container);
-        $this->externalContainers->register($container);
+        ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
         $this->invalidateDeferredDelegators($affectedDependencies);
     }
 
@@ -423,15 +427,8 @@ final readonly class Container implements
         $dependencies = [];
 
         foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            try {
-                $canonical = $this->aliases->resolve($dependencyId);
-            } catch (Throwable) {
-                continue;
-            }
-
-            if ($this->cache->tryGetBase($canonical, $base)
-                || $this->externalContainers->findOwning($canonical) !== null
-                || !$container->has($canonical)
+            if ($this->externalContainers?->findOwning($dependencyId) !== null
+                || !$container->has($dependencyId)
             ) {
                 continue;
             }
