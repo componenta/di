@@ -69,6 +69,21 @@ it('keeps configured make semantics when a stored value only overrides get()', f
         ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
 });
 
+it('restores configured make semantics after removing a runtime definition overlay', function (): void {
+    $container = minimalBuilder()
+        ->addFactory('service', static fn() => new ReplacementFactoryService())
+        ->build();
+
+    $container->set('service', Definition::invokable(ReplacementInvokableService::class));
+    expect($container->make('service'))->toBeInstanceOf(ReplacementInvokableService::class);
+
+    $replacement = new ReplacementStoredService();
+    $container->set('service', $replacement);
+
+    expect($container->get('service'))->toBe($replacement)
+        ->and($container->make('service'))->toBeInstanceOf(ReplacementFactoryService::class);
+});
+
 it('keeps the previous stored value when a replacement definition is invalid', function (): void {
     $container = minimalContainer();
     $previous = new ReplacementStoredService();
