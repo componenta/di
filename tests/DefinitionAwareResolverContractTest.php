@@ -8,42 +8,58 @@ use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\FactoryResolver;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 
-final class RuntimeDefinitionContractInvokable {}
+final class RuntimeDefinitionContractConfiguredInvokable {}
+final class RuntimeDefinitionContractOverrideInvokable {}
 
-test('factory removal ignores configured bindings and removes runtime definitions', function (): void {
+test('factory runtime definitions overlay configured bindings and removal restores them', function (): void {
     $resolver = new FactoryResolver(
-        ['configured' => static fn() => new stdClass()],
+        ['configured' => static fn() => (object) ['source' => 'configured']],
         new NullContainer(),
         new ProxyFactory(),
     );
 
     $resolver->removeDefinition('configured');
-    expect($resolver->can('configured'))->toBeTrue();
+    expect($resolver->resolve('configured')->source)->toBe('configured');
 
     $resolver->setDefinition(
-        'runtime',
+        'configured',
+        Definition::factory(static fn() => (object) ['source' => 'runtime']),
+    );
+    expect($resolver->resolve('configured')->source)->toBe('runtime');
+
+    $resolver->removeDefinition('configured');
+    expect($resolver->resolve('configured')->source)->toBe('configured');
+
+    $resolver->setDefinition(
+        'runtime-only',
         Definition::factory(static fn() => new stdClass()),
     );
-    expect($resolver->can('runtime'))->toBeTrue();
-
-    $resolver->removeDefinition('runtime');
-    expect($resolver->can('runtime'))->toBeFalse();
+    $resolver->removeDefinition('runtime-only');
+    expect($resolver->can('runtime-only'))->toBeFalse();
 });
 
-test('invokable removal ignores configured bindings and removes runtime definitions', function (): void {
-    $resolver = new InvokableResolver([RuntimeDefinitionContractInvokable::class]);
+test('invokable runtime definitions overlay configured bindings and removal restores them', function (): void {
+    $id = RuntimeDefinitionContractConfiguredInvokable::class;
+    $resolver = new InvokableResolver([$id]);
 
-    $resolver->removeDefinition(RuntimeDefinitionContractInvokable::class);
-    expect($resolver->can(RuntimeDefinitionContractInvokable::class))->toBeTrue();
+    $resolver->removeDefinition($id);
+    expect($resolver->resolve($id))->toBeInstanceOf(RuntimeDefinitionContractConfiguredInvokable::class);
 
     $resolver->setDefinition(
-        'runtime',
-        Definition::invokable(RuntimeDefinitionContractInvokable::class),
+        $id,
+        Definition::invokable(RuntimeDefinitionContractOverrideInvokable::class),
     );
-    expect($resolver->can('runtime'))->toBeTrue();
+    expect($resolver->resolve($id))->toBeInstanceOf(RuntimeDefinitionContractOverrideInvokable::class);
 
-    $resolver->removeDefinition('runtime');
-    expect($resolver->can('runtime'))->toBeFalse();
+    $resolver->removeDefinition($id);
+    expect($resolver->resolve($id))->toBeInstanceOf(RuntimeDefinitionContractConfiguredInvokable::class);
+
+    $resolver->setDefinition(
+        'runtime-only',
+        Definition::invokable(RuntimeDefinitionContractOverrideInvokable::class),
+    );
+    $resolver->removeDefinition('runtime-only');
+    expect($resolver->can('runtime-only'))->toBeFalse();
 });
 
 test('removed runtime definition helper types are not part of the package', function (): void {
