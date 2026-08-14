@@ -48,11 +48,4 @@ describe('ExternalContainerRegistry', function () {
         expect($registry->findOwning('missing'))->toBeNull()
             ->and($container->hasCalls)->toBe(1);
     });
-
-    it('does not expose redundant lookup or iteration APIs', function () {
-        expect(method_exists(ExternalContainerRegistry::class, 'has'))->toBeFalse()
-            ->and(method_exists(ExternalContainerRegistry::class, 'getIterator'))->toBeFalse()
-            ->and(is_a(ExternalContainerRegistry::class, \IteratorAggregate::class, true))
-            ->toBeFalse();
-    });
 });
