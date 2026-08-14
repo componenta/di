@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Componenta\Config\Config;
-use Componenta\DI\Compile\Autowire\AutowireClassGraph;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
@@ -76,11 +75,17 @@ it('re-resolves a deferred callable when that callable service is decorated', fu
 });
 
 it('keeps opaque alias roots on the runtime path instead of treating them as missing classes', function (): void {
-    $classes = (new AutowireClassGraph([
-        IndependentOpaqueAliasContract::class => 'external.service',
-    ]))->expand([IndependentOpaqueAliasContract::class]);
+    $directory = sys_get_temp_dir() . '/componenta-opaque-aot-' . bin2hex(random_bytes(5));
 
-    expect($classes)->toBe([]);
+    try {
+        $compiled = (new ContainerBuilder())
+            ->addAlias(IndependentOpaqueAliasContract::class, 'external.service')
+            ->compileFactories([IndependentOpaqueAliasContract::class], $directory);
+
+        expect($compiled)->toBe([]);
+    } finally {
+        @rmdir($directory);
+    }
 });
 
 it('keeps direct compiled definitions path-flexible without skipping returned-class validation', function (): void {
