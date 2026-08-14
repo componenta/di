@@ -38,7 +38,7 @@ $second = $container->make(UserService::class, ['userId' => 7]);
 assert($first !== $second);
 ```
 
-- `get(string $id)` resolves a shared entry and caches its base/decorated result.
+- `get(string $id)` first gives registered external containers the original requested id; when none owns it, local shared resolution runs and caches its base/decorated result.
 - `make(string $entry, array $params = [])` creates a fresh object and skips runtime entry caches, external containers and delegators.
 - `call(mixed $callable, array $params = [])` normalizes a callable, resolves missing arguments and invokes it.
 - Constructor and callable arguments may be supplied by name or position.
@@ -67,16 +67,16 @@ The concrete `Container` additionally exposes `set()`, `alias()`, `delegator()` 
 
 `Container::get($id)` resolves entries in this order:
 
-1. Return an already cached decorated result for the requested id.
-2. Resolve aliases to the canonical id.
-3. Enter circular-dependency protection.
+1. Ask registered external PSR-11 containers for the original requested id.
+2. If none owns it, return an already cached local decorated result for that requested id.
+3. Resolve local aliases to the canonical id.
 4. Return a locally cached base entry when present.
-5. Honor an explicit runtime definition previously installed through `Container::set()`.
-6. Ask registered external PSR-11 containers.
-7. If none owns the id, run the local resolver chain and cache the base result.
-8. Apply delegators registered for the requested id and cache the decorated result.
+5. Otherwise run the local resolver chain and cache the base result.
+6. Apply local delegators and cache the decorated result.
 
-Prebuilt/materialized local values and explicit runtime definitions therefore take local ownership. Otherwise external containers are consulted before unresolved configured factories, invokables and reflection fallback. `has()` follows the same ownership rule, converts container-level resolution failures to `false`, and leaves programming errors visible.
+External lookup happens exactly once and always uses the original requested id. Local aliases are not forwarded to external containers, and an external entry is returned directly without local aliasing, local caches or local delegators. This means an external container also takes precedence over an already materialized local value for `get()`/`has()`.
+
+The external-container registry itself is lazy internal state: it remains `null` when no external containers are registered and is allocated by the first `addContainer()` call. Lookup paths use null-safe access and therefore pay no registry allocation cost in the common no-external-container case.
 
 `make()` resolves aliases but deliberately skips shared caches, external containers and delegators. Fresh-resolution dependency cycles are detected by the same cycle guard used by shared resolution.
 
