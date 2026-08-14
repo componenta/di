@@ -128,9 +128,13 @@ $container->set(
 
 Definitions are resolver configuration, not a separate runtime overlay. `FactoryDefinition`, `ClassDefinition` and `CompiledFactoryDefinition` are accepted directly in `ConfigKey::FACTORIES`; `InvokableDefinition` is accepted in `ConfigKey::INVOKABLES` and is normalized to the same class-string form used by declarative invokable shorthand. The same forms work when dependency sections come from a `ConfigProvider`.
 
+Declarative definitions and runtime definitions share the same definition types but have different lifecycles. Definitions held by `ContainerBuilder`/configuration participate in normalization and persistent-cache compilation. `FactoryDefinition` is reduced to its factory callable, `InvokableDefinition` to its class-string, and `ClassDefinition` is compiled by a `DefinitionCodeGeneratorInterface` into an ordinary factory closure before the cache file is written. A definition supplied later through `Container::set()` mutates only the already-built resolver state; it is not copied back into the builder, compiled or persisted.
+
 `Container::set($id, $definition)` reconfigures the supporting resolver and removes a materialized local base entry for that id so the new definition can be resolved. `Container::set($id, $value)` only replaces the shared local value; it does not remove or roll back resolver configuration, so `make($id)` continues to use the configured resolver binding.
 
-Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments. `InvokableDefinition` enforces the same non-empty class-string shape as invokable shorthand.
+Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments. During `ClassDefinition` code generation, references are emitted as container lookups inside the generated factory. `InvokableDefinition` enforces the same non-empty class-string shape as invokable shorthand.
+
+Definition code generation is extensible through `DefinitionCodeGeneratorInterface` and `DefinitionCodeGeneratorRegistry`. The generator contract accepts `DefinitionInterface`; the registry selects the concrete generator by definition class/interface, so custom definition types do not require changing the compiler.
 
 ## Configuration
 
@@ -217,13 +221,13 @@ $compiled = $builder->compileFactories(
 );
 ```
 
-The compiler follows statically knowable concrete constructor, `#[Inject]` and `#[SetUp]` dependencies. Existing services, explicit factories and invokables retain ownership and are never replaced.
+The compiler follows statically knowable concrete constructor, `#[Inject]` and `#[SetUp]` dependencies. Existing services, explicit factories and invokables retain ownership and are never replaced by this autowiring compiler. Declarative `ClassDefinition` factories are handled separately by the definition compiler when persistent cache is generated; they become ordinary closure factories and therefore do not enter the autowiring compilation graph.
 
 Each `CompiledFactoryDefinition` stores a relative shard file, generated class and method. Shards use content-addressed names and are loaded on first use. Untrusted relative paths are resolved inside the configured cache base directory; traversal and out-of-root symlinks are rejected. Dynamic classes continue through reflection autowiring.
 
 Application-level root discovery normally belongs to `componenta/app`; this package only compiles the roots it is given.
 
-`DiCacheGeneratorInterface::generate()` atomically writes the supplied configuration array as PHP. It does not discover classes or compile factories.
+`DiCacheGeneratorInterface::generate()` normalizes the supplied dependency configuration, runs declarative definition compilation and atomically writes the resulting PHP cache. It does not discover application classes or run `compileFactories()` for autowiring roots.
 
 ## Exceptions
 
