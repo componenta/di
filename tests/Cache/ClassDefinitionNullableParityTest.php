@@ -15,11 +15,25 @@ final class CompiledClassDefinitionNullableTarget
     public function __construct(public ?string $value) {}
 }
 
-it('keeps required nullable ClassDefinition constructor parameters equivalent in runtime and cache', function (): void {
-    $definition = ClassDefinition::create(CompiledClassDefinitionNullableTarget::class);
+final class CompiledClassDefinitionUntypedTarget
+{
+    public mixed $value;
+
+    public function __construct($value)
+    {
+        $this->value = $value;
+    }
+}
+
+it('keeps required nullable and untyped ClassDefinition parameters equivalent in runtime and cache', function (): void {
     $dependencies = [
         ConfigKey::FACTORIES => [
-            CompiledClassDefinitionNullableTarget::class => $definition,
+            CompiledClassDefinitionNullableTarget::class => ClassDefinition::create(
+                CompiledClassDefinitionNullableTarget::class,
+            ),
+            CompiledClassDefinitionUntypedTarget::class => ClassDefinition::create(
+                CompiledClassDefinitionUntypedTarget::class,
+            ),
         ],
     ];
     $runtime = ContainerBuilder::configureWithDependencies(
@@ -38,7 +52,9 @@ it('keeps required nullable ClassDefinition constructor parameters equivalent in
         )->build();
 
         expect($runtime->make(CompiledClassDefinitionNullableTarget::class)->value)->toBeNull()
-            ->and($cached->make(CompiledClassDefinitionNullableTarget::class)->value)->toBeNull();
+            ->and($cached->make(CompiledClassDefinitionNullableTarget::class)->value)->toBeNull()
+            ->and($runtime->make(CompiledClassDefinitionUntypedTarget::class)->value)->toBeNull()
+            ->and($cached->make(CompiledClassDefinitionUntypedTarget::class)->value)->toBeNull();
     } finally {
         @unlink($cacheFile);
         @rmdir($root);
