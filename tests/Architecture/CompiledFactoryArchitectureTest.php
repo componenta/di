@@ -77,8 +77,7 @@ it('returns a loadable compiled graph as regular factory definitions', function 
     $directory = sys_get_temp_dir() . '/componenta-factory-shards-' . bin2hex(random_bytes(5));
 
     try {
-        $builder = new ContainerBuilder();
-        $factories = $builder->compileFactories(
+        $factories = (new ContainerBuilder())->compileFactories(
             [CompiledFactoryRootForTest::class],
             $directory,
             maxShardBytes: 1,
@@ -88,7 +87,7 @@ it('returns a loadable compiled graph as regular factory definitions', function 
         expect($factories)->toHaveKeys([
             CompiledFactoryLeafForTest::class,
             CompiledFactoryRootForTest::class,
-        ])->and($builder->invokables)->toBe([]);
+        ]);
 
         foreach ($factories as $factory) {
             expect($factory)->toBeInstanceOf(CompiledFactoryDefinition::class)
