@@ -9,6 +9,10 @@ use Componenta\DI\CallableInvoker;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\CallableResolverInterface;
+use Componenta\DI\Compile\Definition\ClassDefinitionCodeGenerator;
+use Componenta\DI\Compile\Definition\DefinitionCodeGeneratorInterface;
+use Componenta\DI\Compile\Definition\DefinitionCompiler;
+use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\FactoryInterface;
@@ -92,6 +96,18 @@ it('keeps public named-argument contracts aligned with implementations', functio
         DiCacheGeneratorInterface::class,
         'generate',
         ['dependencies', 'path'],
+    ],
+    'definition code generator' => [
+        ClassDefinitionCodeGenerator::class,
+        DefinitionCodeGeneratorInterface::class,
+        'generate',
+        ['id', 'definition'],
+    ],
+    'definition compiler' => [
+        DefinitionCompiler::class,
+        DefinitionCompilerInterface::class,
+        'compile',
+        ['dependencies'],
     ],
     'builder configure from cache' => [
         ContainerBuilder::class,
