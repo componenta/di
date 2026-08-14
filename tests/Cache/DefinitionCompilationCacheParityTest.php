@@ -58,7 +58,7 @@ final readonly class DefinitionCacheCompiledRoot
     ) {}
 }
 
-it('round-trips resolver definitions through the persistent cache', function (): void {
+it('compiles resolver definitions to canonical persistent cache forms', function (): void {
     $root = sys_get_temp_dir() . '/componenta-definition-cache-' . bin2hex(random_bytes(5));
     $cacheFile = $root . '/container.php';
 
@@ -90,7 +90,7 @@ it('round-trips resolver definitions through the persistent cache', function ():
         $dependencies = $cache[ConfigKey::DEPENDENCIES];
 
         expect($dependencies[ConfigKey::FACTORIES][DefinitionCacheConfiguredService::class])
-            ->toBeInstanceOf(ClassDefinition::class)
+            ->toBeInstanceOf(Closure::class)
             ->and($dependencies[ConfigKey::ALIASES]['definition-cache.invokable'])
             ->toBe(DefinitionCacheInvokable::class)
             ->and($dependencies[ConfigKey::INVOKABLES])
