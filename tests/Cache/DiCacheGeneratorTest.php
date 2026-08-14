@@ -145,6 +145,14 @@ describe('Cache\\DiCacheGenerator', function () {
         mkdir($root);
         mkdir($target);
 
+        set_error_handler(static function (int $severity, string $message): bool {
+            if (str_contains($message, 'rename(')) {
+                return true;
+            }
+
+            return false;
+        });
+
         try {
             expect(fn() => (new DiCacheGenerator())->generate(
                 [ConfigKey::SERVICES => ['fresh' => true]],
@@ -153,6 +161,7 @@ describe('Cache\\DiCacheGenerator', function () {
                 ->and(glob($target . '.tmp.*') ?: [])->toBe([])
                 ->and(is_dir($target))->toBeTrue();
         } finally {
+            restore_error_handler();
             foreach (glob($target . '.tmp.*') ?: [] as $tmp) {
                 @unlink($tmp);
             }
