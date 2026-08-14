@@ -18,10 +18,17 @@ use ReflectionParameter;
 use ReflectionType;
 use ReflectionUnionType;
 use Throwable;
+use UnitEnum;
 
 /** Compiles ClassDefinition into a reflection-free factory closure expression. */
 final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInterface
 {
+    /** @var array<int, string> */
+    private array $capturedObjectVariables = [];
+
+    /** @var list<string> */
+    private array $capturedObjectAssignments = [];
+
     public function generate(
         string $id,
         DefinitionInterface $definition,
@@ -35,6 +42,8 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
         }
 
         FactorySpecificationValidator::assertValid($id, $definition);
+        $this->capturedObjectVariables = [];
+        $this->capturedObjectAssignments = [];
 
         /** @var ReflectionClass<object> $class */
         $class = new ReflectionClass($definition->value);
@@ -82,11 +91,25 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
         }
 
         $body[] = 'return $entry;';
-
-        return new GeneratedDefinitionCode(sprintf(
-            "static function (\\Componenta\\Config\\ContainerValue \$container, array \$context = []): \\%s {\n%s\n}",
+        $capturedVariables = array_values($this->capturedObjectVariables);
+        $use = $capturedVariables === []
+            ? ''
+            : ' use (' . implode(', ', $capturedVariables) . ')';
+        $factory = sprintf(
+            "static function (\\Componenta\\Config\\ContainerValue \$container, array \$context = [])%s: \\%s {\n%s\n}",
+            $use,
             $className,
             self::indent(implode("\n\n", $body)),
+        );
+
+        if ($this->capturedObjectAssignments === []) {
+            return new GeneratedDefinitionCode($factory);
+        }
+
+        return new GeneratedDefinitionCode(sprintf(
+            "(static function (): \\Closure {\n%s\n\n%s\n})()",
+            self::indent(implode("\n", $this->capturedObjectAssignments)),
+            self::indent('return ' . $factory . ';'),
         ));
     }
 
@@ -280,6 +303,10 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
             return '[' . implode(', ', $items) . ']';
         }
 
+        if (is_object($value) && !$value instanceof UnitEnum) {
+            return $this->capturedObjectExpression($value, $id);
+        }
+
         try {
             return Export::var($value);
         } catch (Throwable $error) {
@@ -289,6 +316,30 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
                 $error->getMessage(),
             ), previous: $error);
         }
+    }
+
+    private function capturedObjectExpression(object $value, string $id): string
+    {
+        $objectId = spl_object_id($value);
+        if (isset($this->capturedObjectVariables[$objectId])) {
+            return $this->capturedObjectVariables[$objectId];
+        }
+
+        try {
+            $expression = Export::var($value);
+        } catch (Throwable $error) {
+            throw new InvalidConfigurationException(sprintf(
+                'Class definition for "%s" contains a value that cannot be emitted as PHP source: %s',
+                $id,
+                $error->getMessage(),
+            ), previous: $error);
+        }
+
+        $variable = '$configuredObject' . count($this->capturedObjectVariables);
+        $this->capturedObjectVariables[$objectId] = $variable;
+        $this->capturedObjectAssignments[] = sprintf('%s = %s;', $variable, $expression);
+
+        return $variable;
     }
 
     private static function isSourceClassName(string $class): bool
