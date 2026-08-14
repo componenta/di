@@ -241,7 +241,7 @@ final class DependencyConfiguration
         foreach ($invokables as $key => $class) {
             if ($class instanceof InvokableDefinition) {
                 $class = $class->value;
-                $dependencies[ConfigKey::INVOKABLES][$key] = $class;
+                $invokables[$key] = $class;
             }
 
             if (!is_string($class) || $class === '') {
@@ -252,6 +252,10 @@ final class DependencyConfiguration
             }
         }
 
+        if (array_key_exists(ConfigKey::INVOKABLES, $dependencies)) {
+            $dependencies[ConfigKey::INVOKABLES] = $invokables;
+        }
+
         $aliases = $dependencies[ConfigKey::ALIASES] ?? [];
         if (!is_array($aliases)) {
             throw new InvalidConfigurationException('Aliases must be an array.');
@@ -260,7 +264,7 @@ final class DependencyConfiguration
         foreach ($aliases as $alias => $target) {
             if ($target instanceof InvokableDefinition) {
                 $target = $target->value;
-                $dependencies[ConfigKey::ALIASES][$alias] = $target;
+                $aliases[$alias] = $target;
             }
 
             if (!is_string($alias) || $alias === ''
@@ -270,6 +274,10 @@ final class DependencyConfiguration
                     'Aliases must map non-empty string ids to non-empty string targets.',
                 );
             }
+        }
+
+        if (array_key_exists(ConfigKey::ALIASES, $dependencies)) {
+            $dependencies[ConfigKey::ALIASES] = $aliases;
         }
 
         foreach ([
