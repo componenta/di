@@ -119,7 +119,9 @@ it('fails cache generation when a custom declarative definition has no code gene
             ],
         ], $path))->toThrow(InvalidConfigurationException::class);
     } finally {
-        @unlink($path);
+        if (is_file($path)) {
+            unlink($path);
+        }
     }
 });
 
