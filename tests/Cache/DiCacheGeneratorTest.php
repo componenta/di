@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Componenta\Config\Config;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Cache\DiCacheGeneratorInterface;
+use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -56,6 +57,22 @@ describe('Cache\\DiCacheGenerator', function () {
         )->build();
 
         expect($container->get('cached.alias'))->toBe('cached-value');
+    });
+
+    it('only emits compiler-owned generated definition code as raw PHP', function () {
+        $value = new GeneratedDefinitionCode(
+            'throw new \\RuntimeException("must not execute")',
+        );
+
+        (new DiCacheGenerator())->generate([
+            ConfigKey::SERVICES => ['generated-code-value' => $value],
+        ], $this->path);
+
+        $cache = require $this->path;
+        $restored = $cache[ConfigKey::DEPENDENCIES][ConfigKey::SERVICES]['generated-code-value'];
+
+        expect($restored)->toBeInstanceOf(GeneratedDefinitionCode::class)
+            ->and($restored->code)->toBe($value->code);
     });
 
     it('produces a file with <?php opener and declare(strict_types=1)', function () {
