@@ -258,6 +258,11 @@ final class DependencyConfiguration
         }
 
         foreach ($aliases as $alias => $target) {
+            if ($target instanceof InvokableDefinition) {
+                $target = $target->value;
+                $dependencies[ConfigKey::ALIASES][$alias] = $target;
+            }
+
             if (!is_string($alias) || $alias === ''
                 || !is_string($target) || $target === ''
             ) {
