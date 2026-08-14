@@ -6,15 +6,28 @@ namespace Componenta\DI\Tests;
 
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
+use Componenta\DI\Attribute\Cookie;
 use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
+use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Make;
+use Componenta\DI\Attribute\MapCookies;
+use Componenta\DI\Attribute\MapHeaders;
+use Componenta\DI\Attribute\MapQueryString;
+use Componenta\DI\Attribute\MapRequestAttributes;
+use Componenta\DI\Attribute\MapRequestPayload;
+use Componenta\DI\Attribute\MapServerParams;
+use Componenta\DI\Attribute\MapUploadedFiles;
+use Componenta\DI\Attribute\PayloadParam;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\QueryParam;
+use Componenta\DI\Attribute\RequestAttribute;
 use Componenta\DI\Attribute\RequestMapper;
+use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Cache\DiCacheGeneratorInterface;
 use Componenta\DI\CallableExecutor;
@@ -28,8 +41,11 @@ use Componenta\DI\Compile\Definition\DefinitionCompiler;
 use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\LazyObjectFactoryInterface;
+use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Parameter\Request\LazyFactory;
 use Componenta\DI\VirtualProxyFactoryInterface;
@@ -76,6 +92,12 @@ it('keeps public named-argument contracts aligned with implementations', functio
         VirtualProxyFactoryInterface::class,
         'makeProxy',
         ['class', 'factory'],
+    ],
+    'lazy service factory' => [
+        LazyServiceFactoryInterface::class,
+        LazyServiceFactoryInterface::class,
+        'lazy',
+        ['container', 'proxyFactory', 'context'],
     ],
     'callable executor call' => [
         CallableExecutor::class,
@@ -151,7 +173,7 @@ it('keeps public named-argument contracts aligned with implementations', functio
     ],
 ]);
 
-it('keeps concrete Container and ContainerBuilder named arguments stable', function (
+it('keeps concrete public API named arguments stable', function (
     string $class,
     string $method,
     array $expected,
@@ -205,6 +227,17 @@ it('keeps concrete Container and ContainerBuilder named arguments stable', funct
     ],
     'builder build' => [ContainerBuilder::class, 'build', []],
     'builder to array' => [ContainerBuilder::class, 'toArray', []],
+    'definition factory' => [Definition::class, 'factory', ['factory']],
+    'definition reference' => [Definition::class, 'reference', ['entryId']],
+    'definition invokable' => [Definition::class, 'invokable', ['className']],
+    'class definition constructor' => [
+        ClassDefinition::class,
+        '__construct',
+        ['value', 'constructorParams', 'methodCalls'],
+    ],
+    'class definition create' => [ClassDefinition::class, 'create', ['className']],
+    'class definition parameters' => [ClassDefinition::class, 'constructor', ['params']],
+    'class definition method' => [ClassDefinition::class, 'method', ['method', 'params']],
 ]);
 
 it('keeps documented attribute constructor named arguments stable', function (
@@ -231,5 +264,18 @@ it('keeps documented attribute constructor named arguments stable', function (
     'SetUp' => [SetUp::class, ['method', 'params']],
     'Proxy' => [Proxy::class, ['class']],
     'QueryParam' => [QueryParam::class, ['name', 'default', 'cast']],
+    'PayloadParam' => [PayloadParam::class, ['name', 'default', 'cast']],
+    'Header' => [Header::class, ['name', 'default', 'cast']],
+    'Cookie' => [Cookie::class, ['name', 'default', 'cast']],
+    'RequestAttribute' => [RequestAttribute::class, ['name', 'default', 'cast']],
+    'ServerParam' => [ServerParam::class, ['name', 'default', 'cast']],
+    'UploadedFile' => [UploadedFile::class, ['name']],
     'RequestMapper' => [RequestMapper::class, ['map', 'conflictPolicy']],
+    'MapQueryString' => [MapQueryString::class, ['map', 'conflictPolicy']],
+    'MapRequestPayload' => [MapRequestPayload::class, ['map', 'conflictPolicy']],
+    'MapHeaders' => [MapHeaders::class, ['map', 'conflictPolicy']],
+    'MapCookies' => [MapCookies::class, ['map', 'conflictPolicy']],
+    'MapRequestAttributes' => [MapRequestAttributes::class, ['map', 'conflictPolicy']],
+    'MapServerParams' => [MapServerParams::class, ['map', 'conflictPolicy']],
+    'MapUploadedFiles' => [MapUploadedFiles::class, ['map', 'conflictPolicy']],
 ]);

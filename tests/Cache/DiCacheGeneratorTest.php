@@ -139,25 +139,29 @@ describe('Cache\\DiCacheGenerator', function () {
             ->and(glob($this->path . '.tmp.*') ?: [])->toBe([]);
     });
 
-    it('cleans the temporary artifact when the atomic commit target cannot be replaced', function () {
+    it('keeps atomic commit failures inside the DI exception boundary without leaking warnings', function () {
         $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'di_cache_commit_' . bin2hex(random_bytes(4));
         $target = $root . DIRECTORY_SEPARATOR . 'cache.php';
+        $warnings = [];
         mkdir($root);
         mkdir($target);
 
-        set_error_handler(static function (int $severity, string $message): bool {
-            if (str_contains($message, 'rename(')) {
-                return true;
-            }
+        set_error_handler(
+            static function (int $_severity, string $message) use (&$warnings): bool {
+                $warnings[] = $message;
 
-            return false;
-        });
+                return true;
+            },
+            E_WARNING,
+        );
 
         try {
             expect(fn() => (new DiCacheGenerator())->generate(
                 [ConfigKey::SERVICES => ['fresh' => true]],
                 $target,
-            ))->toThrow(InvalidConfigurationException::class, 'Failed to commit DI cache file')
+            ))->toThrow(InvalidConfigurationException::class, 'Failed to commit DI cache file');
+
+            expect($warnings)->toBe([])
                 ->and(glob($target . '.tmp.*') ?: [])->toBe([])
                 ->and(is_dir($target))->toBeTrue();
         } finally {

@@ -21,7 +21,9 @@ use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Componenta\DI\Tests\Fixture\FakeUploadedFile;
+use Componenta\Validation\Error\ErrorMessageCollector;
 use Componenta\Validation\Error\ErrorMessageCollectorInterface;
+use Componenta\Validation\Exception\ValidationException;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -112,13 +114,46 @@ it('resolves every scalar PSR-7 attribute and UriInterface through Container::ca
     ]);
 });
 
-it('uses the callable parameter name when a scalar request attribute omits its name', function (): void {
-    $request = new FakeServerRequest(queryParams: ['search' => 'needle']);
+it('uses callable parameter names for request attributes that support omitted names', function (): void {
+    $request = new FakeServerRequest(
+        queryParams: ['query' => 'query-value'],
+        attributes: ['attribute' => 'attribute-value'],
+        parsedBody: ['payload' => 'payload-value'],
+    );
 
     expect(requestContractContainer()->call(
-        static fn(#[QueryParam] string $search): string => $search,
+        static fn(
+            #[QueryParam] string $query,
+            #[PayloadParam] string $payload,
+            #[RequestAttribute] string $attribute,
+        ): array => [$query, $payload, $attribute],
         [ServerRequestInterface::class => $request],
-    ))->toBe('needle');
+    ))->toBe(['query-value', 'payload-value', 'attribute-value']);
+});
+
+it('preserves explicit nulls while applying defaults only to missing scalar request data', function (): void {
+    $request = new FakeServerRequest(
+        queryParams: ['query' => null],
+        cookieParams: ['cookie' => null],
+        serverParams: ['server' => null],
+        attributes: ['attribute' => null],
+        parsedBody: ['payload' => null],
+    );
+    $container = requestContractContainer();
+
+    $resolved = $container->call(static fn(
+        #[QueryParam('query', default: 'fallback')] mixed $query,
+        #[PayloadParam('payload', default: 'fallback')] mixed $payload,
+        #[Cookie('cookie', default: 'fallback')] mixed $cookie,
+        #[RequestAttribute('attribute', default: 'fallback')] mixed $attribute,
+        #[ServerParam('server', default: 'fallback')] mixed $server,
+        #[Header('X-Missing', default: 'fallback')] string $header,
+        #[UploadedFile('missing')] ?UploadedFileInterface $file,
+    ): array => [$query, $payload, $cookie, $attribute, $server, $header, $file], [
+        ServerRequestInterface::class => $request,
+    ]);
+
+    expect($resolved)->toBe([null, null, null, null, null, 'fallback', null]);
 });
 
 it('requires a PSR-7 request for request attributes and UriInterface resolution', function (): void {
@@ -132,7 +167,7 @@ it('requires a PSR-7 request for request attributes and UriInterface resolution'
         ))->toThrow(ResolutionException::class, 'PSR-7 request is required');
 });
 
-it('validates raw transport data before mapper transformation and DTO construction', function (): void {
+it('rejects malformed raw transport data before mapper transformation can normalize it', function (): void {
     $validated = [];
     $validator = new class ($validated) implements ValidatorInterface {
         public function __construct(private array &$validated) {}
@@ -141,7 +176,12 @@ it('validates raw transport data before mapper transformation and DTO constructi
             iterable $data,
             ?\Componenta\Validation\ContextInterface $context = null,
         ): true|ErrorMessageCollectorInterface {
-            $this->validated[] = is_array($data) ? $data : iterator_to_array($data);
+            $data = is_array($data) ? $data : iterator_to_array($data);
+            $this->validated[] = $data;
+
+            if (array_key_exists('raw', $data)) {
+                throw new ValidationException(new ErrorMessageCollector());
+            }
 
             return true;
         }
@@ -157,15 +197,13 @@ it('validates raw transport data before mapper transformation and DTO constructi
     $request = new FakeServerRequest(queryParams: ['raw' => '7']);
     $container = requestContractContainer($validation);
 
-    $dto = $container->call(
+    expect(fn() => $container->call(
         static fn(
             #[MapQueryString(map: ['raw' => 'value'])]
             RequestContractDto $dto,
         ): RequestContractDto => $dto,
         [ServerRequestInterface::class => $request],
-    );
+    ))->toThrow(ValidationException::class);
 
-    expect($validated)->toBe([['raw' => '7']])
-        ->and($dto)->toBeInstanceOf(RequestContractDto::class)
-        ->and($dto->value)->toBe('7');
+    expect($validated)->toBe([['raw' => '7']]);
 });

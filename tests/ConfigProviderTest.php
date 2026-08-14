@@ -2,52 +2,48 @@
 
 declare(strict_types=1);
 
-use Componenta\Caster\CasterProviderInterface;
-use Componenta\Caster\NullCasterProvider;
+use Componenta\Caster\ConfigProvider as CasterConfigProvider;
 use Componenta\Config\Config;
-use Componenta\Config\ConfigKey;
+use Componenta\DI\Attribute\Cast;
+use Componenta\DI\Attribute\CurrentUser;
+use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\ConfigProvider;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
-use Componenta\DI\Resolver\CastableResolver;
-use Componenta\DI\Resolver\CurrentUserProvider;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
-use Componenta\DI\Resolver\CurrentUserResolver;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolverFactory;
+use Componenta\DI\Tests\Fixture\FakeServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
 
 final class ConfigProviderInvokableDefinitionFixture {}
 
-it('registers the optional DI extension pipeline and its factories', function () {
-    $config = (new ConfigProvider())();
-    $dependencies = $config[ConfigKey::DEPENDENCIES];
-    $diDependencyKeys = \Componenta\DI\ConfigKey::dependencyKeys();
+final class ConfigProviderCurrentUserFixture {}
 
-    expect($dependencies[ConfigKey::FACTORIES][RequestResolver::class] ?? null)
-        ->toBe(RequestResolverFactory::class)
-        ->and($dependencies[\Componenta\DI\ConfigKey::PARAMETER_RESOLVERS])
-        ->toBe([
-            ContainerBuilder::PRIORITY_PARAM_CASTABLE => CastableResolver::class,
-            ContainerBuilder::PRIORITY_PARAM_CURRENT_USER => CurrentUserResolver::class,
-            ContainerBuilder::PRIORITY_PARAM_REQUEST => RequestResolver::class,
-        ])
-        ->and($dependencies[\Componenta\DI\ConfigKey::ATTRIBUTE_HANDLERS])
-        ->toBe([CastableResolver::class, CurrentUserResolver::class])
-        ->and(array_diff($diDependencyKeys, ConfigKey::dependencyKeys()))
-        ->toBe([])
-        ->and($diDependencyKeys)
-        ->not->toContain('generated_entry_resolver_file')
-        ->and($diDependencyKeys)
-        ->not->toContain('generated_entry_resolver_release_fingerprint');
+it('wires optional DI behavior when composed with its dependency providers', function (): void {
+    $provider = new class () extends \Componenta\Config\ConfigProvider {
+        protected function getProviders(): array
+        {
+            return [
+                new CasterConfigProvider(),
+                new ConfigProvider(),
+            ];
+        }
+    };
+    $container = ContainerBuilder::configure(new Config($provider()))->build();
+    $user = new ConfigProviderCurrentUserFixture();
+    $currentUser = $container->get(CurrentUserProviderInterface::class);
+    $currentUser->setUser($user);
+    $request = new FakeServerRequest(queryParams: ['limit' => '12']);
 
-    $container = ContainerBuilder::configure(new Config($config))
-        ->addService(CasterProviderInterface::class, new NullCasterProvider())
-        ->build();
+    $resolved = $container->call(static fn(
+        #[Cast('int')] int $count,
+        #[CurrentUser] ConfigProviderCurrentUserFixture $authenticated,
+        #[QueryParam('limit', cast: 'int')] int $limit,
+    ): array => [$count, $authenticated, $limit], [
+        'count' => '7',
+        ServerRequestInterface::class => $request,
+    ]);
 
-    expect($container->get(CurrentUserProviderInterface::class))
-        ->toBeInstanceOf(CurrentUserProvider::class)
-        ->and($container->get(RequestResolver::class))
-        ->toBeInstanceOf(RequestResolver::class);
+    expect($resolved)->toBe([7, $user, 12]);
 });
 
 it('accepts factory definitions directly from a config provider factories section', function (): void {

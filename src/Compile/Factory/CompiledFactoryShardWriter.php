@@ -34,7 +34,7 @@ final readonly class CompiledFactoryShardWriter
             $this->lint($temporary);
             @chmod($temporary, 0644);
 
-            if (!@rename($temporary, $file)) {
+            if (!$this->renameWithoutWarning($temporary, $file)) {
                 if (!is_file($file)) {
                     throw new RuntimeException(sprintf('Cannot activate generated factory shard "%s".', $file));
                 }
@@ -105,6 +105,20 @@ final readonly class CompiledFactoryShardWriter
         if ($status !== 0) {
             $output = trim((is_string($stdout) ? $stdout : '') . "\n" . (is_string($stderr) ? $stderr : ''));
             throw new RuntimeException("Generated factory shard failed PHP compile validation:\n" . $output);
+        }
+    }
+
+    private function renameWithoutWarning(string $from, string $to): bool
+    {
+        set_error_handler(
+            static fn(int $_severity, string $_message, string $_file, int $_line): bool => true,
+            E_WARNING,
+        );
+
+        try {
+            return rename($from, $to);
+        } finally {
+            restore_error_handler();
         }
     }
 }

@@ -50,3 +50,36 @@ it('syntax-checks an existing matching shard before reusing it', function (): vo
         @unlink($file);
     }
 });
+
+it('does not leak rename warnings when an atomic shard commit fails', function (): void {
+    $root = sys_get_temp_dir() . '/componenta-shard-commit-' . bin2hex(random_bytes(6));
+    $file = $root . '/generated.php';
+    $warnings = [];
+    $code = "<?php\nreturn 'expected';\n";
+    mkdir($root);
+    mkdir($file);
+
+    set_error_handler(
+        static function (int $_severity, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        },
+        E_WARNING,
+    );
+
+    try {
+        expect(fn() => (new CompiledFactoryShardWriter())->write($file, $code))
+            ->toThrow(RuntimeException::class, 'Cannot activate generated factory shard');
+
+        expect($warnings)->toBe([])
+            ->and(is_dir($file))->toBeTrue();
+    } finally {
+        restore_error_handler();
+        foreach (glob($root . '/generated.php.tmp.*') ?: [] as $temporary) {
+            @unlink($temporary);
+        }
+        @rmdir($file);
+        @rmdir($root);
+    }
+});

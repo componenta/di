@@ -62,7 +62,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             );
         }
 
-        if (!@rename($tmp, $path)) {
+        if (!$this->renameWithoutWarning($tmp, $path)) {
             @unlink($tmp);
             throw new InvalidConfigurationException(
                 sprintf('Failed to commit DI cache file: %s', $path),
@@ -123,6 +123,20 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             throw new InvalidConfigurationException(
                 sprintf('Failed to create DI cache directory: %s', $dir),
             );
+        }
+    }
+
+    private function renameWithoutWarning(string $from, string $to): bool
+    {
+        set_error_handler(
+            static fn(int $_severity, string $_message, string $_file, int $_line): bool => true,
+            E_WARNING,
+        );
+
+        try {
+            return rename($from, $to);
+        } finally {
+            restore_error_handler();
         }
     }
 }
