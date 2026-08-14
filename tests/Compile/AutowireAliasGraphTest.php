@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\Compile\Autowire\AutowireClassGraph;
+use Componenta\DI\ContainerBuilder;
 
 interface AutowireAliasGraphContract {}
 
@@ -19,23 +19,41 @@ final readonly class AutowireAliasGraphRoot
 }
 
 it('follows known interface aliases to concrete AOT dependencies', function () {
-    $classes = (new AutowireClassGraph([
-        AutowireAliasGraphContract::class => AutowireAliasGraphImplementation::class,
-    ]))->expand([AutowireAliasGraphRoot::class]);
+    $directory = sys_get_temp_dir() . '/componenta-aot-alias-' . bin2hex(random_bytes(5));
 
-    expect($classes)
-        ->toContain(AutowireAliasGraphRoot::class)
-        ->toContain(AutowireAliasGraphImplementation::class)
-        ->toContain(AutowireAliasGraphLeaf::class);
+    try {
+        $compiled = (new ContainerBuilder())
+            ->addAlias(AutowireAliasGraphContract::class, AutowireAliasGraphImplementation::class)
+            ->compileFactories([AutowireAliasGraphRoot::class], $directory);
+
+        expect($compiled)
+            ->toHaveKey(AutowireAliasGraphRoot::class)
+            ->toHaveKey(AutowireAliasGraphImplementation::class)
+            ->toHaveKey(AutowireAliasGraphLeaf::class);
+    } finally {
+        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($directory);
+    }
 });
 
 it('resolves a known alias before filtering an AOT root for eligibility', function () {
-    $classes = (new AutowireClassGraph([
-        AutowireAliasGraphContract::class => AutowireAliasGraphImplementation::class,
-    ]))->expand([AutowireAliasGraphContract::class]);
+    $directory = sys_get_temp_dir() . '/componenta-aot-alias-root-' . bin2hex(random_bytes(5));
 
-    expect($classes)
-        ->not->toContain(AutowireAliasGraphContract::class)
-        ->toContain(AutowireAliasGraphImplementation::class)
-        ->toContain(AutowireAliasGraphLeaf::class);
+    try {
+        $compiled = (new ContainerBuilder())
+            ->addAlias(AutowireAliasGraphContract::class, AutowireAliasGraphImplementation::class)
+            ->compileFactories([AutowireAliasGraphContract::class], $directory);
+
+        expect($compiled)
+            ->not->toHaveKey(AutowireAliasGraphContract::class)
+            ->toHaveKey(AutowireAliasGraphImplementation::class)
+            ->toHaveKey(AutowireAliasGraphLeaf::class);
+    } finally {
+        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($directory);
+    }
 });
