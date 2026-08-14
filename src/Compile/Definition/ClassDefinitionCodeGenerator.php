@@ -79,6 +79,15 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
 
                 $body[] = $this->compileConfiguredArgument($parameter, $class);
                 $body[] = $this->compileRuntimeOverride($parameter, $class);
+
+                if (!$parameter->isDefaultValueAvailable() && $parameter->allowsNull()) {
+                    $name = var_export($parameter->getName(), true);
+                    $body[] = sprintf(
+                        "if (!array_key_exists(%s, \$arguments)) {\n    \$arguments[%s] = null;\n}",
+                        $name,
+                        $name,
+                    );
+                }
             }
 
             $body[] = sprintf('$entry = new \\%s(...$arguments);', $className);
