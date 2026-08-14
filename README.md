@@ -95,7 +95,7 @@ The external-container registry itself is lazy internal state: it remains `null`
 - `toArray()`
 - `build()`
 
-`addService()` and `ConfigKey::SERVICES` register prebuilt shared values verbatim. An object that implements `DefinitionInterface` is still a stored service value on this builder path; definitions are installed intentionally through `Container::set($id, $definition)` or the factory/invokable configuration sections.
+`addService()` and `ConfigKey::SERVICES` register prebuilt shared values verbatim. An object that implements `DefinitionInterface` is still a stored service value on this builder path. Resolver definitions are configuration: compatible definition objects may be supplied directly in the factory/invokable configuration sections or through `Container::set($id, $definition)`. Definition objects and the corresponding section shorthand configure the same resolver state.
 
 A delegator method reference may use a class, interface or opaque service id, for example `[DecoratorInterface::class, 'decorate']` or `['decorator.service', 'decorate']`. In bulk/config input, an opaque service-method delegator must be nested as `[['decorator.service', 'decorate']]`; the flat `['first', 'second']` form means two string delegators unless it is an actual class/interface method reference.
 
@@ -126,7 +126,11 @@ $container->set(
 );
 ```
 
-Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments. Runtime invokable definitions enforce the same non-empty class-string shape as declarative invokable configuration.
+Definitions are resolver configuration, not a separate runtime overlay. `FactoryDefinition`, `ClassDefinition` and `CompiledFactoryDefinition` are accepted directly in `ConfigKey::FACTORIES`; `InvokableDefinition` is accepted in `ConfigKey::INVOKABLES` and is normalized to the same class-string form used by declarative invokable shorthand. The same forms work when dependency sections come from a `ConfigProvider`.
+
+`Container::set($id, $definition)` reconfigures the supporting resolver and removes a materialized local base entry for that id so the new definition can be resolved. `Container::set($id, $value)` only replaces the shared local value; it does not remove or roll back resolver configuration, so `make($id)` continues to use the configured resolver binding.
+
+Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments. `InvokableDefinition` enforces the same non-empty class-string shape as invokable shorthand.
 
 ## Configuration
 
