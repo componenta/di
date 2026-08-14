@@ -11,7 +11,7 @@ use Componenta\DI\Exception\ResolutionException;
 use InvalidArgumentException;
 
 /** Ordered entry-resolver chain with positive and negative owner caching. */
-class CompositeResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
+class CompositeResolver implements DefinitionAwareResolverInterface
 {
     /** @var list<EntryResolverInterface> */
     protected array $resolvers = [];
@@ -110,19 +110,7 @@ class CompositeResolver implements DefinitionAwareResolverInterface, DefinitionR
 
     public function removeDefinition(string $id): void
     {
-        $owners = $this->definitionOwnerHistory[$id] ?? [];
-
-        foreach ($owners as $owner) {
-            if (!$owner instanceof DefinitionRemovalInterface) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Resolver "%s" cannot remove runtime definition "%s".',
-                    $owner::class,
-                    $id,
-                ));
-            }
-        }
-
-        foreach ($owners as $owner) {
+        foreach ($this->definitionOwnerHistory[$id] ?? [] as $owner) {
             $owner->removeDefinition($id);
         }
 
