@@ -80,9 +80,13 @@ $container->set(
 
 Definitions — это конфигурация resolver-ов, а не отдельный runtime-overlay. `FactoryDefinition`, `ClassDefinition` и `CompiledFactoryDefinition` можно передавать прямо в `ConfigKey::FACTORIES`; `InvokableDefinition` принимается в `ConfigKey::INVOKABLES` и нормализуется в ту же class-string форму, что и обычный invokable shorthand. Те же формы работают, когда dependency sections приходят из `ConfigProvider`.
 
+Конфигурационные и runtime definitions используют одни и те же типы definitions, но имеют разный жизненный цикл. Definitions, находящиеся в `ContainerBuilder`/конфигурации, участвуют в нормализации и компиляции persistent cache. `FactoryDefinition` сворачивается в содержащийся в ней factory callable, `InvokableDefinition` — в class-string, а `ClassDefinition` через `DefinitionCodeGeneratorInterface` компилируется в обычную factory closure до записи cache-файла. Definition, переданная позже через `Container::set()`, изменяет только resolver уже построенного контейнера: она не записывается обратно в builder, не компилируется и не сохраняется в persistent cache.
+
 `Container::set($id, $definition)` переконфигурирует подходящий resolver и удаляет уже материализованный локальный base entry для этого id, чтобы новая definition могла разрешиться. `Container::set($id, $value)` заменяет только локальное shared value и не удаляет/не откатывает конфигурацию resolver-а, поэтому `make($id)` продолжает использовать настроенный resolver binding.
 
-`ReferenceDefinition` представляет ссылку на container entry внутри аргументов class-definition. `InvokableDefinition` проверяет тот же базовый shape, что и invokable shorthand: class-string не может быть пустым.
+`ReferenceDefinition` представляет ссылку на container entry внутри аргументов class-definition. При генерации кода `ClassDefinition` такая ссылка превращается в lookup контейнера внутри сгенерированной фабрики. `InvokableDefinition` проверяет тот же базовый shape, что и invokable shorthand: class-string не может быть пустым.
+
+Генерация кода definitions расширяется через `DefinitionCodeGeneratorInterface` и `DefinitionCodeGeneratorRegistry`. Контракт генератора принимает `DefinitionInterface`, а registry выбирает конкретный генератор по классу/интерфейсу definition, поэтому для пользовательских типов definitions не требуется изменять compiler.
 
 ## Конфигурация
 
@@ -127,11 +131,11 @@ Mappers: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCoo
 
 ## Compiled factories
 
-`compileFactories()` компилирует известные autowiring roots и статически известные concrete dependencies (`constructor`, `#[Inject]`, `#[SetUp]`) в обычные factory definitions. Явные services/factories/invokables сохраняют ownership.
+`compileFactories()` компилирует известные autowiring roots и статически известные concrete dependencies (`constructor`, `#[Inject]`, `#[SetUp]`) в обычные factory definitions. Явные services/factories/invokables сохраняют ownership и не заменяются этим autowiring compiler. Конфигурационные `ClassDefinition` обрабатываются отдельно definition compiler при генерации persistent cache: они превращаются в обычные closure factories и поэтому не попадают в autowiring compilation graph.
 
 Shard-файлы имеют content-addressed имена и загружаются по требованию. Недоверенные пути ограничиваются cache base directory; traversal и symlink за пределы корня отклоняются. Динамические классы продолжают разрешаться через reflection.
 
-`DiCacheGeneratorInterface::generate()` только атомарно записывает переданную конфигурацию как PHP и не выполняет discovery/компиляцию.
+`DiCacheGeneratorInterface::generate()` нормализует переданную dependency-конфигурацию, запускает компиляцию declarative definitions и атомарно записывает полученный PHP cache. Он не выполняет discovery классов приложения и не запускает `compileFactories()` для autowiring roots.
 
 ## Исключения
 
