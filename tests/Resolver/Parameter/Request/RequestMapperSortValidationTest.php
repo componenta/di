@@ -2,35 +2,28 @@
 
 declare(strict_types=1);
 
-use Componenta\Caster\NullCasterProvider;
-use Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline;
+use Componenta\DI\Tests\Fixture\ConfigurableQueryMapper;
 
 it('rejects a non-scalar sort alias with a stable mapping exception', function (): void {
-    expect(fn() => (new RequestMapperPipeline())->run(
-        data: ['sort' => ['unexpected']],
-        map: [],
-        defaults: [],
-        cast: [],
+    $mapper = new ConfigurableQueryMapper(
         sortMap: ['newest' => ['createdAt' => 'desc']],
-        exclude: [],
-        provider: new NullCasterProvider(),
-    ))->toThrow(
-        InvalidArgumentException::class,
-        'Sort alias must be a string or integer',
     );
+
+    expect(fn() => $mapper->transform(['sort' => ['unexpected']]))
+        ->toThrow(
+            InvalidArgumentException::class,
+            'Sort alias must be a string or integer',
+        );
 });
 
 it('rejects an explicitly null sort alias instead of treating it as missing', function (): void {
-    expect(fn() => (new RequestMapperPipeline())->run(
-        data: ['sort' => null],
-        map: [],
-        defaults: [],
-        cast: [],
+    $mapper = new ConfigurableQueryMapper(
         sortMap: ['newest' => ['createdAt' => 'desc']],
-        exclude: [],
-        provider: new NullCasterProvider(),
-    ))->toThrow(
-        InvalidArgumentException::class,
-        'Sort alias must be a string or integer',
     );
+
+    expect(fn() => $mapper->transform(['sort' => null]))
+        ->toThrow(
+            InvalidArgumentException::class,
+            'Sort alias must be a string or integer',
+        );
 });
