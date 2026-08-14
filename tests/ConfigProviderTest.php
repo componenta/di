@@ -8,21 +8,28 @@ use Componenta\DI\ConfigProvider;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Resolver\CastableResolver;
+use Componenta\DI\Resolver\CurrentUserProvider;
+use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Resolver\CurrentUserResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolverFactory;
 
 final class ConfigProviderInvokableDefinitionFixture {}
 
-it('registers the lazy request resolver factory', function () {
+it('registers the optional DI extension pipeline and its factories', function () {
     $config = (new ConfigProvider())();
-
     $dependencies = $config[ConfigKey::DEPENDENCIES];
     $diDependencyKeys = \Componenta\DI\ConfigKey::dependencyKeys();
 
     expect($dependencies[ConfigKey::FACTORIES][RequestResolver::class] ?? null)
         ->toBe(RequestResolverFactory::class)
-        ->and($dependencies[ConfigKey::ATTRIBUTE_HANDLERS])
+        ->and($dependencies[\Componenta\DI\ConfigKey::PARAMETER_RESOLVERS])
+        ->toBe([
+            ContainerBuilder::PRIORITY_PARAM_CASTABLE => CastableResolver::class,
+            ContainerBuilder::PRIORITY_PARAM_CURRENT_USER => CurrentUserResolver::class,
+            ContainerBuilder::PRIORITY_PARAM_REQUEST => RequestResolver::class,
+        ])
+        ->and($dependencies[\Componenta\DI\ConfigKey::ATTRIBUTE_HANDLERS])
         ->toBe([CastableResolver::class, CurrentUserResolver::class])
         ->and(array_diff($diDependencyKeys, ConfigKey::dependencyKeys()))
         ->toBe([])
@@ -30,6 +37,13 @@ it('registers the lazy request resolver factory', function () {
         ->not->toContain('generated_entry_resolver_file')
         ->and($diDependencyKeys)
         ->not->toContain('generated_entry_resolver_release_fingerprint');
+
+    $container = ContainerBuilder::configure(new Config($config))->build();
+
+    expect($container->get(CurrentUserProviderInterface::class))
+        ->toBeInstanceOf(CurrentUserProvider::class)
+        ->and($container->get(RequestResolver::class))
+        ->toBeInstanceOf(RequestResolver::class);
 });
 
 it('accepts factory definitions directly from a config provider factories section', function (): void {

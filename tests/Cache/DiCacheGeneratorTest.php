@@ -125,13 +125,39 @@ describe('Cache\\DiCacheGenerator', function () {
             ->toThrow(InvalidConfigurationException::class);
     });
 
-    it('throws InvalidConfigurationException when dependencies contain unserialisable values', function () {
+    it('preserves an existing cache when serialization fails before commit', function () {
         $generator = new DiCacheGenerator();
+        $previous = '<?php return ["previous" => true];';
+        file_put_contents($this->path, $previous);
         $dependencies = [
             ConfigKey::SERVICES => ['bad' => fn() => 'unserialisable'],
         ];
 
         expect(fn() => $generator->generate($dependencies, $this->path))
-            ->toThrow(InvalidConfigurationException::class);
+            ->toThrow(InvalidConfigurationException::class)
+            ->and(file_get_contents($this->path))->toBe($previous)
+            ->and(glob($this->path . '.tmp.*') ?: [])->toBe([]);
+    });
+
+    it('cleans the temporary artifact when the atomic commit target cannot be replaced', function () {
+        $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'di_cache_commit_' . bin2hex(random_bytes(4));
+        $target = $root . DIRECTORY_SEPARATOR . 'cache.php';
+        mkdir($root);
+        mkdir($target);
+
+        try {
+            expect(fn() => (new DiCacheGenerator())->generate(
+                [ConfigKey::SERVICES => ['fresh' => true]],
+                $target,
+            ))->toThrow(InvalidConfigurationException::class, 'Failed to commit DI cache file')
+                ->and(glob($target . '.tmp.*') ?: [])->toBe([])
+                ->and(is_dir($target))->toBeTrue();
+        } finally {
+            foreach (glob($target . '.tmp.*') ?: [] as $tmp) {
+                @unlink($tmp);
+            }
+            @rmdir($target);
+            @rmdir($root);
+        }
     });
 });

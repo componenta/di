@@ -52,6 +52,44 @@ describe('Container', function () {
             expect(fn() => minimalContainer()->get('no.such.id'))
                 ->toThrow(NotFoundException::class);
         });
+
+        it('reports ids owned by an external container from has()', function () {
+            $external = new class () implements ContainerInterface {
+                public function get(string $id): mixed
+                {
+                    return 'external';
+                }
+
+                public function has(string $id): bool
+                {
+                    return $id === 'external.present';
+                }
+            };
+            $container = minimalContainer();
+            $container->addContainer($external);
+
+            expect($container->has('external.present'))->toBeTrue()
+                ->and($container->has('external.missing'))->toBeFalse();
+        });
+
+        it('does not hide programming errors raised by external containers from has()', function () {
+            $external = new class () implements ContainerInterface {
+                public function get(string $id): mixed
+                {
+                    throw new \LogicException('not used');
+                }
+
+                public function has(string $id): bool
+                {
+                    throw new \TypeError('broken external container');
+                }
+            };
+            $container = minimalContainer();
+            $container->addContainer($external);
+
+            expect(fn() => $container->has('external.broken'))
+                ->toThrow(\TypeError::class, 'broken external container');
+        });
     });
 
     describe('self-registration', function () {
@@ -144,17 +182,6 @@ describe('Container', function () {
         });
     });
 
-    describe('external containers', function () {
-        it('delegates get() to an external container that owns the id', function () {
-            $external = tinyExternalContainer(['external.svc' => 'from-outside']);
-            $container = minimalContainer();
-            $container->addContainer($external);
-
-            expect($container->get('external.svc'))->toBe('from-outside')
-                ->and($container->has('external.svc'))->toBeTrue();
-        });
-    });
-
     describe('cycle detection', function () {
         it('throws CircularDependencyException with the public resolution chain when factories form a cycle', function () {
             $container = minimalBuilder()
@@ -230,6 +257,24 @@ describe('Container', function () {
             $container->delegator('factory.service', fn() => throw new \RuntimeException('must not run'));
 
             expect($container->make('factory.service'))->toBeInstanceOf(SimpleService::class);
+        });
+
+        it('does not consult external containers', function () {
+            $external = new class () implements ContainerInterface {
+                public function get(string $id): mixed
+                {
+                    throw new \RuntimeException('make() must not consult external containers');
+                }
+
+                public function has(string $id): bool
+                {
+                    return $id === SimpleService::class;
+                }
+            };
+            $container = minimalContainer();
+            $container->addContainer($external);
+
+            expect($container->make(SimpleService::class))->toBeInstanceOf(SimpleService::class);
         });
 
         it('propagates NotFoundException for a string the resolver chain cannot handle', function () {

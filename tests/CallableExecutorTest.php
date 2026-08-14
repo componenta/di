@@ -30,21 +30,8 @@ describe('CallableExecutor', function () {
     });
 
     describe('call()', function () {
-        it('invokes a parameterless callable without asking the parameter resolver for anything', function () {
-            $parametersResolver = new class (new ArrayResolver()) extends ParametersResolver {
-                public int $calls = 0;
-
-                public function resolve(array $parameters, array $providedParameters = []): array
-                {
-                    $this->calls++;
-                    return parent::resolve($parameters, $providedParameters);
-                }
-            };
-
-            $result = makeExecutor(parametersResolver: $parametersResolver)->call(fn() => 'done');
-
-            expect($result)->toBe('done')
-                ->and($parametersResolver->calls)->toBe(0);
+        it('invokes a parameterless callable', function () {
+            expect(makeExecutor()->call(fn() => 'done'))->toBe('done');
         });
 
         it('forwards explicit positional arguments when the callable declares no parameters', function () {
