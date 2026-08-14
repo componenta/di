@@ -59,6 +59,11 @@ final class CompiledClassDefinitionConfiguredValueTarget
     }
 }
 
+final class CompiledClassDefinitionConfiguredClosureTarget
+{
+    public function __construct(public Closure $callback) {}
+}
+
 final readonly class CompiledClassDefinitionLiveDependency
 {
     public function __construct(public int $version) {}
@@ -129,10 +134,11 @@ it('compiles configured ClassDefinition objects to closure factories in the pers
     }
 });
 
-it('preserves configured object identity while keeping references live after cache compilation', function (): void {
+it('preserves configured object and closure identity while keeping references live after cache compilation', function (): void {
     $root = sys_get_temp_dir() . '/componenta-class-definition-identity-' . bin2hex(random_bytes(5));
     $cacheFile = $root . '/container.php';
     $configuredMarker = new CompiledClassDefinitionConfiguredMarker('configured');
+    $configuredCallback = static fn(): string => 'configured-callback';
     $firstDependency = new CompiledClassDefinitionLiveDependency(1);
 
     try {
@@ -144,6 +150,11 @@ it('preserves configured object identity while keeping references live after cac
                     'marker' => $configuredMarker,
                     'nested' => ['marker' => $configuredMarker],
                 ])->method('configure', [$configuredMarker]),
+                CompiledClassDefinitionConfiguredClosureTarget::class => ClassDefinition::create(
+                    CompiledClassDefinitionConfiguredClosureTarget::class,
+                )->constructor([
+                    'callback' => $configuredCallback,
+                ]),
                 CompiledClassDefinitionLiveReferenceTarget::class => ClassDefinition::create(
                     CompiledClassDefinitionLiveReferenceTarget::class,
                 )->constructor([
@@ -169,6 +180,12 @@ it('preserves configured object identity while keeping references live after cac
             ->and($second->marker)->toBe($first->marker)
             ->and($second->nested['marker'])->toBe($first->marker)
             ->and($second->methodMarker)->toBe($first->marker);
+
+        $firstClosure = $container->make(CompiledClassDefinitionConfiguredClosureTarget::class);
+        $secondClosure = $container->make(CompiledClassDefinitionConfiguredClosureTarget::class);
+
+        expect($firstClosure->callback)->toBe($secondClosure->callback)
+            ->and(($firstClosure->callback)())->toBe('configured-callback');
 
         $firstReference = $container->make(CompiledClassDefinitionLiveReferenceTarget::class);
         $secondDependency = new CompiledClassDefinitionLiveDependency(2);
