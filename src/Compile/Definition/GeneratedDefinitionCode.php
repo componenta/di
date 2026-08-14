@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Definition;
 
-/** Compiler-only PHP expression inserted verbatim into the persistent cache. */
+/**
+ * Compiler-owned PHP expression inserted verbatim into the persistent cache.
+ *
+ * @internal
+ */
 final readonly class GeneratedDefinitionCode
 {
     public function __construct(public string $code)
