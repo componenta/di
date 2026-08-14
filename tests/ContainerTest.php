@@ -8,7 +8,6 @@ require_once __DIR__ . '/Fixture/container_helpers.php';
 
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolverInterface;
-use Componenta\DI\Container;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
