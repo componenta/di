@@ -21,7 +21,7 @@ final readonly class ExplicitAliasBindingRoot
     public function __construct(public ExplicitAliasBindingContract $service) {}
 }
 
-it('excludes the canonical target of an explicitly bound aliased service from AOT planning', function (): void {
+it('keeps an explicitly bound aliased service outside AOT ownership', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-explicit-alias-aot-' . bin2hex(random_bytes(5));
     $service = new ExplicitAliasBindingImplementation(new ExplicitAliasBindingLeaf());
 
@@ -40,7 +40,7 @@ it('excludes the canonical target of an explicitly bound aliased service from AO
         expect($factories)
             ->toHaveKey(ExplicitAliasBindingRoot::class)
             ->not->toHaveKey(ExplicitAliasBindingImplementation::class)
-            ->and($builder->invokables)->not->toContain(ExplicitAliasBindingLeaf::class);
+            ->not->toHaveKey(ExplicitAliasBindingLeaf::class);
 
         $container = ContainerBuilder::configureFromCache(
             new Config([]),
@@ -54,15 +54,12 @@ it('excludes the canonical target of an explicitly bound aliased service from AO
                     ConfigKey::SERVICES => [
                         ExplicitAliasBindingContract::class => $service,
                     ],
-                    ConfigKey::INVOKABLES => $builder->invokables,
                 ],
             ],
             $directory,
         )->build();
 
-        $root = $container->make(ExplicitAliasBindingRoot::class);
-
-        expect($root->service)->toBe($service);
+        expect($container->make(ExplicitAliasBindingRoot::class)->service)->toBe($service);
     } finally {
         foreach (glob($directory . '/' . CompiledFactoryShardCompiler::FILE_PREFIX . '*.php') ?: [] as $file) {
             @unlink($file);
