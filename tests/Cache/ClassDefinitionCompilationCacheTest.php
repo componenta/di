@@ -59,6 +59,11 @@ final class CompiledClassDefinitionConfiguredValueTarget
     }
 }
 
+final readonly class CompiledClassDefinitionLiveDependency
+{
+    public function __construct(public int $version) {}
+}
+
 final class CompiledClassDefinitionLiveReferenceTarget
 {
     public function __construct(public object $dependency) {}
@@ -128,7 +133,7 @@ it('preserves configured object identity while keeping references live after cac
     $root = sys_get_temp_dir() . '/componenta-class-definition-identity-' . bin2hex(random_bytes(5));
     $cacheFile = $root . '/container.php';
     $configuredMarker = new CompiledClassDefinitionConfiguredMarker('configured');
-    $firstDependency = (object) ['version' => 1];
+    $firstDependency = new CompiledClassDefinitionLiveDependency(1);
 
     try {
         (new DiCacheGenerator())->generate([
@@ -166,7 +171,7 @@ it('preserves configured object identity while keeping references live after cac
             ->and($second->methodMarker)->toBe($first->marker);
 
         $firstReference = $container->make(CompiledClassDefinitionLiveReferenceTarget::class);
-        $secondDependency = (object) ['version' => 2];
+        $secondDependency = new CompiledClassDefinitionLiveDependency(2);
         $container->set('live.dependency', $secondDependency);
         $secondReference = $container->make(CompiledClassDefinitionLiveReferenceTarget::class);
 
