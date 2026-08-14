@@ -76,14 +76,11 @@ function liveExternalParityContainer(LiveExternalParityContract $service): Conta
     };
 }
 
-/**
- * @param list<class-string> $invokables
- */
+/** @param array<string, mixed> $factories */
 function liveParityProductionContainer(
     array $factories,
     string $directory,
     array $aliases = [],
-    array $invokables = [],
 ): Container {
     return ContainerBuilder::configureFromCache(
         new Config([]),
@@ -92,7 +89,6 @@ function liveParityProductionContainer(
             ConfigKey::DEPENDENCIES => [
                 ConfigKey::FACTORIES => $factories,
                 ConfigKey::ALIASES => $aliases,
-                ConfigKey::INVOKABLES => $invokables,
             ],
         ],
         $directory,
@@ -106,17 +102,16 @@ it('keeps compiled autowiring bound to the live alias resolver', function (): vo
         $development = (new ContainerBuilder())
             ->addAlias(LiveAliasParityContract::class, LiveAliasParityFirst::class)
             ->build();
-        $compiler = (new ContainerBuilder())
-            ->addAlias(LiveAliasParityContract::class, LiveAliasParityFirst::class);
-        $factories = $compiler->compileFactories(
-            [LiveAliasParityConsumer::class],
-            $directory,
-        );
+        $factories = (new ContainerBuilder())
+            ->addAlias(LiveAliasParityContract::class, LiveAliasParityFirst::class)
+            ->compileFactories(
+                [LiveAliasParityConsumer::class],
+                $directory,
+            );
         $production = liveParityProductionContainer(
             $factories,
             $directory,
             [LiveAliasParityContract::class => LiveAliasParityFirst::class],
-            $compiler->invokables,
         );
 
         $development->alias(LiveAliasParityContract::class, LiveAliasParitySecond::class);
@@ -143,15 +138,13 @@ it('keeps compiled autowiring bound to external containers registered after buil
 
     try {
         $development = (new ContainerBuilder())->build();
-        $compiler = new ContainerBuilder();
-        $factories = $compiler->compileFactories(
+        $factories = (new ContainerBuilder())->compileFactories(
             [LiveExternalParityConsumer::class],
             $directory,
         );
         $production = liveParityProductionContainer(
             $factories,
             $directory,
-            invokables: $compiler->invokables,
         );
 
         $development->addContainer(liveExternalParityContainer(new LiveExternalParityService()));
