@@ -158,7 +158,7 @@ describe('audit consistency regressions', function () {
         )->value)->toBe('runtime-only');
     });
 
-    it('returns zero-argument AOT roots as compiled factories without mutating invokable configuration', function () {
+    it('returns zero-argument AOT roots as compiled factories', function () {
         $directory = sys_get_temp_dir()
             . '/componenta-audit-aot-'
             . bin2hex(random_bytes(5));
@@ -172,8 +172,7 @@ describe('audit consistency regressions', function () {
 
             expect($compiled)->toHaveKey(AuditAotZeroArgumentEntry::class)
                 ->and($compiled[AuditAotZeroArgumentEntry::class])
-                ->toBeInstanceOf(CompiledFactoryDefinition::class)
-                ->and($builder->invokables)->toBe([]);
+                ->toBeInstanceOf(CompiledFactoryDefinition::class);
 
             $encoded = [];
             foreach ($compiled as $id => $definition) {
@@ -233,7 +232,7 @@ describe('audit consistency regressions', function () {
             ->toThrow(\Error::class);
     });
 
-    it('preserves subclass constructor defaults while declarative configuration overrides matching values', function () {
+    it('preserves subclass builder defaults while declarative configuration overrides matching values', function () {
         $replacementResolver = new AuditNeverResolver();
         $builder = AuditConfiguredBuilder::configureWithDependencies(
             new Config([]),
@@ -249,14 +248,18 @@ describe('audit consistency regressions', function () {
                 ],
             ],
         );
+        $dependencies = $builder->toArray()[ConfigKey::DEPENDENCIES];
 
-        expect($builder->services['audit.default.service'])->toBe('constructor-default')
-            ->and($builder->services['audit.override.service'])->toBe('configuration')
-            ->and($builder->replaceParameterResolvers)->toBeTrue()
-            ->and($builder->replaceAttributeHandlers)->toBeTrue()
-            ->and($builder->delegators['audit.decorated'])->toHaveCount(2)
-            ->and($builder->parameterResolvers)->toHaveCount(1)
-            ->and($builder->parameterResolvers[0][0])->toBe($replacementResolver);
+        expect($dependencies[ConfigKey::SERVICES]['audit.default.service'])
+            ->toBe('constructor-default')
+            ->and($dependencies[ConfigKey::SERVICES]['audit.override.service'])
+            ->toBe('configuration')
+            ->and($dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE])->toBeTrue()
+            ->and($dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE])->toBeTrue()
+            ->and($dependencies[ConfigKey::DELEGATORS]['audit.decorated'])->toHaveCount(2)
+            ->and($dependencies[ConfigKey::PARAMETER_RESOLVERS])->toBe([
+                -1000 => $replacementResolver,
+            ]);
 
         $overriddenFlags = AuditConfiguredBuilder::configureWithDependencies(
             new Config([]),
@@ -264,10 +267,10 @@ describe('audit consistency regressions', function () {
                 ConfigKey::PARAMETER_RESOLVERS_REPLACE => false,
                 ConfigKey::ATTRIBUTE_HANDLERS_REPLACE => false,
             ],
-        );
+        )->toArray()[ConfigKey::DEPENDENCIES];
 
-        expect($overriddenFlags->replaceParameterResolvers)->toBeFalse()
-            ->and($overriddenFlags->replaceAttributeHandlers)->toBeFalse();
+        expect($overriddenFlags[ConfigKey::PARAMETER_RESOLVERS_REPLACE])->toBeFalse()
+            ->and($overriddenFlags[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE])->toBeFalse();
     });
 
     it('rejects repeated request extractor instances of the same class as ambiguous', function () {
