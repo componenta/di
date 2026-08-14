@@ -57,7 +57,7 @@ $result = $container->call($callable, ['id' => 7]);
 
 Основные методы: `addFactory()`, `addInvokable()`, `addAlias()`, `addDelegator()`, `addService()`, их bulk-варианты, `addParameterResolver()`, `addAttributeHandler()`, `compileFactories()`, `toArray()` и `build()`.
 
-`addService()` и `ConfigKey::SERVICES` регистрируют готовые shared values без переинтерпретации. Объект, реализующий `DefinitionInterface`, в секции services остаётся обычным значением. Definition намеренно устанавливается через `Container::set($id, $definition)` либо через factories/invokables configuration.
+`addService()` и `ConfigKey::SERVICES` регистрируют готовые shared values без переинтерпретации. Объект, реализующий `DefinitionInterface`, в секции services остаётся обычным значением. Definition — это конфигурация resolver-а: совместимый объект definition можно передать непосредственно в секции factories/invokables либо через `Container::set($id, $definition)`. Definition и соответствующий shorthand конфигурируют одно и то же состояние resolver-а.
 
 Delegator может быть callable, class/interface method reference или ссылкой на произвольный service id. В bulk/config input opaque method reference записывается вложенно: `[['decorator.service', 'decorate']]`; плоская пара строк означает два строковых delegator, если она не является реальной ссылкой на class/interface method.
 
@@ -78,7 +78,11 @@ $container->set(
 );
 ```
 
-Runtime `InvokableDefinition` проверяет тот же базовый shape, что и declarative invokables: class-string не может быть пустым.
+Definitions — это конфигурация resolver-ов, а не отдельный runtime-overlay. `FactoryDefinition`, `ClassDefinition` и `CompiledFactoryDefinition` можно передавать прямо в `ConfigKey::FACTORIES`; `InvokableDefinition` принимается в `ConfigKey::INVOKABLES` и нормализуется в ту же class-string форму, что и обычный invokable shorthand. Те же формы работают, когда dependency sections приходят из `ConfigProvider`.
+
+`Container::set($id, $definition)` переконфигурирует подходящий resolver и удаляет уже материализованный локальный base entry для этого id, чтобы новая definition могла разрешиться. `Container::set($id, $value)` заменяет только локальное shared value и не удаляет/не откатывает конфигурацию resolver-а, поэтому `make($id)` продолжает использовать настроенный resolver binding.
+
+`ReferenceDefinition` представляет ссылку на container entry внутри аргументов class-definition. `InvokableDefinition` проверяет тот же базовый shape, что и invokable shorthand: class-string не может быть пустым.
 
 ## Конфигурация
 
