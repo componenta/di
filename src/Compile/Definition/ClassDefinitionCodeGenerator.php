@@ -23,12 +23,6 @@ use UnitEnum;
 /** Compiles ClassDefinition into a reflection-free factory closure expression. */
 final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInterface
 {
-    /** @var array<int, string> */
-    private array $capturedObjectVariables = [];
-
-    /** @var list<string> */
-    private array $capturedObjectAssignments = [];
-
     public function generate(
         string $id,
         DefinitionInterface $definition,
@@ -42,8 +36,6 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
         }
 
         FactorySpecificationValidator::assertValid($id, $definition);
-        $this->capturedObjectVariables = [];
-        $this->capturedObjectAssignments = [];
 
         /** @var ReflectionClass<object> $class */
         $class = new ReflectionClass($definition->value);
@@ -57,9 +49,17 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
             ));
         }
 
-        $body = [
-            '$configured = ' . $this->valueExpression($definition->constructorParams, $id) . ';',
-        ];
+        /** @var array<int, string> $capturedObjectVariables */
+        $capturedObjectVariables = [];
+        /** @var list<string> $capturedObjectAssignments */
+        $capturedObjectAssignments = [];
+        $configured = $this->valueExpression(
+            $definition->constructorParams,
+            $id,
+            $capturedObjectVariables,
+            $capturedObjectAssignments,
+        );
+        $body = ['$configured = ' . $configured . ';'];
         $constructor = $class->getConstructor();
 
         if ($constructor === null) {
@@ -86,12 +86,17 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
 
         foreach ($definition->methodCalls as $call) {
             $method = var_export($call['method'], true);
-            $params = $this->valueExpression($call['params'], $id);
+            $params = $this->valueExpression(
+                $call['params'],
+                $id,
+                $capturedObjectVariables,
+                $capturedObjectAssignments,
+            );
             $body[] = sprintf('$entry->{%s}(...%s);', $method, $params);
         }
 
         $body[] = 'return $entry;';
-        $capturedVariables = array_values($this->capturedObjectVariables);
+        $capturedVariables = array_values($capturedObjectVariables);
         $use = $capturedVariables === []
             ? ''
             : ' use (' . implode(', ', $capturedVariables) . ')';
@@ -102,13 +107,13 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
             self::indent(implode("\n\n", $body)),
         );
 
-        if ($this->capturedObjectAssignments === []) {
+        if ($capturedObjectAssignments === []) {
             return new GeneratedDefinitionCode($factory);
         }
 
         return new GeneratedDefinitionCode(sprintf(
             "(static function (): \\Closure {\n%s\n\n%s\n})()",
-            self::indent(implode("\n", $this->capturedObjectAssignments)),
+            self::indent(implode("\n", $capturedObjectAssignments)),
             self::indent('return ' . $factory . ';'),
         ));
     }
@@ -281,8 +286,16 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
         return $name;
     }
 
-    private function valueExpression(mixed $value, string $id): string
-    {
+    /**
+     * @param array<int, string> $capturedObjectVariables
+     * @param list<string> $capturedObjectAssignments
+     */
+    private function valueExpression(
+        mixed $value,
+        string $id,
+        array &$capturedObjectVariables,
+        array &$capturedObjectAssignments,
+    ): string {
         if ($value instanceof ReferenceDefinition) {
             return sprintf(
                 '$container->get(%s)',
@@ -296,7 +309,12 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
                 $items[] = sprintf(
                     '%s => %s',
                     var_export($key, true),
-                    $this->valueExpression($item, $id),
+                    $this->valueExpression(
+                        $item,
+                        $id,
+                        $capturedObjectVariables,
+                        $capturedObjectAssignments,
+                    ),
                 );
             }
 
@@ -304,7 +322,12 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
         }
 
         if (is_object($value) && !$value instanceof UnitEnum) {
-            return $this->capturedObjectExpression($value, $id);
+            return $this->capturedObjectExpression(
+                $value,
+                $id,
+                $capturedObjectVariables,
+                $capturedObjectAssignments,
+            );
         }
 
         try {
@@ -318,11 +341,19 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
         }
     }
 
-    private function capturedObjectExpression(object $value, string $id): string
-    {
+    /**
+     * @param array<int, string> $capturedObjectVariables
+     * @param list<string> $capturedObjectAssignments
+     */
+    private function capturedObjectExpression(
+        object $value,
+        string $id,
+        array &$capturedObjectVariables,
+        array &$capturedObjectAssignments,
+    ): string {
         $objectId = spl_object_id($value);
-        if (isset($this->capturedObjectVariables[$objectId])) {
-            return $this->capturedObjectVariables[$objectId];
+        if (isset($capturedObjectVariables[$objectId])) {
+            return $capturedObjectVariables[$objectId];
         }
 
         try {
@@ -335,9 +366,9 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
             ), previous: $error);
         }
 
-        $variable = '$configuredObject' . count($this->capturedObjectVariables);
-        $this->capturedObjectVariables[$objectId] = $variable;
-        $this->capturedObjectAssignments[] = sprintf('%s = %s;', $variable, $expression);
+        $variable = '$configuredObject' . count($capturedObjectVariables);
+        $capturedObjectVariables[$objectId] = $variable;
+        $capturedObjectAssignments[] = sprintf('%s = %s;', $variable, $expression);
 
         return $variable;
     }
