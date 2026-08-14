@@ -29,6 +29,13 @@ describe('Cache\\DiCacheGenerator', function () {
         expect(new DiCacheGenerator())->toBeInstanceOf(DiCacheGeneratorInterface::class);
     });
 
+    it('resolves the default cache generator through the container alias', function () {
+        $container = (new ContainerBuilder())->build();
+
+        expect($container->get(DiCacheGeneratorInterface::class))
+            ->toBeInstanceOf(DiCacheGenerator::class);
+    });
+
     it('writes a versioned cache envelope that configureFromCache can load', function () {
         $generator = new DiCacheGenerator();
         $dependencies = [
