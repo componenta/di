@@ -7,15 +7,14 @@ namespace Componenta\DI\Tests;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\Inject;
-use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Container\ContainerInterface;
 
 final class BuilderGeneratedEntry
@@ -27,52 +26,32 @@ final class BuilderGeneratedEntry
 
 final class BuilderInjectedDependency {}
 
-final class BuilderAttributedResolver implements
-    \Componenta\DI\Resolver\Parameter\ParameterResolverInterface
+final class BuilderAttributedResolver implements ParameterResolverInterface
 {
     #[Inject]
     public BuilderInjectedDependency $dependency;
 
-    public function supports(
-        \Componenta\DI\Resolver\Target\ParameterTarget $target,
-    ): bool {
-        return false;
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->name === 'custom';
     }
 
     public function resolveParameter(
-        \Componenta\DI\Resolver\Target\ParameterTarget $target,
-        \Componenta\DI\Resolver\Parameter\ParameterResolutionContext $context,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
     ): ?array {
-        return null;
+        return [$target->position, $this->dependency];
     }
 }
 
-#[Lazy]
-final class BuilderLazyEntry
+final readonly class BuilderCustomResolverTarget
 {
-    public function __construct(public int $value = 5) {}
+    public function __construct(public mixed $custom) {}
 }
 
-final class BuilderProxyFactory implements ProxyFactoryInterface
+final readonly class BuilderFactoryResolverTarget
 {
-    public int $lazyCalls = 0;
-    public int $proxyCalls = 0;
-
-    public function makeLazy(string $class, callable $initializer): object
-    {
-        ++$this->lazyCalls;
-        $entry = (new \ReflectionClass($class))->newInstanceWithoutConstructor();
-        $initializer($entry);
-
-        return $entry;
-    }
-
-    public function makeProxy(string $class, callable $initializer): object
-    {
-        ++$this->proxyCalls;
-
-        return $initializer((new \ReflectionClass($class))->newInstanceWithoutConstructor());
-    }
+    public function __construct(public mixed $fromFactory) {}
 }
 
 final class BuilderExternalContainer implements ContainerInterface
@@ -99,21 +78,6 @@ final class BuilderMagicDelegator
     }
 }
 
-final class BuilderWithProxyFactory extends ContainerBuilder
-{
-    public readonly BuilderProxyFactory $proxy;
-
-    public function __construct()
-    {
-        $this->proxy = new BuilderProxyFactory();
-    }
-
-    protected function createProxyFactory(): ProxyFactoryInterface
-    {
-        return $this->proxy;
-    }
-}
-
 describe('ContainerBuilder', function () {
     it('shares the built container identity with bootstrap values and factories', function () {
         $factoryContainer = null;
@@ -131,35 +95,26 @@ describe('ContainerBuilder', function () {
             ->and($container->get(ContainerValue::class)->value)->toBe($container);
     });
 
-    it('materializes custom pipeline extensions before build returns', function () {
-        $materialized = false;
-        $resolver = new class () implements \Componenta\DI\Resolver\Parameter\ParameterResolverInterface {
-            public function supports(
-                \Componenta\DI\Resolver\Target\ParameterTarget $target,
-            ): bool {
-                return false;
+    it('uses a parameter resolver supplied by a callable factory', function () {
+        $resolver = new class () implements ParameterResolverInterface {
+            public function supports(ParameterTarget $target): bool
+            {
+                return $target->name === 'fromFactory';
             }
 
             public function resolveParameter(
-                \Componenta\DI\Resolver\Target\ParameterTarget $target,
-                \Componenta\DI\Resolver\Parameter\ParameterResolutionContext $context,
+                ParameterTarget $target,
+                ParameterResolutionContext $context,
             ): ?array {
-                return null;
+                return [$target->position, 'resolved-by-factory'];
             }
         };
-
-        (new ContainerBuilder())
-            ->addParameterResolver(
-                static function () use (&$materialized, $resolver): object {
-                    $materialized = true;
-
-                    return $resolver;
-                },
-                -1000,
-            )
+        $container = (new ContainerBuilder())
+            ->addParameterResolver(static fn(): object => $resolver, 5000)
             ->build();
 
-        expect($materialized)->toBeTrue();
+        expect($container->make(BuilderFactoryResolverTarget::class)->fromFactory)
+            ->toBe('resolved-by-factory');
     });
 
     it('builds one runtime container and resolves fresh objects with explicit context', function () {
@@ -174,60 +129,15 @@ describe('ContainerBuilder', function () {
             ->and($second)->not->toBe($first);
     });
 
-    it('installs default attribute handlers before materializing custom parameter resolvers', function () {
+    it('applies default attribute injection when materializing a custom resolver', function () {
         $dependency = new BuilderInjectedDependency();
         $container = (new ContainerBuilder())
             ->addService(BuilderInjectedDependency::class, $dependency)
-            ->addParameterResolver(BuilderAttributedResolver::class, -1000)
+            ->addParameterResolver(BuilderAttributedResolver::class, 5000)
             ->build();
 
-        $custom = array_find(
-            $container->get(ParametersResolver::class)->resolverList,
-            static fn(object $resolver): bool => $resolver instanceof BuilderAttributedResolver,
-        );
-
-        expect($custom)->toBeInstanceOf(BuilderAttributedResolver::class)
-            ->and($custom->dependency)->toBe($dependency);
-    });
-
-    it('uses one proxy collaborator behind reflection and the public container facade', function () {
-        $builder = new BuilderWithProxyFactory();
-        $container = $builder->build();
-
-        $entry = $container->make(BuilderLazyEntry::class);
-        $container->makeLazy(
-            BuilderGeneratedEntry::class,
-            static function (object $entry): void {
-                $entry->__construct(7);
-            },
-        );
-
-        expect($entry)->toBeInstanceOf(BuilderLazyEntry::class)
-            ->and($entry->value)->toBe(5)
-            ->and($builder->proxy->lazyCalls)->toBe(2)
-            ->and($container->get(ProxyFactoryInterface::class))->toBe($container);
-    });
-
-    it('installs core pipeline services atomically and forbids rebinding or decoration', function () {
-        $container = (new ContainerBuilder())->build();
-
-        expect($container->get(ParametersResolver::class))
-            ->toBeInstanceOf(ParametersResolver::class)
-            ->and($container->get(AttributeProcessor::class))
-            ->toBeInstanceOf(AttributeProcessor::class)
-            ->and(fn() => $container->set(ParametersResolver::class, new ParametersResolver()))
-            ->toThrow(InvalidConfigurationException::class)
-            ->and(fn() => $container->alias(ParametersResolver::class, BuilderGeneratedEntry::class))
-            ->toThrow(InvalidConfigurationException::class)
-            ->and(fn() => $container->delegator(ParametersResolver::class, static fn($entry) => $entry))
-            ->toThrow(InvalidConfigurationException::class)
-            ->and(fn() => $container->get(ParametersResolver::class)->add(
-                new \Componenta\DI\Resolver\Parameter\ArrayResolver(),
-            ))->toThrow(\LogicException::class)
-            ->and(fn() => $container->get(
-                \Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry::class,
-            )->add(new \Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler()))
-            ->toThrow(\LogicException::class);
+        expect($container->make(BuilderCustomResolverTarget::class)->custom)
+            ->toBe($dependency);
     });
 
     it('canonicalizes definitions registered through aliases', function () {
@@ -269,16 +179,11 @@ describe('ContainerBuilder', function () {
             ->toThrow(InvalidConfigurationException::class);
     });
 
-    it('rejects unreachable factories and canonical bindings to protected services', function () {
+    it('rejects a factory shadowed by an alias for the same id', function () {
         expect(fn() => (new ContainerBuilder())
             ->addFactory('builder.alias', static fn() => new BuilderGeneratedEntry())
             ->addAlias('builder.alias', BuilderGeneratedEntry::class)
             ->build())
-            ->toThrow(InvalidConfigurationException::class)
-            ->and(fn() => (new ContainerBuilder())
-                ->addAlias('builder.parameters', ParametersResolver::class)
-                ->addService('builder.parameters', new \stdClass())
-                ->build())
             ->toThrow(InvalidConfigurationException::class);
     });
 

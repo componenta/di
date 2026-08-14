@@ -25,33 +25,28 @@ it('keeps concrete object delegators fail-fast at the configuration boundary', f
     ))->toThrow(InvalidConfigurationException::class);
 });
 
-it('keeps unrelated namespace mutations from invalidating a cached deferred decoration', function (): void {
-    $calls = 0;
+it('keeps an unrelated namespace mutation from invalidating a cached decorated entry', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    $container->set('handler', function (string $entry) use (&$calls): string {
-        ++$calls;
-
-        return $entry . ':handled';
-    });
+    $container->set(
+        'handler',
+        static fn(string $entry): object => (object) ['value' => $entry . ':handled'],
+    );
     $container->set('service', 'base');
     $container->delegator('service', 'handler');
 
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+    $resolved = $container->get('service');
+    expect($resolved->value)->toBe('base:handled');
 
     $container->set('unrelated', 'value');
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+    expect($container->get('service'))->toBe($resolved);
 
     $container->alias('unrelated.alias', 'unrelated');
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+    expect($container->get('service'))->toBe($resolved);
 
     $container->set('other', 'base');
     $container->delegator('other', static fn(string $entry): string => $entry . ':other');
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+    expect($container->get('service'))->toBe($resolved);
 });
 
 it('re-resolves a deferred callable when that callable service is decorated', function (): void {

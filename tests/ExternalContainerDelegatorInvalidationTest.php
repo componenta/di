@@ -20,44 +20,37 @@ function externalInvalidationEmptyContainer(): ContainerInterface
     };
 }
 
-it('keeps duplicate external container registration side effect free', function (): void {
-    $calls = 0;
+function externalInvalidationContainer(): \Componenta\DI\Container
+{
     $container = (new ContainerBuilder())->build();
-    $external = externalInvalidationEmptyContainer();
-
-    $container->set('handler', function (string $entry) use (&$calls): string {
-        ++$calls;
-        return $entry . ':handled';
-    });
+    $container->set(
+        'handler',
+        static fn(string $entry): object => (object) ['value' => $entry . ':handled'],
+    );
     $container->set('service', 'base');
     $container->delegator('service', 'handler');
+
+    return $container;
+}
+
+it('keeps duplicate external container registration side effect free', function (): void {
+    $container = externalInvalidationContainer();
+    $external = externalInvalidationEmptyContainer();
+    $container->addContainer($external);
+    $resolved = $container->get('service');
+
     $container->addContainer($external);
 
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
-
-    $container->addContainer($external);
-
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+    expect($container->get('service'))->toBe($resolved)
+        ->and($resolved->value)->toBe('base:handled');
 });
 
-it('does not invalidate a deferred callable for an unrelated new external container', function (): void {
-    $calls = 0;
-    $container = (new ContainerBuilder())->build();
-
-    $container->set('handler', function (string $entry) use (&$calls): string {
-        ++$calls;
-        return $entry . ':handled';
-    });
-    $container->set('service', 'base');
-    $container->delegator('service', 'handler');
-
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+it('does not invalidate an unrelated decorated entry when a new external container is added', function (): void {
+    $container = externalInvalidationContainer();
+    $resolved = $container->get('service');
 
     $container->addContainer(externalInvalidationEmptyContainer());
 
-    expect($container->get('service'))->toBe('base:handled')
-        ->and($calls)->toBe(1);
+    expect($container->get('service'))->toBe($resolved)
+        ->and($resolved->value)->toBe('base:handled');
 });

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Componenta\Caster\CasterProviderInterface;
+use Componenta\Caster\NullCasterProvider;
 use Componenta\Config\Config;
 use Componenta\Config\ConfigKey;
 use Componenta\DI\ConfigProvider;
@@ -38,7 +40,9 @@ it('registers the optional DI extension pipeline and its factories', function ()
         ->and($diDependencyKeys)
         ->not->toContain('generated_entry_resolver_release_fingerprint');
 
-    $container = ContainerBuilder::configure(new Config($config))->build();
+    $container = ContainerBuilder::configure(new Config($config))
+        ->addService(CasterProviderInterface::class, new NullCasterProvider())
+        ->build();
 
     expect($container->get(CurrentUserProviderInterface::class))
         ->toBeInstanceOf(CurrentUserProvider::class)

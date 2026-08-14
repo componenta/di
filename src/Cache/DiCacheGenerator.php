@@ -62,7 +62,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             );
         }
 
-        if (!rename($tmp, $path)) {
+        if (!@rename($tmp, $path)) {
             @unlink($tmp);
             throw new InvalidConfigurationException(
                 sprintf('Failed to commit DI cache file: %s', $path),
