@@ -16,8 +16,7 @@ it('never compiles container-owned bootstrap services discovered in an AOT graph
     $directory = sys_get_temp_dir() . '/componenta-protected-aot-' . bin2hex(random_bytes(5));
 
     try {
-        $builder = new ContainerBuilder();
-        $factories = $builder->compileFactories(
+        $factories = (new ContainerBuilder())->compileFactories(
             [ProtectedAotServiceRoot::class],
             $directory,
             maxShardBytes: 1,
@@ -34,7 +33,6 @@ it('never compiles container-owned bootstrap services discovered in an AOT graph
                 'version' => ContainerBuilder::CACHE_VERSION,
                 ConfigKey::DEPENDENCIES => [
                     ConfigKey::FACTORIES => $factories,
-                    ConfigKey::INVOKABLES => $builder->invokables,
                 ],
             ],
             $directory,
