@@ -20,22 +20,13 @@ class CompositeResolver implements DefinitionAwareResolverInterface
     private array $ownerCache = [];
 
     /**
-     * Runtime definitions explicitly select their owner. The selected owner
-     * must take precedence over stale definitions retained by another child
-     * resolver when a definition changes kind for the same id.
+     * Definitions registered through this composite explicitly select their
+     * supporting resolver. This keeps the latest definition authoritative when
+     * the same id is reconfigured with a different definition kind.
      *
      * @var array<string, DefinitionAwareResolverInterface>
      */
     private array $definitionOwners = [];
-
-    /**
-     * Every resolver that has owned a runtime definition for an id. Keeping
-     * the history lets a later stored-value replacement remove stale bindings
-     * from all previous resolver kinds, not only the latest owner.
-     *
-     * @var array<string, array<int, DefinitionAwareResolverInterface>>
-     */
-    private array $definitionOwnerHistory = [];
 
     public function __construct(EntryResolverInterface ...$resolvers)
     {
@@ -99,26 +90,12 @@ class CompositeResolver implements DefinitionAwareResolverInterface
             ) {
                 $resolver->setDefinition($id, $definition);
                 $this->definitionOwners[$id] = $resolver;
-                $this->definitionOwnerHistory[$id][spl_object_id($resolver)] = $resolver;
                 $this->ownerCache[$id] = $resolver;
                 return;
             }
         }
 
         throw InvalidConfigurationException::forInvalidDefinition($definition);
-    }
-
-    public function removeDefinition(string $id): void
-    {
-        foreach ($this->definitionOwnerHistory[$id] ?? [] as $owner) {
-            $owner->removeDefinition($id);
-        }
-
-        unset(
-            $this->definitionOwners[$id],
-            $this->definitionOwnerHistory[$id],
-            $this->ownerCache[$id],
-        );
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
