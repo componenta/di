@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\AliasResolver;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
+use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
@@ -16,7 +17,8 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 /**
  * Normalizes and validates the declarative dependency configuration consumed by
  * ContainerBuilder. Runtime container assembly intentionally remains in the
- * builder; this class owns only pure configuration-shape concerns.
+ * builder; this class owns only configuration-shape concerns and normalization
+ * of equivalent resolver configuration forms.
  *
  * @internal
  *
@@ -148,10 +150,15 @@ final class DependencyConfiguration
     }
 
     /**
+     * Validates dependency shape and normalizes definition objects that are
+     * equivalent to an existing section shorthand. The input array is local to
+     * builder/config normalization, so callers observe one canonical resolver
+     * configuration after this boundary.
+     *
      * @param array<string, mixed> $dependencies
      * @phpstan-assert DependencyShape $dependencies
      */
-    public static function assertShape(array $dependencies): void
+    public static function assertShape(array &$dependencies): void
     {
         $allowed = array_fill_keys(ConfigKey::dependencyKeys(), true);
 
@@ -231,10 +238,15 @@ final class DependencyConfiguration
             throw new InvalidConfigurationException('Invokables must be an array.');
         }
 
-        foreach ($invokables as $class) {
+        foreach ($invokables as $key => $class) {
+            if ($class instanceof InvokableDefinition) {
+                $class = $class->value;
+                $dependencies[ConfigKey::INVOKABLES][$key] = $class;
+            }
+
             if (!is_string($class) || $class === '') {
                 throw new InvalidConfigurationException(sprintf(
-                    'Invokable entry must be a non-empty class-string; got %s.',
+                    'Invokable entry must be a non-empty class-string or InvokableDefinition; got %s.',
                     get_debug_type($class),
                 ));
             }
