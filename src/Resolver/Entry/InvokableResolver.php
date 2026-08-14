@@ -17,26 +17,28 @@ class InvokableResolver implements DefinitionAwareResolverInterface
     /** @var array<string, class-string> */
     private array $invokables = [];
 
-    /** @var array<string, class-string> */
-    private array $runtimeDefinitions = [];
-
-    /** @param list<class-string> $invokables */
+    /** @param list<class-string|InvokableDefinition> $invokables */
     public function __construct(array $invokables = [])
     {
-        foreach ($invokables as $class) {
-            if (!is_string($class) || $class === '') {
+        foreach ($invokables as $invokable) {
+            if ($invokable instanceof InvokableDefinition) {
+                $this->setDefinition($invokable->value, $invokable);
+                continue;
+            }
+
+            if (!is_string($invokable) || $invokable === '') {
                 throw new InvalidConfigurationException(
-                    'Invokable class must be a non-empty string.',
+                    'Invokable class must be a non-empty string or InvokableDefinition.',
                 );
             }
 
-            $this->invokables[$class] = $class;
+            $this->invokables[$invokable] = $invokable;
         }
     }
 
     public function can(string $id): bool
     {
-        return isset($this->runtimeDefinitions[$id]) || isset($this->invokables[$id]);
+        return isset($this->invokables[$id]);
     }
 
     /** @param array<string|int, mixed> $context */
@@ -46,7 +48,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             throw NotFoundException::forService($id);
         }
 
-        $class = $this->runtimeDefinitions[$id] ?? $this->invokables[$id];
+        $class = $this->invokables[$id];
 
         try {
             return new $class();
@@ -67,12 +69,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             );
         }
 
-        $this->runtimeDefinitions[$id] = $definition->value;
-    }
-
-    public function removeDefinition(string $id): void
-    {
-        unset($this->runtimeDefinitions[$id]);
+        $this->invokables[$id] = $definition->value;
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
