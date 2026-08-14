@@ -12,10 +12,13 @@ use Componenta\DI\Exception\ResolutionException;
 use Throwable;
 
 /** Resolves explicitly registered invokable classes with zero-argument construction. */
-class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
+class InvokableResolver implements DefinitionAwareResolverInterface
 {
     /** @var array<string, class-string> */
     private array $invokables = [];
+
+    /** @var array<string, true> */
+    private array $runtimeDefinitionIds = [];
 
     /** @param list<class-string> $invokables */
     public function __construct(array $invokables = [])
@@ -65,11 +68,16 @@ class InvokableResolver implements DefinitionAwareResolverInterface, DefinitionR
         }
 
         $this->invokables[$id] = $definition->value;
+        $this->runtimeDefinitionIds[$id] = true;
     }
 
     public function removeDefinition(string $id): void
     {
-        unset($this->invokables[$id]);
+        if (!isset($this->runtimeDefinitionIds[$id])) {
+            return;
+        }
+
+        unset($this->invokables[$id], $this->runtimeDefinitionIds[$id]);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
