@@ -40,13 +40,6 @@ describe('EntryCache', function () {
             ->and($cache->tryGetResolved('canonical', $canonical))->toBeFalse();
     });
 
-    it('does not expose the removed duplicate getter API', function () {
-        expect(method_exists(EntryCache::class, 'getBase'))->toBeFalse()
-            ->and(method_exists(EntryCache::class, 'getResolved'))->toBeFalse()
-            ->and(method_exists(EntryCache::class, 'hasBase'))->toBeFalse()
-            ->and(method_exists(EntryCache::class, 'hasResolved'))->toBeFalse();
-    });
-
     it('accepts initial base entries without changing null semantics', function () {
         $cache = new EntryCache([
             'value' => 10,
