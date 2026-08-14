@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Fixture/container_helpers.php';
 
+use Componenta\Config\Config;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
-use Componenta\DI\Resolver\Entry\FactoryResolver;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Fixture\SimpleService;
 
 test('compiled shard cache never reuses a shard for a conflicting declared class', function () {
@@ -16,31 +16,26 @@ test('compiled shard cache never reuses a shard for a conflicting declared class
 
     try {
         $definition = minimalBuilder()->compileFactories([SimpleService::class], $directory)[SimpleService::class];
-        $runtime = minimalBuilder()->build();
-        $parameters = $runtime->get(ParametersResolver::class);
-        $attributes = $runtime->get(AttributeProcessor::class);
-
-        expect($parameters)->toBeInstanceOf(ParametersResolver::class)
-            ->and($attributes)->toBeInstanceOf(AttributeProcessor::class);
-
-        $resolver = new FactoryResolver(
+        $container = ContainerBuilder::configureFromCache(
+            new Config([]),
             [
-                'first' => $definition,
-                'second' => new CompiledFactoryDefinition(
-                    $definition->file,
-                    $definition->class . 'Mismatch',
-                    $definition->method,
-                ),
+                'version' => ContainerBuilder::CACHE_VERSION,
+                ConfigKey::DEPENDENCIES => [
+                    ConfigKey::FACTORIES => [
+                        'first' => $definition,
+                        'second' => new CompiledFactoryDefinition(
+                            $definition->file,
+                            $definition->class . 'Mismatch',
+                            $definition->method,
+                        ),
+                    ],
+                ],
             ],
-            $runtime,
-            $runtime,
-            $parameters,
-            $attributes,
             $directory,
-        );
+        )->build();
 
-        expect($resolver->resolve('first'))->toBeInstanceOf(SimpleService::class);
-        expect(fn() => $resolver->resolve('second'))
+        expect($container->make('first'))->toBeInstanceOf(SimpleService::class)
+            ->and(fn() => $container->make('second'))
             ->toThrow(InvalidConfigurationException::class);
     } finally {
         foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
