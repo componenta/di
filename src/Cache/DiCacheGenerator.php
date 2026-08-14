@@ -6,6 +6,7 @@ namespace Componenta\DI\Cache;
 
 use Componenta\DI\Compile\Definition\DefinitionCompiler;
 use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
+use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -37,7 +38,10 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             $config = ExportConfig::pretty()->withTrailingComma();
             $exported = (new VarExporter(
                 $config,
-                objectExporter: new DiCacheObjectExporter($config),
+                objectExporter: new DiCacheObjectExporter(
+                    $config,
+                    $this->trustedGeneratedCode($dependencies),
+                ),
             ))->export($cache);
         } catch (\Throwable $e) {
             throw new InvalidConfigurationException(
@@ -66,6 +70,28 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         if (function_exists('opcache_invalidate')) {
             @opcache_invalidate($path, true);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $dependencies
+     * @return array<int, true>
+     */
+    private function trustedGeneratedCode(array $dependencies): array
+    {
+        $trusted = [];
+        $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
+
+        if (!is_array($factories)) {
+            return $trusted;
+        }
+
+        foreach ($factories as $factory) {
+            if ($factory instanceof GeneratedDefinitionCode) {
+                $trusted[spl_object_id($factory)] = true;
+            }
+        }
+
+        return $trusted;
     }
 
     private function ensureDirectory(string $dir): void
