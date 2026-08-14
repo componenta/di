@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Compile\Definition;
 
 /**
- * Compiler-owned PHP expression inserted verbatim into the persistent cache.
+ * Immutable PHP expression returned by definition code generators.
  *
- * @internal
+ * The persistent-cache writer treats an instance as executable generated code
+ * only when that exact instance came from the configured definition compiler.
  */
 final readonly class GeneratedDefinitionCode
 {
