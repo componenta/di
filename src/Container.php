@@ -11,7 +11,6 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
-use Componenta\DI\Resolver\Entry\DefinitionRemovalInterface;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
@@ -47,8 +46,6 @@ final class Container implements
     private readonly CycleGuard $cycleGuard;
 
     private readonly ProxyFactoryInterface $proxyFactory;
-
-    private readonly RuntimeDefinitionRegistry $runtimeDefinitions;
 
     /**
      * Collaborators are wired via the constructor - no post-injection.
@@ -130,7 +127,6 @@ final class Container implements
         $this->externalContainers = $externalContainers;
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
-        $this->runtimeDefinitions = new RuntimeDefinitionRegistry();
     }
 
     /** Creates a container from a {@see Config} instance. */
@@ -253,19 +249,9 @@ final class Container implements
 
             $this->resolver->setDefinition($canonical, $entry);
             $this->cache->removeBase($canonical);
-            $this->runtimeDefinitions->mark($canonical);
         } else {
-            if ($this->runtimeDefinitions->has($canonical)) {
-                if (!$this->resolver instanceof DefinitionRemovalInterface) {
-                    throw new InvalidConfigurationException(sprintf(
-                        'Resolver "%s" cannot remove runtime definition "%s" before storing a value.',
-                        $this->resolver::class,
-                        $canonical,
-                    ));
-                }
-
+            if ($this->resolver instanceof DefinitionAwareResolverInterface) {
                 $this->resolver->removeDefinition($canonical);
-                $this->runtimeDefinitions->clear($canonical);
             }
 
             $this->cache->putBase($canonical, $entry);
