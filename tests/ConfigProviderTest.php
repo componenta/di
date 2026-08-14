@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Componenta\Config\Config;
 use Componenta\Config\ConfigKey;
 use Componenta\DI\ConfigProvider;
+use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Resolver\CastableResolver;
 use Componenta\DI\Resolver\CurrentUserResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
@@ -25,4 +28,21 @@ it('registers the lazy request resolver factory', function () {
         ->not->toContain('generated_entry_resolver_file')
         ->and($diDependencyKeys)
         ->not->toContain('generated_entry_resolver_release_fingerprint');
+});
+
+it('accepts factory definitions directly from a config provider factories section', function (): void {
+    $provider = new class () extends \Componenta\Config\ConfigProvider {
+        protected function getFactories(): array
+        {
+            return [
+                'provider.definition' => Definition::factory(
+                    static fn() => (object) ['source' => 'definition'],
+                ),
+            ];
+        }
+    };
+
+    $container = ContainerBuilder::configure(new Config($provider()))->build();
+
+    expect($container->get('provider.definition')->source)->toBe('definition');
 });
