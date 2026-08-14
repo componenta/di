@@ -8,6 +8,8 @@ use Closure;
 use Componenta\DI\AliasResolver;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
+use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -156,6 +158,11 @@ final class DependencyConfiguration
      * builder/config normalization, so callers observe one canonical resolver
      * configuration after this boundary.
      *
+     * Unknown DefinitionInterface implementations are valid declarative input
+     * at this boundary so a configured definition compiler can translate them
+     * before the persistent cache is written. Runtime resolver assembly still
+     * rejects definitions it does not support.
+     *
      * @param array<string, mixed> $dependencies
      * @phpstan-assert DependencyShape $dependencies
      */
@@ -303,10 +310,16 @@ final class DependencyConfiguration
                 }
 
                 if ($key === ConfigKey::FACTORIES) {
-                    FactorySpecificationValidator::assertValid($id, $value);
-
                     if ($value instanceof FactoryDefinition) {
                         $section[$id] = $value->value;
+                        continue;
+                    }
+
+                    if (!$value instanceof DefinitionInterface
+                        || $value instanceof ClassDefinition
+                        || $value instanceof CompiledFactoryDefinition
+                    ) {
+                        FactorySpecificationValidator::assertValid($id, $value);
                     }
                 } elseif ($key === ConfigKey::DELEGATORS) {
                     self::normalizeDelegatorList($value, $id);
