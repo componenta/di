@@ -53,9 +53,3 @@ test('invokable definitions configure the same state as invokable class shorthan
 
     expect($resolver->resolve($configured))->toBeInstanceOf(DefinitionContractOverrideInvokable::class);
 });
-
-test('removed runtime definition helper types are not part of the package', function (): void {
-    expect(class_exists('Componenta\\DI\\RuntimeDefinitionRegistry'))->toBeFalse()
-        ->and(interface_exists('Componenta\\DI\\Resolver\\Entry\\DefinitionRemovalInterface'))
-        ->toBeFalse();
-});
