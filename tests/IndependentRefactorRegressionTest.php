@@ -84,7 +84,9 @@ it('keeps opaque alias roots on the runtime path instead of treating them as mis
 
         expect($compiled)->toBe([]);
     } finally {
-        @rmdir($directory);
+        if (is_dir($directory)) {
+            rmdir($directory);
+        }
     }
 });
 
