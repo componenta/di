@@ -38,6 +38,32 @@ final class CompiledClassDefinitionNativeDefault
     public function __construct(public object $marker = new \stdClass()) {}
 }
 
+final readonly class CompiledClassDefinitionConfiguredMarker
+{
+    public function __construct(public string $value) {}
+}
+
+final class CompiledClassDefinitionConfiguredValueTarget
+{
+    public ?CompiledClassDefinitionConfiguredMarker $methodMarker = null;
+
+    /** @param array{marker: CompiledClassDefinitionConfiguredMarker} $nested */
+    public function __construct(
+        public CompiledClassDefinitionConfiguredMarker $marker,
+        public array $nested,
+    ) {}
+
+    public function configure(CompiledClassDefinitionConfiguredMarker $marker): void
+    {
+        $this->methodMarker = $marker;
+    }
+}
+
+final class CompiledClassDefinitionLiveReferenceTarget
+{
+    public function __construct(public object $dependency) {}
+}
+
 it('compiles configured ClassDefinition objects to closure factories in the persistent cache', function (): void {
     $root = sys_get_temp_dir() . '/componenta-class-definition-cache-' . bin2hex(random_bytes(5));
     $cacheFile = $root . '/container.php';
@@ -92,6 +118,60 @@ it('compiles configured ClassDefinition objects to closure factories in the pers
         $firstDefault = $container->make(CompiledClassDefinitionNativeDefault::class);
         $secondDefault = $container->make(CompiledClassDefinitionNativeDefault::class);
         expect($firstDefault->marker)->not->toBe($secondDefault->marker);
+    } finally {
+        @unlink($cacheFile);
+        @rmdir($root);
+    }
+});
+
+it('preserves configured object identity while keeping references live after cache compilation', function (): void {
+    $root = sys_get_temp_dir() . '/componenta-class-definition-identity-' . bin2hex(random_bytes(5));
+    $cacheFile = $root . '/container.php';
+    $configuredMarker = new CompiledClassDefinitionConfiguredMarker('configured');
+    $firstDependency = (object) ['version' => 1];
+
+    try {
+        (new DiCacheGenerator())->generate([
+            ConfigKey::FACTORIES => [
+                CompiledClassDefinitionConfiguredValueTarget::class => ClassDefinition::create(
+                    CompiledClassDefinitionConfiguredValueTarget::class,
+                )->constructor([
+                    'marker' => $configuredMarker,
+                    'nested' => ['marker' => $configuredMarker],
+                ])->method('configure', [$configuredMarker]),
+                CompiledClassDefinitionLiveReferenceTarget::class => ClassDefinition::create(
+                    CompiledClassDefinitionLiveReferenceTarget::class,
+                )->constructor([
+                    'dependency' => Definition::reference('live.dependency'),
+                ]),
+            ],
+            ConfigKey::SERVICES => [
+                'live.dependency' => $firstDependency,
+            ],
+        ], $cacheFile);
+
+        $container = ContainerBuilder::configureFromCache(
+            new Config([]),
+            require $cacheFile,
+            $root,
+        )->build();
+
+        $first = $container->make(CompiledClassDefinitionConfiguredValueTarget::class);
+        $second = $container->make(CompiledClassDefinitionConfiguredValueTarget::class);
+
+        expect($first->marker)->toBe($first->nested['marker'])
+            ->and($first->methodMarker)->toBe($first->marker)
+            ->and($second->marker)->toBe($first->marker)
+            ->and($second->nested['marker'])->toBe($first->marker)
+            ->and($second->methodMarker)->toBe($first->marker);
+
+        $firstReference = $container->make(CompiledClassDefinitionLiveReferenceTarget::class);
+        $secondDependency = (object) ['version' => 2];
+        $container->set('live.dependency', $secondDependency);
+        $secondReference = $container->make(CompiledClassDefinitionLiveReferenceTarget::class);
+
+        expect($firstReference->dependency)->not->toBe($secondReference->dependency)
+            ->and($secondReference->dependency)->toBe($secondDependency);
     } finally {
         @unlink($cacheFile);
         @rmdir($root);
