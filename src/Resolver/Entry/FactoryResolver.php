@@ -32,8 +32,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
 
-    /** @var array<string, true> */
-    private array $runtimeDefinitionIds = [];
+    /** @var array<string, DefinitionInterface> */
+    private array $runtimeDefinitions = [];
 
     private readonly ExplicitParametersResolver $explicitParametersResolver;
 
@@ -61,7 +61,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
 
     public function can(string $id): bool
     {
-        return isset($this->factories[$id]);
+        return isset($this->runtimeDefinitions[$id]) || isset($this->factories[$id]);
     }
 
     /**
@@ -79,14 +79,13 @@ class FactoryResolver implements DefinitionAwareResolverInterface
                 return ($this->compiledFactories[$id])($context);
             }
 
-            $definition = $this->factories[$id];
+            $definition = $this->factory($id);
             $compiled = CompiledFactoryDefinition::decode($definition);
             if ($compiled !== null) {
                 $factory = $this->compiledFactory(
                     $compiled,
                     $definition instanceof CompiledFactoryDefinition,
                 );
-                $this->factories[$id] = $compiled;
                 $this->compiledFactories[$id] = $factory;
 
                 return $factory($context);
@@ -108,7 +107,7 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     /** @return callable(ContainerValue, array<string|int, mixed>): mixed */
     private function resolveFactory(string $id): callable
     {
-        $factory = $this->factories[$id];
+        $factory = $this->factory($id);
 
         if ($factory instanceof FactoryDefinition) {
             $factory = $factory->value;
@@ -315,22 +314,17 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         FactorySpecificationValidator::assertValid($id, $definition);
-        $this->factories[$id] = $definition;
-        $this->runtimeDefinitionIds[$id] = true;
+        $this->runtimeDefinitions[$id] = $definition;
         unset($this->compiledFactories[$id]);
     }
 
     public function removeDefinition(string $id): void
     {
-        if (!isset($this->runtimeDefinitionIds[$id])) {
+        if (!isset($this->runtimeDefinitions[$id])) {
             return;
         }
 
-        unset(
-            $this->factories[$id],
-            $this->compiledFactories[$id],
-            $this->runtimeDefinitionIds[$id],
-        );
+        unset($this->runtimeDefinitions[$id], $this->compiledFactories[$id]);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
@@ -338,5 +332,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface
         return $definition instanceof FactoryDefinition
             || $definition instanceof ClassDefinition
             || $definition instanceof CompiledFactoryDefinition;
+    }
+
+    private function factory(string $id): mixed
+    {
+        return $this->runtimeDefinitions[$id] ?? $this->factories[$id];
     }
 }
