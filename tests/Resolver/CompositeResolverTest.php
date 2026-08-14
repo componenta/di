@@ -54,6 +54,11 @@ function definitionAwareResolver(array $supported = [FactoryDefinition::class]):
             $this->definitions[$id] = $definition;
         }
 
+        public function removeDefinition(string $id): void
+        {
+            unset($this->definitions[$id]);
+        }
+
         public function supportsDefinition(DefinitionInterface $definition): bool
         {
             return in_array($definition::class, $this->supported, true);
@@ -170,6 +175,18 @@ describe('Resolver\\CompositeResolver', function () {
             $composite->setDefinition('svc', $definition);
 
             expect($aware->definitions)->toBe(['svc' => $definition]);
+        });
+
+        it('forwards removeDefinition to runtime definition owners', function () {
+            $composite = new CompositeResolver();
+            $aware = definitionAwareResolver();
+            $composite->addResolver($aware);
+
+            $composite->setDefinition('svc', new FactoryDefinition(fn() => 'value'));
+            $composite->removeDefinition('svc');
+
+            expect($aware->definitions)->toBe([])
+                ->and($composite->can('svc'))->toBeFalse();
         });
 
         it('throws InvalidConfigurationException when no resolver supports the definition', function () {
