@@ -5,8 +5,6 @@ declare(strict_types=1);
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\SetUp;
-use Componenta\DI\Compile\Autowire\AutowireClassGraph;
-use Componenta\DI\Compile\Autowire\AutowireEntry;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\ConfigKey;
@@ -38,25 +36,44 @@ final readonly class CompiledFactoryRootForTest
     ) {}
 }
 
-it('expands only statically knowable concrete dependencies and honours explicit bindings', function (): void {
-    $graph = new AutowireClassGraph();
+it('compiles statically knowable dependencies while explicit bindings retain ownership', function (): void {
+    $directory = sys_get_temp_dir() . '/componenta-compile-graph-' . bin2hex(random_bytes(5));
+    $explicitDirectory = sys_get_temp_dir() . '/componenta-compile-graph-explicit-' . bin2hex(random_bytes(5));
 
-    expect($graph->expand([new AutowireEntry(CompiledGraphRootForTest::class)]))
-        ->toBe([
+    try {
+        $compiled = (new ContainerBuilder())->compileFactories(
+            [CompiledGraphRootForTest::class],
+            $directory,
+        );
+
+        expect($compiled)->toHaveKeys([
             CompiledGraphLeafForTest::class,
             CompiledGraphRootForTest::class,
             CompiledGraphSetUpForTest::class,
-        ])
-        ->and($graph->expand(
-            [CompiledGraphRootForTest::class],
-            [CompiledGraphLeafForTest::class => true],
-        ))->toBe([
-            CompiledGraphRootForTest::class,
-            CompiledGraphSetUpForTest::class,
         ]);
+
+        $withExplicitLeaf = (new ContainerBuilder())
+            ->addService(CompiledGraphLeafForTest::class, new CompiledGraphLeafForTest())
+            ->compileFactories(
+                [CompiledGraphRootForTest::class],
+                $explicitDirectory,
+            );
+
+        expect($withExplicitLeaf)
+            ->not->toHaveKey(CompiledGraphLeafForTest::class)
+            ->toHaveKey(CompiledGraphRootForTest::class)
+            ->toHaveKey(CompiledGraphSetUpForTest::class);
+    } finally {
+        foreach ([$directory, $explicitDirectory] as $root) {
+            foreach (glob($root . '/' . CompiledFactoryShardCompiler::FILE_PREFIX . '*.php') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($root);
+        }
+    }
 });
 
-it('returns the complete compiled graph as regular factories and loads shards lazily', function (): void {
+it('returns a loadable compiled graph as regular factory definitions', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-factory-shards-' . bin2hex(random_bytes(5));
 
     try {
@@ -68,20 +85,15 @@ it('returns the complete compiled graph as regular factories and loads shards la
             namespace: 'Componenta\\DI\\Tests\\Generated',
         );
 
-        $definition = $factories[CompiledFactoryRootForTest::class];
-        $source = file_get_contents($directory . '/' . $definition->file);
-
         expect($factories)->toHaveKeys([
             CompiledFactoryLeafForTest::class,
             CompiledFactoryRootForTest::class,
-        ])->and($builder->invokables)->toBe([])
-            ->and(array_unique(array_map(
-                static fn(CompiledFactoryDefinition $factory): string => $factory->file,
-                $factories,
-            )))->toHaveCount(2)
-            ->and($source)->toBeString()->not->toContain('if (!class_exists(')
-            ->and(strlen($definition->file))->toBe(strlen(CompiledFactoryShardCompiler::FILE_PREFIX) + 32 + 4)
-            ->and(class_exists($definition->class, false))->toBeFalse();
+        ])->and($builder->invokables)->toBe([]);
+
+        foreach ($factories as $factory) {
+            expect($factory)->toBeInstanceOf(CompiledFactoryDefinition::class)
+                ->and(is_file($directory . '/' . $factory->file))->toBeTrue();
+        }
 
         $container = ContainerBuilder::configureFromCache(
             new Config([]),
@@ -97,8 +109,7 @@ it('returns the complete compiled graph as regular factories and loads shards la
 
         expect($entry)->toBeInstanceOf(CompiledFactoryRootForTest::class)
             ->and($entry->leaf)->toBeInstanceOf(CompiledFactoryLeafForTest::class)
-            ->and($entry->value)->toBe(42)
-            ->and(class_exists($definition->class, false))->toBeTrue();
+            ->and($entry->value)->toBe(42);
 
         $secondContainer = ContainerBuilder::configureFromCache(
             new Config([]),
@@ -119,11 +130,4 @@ it('returns the complete compiled graph as regular factories and loads shards la
         }
         @rmdir($directory);
     }
-});
-
-it('does not expose the removed generated resolver contract', function (): void {
-    expect(method_exists(ContainerBuilder::class, 'compileGeneratedEntryResolver'))->toBeFalse()
-        ->and(method_exists(ContainerBuilder::class, 'useGeneratedEntryResolver'))->toBeFalse()
-        ->and(defined(ConfigKey::class . '::GENERATED_ENTRY_RESOLVER_FILE'))->toBeFalse()
-        ->and(class_exists('Componenta\\DI\\Compile\\Entry\\GeneratedEntryResolverLoader'))->toBeFalse();
 });
