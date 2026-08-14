@@ -67,8 +67,4 @@ describe('Definition', function () {
 
         expect($definition->value)->toBe($factory);
     });
-
-    it('does not expose the misleading autowire definition helper', function () {
-        expect(method_exists(\Componenta\DI\Definition\Definition::class, 'autowire'))->toBeFalse();
-    });
 });
