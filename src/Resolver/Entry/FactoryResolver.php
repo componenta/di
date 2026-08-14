@@ -24,13 +24,16 @@ use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
 /** Resolves container entries using factory callables or class definitions. */
-class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRemovalInterface
+class FactoryResolver implements DefinitionAwareResolverInterface
 {
     /** @var array<string, object> */
     private array $compiledShards = [];
 
     /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
+
+    /** @var array<string, true> */
+    private array $runtimeDefinitionIds = [];
 
     private readonly ExplicitParametersResolver $explicitParametersResolver;
 
@@ -313,12 +316,21 @@ class FactoryResolver implements DefinitionAwareResolverInterface, DefinitionRem
 
         FactorySpecificationValidator::assertValid($id, $definition);
         $this->factories[$id] = $definition;
+        $this->runtimeDefinitionIds[$id] = true;
         unset($this->compiledFactories[$id]);
     }
 
     public function removeDefinition(string $id): void
     {
-        unset($this->factories[$id], $this->compiledFactories[$id]);
+        if (!isset($this->runtimeDefinitionIds[$id])) {
+            return;
+        }
+
+        unset(
+            $this->factories[$id],
+            $this->compiledFactories[$id],
+            $this->runtimeDefinitionIds[$id],
+        );
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
