@@ -17,8 +17,8 @@ class InvokableResolver implements DefinitionAwareResolverInterface
     /** @var array<string, class-string> */
     private array $invokables = [];
 
-    /** @var array<string, true> */
-    private array $runtimeDefinitionIds = [];
+    /** @var array<string, class-string> */
+    private array $runtimeDefinitions = [];
 
     /** @param list<class-string> $invokables */
     public function __construct(array $invokables = [])
@@ -36,7 +36,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
 
     public function can(string $id): bool
     {
-        return isset($this->invokables[$id]);
+        return isset($this->runtimeDefinitions[$id]) || isset($this->invokables[$id]);
     }
 
     /** @param array<string|int, mixed> $context */
@@ -46,7 +46,7 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             throw NotFoundException::forService($id);
         }
 
-        $class = $this->invokables[$id];
+        $class = $this->runtimeDefinitions[$id] ?? $this->invokables[$id];
 
         try {
             return new $class();
@@ -67,17 +67,12 @@ class InvokableResolver implements DefinitionAwareResolverInterface
             );
         }
 
-        $this->invokables[$id] = $definition->value;
-        $this->runtimeDefinitionIds[$id] = true;
+        $this->runtimeDefinitions[$id] = $definition->value;
     }
 
     public function removeDefinition(string $id): void
     {
-        if (!isset($this->runtimeDefinitionIds[$id])) {
-            return;
-        }
-
-        unset($this->invokables[$id], $this->runtimeDefinitionIds[$id]);
+        unset($this->runtimeDefinitions[$id]);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
