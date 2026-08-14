@@ -379,16 +379,19 @@ describe('ContainerBuilder', function () {
             ->toThrow(NotFoundException::class);
     });
 
-    it('keeps local base entries ahead of external containers deterministically', function () {
+    it('keeps external containers ahead of cached local entries deterministically', function () {
         $container = (new ContainerBuilder())
             ->addService('builder.shared', 'local')
             ->build();
+
+        expect($container->get('builder.shared'))->toBe('local');
+
         $container->addContainer(new BuilderExternalContainer([
             'builder.shared' => 'external',
             'builder.external-only' => 'external-only',
         ]));
 
-        expect($container->get('builder.shared'))->toBe('local')
+        expect($container->get('builder.shared'))->toBe('external')
             ->and($container->get('builder.external-only'))->toBe('external-only')
             ->and(fn() => $container->addContainer($container))
             ->toThrow(InvalidConfigurationException::class);
