@@ -12,6 +12,8 @@ use Componenta\DI\Resolver\CurrentUserResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolverFactory;
 
+final class ConfigProviderInvokableDefinitionFixture {}
+
 it('registers the lazy request resolver factory', function () {
     $config = (new ConfigProvider())();
 
@@ -45,4 +47,25 @@ it('accepts factory definitions directly from a config provider factories sectio
     $container = ContainerBuilder::configure(new Config($provider()))->build();
 
     expect($container->get('provider.definition')->source)->toBe('definition');
+});
+
+it('accepts invokable definitions directly from a config provider invokables section', function (): void {
+    $provider = new class () extends \Componenta\Config\ConfigProvider {
+        protected function getInvokables(): array
+        {
+            return [
+                Definition::invokable(ConfigProviderInvokableDefinitionFixture::class),
+                'provider.invokable.alias' => Definition::invokable(
+                    ConfigProviderInvokableDefinitionFixture::class,
+                ),
+            ];
+        }
+    };
+
+    $container = ContainerBuilder::configure(new Config($provider()))->build();
+
+    expect($container->get(ConfigProviderInvokableDefinitionFixture::class))
+        ->toBeInstanceOf(ConfigProviderInvokableDefinitionFixture::class)
+        ->and($container->get('provider.invokable.alias'))
+        ->toBeInstanceOf(ConfigProviderInvokableDefinitionFixture::class);
 });
