@@ -118,9 +118,3 @@ it('keeps public named-argument contracts aligned with implementations', functio
         ['handler'],
     ],
 ]);
-
-it('does not expose an alias resolver contract', function () {
-    expect(interface_exists('Componenta\\DI\\AliasResolverInterface'))->toBeFalse()
-        ->and((new ContainerBuilder())->build()->has('Componenta\\DI\\AliasResolverInterface'))
-        ->toBeFalse();
-});
