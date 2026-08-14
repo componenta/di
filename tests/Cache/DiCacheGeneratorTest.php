@@ -107,6 +107,37 @@ describe('Cache\\DiCacheGenerator', function () {
         }
     });
 
+    it('normalizes directory creation warnings into the DI exception boundary', function (): void {
+        $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'di_cache_directory_' . bin2hex(random_bytes(4));
+        $blocker = $root . DIRECTORY_SEPARATOR . 'blocker';
+        $target = $blocker . DIRECTORY_SEPARATOR . 'cache.php';
+        $warnings = [];
+        mkdir($root);
+        file_put_contents($blocker, 'not-a-directory');
+
+        set_error_handler(
+            static function (int $_severity, string $message) use (&$warnings): bool {
+                $warnings[] = $message;
+
+                return true;
+            },
+            E_WARNING,
+        );
+
+        try {
+            expect(fn() => (new DiCacheGenerator())->generate(
+                [ConfigKey::SERVICES => ['fresh' => true]],
+                $target,
+            ))->toThrow(InvalidConfigurationException::class, 'Failed to create DI cache directory');
+
+            expect($warnings)->toBe([]);
+        } finally {
+            restore_error_handler();
+            @unlink($blocker);
+            @rmdir($root);
+        }
+    });
+
     it('replaces an existing file without retaining previous contents', function () {
         $generator = new DiCacheGenerator();
         file_put_contents($this->path, '<?php return ["previous" => true];');

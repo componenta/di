@@ -21,6 +21,7 @@ use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Componenta\DI\Tests\Fixture\FakeUploadedFile;
+use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Error\ErrorMessageCollector;
 use Componenta\Validation\Error\ErrorMessageCollectorInterface;
 use Componenta\Validation\Exception\ValidationException;
@@ -174,16 +175,29 @@ it('rejects malformed raw transport data before mapper transformation can normal
 
         public function validate(
             iterable $data,
-            ?\Componenta\Validation\ContextInterface $context = null,
+            ?ContextInterface $context = null,
         ): true|ErrorMessageCollectorInterface {
             $data = is_array($data) ? $data : iterator_to_array($data);
-            $this->validated[] = $data;
+            $throwOnFailure = $context?->getAttribute(
+                ContextInterface::THROW_ON_FAILURE_ATTRIBUTE,
+                false,
+            ) === true;
+            $this->validated[] = [
+                'data' => $data,
+                'throwOnFailure' => $throwOnFailure,
+            ];
 
-            if (array_key_exists('raw', $data)) {
-                throw new ValidationException(new ErrorMessageCollector());
+            if (!array_key_exists('raw', $data)) {
+                return true;
             }
 
-            return true;
+            $errors = new ErrorMessageCollector();
+
+            if ($throwOnFailure) {
+                throw new ValidationException($errors);
+            }
+
+            return $errors;
         }
     };
     $validation = new class ($validator) implements ValidationProviderInterface {
@@ -205,5 +219,8 @@ it('rejects malformed raw transport data before mapper transformation can normal
         [ServerRequestInterface::class => $request],
     ))->toThrow(ValidationException::class);
 
-    expect($validated)->toBe([['raw' => '7']]);
+    expect($validated)->toBe([[
+        'data' => ['raw' => '7'],
+        'throwOnFailure' => true,
+    ]]);
 });

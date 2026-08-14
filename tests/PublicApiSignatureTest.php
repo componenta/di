@@ -35,21 +35,34 @@ use Componenta\DI\CallableInvoker;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\CallableResolverInterface;
+use Componenta\DI\Compile\Autowire\AutowireEntry;
 use Componenta\DI\Compile\Definition\ClassDefinitionCodeGenerator;
 use Componenta\DI\Compile\Definition\DefinitionCodeGeneratorInterface;
+use Componenta\DI\Compile\Definition\DefinitionCodeGeneratorRegistry;
 use Componenta\DI\Compile\Definition\DefinitionCompiler;
 use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
+use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
+use Componenta\DI\Definition\FactoryDefinition;
+use Componenta\DI\Definition\InvokableDefinition;
+use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\LazyObjectFactoryInterface;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactory;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\Request\LazyFactory;
 use Componenta\DI\VirtualProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
+
+/*
+ * Explicit SemVer manifest for the named-argument surface documented in README.
+ * Adding a documented public entry point should add its parameter names here.
+ */
 
 it('keeps public named-argument contracts aligned with implementations', function (
     string $implementation,
@@ -147,6 +160,30 @@ it('keeps public named-argument contracts aligned with implementations', functio
         'compile',
         ['dependencies'],
     ],
+    'parameter resolver supports' => [
+        ParameterResolverInterface::class,
+        ParameterResolverInterface::class,
+        'supports',
+        ['target'],
+    ],
+    'parameter resolver resolve' => [
+        ParameterResolverInterface::class,
+        ParameterResolverInterface::class,
+        'resolveParameter',
+        ['target', 'context'],
+    ],
+    'attribute handler supports' => [
+        AttributeHandlerInterface::class,
+        AttributeHandlerInterface::class,
+        'supportsAttribute',
+        ['attributeClass', 'target'],
+    ],
+    'attribute handler handle' => [
+        AttributeHandlerInterface::class,
+        AttributeHandlerInterface::class,
+        'handle',
+        ['attribute', 'target', 'context'],
+    ],
     'builder configure from cache' => [
         ContainerBuilder::class,
         ContainerBuilder::class,
@@ -230,6 +267,25 @@ it('keeps concrete public API named arguments stable', function (
     'definition factory' => [Definition::class, 'factory', ['factory']],
     'definition reference' => [Definition::class, 'reference', ['entryId']],
     'definition invokable' => [Definition::class, 'invokable', ['className']],
+    'factory definition constructor' => [FactoryDefinition::class, '__construct', ['value']],
+    'reference definition constructor' => [ReferenceDefinition::class, '__construct', ['value']],
+    'invokable definition constructor' => [InvokableDefinition::class, '__construct', ['value']],
+    'compiled factory definition constructor' => [
+        CompiledFactoryDefinition::class,
+        '__construct',
+        ['file', 'class', 'method'],
+    ],
+    'autowire entry constructor' => [AutowireEntry::class, '__construct', ['class']],
+    'definition generator registry register' => [
+        DefinitionCodeGeneratorRegistry::class,
+        'register',
+        ['definitionClass', 'generator'],
+    ],
+    'definition generator registry find' => [
+        DefinitionCodeGeneratorRegistry::class,
+        'find',
+        ['definition'],
+    ],
     'class definition constructor' => [
         ClassDefinition::class,
         '__construct',

@@ -10,6 +10,7 @@ use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\WarningGuard;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
 use Componenta\VarExport\VarExporter;
@@ -54,23 +55,30 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
         $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
+        $written = WarningGuard::run(
+            static fn(): int|false => file_put_contents($tmp, $contents, LOCK_EX),
+        );
 
-        if (file_put_contents($tmp, $contents, LOCK_EX) === false) {
-            @unlink($tmp);
+        if ($written === false) {
+            WarningGuard::run(static fn(): bool => unlink($tmp));
             throw new InvalidConfigurationException(
                 sprintf('Failed to write DI cache temp file: %s', $tmp),
             );
         }
 
-        if (!$this->renameWithoutWarning($tmp, $path)) {
-            @unlink($tmp);
+        $committed = WarningGuard::run(
+            static fn(): bool => rename($tmp, $path),
+        );
+
+        if (!$committed) {
+            WarningGuard::run(static fn(): bool => unlink($tmp));
             throw new InvalidConfigurationException(
                 sprintf('Failed to commit DI cache file: %s', $path),
             );
         }
 
         if (function_exists('opcache_invalidate')) {
-            @opcache_invalidate($path, true);
+            WarningGuard::run(static fn(): bool => opcache_invalidate($path, true));
         }
     }
 
@@ -119,24 +127,14 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             return;
         }
 
-        if (!mkdir($dir, 0o755, recursive: true) && !is_dir($dir)) {
+        $created = WarningGuard::run(
+            static fn(): bool => mkdir($dir, 0o755, recursive: true),
+        );
+
+        if (!$created && !is_dir($dir)) {
             throw new InvalidConfigurationException(
                 sprintf('Failed to create DI cache directory: %s', $dir),
             );
-        }
-    }
-
-    private function renameWithoutWarning(string $from, string $to): bool
-    {
-        set_error_handler(
-            static fn(int $_severity, string $_message, string $_file, int $_line): bool => true,
-            E_WARNING,
-        );
-
-        try {
-            return rename($from, $to);
-        } finally {
-            restore_error_handler();
         }
     }
 }
