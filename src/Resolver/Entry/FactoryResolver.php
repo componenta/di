@@ -110,6 +110,8 @@ class FactoryResolver implements DefinitionAwareResolverInterface
     private function resolveFactory(string $id): callable
     {
         $factory = $this->factories[$id];
+        $validateResolvedCallable = !($factory instanceof ClassDefinition)
+            && (is_string($factory) || !is_callable($factory));
 
         if ($factory instanceof ClassDefinition) {
             $factory = $this->createFactoryFromDefinition($factory);
@@ -140,6 +142,10 @@ class FactoryResolver implements DefinitionAwareResolverInterface
                 $id,
                 get_debug_type($factory),
             ));
+        }
+
+        if ($validateResolvedCallable) {
+            FactorySpecificationValidator::assertResolvedCallable($id, $factory);
         }
 
         return $factory;

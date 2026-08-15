@@ -32,6 +32,7 @@ use Componenta\DI\Resolver\ConfigAttributeResolver;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
+use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
@@ -870,6 +871,7 @@ class ContainerBuilder
     public function addFactory(string $id, callable $factory): static
     {
         self::assertBindingIdAvailable($id, 'factory');
+        FactorySpecificationValidator::assertValid($id, $factory);
         $this->invalidateBindingValidationFor($id, 'factory');
         $this->factories[$id] = $factory;
 

@@ -312,6 +312,7 @@ final class DependencyConfiguration
 
                 if ($key === ConfigKey::FACTORIES) {
                     if ($value instanceof FactoryDefinition) {
+                        FactorySpecificationValidator::assertValid($id, $value);
                         $section[$id] = $value->value;
                         continue;
                     }
