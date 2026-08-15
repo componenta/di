@@ -7,7 +7,7 @@ namespace Componenta\DI;
 use Componenta\Config\Config;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\CircularDependencyException;
-use Componenta\DI\Exception\DelegatorException;
+use Componenta\DI\Exception\ConcurrentResolutionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
@@ -24,7 +24,7 @@ use Throwable;
  * collaborator so responsibilities stay sharp and testable.
  *
  *  - {@see EntryResolverInterface}        - chain that actually builds entries.
- *  - {@see AliasResolverInterface}        - alias -> canonical id resolution.
+ *  - {@see AliasResolver}                 - internal alias -> canonical id resolution.
  *  - {@see CallableExecutorInterface}     - resolve-and-invoke pipeline.
  *  - {@see ProxyFactoryInterface}         - produces lazy objects / virtual proxies.
  *  - {@see EntryCache}                    - two-tier base/decorated cache.
@@ -32,33 +32,35 @@ use Throwable;
  *  - {@see ExternalContainerRegistry}     - delegated PSR-11 containers.
  *  - {@see CycleGuard}                    - circular-dependency detection.
  */
-final readonly class Container implements
+final class Container implements
     ContainerInterface,
     FactoryInterface,
     CallableInvokerInterface,
     ProxyFactoryInterface
 {
-    private EntryCache $cache;
+    private readonly EntryCache $cache;
 
-    private DelegatorRegistry $delegators;
+    private readonly DelegatorRegistry $delegators;
 
-    private ExternalContainerRegistry $externalContainers;
+    private ?ExternalContainerRegistry $externalContainers = null;
 
-    private CycleGuard $cycleGuard;
+    private readonly CycleGuard $cycleGuard;
 
-    private ProxyFactoryInterface $proxyFactory;
+    private readonly ProxyFactoryInterface $proxyFactory;
 
     /**
      * Collaborators are wired via the constructor - no post-injection.
      *
-     * The internal state holders are optional in the signature so tests and
-     * bespoke bootstrap code can plug in replacements; the builder always
-     * passes fresh instances.
+     * Internal state holders are optional so tests and bespoke bootstrap code
+     * can plug in replacements. The external-container registry remains null
+     * until an external container is actually registered.
+     *
+     * @param array<array-key, mixed> $bootstrapServices
      */
     public function __construct(
-        private EntryResolverInterface    $resolver,
-        private AliasResolverInterface    $aliases,
-        private CallableExecutorInterface $callableExecutor,
+        private readonly EntryResolverInterface    $resolver,
+        private readonly AliasResolver             $aliases,
+        private readonly CallableExecutorInterface $callableExecutor,
         ?EntryCache $cache = null,
         ?DelegatorRegistry $delegators = null,
         ?ExternalContainerRegistry $externalContainers = null,
@@ -74,7 +76,7 @@ final readonly class Container implements
             LazyObjectFactoryInterface::class => $this,
             VirtualProxyFactoryInterface::class => $this,
             self::class => $this,
-            AliasResolverInterface::class => $this->aliases,
+            CallableResolverInterface::class => $this->callableExecutor,
             CallableExecutorInterface::class => $this->callableExecutor,
         ];
         $validatedBootstrapServices = [];
@@ -83,7 +85,7 @@ final readonly class Container implements
             if (!is_string($id) || ($expected = ProtectedServiceIds::bootstrapType($id)) === null) {
                 throw new InvalidConfigurationException(sprintf(
                     'Unsupported bootstrap service id "%s".',
-                    is_scalar($id) ? (string) $id : get_debug_type($id),
+                    (string) $id,
                 ));
             }
 
@@ -122,15 +124,13 @@ final readonly class Container implements
             }
         }
 
-        $this->delegators         = $delegators ?? new DelegatorRegistry($this->callableExecutor);
-        $this->externalContainers = $externalContainers ?? new ExternalContainerRegistry();
-        $this->cycleGuard         = $cycleGuard ?? new CycleGuard();
-        $this->proxyFactory       = $proxyFactory ?? new ProxyFactory();
+        $this->delegators = $delegators ?? new DelegatorRegistry($this->callableExecutor);
+        $this->externalContainers = $externalContainers;
+        $this->cycleGuard = $cycleGuard ?? new CycleGuard();
+        $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
     }
 
-    /**
-     * Creates a container from a {@see Config} instance.
-     */
+    /** Creates a container from a {@see Config} instance. */
     public static function create(Config $config): Container
     {
         return ContainerBuilder::configure($config)->build();
@@ -140,47 +140,56 @@ final readonly class Container implements
      * Retrieves an entry by identifier.
      *
      * Resolution order:
-     * 1. Decorated cache (by requested id).
-     * 2. Alias resolution to canonical id.
-     * 3. Local base cache by canonical id.
-     * 4. External PSR-11 containers (inside the cycle guard).
-     * 5. Resolver chain.
-     * 6. Delegators applied on top of the produced value.
+     * 1. External PSR-11 containers receive the original requested id.
+     * 2. Decorated local cache by requested id.
+     * 3. Local alias resolution to the canonical id.
+     * 4. Local base cache by canonical id.
+     * 5. Local resolver chain.
+     * 6. Local delegators and decorated cache.
+     *
+     * Local aliases are never forwarded to external containers. External
+     * entries are returned directly; the external container owns their
+     * caching and lifecycle.
      *
      * @throws NotFoundException           If no resolver can handle the entry.
      * @throws CircularDependencyException If a cycle is detected.
+     * @throws ConcurrentResolutionException If another execution context is constructing the shared entry.
      * @throws ResolutionException         If a resolver fails hard.
      */
     public function get(string $id): mixed
     {
+        $externalGuard = "\0external:" . $id;
+        $this->cycleGuard->enter($externalGuard);
+
+        try {
+            $external = $this->externalContainers?->findOwning($id);
+            if ($external !== null) {
+                return $external->get($id);
+            }
+        } finally {
+            $this->cycleGuard->leave($externalGuard);
+        }
+
         if ($this->cache->tryGetResolved($id, $entry)) {
             return $entry;
         }
 
         $entryId = $this->aliases->resolve($id);
-        $this->cycleGuard->enter($entryId);
+        $this->cycleGuard->enterShared($entryId);
 
         try {
             return $this->resolveAndStore($id, $entryId);
         } finally {
-            $this->cycleGuard->leave($entryId);
+            $this->cycleGuard->leaveShared($entryId);
         }
     }
 
-    /**
-     * Core resolution step run inside the cycle guard.
-     */
+    /** Core local resolution step run inside the cycle guard. */
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
         if (!$this->cache->tryGetBase($entryId, $entry)) {
-            $external = $this->externalContainers->findOwning($entryId);
-
-            if ($external !== null) {
-                $entry = $external->get($entryId);
-            } else {
-                $entry = $this->resolver->resolve($entryId);
-                $this->cache->putBase($entryId, $entry);
-            }
+            $entry = $this->resolver->resolve($entryId);
+            $this->cache->putBase($entryId, $entry);
         }
 
         $entry = $this->delegators->apply($requestedId, $entry, $this);
@@ -191,26 +200,22 @@ final readonly class Container implements
 
     public function has(string $id): bool
     {
-        if ($this->cache->tryGetResolved($id, $resolved)) {
-            return true;
-        }
-
-        // Only container-typed failures collapse to "absent"; real bugs
-        // (e.g. TypeError in a resolver's can()) propagate. A distinct guard
-        // key prevents mutually delegated containers from recursively probing
-        // each other's has() forever without interfering with service-cycle
-        // diagnostics used by get().
         try {
-            $entryId = $this->aliases->resolve($id);
-            $guardId = "\0has:" . $entryId;
+            $guardId = "\0has:" . $id;
             $this->cycleGuard->enter($guardId);
 
             try {
-                if ($this->cache->tryGetBase($entryId, $base)) {
+                if ($this->externalContainers?->findOwning($id) !== null) {
                     return true;
                 }
 
-                if ($this->externalContainers->findOwning($entryId) !== null) {
+                if ($this->cache->tryGetResolved($id, $resolved)) {
+                    return true;
+                }
+
+                $entryId = $this->aliases->resolve($id);
+
+                if ($this->cache->tryGetBase($entryId, $base)) {
                     return true;
                 }
 
@@ -223,22 +228,9 @@ final readonly class Container implements
         }
     }
 
-    /**
-     * Registers an entry or definition.
-     *
-     * Aliases are resolved before the base cache write so that a value set
-     * under an alias name lands at the canonical id - otherwise
-     * the local base cache (which is keyed by canonical id) would miss it and recreate the entry from scratch.
-     *
-     * Definitions use the same canonical id as ordinary values. Otherwise a
-     * definition registered through an alias could never be reached because
-     * get() resolves aliases before consulting the resolver chain.
-     *
-     * @throws InvalidConfigurationException If the definition type is not
-     *                                       supported by the resolver.
-     */
     public function set(string $id, mixed $entry): void
     {
+        self::assertMutableId($id, 'entry');
         $canonical = $this->aliases->resolve($id);
 
         if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
@@ -248,6 +240,8 @@ final readonly class Container implements
             ));
         }
 
+        $affectedDependencies = $this->deferredDependenciesResolvingTo($canonical);
+
         if ($entry instanceof DefinitionInterface) {
             if (!$this->resolver instanceof DefinitionAwareResolverInterface
                 || !$this->resolver->supportsDefinition($entry)
@@ -255,84 +249,55 @@ final readonly class Container implements
                 throw InvalidConfigurationException::forInvalidDefinition($entry);
             }
 
-            $this->cache->removeBase($canonical);
             $this->resolver->setDefinition($canonical, $entry);
+            $this->cache->removeBase($canonical);
         } else {
             $this->cache->putBase($canonical, $entry);
         }
 
         $this->invalidate($id);
+        $this->invalidateDeferredDelegators($affectedDependencies);
     }
 
-    /**
-     * Creates a new instance with dependency injection.
-     *
-     * Differences from {@see get()}:
-     *  - Always returns a fresh instance - never consults or populates the
-     *    cache, so repeat calls never share state.
-     *  - Delegators registered via {@see delegator()} are intentionally
-     *    **not** applied. `make()` is the "raw constructor" path: callers
-     *    use it precisely to bypass the decoration that `get()` performs.
-     *    Apply delegators explicitly at the call site if you need them.
-     *  - External containers ({@see addContainer()}) are likewise skipped -
-     *    they own caching/lifetime semantics that `make()` does not honour.
-     *
-     * Aliases are still resolved so callers can pass either an alias or the
-     * canonical id.
-     *
-     * @throws ResolutionException If instantiation fails.
-     */
     public function make(string $entry, array $params = []): object
     {
         $resolved = $this->aliases->resolve($entry);
+        $this->cycleGuard->enter($resolved);
 
         try {
-            $instance = $this->resolver->resolve($resolved, $params);
-        } catch (ContainerExceptionInterface $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw ResolutionException::forService($entry, $e);
-        }
+            try {
+                $instance = $this->resolver->resolve($resolved, $params);
+            } catch (ContainerExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw ResolutionException::forService($entry, $e);
+            }
 
-        if (!is_object($instance)) {
-            throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
-        }
+            if (!is_object($instance)) {
+                throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
+            }
 
-        return $instance;
+            return $instance;
+        } finally {
+            $this->cycleGuard->leave($resolved);
+        }
     }
 
-    /**
-     * Invokes a callable with dependency injection.
-     *
-     * Exceptions thrown by the callable itself propagate unchanged.
-     */
     public function call(mixed $callable, array $params = []): mixed
     {
         return $this->callableExecutor->call($callable, $params);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function makeLazy(string $class, callable $initializer): object
     {
         return $this->proxyFactory->makeLazy($class, $initializer);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function makeProxy(string $class, callable $factory): object
     {
         return $this->proxyFactory->makeProxy($class, $factory);
     }
 
-    /**
-     * Registers an external PSR-11 container as a delegated lookup source.
-     *
-     * External containers are probed before the resolver chain, in the order
-     * they were registered.
-     */
     public function addContainer(ContainerInterface $container): void
     {
         if ($container === $this) {
@@ -341,7 +306,13 @@ final readonly class Container implements
             );
         }
 
-        $this->externalContainers->register($container);
+        if ($this->externalContainers?->contains($container) === true) {
+            return;
+        }
+
+        $affectedDependencies = $this->deferredDependenciesTakenOverBy($container);
+        ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
+        $this->invalidateDeferredDelegators($affectedDependencies);
     }
 
     public function alias(string $alias, string $target): void
@@ -353,22 +324,31 @@ final readonly class Container implements
             ));
         }
 
+        $before = $this->deferredDependencyTargets();
         $previousCanonical = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
         $this->invalidate($alias, $previousCanonical);
+
+        $changedDependencies = [];
+        foreach ($before as $dependencyId => $previousTarget) {
+            try {
+                $currentTarget = $this->aliases->resolve($dependencyId);
+            } catch (Throwable) {
+                $currentTarget = null;
+            }
+
+            if ($currentTarget !== $previousTarget) {
+                $changedDependencies[] = $dependencyId;
+            }
+        }
+
+        $this->invalidateDeferredDelegators($changedDependencies);
     }
 
-    /**
-     * Registers a delegator (decorator) for an entry.
-     *
-     * Multiple delegators are applied in registration order. Non-closure forms
-     * (service id, global function, `"Class::method"`, `[class-string|object, method]`)
-     * are resolved through the callable resolver on first use.
-     *
-     * @throws DelegatorException If the delegator itself throws at invocation time.
-     */
+    /** @param callable|string|array{0: object|string, 1: string} $delegator */
     public function delegator(string $id, callable|string|array $delegator): void
     {
+        self::assertMutableId($id, 'delegator');
         $canonical = $this->aliases->resolve($id);
         if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
             throw new InvalidConfigurationException(sprintf(
@@ -379,17 +359,21 @@ final readonly class Container implements
 
         $this->delegators->register($id, $delegator);
         $this->invalidate($id);
+        $this->invalidateDeferredDelegators([$id]);
     }
 
-    /**
-     * Invalidates every cached entry that could have been seeded under the
-     * given id - directly, through an alias pointing at it, or through its
-     * canonical target.
-     */
+    private static function assertMutableId(string $id, string $kind): void
+    {
+        if ($id === '') {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot register %s with an empty DI id.',
+                $kind,
+            ));
+        }
+    }
+
     private function invalidate(string $id, ?string $knownCanonical = null): void
     {
-        // Best-effort resolve to canonical; a malformed alias map must not
-        // abort cleanup here.
         try {
             $canonical = $knownCanonical ?? $this->aliases->resolve($id);
         } catch (Throwable) {
@@ -401,6 +385,76 @@ final readonly class Container implements
 
         if ($canonical !== $id) {
             $this->delegators->invalidate($canonical);
+        }
+    }
+
+    /** @return list<string> */
+    private function deferredDependenciesResolvingTo(string $canonical): array
+    {
+        $dependencies = [];
+
+        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+            try {
+                if ($this->aliases->resolve($dependencyId) === $canonical) {
+                    $dependencies[] = $dependencyId;
+                }
+            } catch (Throwable) {
+            }
+        }
+
+        return $dependencies;
+    }
+
+    /** @return list<string> */
+    private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
+    {
+        $dependencies = [];
+
+        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+            if ($this->externalContainers?->findOwning($dependencyId) !== null
+                || !$container->has($dependencyId)
+            ) {
+                continue;
+            }
+
+            $dependencies[] = $dependencyId;
+        }
+
+        return $dependencies;
+    }
+
+    /** @return array<string, string|null> */
+    private function deferredDependencyTargets(): array
+    {
+        $targets = [];
+
+        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+            try {
+                $targets[$dependencyId] = $this->aliases->resolve($dependencyId);
+            } catch (Throwable) {
+                $targets[$dependencyId] = null;
+            }
+        }
+
+        return $targets;
+    }
+
+    /** @param iterable<string> $dependencyIds */
+    private function invalidateDeferredDelegators(iterable $dependencyIds): void
+    {
+        foreach ($this->delegators->invalidateDependencies($dependencyIds) as $entryId) {
+            try {
+                $canonical = $this->aliases->resolve($entryId);
+            } catch (Throwable) {
+                $canonical = $entryId;
+            }
+
+            $this->cache->invalidate($entryId, $canonical);
+            $this->delegators->invalidate($entryId);
+
+            if ($canonical !== $entryId) {
+                $this->delegators->invalidate($canonical);
+            }
         }
     }
 }

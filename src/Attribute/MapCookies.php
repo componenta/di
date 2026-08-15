@@ -14,7 +14,9 @@ class MapCookies extends RequestMapper implements RequestDataExtractorInterface
 
     public function extract(ServerRequestInterface $request): array
     {
-        $data = $this->extractSharedData($request);
-        return array_merge($data, $request->getCookieParams());
+        return $this->mergeRequestData([
+            ...$this->extractSharedSources($request),
+            'cookies' => $request->getCookieParams(),
+        ]);
     }
 }

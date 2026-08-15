@@ -6,7 +6,7 @@ namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Resolves an explicit object by declared class/interface type. */
+/** Resolves an explicit object registered under its declared class/interface type. */
 final class ArrayTypedResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
@@ -25,12 +25,6 @@ final class ArrayTypedResolver implements ParameterResolverInterface
 
             $value = $context->provided[$typeName];
 
-            if (is_object($value) && $target->accepts($value)) {
-                return [$target->position, $value];
-            }
-        }
-
-        foreach ($context->provided as $value) {
             if (is_object($value) && $target->accepts($value)) {
                 return [$target->position, $value];
             }

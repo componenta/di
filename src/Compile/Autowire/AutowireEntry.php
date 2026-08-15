@@ -10,6 +10,5 @@ final readonly class AutowireEntry
     /** @param class-string $class */
     public function __construct(
         public string $class,
-        public ?string $origin = null,
     ) {}
 }

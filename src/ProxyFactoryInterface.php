@@ -20,6 +20,4 @@ namespace Componenta\DI;
  */
 interface ProxyFactoryInterface extends
     LazyObjectFactoryInterface,
-    VirtualProxyFactoryInterface
-{
-}
+    VirtualProxyFactoryInterface {}

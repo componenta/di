@@ -3,15 +3,10 @@
 declare(strict_types=1);
 
 use Componenta\DI\AliasResolver;
-use Componenta\DI\AliasResolverInterface;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
 describe('AliasResolver', function () {
-    it('implements AliasResolverInterface', function () {
-        expect(new AliasResolver())->toBeInstanceOf(AliasResolverInterface::class);
-    });
-
     describe('resolve()', function () {
         it('returns the id unchanged when it is not a registered alias', function () {
             expect((new AliasResolver())->resolve('service'))->toBe('service');
@@ -40,16 +35,6 @@ describe('AliasResolver', function () {
 
             expect($resolver->resolve('a'))->toBe('New');
         });
-
-        it('defensively throws on cycle even when validation was skipped at construction', function () {
-            $resolver = new AliasResolver(
-                ['a' => 'b', 'b' => 'a'],
-                skipValidation: true,
-            );
-
-            expect(fn () => $resolver->resolve('a'))
-                ->toThrow(CircularDependencyException::class);
-        });
     });
 
     describe('set()', function () {
@@ -68,7 +53,7 @@ describe('AliasResolver', function () {
         });
 
         it('throws InvalidConfigurationException for a self-referencing alias', function () {
-            expect(fn () => (new AliasResolver())->set('a', 'a'))
+            expect(fn() => (new AliasResolver())->set('a', 'a'))
                 ->toThrow(InvalidConfigurationException::class, 'Self-referencing alias: "a"');
         });
 
@@ -85,7 +70,7 @@ describe('AliasResolver', function () {
             self::fail('expected CircularDependencyException');
         });
 
-        it('leaves the map untouched when the update is rejected for a cycle', function () {
+        it('leaves the graph untouched when an update is rejected for a cycle', function () {
             $resolver = new AliasResolver(['a' => 'b', 'b' => 'c']);
 
             try {
@@ -94,7 +79,9 @@ describe('AliasResolver', function () {
                 // expected
             }
 
-            expect(iterator_to_array($resolver))->toBe(['a' => 'b', 'b' => 'c']);
+            expect($resolver->resolve('a'))->toBe('c')
+                ->and($resolver->resolve('b'))->toBe('c')
+                ->and($resolver->has('c'))->toBeFalse();
         });
     });
 
@@ -108,58 +95,9 @@ describe('AliasResolver', function () {
         });
     });
 
-    describe('unset()', function () {
-        it('removes the alias from the registry', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-
-            $resolver->unset('a');
-
-            expect($resolver->has('a'))->toBeFalse();
-        });
-
-        it('stops chain resolution at the removed link', function () {
-            $resolver = new AliasResolver(['a' => 'b', 'b' => 'Target']);
-            expect($resolver->resolve('a'))->toBe('Target');
-
-            $resolver->unset('b');
-
-            // 'a' still maps to 'b', but 'b' is no longer an alias => resolves to 'b'.
-            expect($resolver->resolve('a'))->toBe('b');
-        });
-
-        it('returns the resolver instance for fluent chaining', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-
-            expect($resolver->unset('a'))->toBe($resolver);
-        });
-
-        it('is a no-op for an id that is not a registered alias', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-
-            $resolver->unset('not-an-alias');
-
-            expect(iterator_to_array($resolver))->toBe(['a' => 'b']);
-        });
-    });
-
-    describe('iteration', function () {
-        it('yields the alias->target pairs', function () {
-            $pairs = ['a' => 'TargetA', 'b' => 'TargetB'];
-
-            expect(iterator_to_array(new AliasResolver($pairs)))->toBe($pairs);
-        });
-
-        it('reflects later set() calls', function () {
-            $resolver = new AliasResolver(['a' => 'b']);
-            $resolver->set('c', 'd');
-
-            expect(iterator_to_array($resolver))->toBe(['a' => 'b', 'c' => 'd']);
-        });
-    });
-
     describe('constructor validation', function () {
         it('throws InvalidConfigurationException for self-referencing alias in the map', function () {
-            expect(fn () => new AliasResolver(['x' => 'x']))
+            expect(fn() => new AliasResolver(['x' => 'x']))
                 ->toThrow(InvalidConfigurationException::class);
         });
 
@@ -173,13 +111,6 @@ describe('AliasResolver', function () {
 
             self::fail('expected CircularDependencyException');
         });
-
-        it('accepts a cyclic map when skipValidation is true (deferred detection)', function () {
-            $resolver = new AliasResolver(['a' => 'b', 'b' => 'a'], skipValidation: true);
-
-            expect($resolver->has('a'))->toBeTrue()
-                ->and($resolver->has('b'))->toBeTrue();
-        });
     });
 
     describe('caching', function () {
@@ -190,15 +121,6 @@ describe('AliasResolver', function () {
             $resolver->set('b', 'New');
 
             expect($resolver->resolve('a'))->toBe('New');
-        });
-
-        it('invalidates the resolution cache on unset()', function () {
-            $resolver = new AliasResolver(['a' => 'b', 'b' => 'Target']);
-            expect($resolver->resolve('a'))->toBe('Target');
-
-            $resolver->unset('b');
-
-            expect($resolver->resolve('a'))->toBe('b');
         });
     });
 });

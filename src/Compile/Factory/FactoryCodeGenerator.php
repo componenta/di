@@ -140,6 +140,7 @@ final class FactoryCodeGenerator
         );
     }
 
+    /** @param ReflectionClass<object> $class */
     private function reset(ReflectionClass $class): void
     {
         $this->factory = new FactoryCode();
@@ -293,15 +294,15 @@ PHP,
         }
 
         $body[] = sprintf(
-                <<<'PHP'
+            <<<'PHP'
 $creation = new \%s(
     class: self::%s(),
     parameters: $parameters,
 );
 PHP,
-                ObjectCreationContext::class,
-                $this->classHelper(),
-            );
+            ObjectCreationContext::class,
+            $this->classHelper(),
+        );
 
         if ($beforeCode !== '') {
             $body[] = $beforeCode;
@@ -471,17 +472,39 @@ PHP,
                 $parts[] = $parameterCode;
             }
 
-            $parts[] = sprintf(
-                <<<'PHP'
+            $initializeExisting = $constructor->isPublic()
+                ? sprintf(
+                    <<<'PHP'
 if ($entry !== null) {
     $entry->__construct(%s);
 
     return $entry;
 }
+PHP,
+                    implode(', ', $arguments),
+                )
+                : sprintf(
+                    <<<'PHP'
+if ($entry !== null) {
+    $constructor = self::%s()->getConstructor()
+        ?? throw new \LogicException('Compiled lazy initializer lost its constructor.');
+
+    $constructor->invokeArgs($entry, [%s]);
+
+    return $entry;
+}
+PHP,
+                    $this->classHelper(),
+                    implode(', ', $arguments),
+                );
+
+            $parts[] = sprintf(
+                <<<'PHP'
+%s
 
 return new \%s(%s);
 PHP,
-                implode(', ', $arguments),
+                $initializeExisting,
                 $this->className,
                 implode(', ', $arguments),
             );

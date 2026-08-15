@@ -68,7 +68,7 @@ describe('Resolver\\Entry\\SetUp\\ConfigUnwrapper', function () {
     it('lets PSR-11 container exceptions propagate unchanged', function () {
         $unwrapper = new ConfigUnwrapper(configUnwrapperContainer(NotFoundException::forService(Config::KEY)));
 
-        expect(fn () => $unwrapper->unwrap(new Config('k'), 'key'))
+        expect(fn() => $unwrapper->unwrap(new Config('k'), 'key'))
             ->toThrow(NotFoundException::class);
     });
 });

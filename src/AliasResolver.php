@@ -6,8 +6,6 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use IteratorAggregate;
-use Traversable;
 
 /**
  * Resolves aliases to their target identifiers.
@@ -15,9 +13,9 @@ use Traversable;
  * Uses path compression so every alias encountered in a successfully resolved
  * chain becomes an O(1) lookup until the map changes.
  *
- * @implements IteratorAggregate<string, string>
+ * @internal
  */
-final class AliasResolver implements AliasResolverInterface, IteratorAggregate
+final class AliasResolver
 {
     /** @var array<string, string> Cache of fully resolved aliases. */
     private array $resolved = [];
@@ -25,23 +23,19 @@ final class AliasResolver implements AliasResolverInterface, IteratorAggregate
     /** @var array<string, string> */
     private array $map;
 
-    /**
-     * @param array<string, string> $map Alias to target map.
-     * @param bool $skipValidation Skip circular reference validation.
-     */
-    public function __construct(
-        array $map = [],
-        bool $skipValidation = false,
-    ) {
-        if ($skipValidation) {
-            $this->map = $map;
-            return;
-        }
-
-        // Incremental validation: replay the map as a series of insertions.
-        // This gives O(total alias-chain length) instead of O(N²) per insert.
+    /** @param array<string, string> $map Alias to target map. */
+    public function __construct(array $map = [])
+    {
         $this->map = [];
         foreach ($map as $alias => $target) {
+            if (!is_string($alias) || !is_string($target)) {
+                throw new InvalidConfigurationException(
+                    'Alias ids and targets must be strings.',
+                );
+            }
+
+            self::assertNonEmpty($alias, $target);
+
             if ($alias === $target) {
                 throw InvalidConfigurationException::forSelfReferencingAlias($alias);
             }
@@ -91,6 +85,8 @@ final class AliasResolver implements AliasResolverInterface, IteratorAggregate
 
     public function set(string $alias, string $target): static
     {
+        self::assertNonEmpty($alias, $target);
+
         if ($alias === $target) {
             throw InvalidConfigurationException::forSelfReferencingAlias($alias);
         }
@@ -107,17 +103,15 @@ final class AliasResolver implements AliasResolverInterface, IteratorAggregate
         return isset($this->map[$alias]);
     }
 
-    public function unset(string $alias): static
+    private static function assertNonEmpty(string $alias, string $target): void
     {
-        unset($this->map[$alias]);
-        $this->resolved = [];
+        if ($alias === '') {
+            throw new InvalidConfigurationException('Alias id must be a non-empty string.');
+        }
 
-        return $this;
-    }
-
-    public function getIterator(): Traversable
-    {
-        yield from $this->map;
+        if ($target === '') {
+            throw new InvalidConfigurationException('Alias target must be a non-empty DI id.');
+        }
     }
 
     /**

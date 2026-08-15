@@ -64,5 +64,11 @@ final class ProxyHandler implements CompilableAttributeHandlerInterface
                 get_debug_type($target),
             ));
         }
+
+        if ($attribute->class !== null) {
+            throw new \LogicException(
+                'Class-level #[Proxy] must not specify a proxy class; the marked class is used.',
+            );
+        }
     }
 }

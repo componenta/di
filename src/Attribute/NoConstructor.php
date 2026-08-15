@@ -28,6 +28,4 @@ namespace Componenta\DI\Attribute;
  * ```
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
-readonly class NoConstructor
-{
-}
+readonly class NoConstructor {}

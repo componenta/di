@@ -14,9 +14,14 @@ class MapHeaders extends RequestMapper implements RequestDataExtractorInterface
 
     public function extract(ServerRequestInterface $request): array
     {
-        $data = $this->extractSharedData($request);
-        return array_merge($data, array_map(static fn(array $values): string => implode(', ', $values),
-            $request->getHeaders()
-        ));
+        $headers = array_map(
+            static fn(array $values): string => implode(', ', $values),
+            $request->getHeaders(),
+        );
+
+        return $this->mergeRequestData([
+            ...$this->extractSharedSources($request),
+            'headers' => $headers,
+        ]);
     }
 }

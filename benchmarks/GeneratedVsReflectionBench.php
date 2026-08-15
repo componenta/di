@@ -68,19 +68,19 @@ try {
     $compiledBuildMilliseconds = (hrtime(true) - $compiledBuildStarted) / 1_000_000;
 
     $reflectionDefault = benchmark(
-        static fn (): object => $reflection->make(BenchmarkEntry::class),
+        static fn(): object => $reflection->make(BenchmarkEntry::class),
         $iterations,
     );
     $compiledDefault = benchmark(
-        static fn (): object => $compiled->make(BenchmarkEntry::class),
+        static fn(): object => $compiled->make(BenchmarkEntry::class),
         $iterations,
     );
     $reflectionOverride = benchmark(
-        static fn (): object => $reflection->make(BenchmarkEntry::class, ['number' => 42]),
+        static fn(): object => $reflection->make(BenchmarkEntry::class, ['number' => 42]),
         $iterations,
     );
     $compiledOverride = benchmark(
-        static fn (): object => $compiled->make(BenchmarkEntry::class, ['number' => 42]),
+        static fn(): object => $compiled->make(BenchmarkEntry::class, ['number' => 42]),
         $iterations,
     );
 

@@ -6,7 +6,6 @@ use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\SetUp;
-use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
@@ -139,7 +138,7 @@ function developmentProductionParitySnapshot(Container $container): array
         'null-present' => $container->has('parity.null'),
         'null-value' => $container->get('parity.null'),
         'call-result' => $container->call(
-            static fn (
+            static fn(
                 DevelopmentProductionParityDependency $dependency,
                 string $value = 'fallback',
             ): string => $dependency::class . ':' . $value,
@@ -162,39 +161,20 @@ it('keeps development reflection and production compiled containers observably e
     try {
         $development = ContainerBuilder::configure(new Config($configData))->build();
 
-        $compiler = ContainerBuilder::configure(new Config($configData));
-        $compiledFactories = $compiler->compileFactories([
-            DevelopmentProductionParityEntry::class,
-        ], $directory);
+        $compiledFactories = ContainerBuilder::configure(new Config($configData))
+            ->compileFactories([
+                DevelopmentProductionParityEntry::class,
+            ], $directory);
         $productionDependencies = $dependencies;
         $productionDependencies[ConfigKey::FACTORIES] = array_replace(
             $compiledFactories,
             $dependencies[ConfigKey::FACTORIES],
         );
-        $productionInvokables = $dependencies[ConfigKey::INVOKABLES];
-
-        foreach ($compiler->invokables as $class) {
-            if (!in_array($class, $productionInvokables, true)) {
-                $productionInvokables[] = $class;
-            }
-        }
-
-        $productionDependencies[ConfigKey::INVOKABLES] = $productionInvokables;
-        $productionDependencies = ContainerBuilder::normalizeDependencies(
-            $productionDependencies,
-        );
-
-        foreach ($productionDependencies[ConfigKey::FACTORIES] as $id => $factory) {
-            if ($factory instanceof CompiledFactoryDefinition) {
-                $productionDependencies[ConfigKey::FACTORIES][$id] = $factory->encode();
-            }
-        }
 
         $production = ContainerBuilder::configureFromCache(
             new Config($configData),
             [
                 'version' => ContainerBuilder::CACHE_VERSION,
-                ContainerBuilder::CACHE_VALIDATED_KEY => true,
                 ConfigKey::DEPENDENCIES => $productionDependencies,
             ],
             $directory,

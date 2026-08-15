@@ -5,20 +5,13 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Attribute;
 
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use LogicException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionParameter;
 use ReflectionProperty;
-use LogicException;
 
-/**
- * Scans and binds class/property/method attributes once, then executes only
- * the preselected handlers for the requested phase.
- *
- * Parameter attributes are deliberately excluded: their first-match order is
- * owned by ParametersResolver and must not be bypassed by a class scan.
- */
+/** Binds class/property/method attributes to the exact owning handlers. */
 final class AttributeProcessor
 {
     /** @var array<class-string, array{version: int, plan: AttributeExecutionPlan}> */
@@ -28,6 +21,7 @@ final class AttributeProcessor
         public readonly AttributeHandlerRegistry $registry,
     ) {}
 
+    /** @param ReflectionClass<object> $class */
     public function process(
         ReflectionClass $class,
         AttributePhase $phase,
@@ -51,13 +45,8 @@ final class AttributeProcessor
     }
 
     /**
-     * Exposes the immutable, ordered phase map to the later code-generation
-     * stage without rescanning native reflection.
-     *
-     * @return array{
-     *     before: list<AttributeInvocation>,
-     *     after: list<AttributeInvocation>
-     * }
+     * @param ReflectionClass<object> $class
+     * @return array{before: list<AttributeInvocation>, after: list<AttributeInvocation>}
      */
     public function invocations(ReflectionClass $class): array
     {
@@ -69,6 +58,7 @@ final class AttributeProcessor
         ];
     }
 
+    /** @param ReflectionClass<object> $class */
     public function plan(ReflectionClass $class): AttributeExecutionPlan
     {
         $className = $class->getName();
@@ -131,86 +121,15 @@ final class AttributeProcessor
     }
 
     /**
-     * Returns every attribute class name present in the entry metadata, not
-     * only attributes currently claimed by a registered handler.
-     *
-     * An unsupported attribute can become supported after its own class or
-     * inheritance hierarchy changes while the entry source and handler chain
-     * stay unchanged. Fingerprinting only bound invocations would then accept
-     * a stale generated factory that silently skips the newly applicable
-     * handler. Missing attribute classes are retained as names as well, so a
-     * class that becomes autoloadable later also invalidates the artifact.
-     *
-     * @return list<class-string>
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionProperty>
      */
-    public function sourceAttributeClasses(ReflectionClass $class): array
-    {
-        $classes = [];
-
-        self::collectTargetAttributeClasses($class, $classes);
-
-        foreach (self::properties($class) as $property) {
-            self::collectTargetAttributeClasses($property, $classes);
-        }
-
-        $constructor = $class->getConstructor();
-        if ($constructor !== null) {
-            self::collectParameterAttributeClasses($constructor->getParameters(), $classes);
-        }
-
-        // A class-level compilable handler may refer to a method indirectly
-        // (for example SetUp). Include both method attributes and parameter
-        // attributes while reusing the processor's canonical hierarchy walk.
-        foreach (self::methods($class) as $method) {
-            self::collectTargetAttributeClasses($method, $classes);
-            self::collectParameterAttributeClasses($method->getParameters(), $classes);
-        }
-
-        return array_keys($classes);
-    }
-
-    /**
-     * @param ReflectionClass|ReflectionProperty|ReflectionMethod $target
-     * @param array<class-string, true> $classes
-     */
-    private static function collectTargetAttributeClasses(
-        ReflectionClass|ReflectionProperty|ReflectionMethod $target,
-        array &$classes,
-    ): void {
-        /** @var ReflectionAttribute<object> $attribute */
-        foreach ($target->getAttributes() as $attribute) {
-            /** @var class-string $attributeClass */
-            $attributeClass = $attribute->getName();
-            $classes[$attributeClass] = true;
-        }
-    }
-
-    /**
-     * @param list<ReflectionParameter> $parameters
-     * @param array<class-string, true> $classes
-     */
-    private static function collectParameterAttributeClasses(
-        array $parameters,
-        array &$classes,
-    ): void {
-        foreach ($parameters as $parameter) {
-            /** @var ReflectionAttribute<object> $attribute */
-            foreach ($parameter->getAttributes() as $attribute) {
-                $attributeClass = $attribute->getName();
-
-                /** @var class-string $attributeClass */
-                $classes[$attributeClass] = true;
-            }
-        }
-    }
-
-    /** @return list<ReflectionProperty> */
     private static function properties(ReflectionClass $class): array
     {
         $properties = $class->getProperties();
 
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
-            foreach ($parent->getProperties(\ReflectionProperty::IS_PRIVATE) as $property) {
+            foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
                 if ($property->getDeclaringClass()->getName() === $parent->getName()) {
                     $properties[] = $property;
                 }
@@ -220,7 +139,10 @@ final class AttributeProcessor
         return $properties;
     }
 
-    /** @return list<ReflectionMethod> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionMethod>
+     */
     private static function methods(ReflectionClass $class): array
     {
         $methods = $class->getMethods();
@@ -237,6 +159,7 @@ final class AttributeProcessor
     }
 
     /**
+     * @param ReflectionClass<object>|ReflectionProperty|ReflectionMethod $target
      * @param list<array{handler: AttributeHandlerInterface, order: int, phase: AttributePhase, priority: int}> $registrations
      * @param list<AttributeInvocation> $before
      * @param list<AttributeInvocation> $after
@@ -250,6 +173,7 @@ final class AttributeProcessor
     ): void {
         /** @var ReflectionAttribute<object> $reflectionAttribute */
         foreach ($target->getAttributes() as $attributeIndex => $reflectionAttribute) {
+            /** @var class-string $attributeClass */
             $attributeClass = $reflectionAttribute->getName();
 
             foreach ($registrations as $handlerSlot => $registration) {
@@ -275,8 +199,6 @@ final class AttributeProcessor
                     $after[] = $invocation;
                 }
 
-                // One attribute is owned by the first supporting handler in
-                // registry priority order. This keeps dispatch deterministic.
                 continue 2;
             }
 

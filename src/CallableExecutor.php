@@ -19,16 +19,6 @@ use WeakMap;
  *
  * Resolves callable representations and invokes them with auto-wired parameters.
  * Parameters can be provided explicitly or resolved from container.
- *
- * @example Basic usage
- * ```php
- * $executor->call(fn(LoggerInterface $logger) => $logger->info('Hello'));
- * ```
- *
- * @example With explicit parameters
- * ```php
- * $executor->call([UserService::class, 'create'], ['name' => 'John']);
- * ```
  */
 class CallableExecutor implements CallableExecutorInterface
 {
@@ -41,27 +31,28 @@ class CallableExecutor implements CallableExecutorInterface
     /** @var array<string, list<ParameterTarget>> */
     private array $callableTargets = [];
 
+    private readonly CallableInvoker $invoker;
+
     public function __construct(
         protected readonly CallableResolverInterface $callableResolver,
         protected readonly ParametersResolver $parametersResolver,
-    ) {}
+    ) {
+        $this->invoker = new CallableInvoker();
+    }
 
     /**
-     * Exceptions thrown by the callable itself propagate unchanged.
-     *
-     * @throws InvalidCallableException If the callable cannot be resolved.
+     * @throws InvalidCallableException If the callable cannot be resolved or invoked.
      * @throws ResolutionException      If a parameter cannot be resolved.
      */
     public function call(mixed $callable, array $params = []): mixed
     {
         $resolved = $this->callableResolver->resolve($callable);
         $targets = $this->targets($resolved);
+        $arguments = $targets === []
+            ? $params
+            : $this->parametersResolver->resolveTargets($targets, $params);
 
-        if ($targets === []) {
-            return $resolved();
-        }
-
-        return $resolved(...$this->parametersResolver->resolveTargets($targets, $params));
+        return $this->invoker->call($resolved, $arguments);
     }
 
     /** @return list<ParameterTarget> */
@@ -75,11 +66,15 @@ class CallableExecutor implements CallableExecutorInterface
             }
 
             $reflection = new ReflectionFunction($callable);
-            $signature = (string) $reflection;
+            $signature = self::closureSignature($reflection);
 
             return $closureTargets[$callable]
                 = $this->closureSignatures[$signature]
                     ??= $this->parametersResolver->targets($reflection->getParameters());
+        }
+
+        if (self::isDynamicMethodCallable($callable)) {
+            return [];
         }
 
         $key = self::cacheKey($callable);
@@ -87,6 +82,35 @@ class CallableExecutor implements CallableExecutorInterface
         return $this->callableTargets[$key] ??= $this->parametersResolver->targets(
             Reflection::callable($callable)->getParameters(),
         );
+    }
+
+    private static function closureSignature(ReflectionFunction $reflection): string
+    {
+        return implode("\0", [
+            $reflection->getClosureScopeClass()?->getName() ?? '',
+            $reflection->getClosureCalledClass()?->getName() ?? '',
+            (string) $reflection,
+        ]);
+    }
+
+    private static function isDynamicMethodCallable(callable $callable): bool
+    {
+        if (is_array($callable) && count($callable) === 2) {
+            [$owner, $method] = $callable;
+            $class = is_object($owner) ? $owner::class : $owner;
+
+            return !method_exists($class, $method);
+        }
+
+        if (is_string($callable) && str_contains($callable, '::')) {
+            [$class, $method] = explode('::', $callable, 2);
+
+            return $class !== ''
+                && $method !== ''
+                && !method_exists($class, $method);
+        }
+
+        return false;
     }
 
     private static function cacheKey(callable $callable): string

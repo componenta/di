@@ -5,19 +5,27 @@ declare(strict_types=1);
 namespace Componenta\DI\Compile\Autowire;
 
 use Componenta\DI\Attribute\Inject;
+use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\EntryClassEligibility;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\TypeHints;
 use InvalidArgumentException;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionProperty;
 
-/** Expands explicit roots through statically knowable constructor and injection dependencies. */
+/** Expands explicit roots through statically knowable dependencies. */
 final readonly class AutowireClassGraph
 {
+    /** @param array<string, non-empty-string> $aliases */
+    public function __construct(private array $aliases = []) {}
+
     /**
      * @param iterable<AutowireEntry|class-string> $roots
-     * @param array<string, true> $excluded Existing explicit bindings which must keep ownership.
+     * @param array<string, true> $excluded
      * @return list<class-string>
      */
     public function expand(iterable $roots, array $excluded = []): array
@@ -31,7 +39,16 @@ final readonly class AutowireClassGraph
                 throw new InvalidArgumentException('Autowire entry must contain a non-empty class-string.');
             }
 
-            $pending[$class] = true;
+            // A known alias may terminate at a concrete class, in which case
+            // that implementation participates in AOT. Aliases to opaque
+            // PSR-11/external ids remain runtime-only and must not turn a valid
+            // container configuration into a compilation error.
+            $resolved = $this->resolveAlias($class);
+            if ($resolved !== $class && !self::isLoadable($resolved)) {
+                continue;
+            }
+
+            $pending[$resolved] = true;
         }
 
         $result = [];
@@ -56,7 +73,9 @@ final readonly class AutowireClassGraph
             }
 
             $reflection = new ReflectionClass($class);
-            if (!EntryClassEligibility::allows($reflection)) {
+            if (!EntryClassEligibility::allows($reflection)
+                || self::isBootstrapExtension($reflection)
+            ) {
                 continue;
             }
 
@@ -76,31 +95,41 @@ final readonly class AutowireClassGraph
         return $classes;
     }
 
-    /** @return list<class-string> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<class-string>
+     */
     private function dependencies(ReflectionClass $class): array
     {
         $dependencies = [];
+        $constructorDisabled = $class->getAttributes(
+            NoConstructor::class,
+            ReflectionAttribute::IS_INSTANCEOF,
+        ) !== [];
         $constructor = $class->getConstructor();
 
-        if ($constructor !== null) {
+        if (!$constructorDisabled && $constructor !== null) {
             $this->appendMethodDependencies($dependencies, $constructor);
         }
 
-        foreach ($class->getProperties() as $property) {
-            if ($property->getAttributes(Inject::class) === []) {
+        foreach (self::properties($class) as $property) {
+            if ($property->getAttributes(
+                Inject::class,
+                ReflectionAttribute::IS_INSTANCEOF,
+            ) === []) {
                 continue;
             }
 
-            $dependency = TypeHints::classOf($property->getType(), $property->getDeclaringClass());
-            if ($dependency !== null && class_exists($dependency)) {
-                $candidate = new ReflectionClass($dependency);
-                if (EntryClassEligibility::allows($candidate)) {
-                    $dependencies[$candidate->getName()] = true;
-                }
-            }
+            $this->appendDependency(
+                $dependencies,
+                TypeHints::classOf($property->getType(), $property->getDeclaringClass()),
+            );
         }
 
-        foreach ($class->getAttributes(SetUp::class) as $attribute) {
+        foreach ($class->getAttributes(
+            SetUp::class,
+            ReflectionAttribute::IS_INSTANCEOF,
+        ) as $attribute) {
             $setup = $attribute->newInstance();
 
             if ($class->hasMethod($setup->method)) {
@@ -111,18 +140,91 @@ final readonly class AutowireClassGraph
         return array_keys($dependencies);
     }
 
+    /**
+     * ReflectionClass::getProperties() omits private properties declared by
+     * ancestors. AttributeProcessor intentionally includes them, so the
+     * compilation graph must use the same hierarchy view.
+     *
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionProperty>
+     */
+    private static function properties(ReflectionClass $class): array
+    {
+        $properties = $class->getProperties();
+
+        for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
+            foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
+                if ($property->getDeclaringClass()->getName() === $parent->getName()) {
+                    $properties[] = $property;
+                }
+            }
+        }
+
+        return $properties;
+    }
+
     /** @param array<class-string, true> $dependencies */
     private function appendMethodDependencies(array &$dependencies, ReflectionMethod $method): void
     {
         foreach ($method->getParameters() as $parameter) {
-            $dependency = TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass());
-
-            if ($dependency !== null && class_exists($dependency)) {
-                $candidate = new ReflectionClass($dependency);
-                if (EntryClassEligibility::allows($candidate)) {
-                    $dependencies[$candidate->getName()] = true;
-                }
-            }
+            $this->appendDependency(
+                $dependencies,
+                TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass()),
+            );
         }
+    }
+
+    /** @param array<class-string, true> $dependencies */
+    private function appendDependency(array &$dependencies, ?string $dependency): void
+    {
+        if ($dependency === null) {
+            return;
+        }
+
+        $dependency = $this->resolveAlias($dependency);
+        if (!class_exists($dependency)) {
+            return;
+        }
+
+        $candidate = new ReflectionClass($dependency);
+        if (EntryClassEligibility::allows($candidate)
+            && !self::isBootstrapExtension($candidate)
+        ) {
+            $dependencies[$candidate->getName()] = true;
+        }
+    }
+
+    /** @param ReflectionClass<object> $class */
+    private static function isBootstrapExtension(ReflectionClass $class): bool
+    {
+        return $class->implementsInterface(ParameterResolverInterface::class)
+            || $class->implementsInterface(AttributeHandlerInterface::class);
+    }
+
+    private function resolveAlias(string $id): string
+    {
+        $seen = [];
+
+        while (isset($this->aliases[$id])) {
+            if (isset($seen[$id])) {
+                throw new InvalidArgumentException(sprintf(
+                    'Cannot compile autowire graph through cyclic alias "%s".',
+                    $id,
+                ));
+            }
+
+            $seen[$id] = true;
+            $id = $this->aliases[$id];
+        }
+
+        return $id;
+    }
+
+    private static function isLoadable(string $class): bool
+    {
+        return class_exists($class)
+            || interface_exists($class)
+            || trait_exists($class)
+            || enum_exists($class);
     }
 }

@@ -15,6 +15,7 @@ readonly class UploadedFile implements ExtractorInterface
         public string $name,
     ) {}
 
+    /** @return UploadedFileInterface|array<string|int, mixed>|null */
     public function extract(ServerRequestInterface $request): UploadedFileInterface|array|null
     {
         $files = $request->getUploadedFiles();

@@ -31,7 +31,7 @@ final class ProtectedServiceIds
         ContainerInterface::class => false,
         FactoryInterface::class => false,
         CallableInvokerInterface::class => false,
-        AliasResolverInterface::class => false,
+        CallableResolverInterface::class => false,
         CallableExecutorInterface::class => false,
         ProxyFactoryInterface::class => false,
         LazyObjectFactoryInterface::class => false,
@@ -44,6 +44,12 @@ final class ProtectedServiceIds
     public static function contains(string $id): bool
     {
         return array_key_exists($id, self::IDS);
+    }
+
+    /** @return list<string> */
+    public static function ids(): array
+    {
+        return array_keys(self::IDS);
     }
 
     /** @return class-string|null */

@@ -4,37 +4,42 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeExecutionPlan;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use Componenta\Reflection\Reflection;
 use Psr\Container\ContainerExceptionInterface;
+use ReflectionClass;
 use Throwable;
 
 /** Reflection fallback for entries without an explicit or generated factory. */
-final readonly class ReflectionResolver implements EntryResolverInterface
+final class ReflectionResolver implements EntryResolverInterface
 {
+    /** @var array<string, true> */
+    private array $missingClasses = [];
+
     public function __construct(
-        private InstanceCreator $instanceCreator,
-        private AttributeProcessor $attributes,
-        private ProxyFactoryInterface $proxyFactory,
+        private readonly InstanceCreator $instanceCreator,
+        private readonly AttributeProcessor $attributes,
+        private readonly ProxyFactoryInterface $proxyFactory,
     ) {}
 
     public function can(string $id): bool
     {
-        return ($class = Reflection::class($id)) !== null
+        return ($class = $this->reflect($id)) !== null
             && EntryClassEligibility::allows($class);
     }
 
-    /** @throws ResolutionException */
+    /** @throws NotFoundException|ResolutionException */
     public function resolve(string $id, array $context = []): object
     {
-        $reflector = Reflection::class($id);
+        $reflector = $this->reflect($id);
         if ($reflector === null || !EntryClassEligibility::allows($reflector)) {
-            throw ResolutionException::forMissingService($id);
+            throw NotFoundException::forService($id);
         }
 
         try {
@@ -69,8 +74,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
     private function buildEager(
         ObjectCreationContext $context,
         AttributeExecutionPlan $plan,
-    ): object
-    {
+    ): object {
         try {
             $entry = $context->constructorEnabled
                 ? $this->instanceCreator->create($context->class, $context->parameters)
@@ -89,8 +93,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
     private function buildLazy(
         ObjectCreationContext $context,
         AttributeExecutionPlan $plan,
-    ): object
-    {
+    ): object {
         return $this->proxyFactory->makeLazy(
             $context->class->getName(),
             function (object $entry) use ($context, $plan): void {
@@ -121,8 +124,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
     private function buildVirtualProxy(
         ObjectCreationContext $context,
         AttributeExecutionPlan $plan,
-    ): object
-    {
+    ): object {
         return $this->proxyFactory->makeProxy(
             $context->class->getName(),
             fn(object $proxy): object => $this->buildEager($context->freshAttempt(), $plan),
@@ -133,8 +135,7 @@ final readonly class ReflectionResolver implements EntryResolverInterface
         ObjectCreationContext $context,
         object $entry,
         AttributeExecutionPlan $plan,
-    ): void
-    {
+    ): void {
         $context->initialize($entry);
 
         $this->attributes->processPlan(
@@ -142,5 +143,23 @@ final readonly class ReflectionResolver implements EntryResolverInterface
             AttributePhase::AfterInstantiation,
             $context,
         );
+    }
+
+    /** @return ReflectionClass<object>|null */
+    private function reflect(string $id): ?ReflectionClass
+    {
+        $key = strtolower(ltrim($id, '\\'));
+
+        if (isset($this->missingClasses[$key])) {
+            return null;
+        }
+
+        $class = Reflection::class($id);
+
+        if ($class === null) {
+            $this->missingClasses[$key] = true;
+        }
+
+        return $class;
     }
 }

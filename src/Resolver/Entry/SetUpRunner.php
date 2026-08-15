@@ -6,10 +6,10 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\CallableInvokerInterface;
-use Componenta\DI\Container;
 use Componenta\DI\Compile\Attribute\AttributeCodeGenerationContext;
 use Componenta\DI\Compile\Attribute\GeneratedAttributeCode;
 use Componenta\DI\Compile\Parameter\ParameterCodeGenerationContext;
+use Componenta\DI\Container;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\CompilableAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
@@ -97,7 +97,7 @@ final class SetUpRunner implements CompilableAttributeHandlerInterface
                     $context->targetExpression,
                     $context->creationExpression,
                 ),
-                    usesAttribute: true,
+                usesAttribute: true,
                 usesTarget: true,
             );
         }
@@ -187,6 +187,7 @@ final class SetUpRunner implements CompilableAttributeHandlerInterface
         return array_replace($context, $this->unwrapParams($attribute->params));
     }
 
+    /** @param ReflectionClass<object> $class */
     private static function method(ReflectionClass $class, SetUp $attribute): ReflectionMethod
     {
         if (!$class->hasMethod($attribute->method)) {

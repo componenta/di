@@ -8,5 +8,6 @@ use Psr\Http\Message\ServerRequestInterface;
 
 interface RequestDataExtractorInterface
 {
+    /** @return array<string|int, mixed> */
     public function extract(ServerRequestInterface $request): array;
 }

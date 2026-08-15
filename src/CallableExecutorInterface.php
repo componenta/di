@@ -7,6 +7,4 @@ namespace Componenta\DI;
 /**
  * Resolves and executes callables with dependency injection.
  */
-interface CallableExecutorInterface extends CallableInvokerInterface, CallableResolverInterface
-{
-}
+interface CallableExecutorInterface extends CallableInvokerInterface, CallableResolverInterface {}

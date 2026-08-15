@@ -23,14 +23,14 @@ readonly class RequestAttribute implements ExtractorInterface, CastableInterface
     {
         $name = $this->name ?? $request->getAttribute(RequestResolver::PARAMETER_NAME_ATTRIBUTE);
 
-        if ($name === null) {
-            throw new \LogicException('Request attribute name cannot be null');
+        if (!is_string($name) || $name === '') {
+            throw new \LogicException('Request attribute name must be a non-empty string');
         }
 
         if (!array_key_exists($name, $request->getAttributes())) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required request attribute "%s" is missing', $name)
+                    sprintf('Required request attribute "%s" is missing', $name),
                 );
             }
 

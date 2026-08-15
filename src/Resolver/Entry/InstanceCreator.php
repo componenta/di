@@ -7,14 +7,7 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionClass;
 
-/**
- * Creates or initializes an object by invoking its constructor with parameters
- * resolved through ParametersResolver.
- *
- * Constructor suppression is no longer inferred here from #[NoConstructor].
- * That lifecycle decision belongs to the before-instantiation attribute
- * pipeline and is applied by ReflectionResolver.
- */
+/** Creates or initializes an object through the standard parameter pipeline. */
 final readonly class InstanceCreator
 {
     public function __construct(
@@ -22,7 +15,10 @@ final readonly class InstanceCreator
     ) {}
 
     /**
+     * @template T of object
+     * @param ReflectionClass<T> $reflector
      * @param array<string|int, mixed> $context
+     * @return T
      */
     public function create(ReflectionClass $reflector, array $context = []): object
     {
@@ -40,6 +36,10 @@ final readonly class InstanceCreator
     /**
      * Calls the constructor on an already-allocated lazy ghost.
      *
+     * Reflection invocation is intentional: it preserves the constructor's
+     * declared visibility while initializing the already allocated instance.
+     *
+     * @param ReflectionClass<object> $reflector
      * @param array<string|int, mixed> $context
      */
     public function initialize(object $entry, ReflectionClass $reflector, array $context = []): void
@@ -51,6 +51,6 @@ final readonly class InstanceCreator
         }
 
         $params = $this->parametersResolver->resolve($constructor->getParameters(), $context);
-        $entry->__construct(...$params);
+        $constructor->invokeArgs($entry, $params);
     }
 }

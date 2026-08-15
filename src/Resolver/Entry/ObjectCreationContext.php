@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use LogicException;
@@ -11,12 +12,7 @@ use ReflectionClass;
 use ReflectionProperty;
 use Throwable;
 
-/**
- * Mutable state of one object-creation operation.
- *
- * Inputs are readonly. Handlers may change only controlled lifecycle state or
- * write an explicitly attributed property through {@see writeProperty()}.
- */
+/** Mutable state of one object-creation operation. */
 final class ObjectCreationContext
 {
     public private(set) bool $constructorEnabled = true;
@@ -29,6 +25,7 @@ final class ObjectCreationContext
     private array $claimedProperties = [];
 
     /**
+     * @param ReflectionClass<object> $class
      * @param array<string|int, mixed> $parameters
      */
     public function __construct(
@@ -41,31 +38,27 @@ final class ObjectCreationContext
         $this->constructorEnabled = false;
     }
 
-    /**
-     * Selects the first non-eager strategy in handler-priority order.
-     */
-    public function selectStrategy(CreationStrategy $strategy): bool
+    public function selectStrategy(CreationStrategy $strategy): void
     {
         if ($strategy === CreationStrategy::Eager) {
-            return $this->strategy === CreationStrategy::Eager;
+            if ($this->strategy !== CreationStrategy::Eager) {
+                throw $this->conflictingStrategy($strategy);
+            }
+
+            return;
         }
 
-        if ($this->strategy !== CreationStrategy::Eager) {
-            return false;
+        if ($this->strategy === CreationStrategy::Eager) {
+            $this->strategy = $strategy;
+
+            return;
         }
 
-        $this->strategy = $strategy;
-
-        return true;
+        if ($this->strategy !== $strategy) {
+            throw $this->conflictingStrategy($strategy);
+        }
     }
 
-    /**
-     * Creates isolated mutable state for one lazy/proxy realization attempt.
-     *
-     * PHP retries a lazy initializer after an exception. Lifecycle decisions
-     * are preserved, while the entry and property claims from a failed attempt
-     * must never leak into the next one.
-     */
     public function freshAttempt(): self
     {
         $attempt = clone $this;
@@ -95,15 +88,10 @@ final class ObjectCreationContext
         $this->entry = $entry;
     }
 
-    /**
-     * Claims a property for the highest-priority applicable handler.
-     *
-     * Claiming happens before value resolution so lower-priority handlers can
-     * never perform container lookups, casting or factory calls for an already
-     * owned target.
-     */
-    public function claimProperty(ReflectionProperty $property): bool
-    {
+    public function claimProperty(
+        ReflectionProperty $property,
+        bool $allowPromoted = false,
+    ): bool {
         if ($this->entry === null) {
             throw new LogicException(sprintf(
                 'Cannot claim property "%s" before "%s" is initialized.',
@@ -112,8 +100,14 @@ final class ObjectCreationContext
             ));
         }
 
-        if ($property->isStatic()
-            || $property->isPromoted()
+        if ($property->isStatic()) {
+            throw ResolutionException::forProperty(
+                $property,
+                reason: 'static properties are not supported by DI property handlers',
+            );
+        }
+
+        if ((!$allowPromoted && $property->isPromoted())
             || ($property->isReadOnly() && $property->isInitialized($this->entry))
         ) {
             return false;
@@ -130,12 +124,6 @@ final class ObjectCreationContext
         return true;
     }
 
-    /**
-     * Writes a value through normal PHP property semantics.
-     *
-     * The caller must claim the property first. ReflectionProperty::setValue()
-     * intentionally invokes PHP 8.4 property hooks; raw writes are never used.
-     */
     public function writeProperty(ReflectionProperty $property, mixed $value): void
     {
         if (!isset($this->claimedProperties[self::propertyKey($property)])) {
@@ -153,7 +141,6 @@ final class ObjectCreationContext
         ));
 
         if ($property->isStatic()
-            || $property->isPromoted()
             || ($property->isReadOnly() && $property->isInitialized($entry))
         ) {
             throw new LogicException(sprintf(
@@ -164,14 +151,22 @@ final class ObjectCreationContext
         }
 
         try {
-            // Normal reflection assignment intentionally invokes PHP 8.4
-            // property hooks. Raw writes would silently bypass user code.
             $property->setValue($entry, $value);
         } catch (ResolutionException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($property, previous: $e);
         }
+    }
+
+    private function conflictingStrategy(CreationStrategy $strategy): InvalidConfigurationException
+    {
+        return new InvalidConfigurationException(sprintf(
+            'Creation strategies "%s" and "%s" cannot be combined for "%s".',
+            $this->strategy->value,
+            $strategy->value,
+            $this->class->getName(),
+        ));
     }
 
     private static function propertyKey(ReflectionProperty $property): string

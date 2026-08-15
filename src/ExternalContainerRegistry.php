@@ -25,6 +25,11 @@ final class ExternalContainerRegistry
         $this->containers[spl_object_id($container)] ??= $container;
     }
 
+    public function contains(ContainerInterface $container): bool
+    {
+        return isset($this->containers[spl_object_id($container)]);
+    }
+
     /**
      * Returns the first registered container that reports having the given id,
      * or null if none do.

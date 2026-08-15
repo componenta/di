@@ -23,6 +23,4 @@ namespace Componenta\DI\Attribute;
  * ```
  */
 #[\Attribute(\Attribute::TARGET_PROPERTY)]
-readonly class Inject
-{
-}
+readonly class Inject {}

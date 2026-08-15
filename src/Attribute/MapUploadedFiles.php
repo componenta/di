@@ -14,6 +14,9 @@ class MapUploadedFiles extends RequestMapper implements RequestDataExtractorInte
 
     public function extract(ServerRequestInterface $request): array
     {
-        return array_merge($this->extractSharedData($request), $request->getUploadedFiles());
+        return $this->mergeRequestData([
+            ...$this->extractSharedSources($request),
+            'uploaded files' => $request->getUploadedFiles(),
+        ]);
     }
 }

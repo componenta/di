@@ -9,15 +9,16 @@ use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Compile\Autowire\AutowireClassGraph;
 use Componenta\DI\Compile\Autowire\AutowireEntry;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
+use Componenta\DI\Compile\Factory\CompiledFactoryPipelineFingerprint;
 use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
 use Componenta\DI\Compile\Parameter\DefaultParameterResolverCodeGenerators;
 use Componenta\DI\Compile\Parameter\ParameterCodeGenerator;
 use Componenta\DI\Compile\Parameter\ParameterResolverCodeGeneratorRegistry;
+use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry;
@@ -49,11 +50,20 @@ use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\Reflection\Reflection;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
-/** Builds the runtime container and its resolver/attribute pipelines. */
+/**
+ * Builds the runtime container and its resolver/attribute pipelines.
+ *
+ * Declarative dependency validation/normalization is delegated to
+ * DependencyConfiguration; AOT class discovery/expansion is delegated to
+ * AutowireClassGraph. Runtime composition remains the responsibility of this
+ * builder.
+ *
+ * @phpstan-type CallableReference array{0: object|non-empty-string, 1: non-empty-string}
+ * @phpstan-type DelegatorSpecification callable|non-empty-string|CallableReference
+ */
 class ContainerBuilder
 {
     public const int PRIORITY_PARAM_CASTABLE = 1200;
@@ -69,54 +79,57 @@ class ContainerBuilder
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int CACHE_VERSION = 7;
+    public const int CACHE_VERSION = 9;
+
+    /**
+     * @deprecated Cache readers never trust this marker. It remains only so
+     * older application-level cache producers can emit a v9 envelope while
+     * they migrate to the two-key version/dependencies format.
+     */
     public const string CACHE_VALIDATED_KEY = 'validated';
 
-    /** @var array<string, string> */
+    /** @var array<string, non-empty-string> */
     private const array DEFAULT_ALIASES = [
         \Componenta\DI\Cache\DiCacheGeneratorInterface::class
             => \Componenta\DI\Cache\DiCacheGenerator::class,
     ];
 
-
     /** @var array<string, mixed> */
-    private(set) array $factories = [];
+    public private(set) array $factories = [];
 
     /** @var list<class-string> */
-    private(set) array $invokables = [];
+    public private(set) array $invokables = [];
 
-    /** @var array<string, string> */
-    private(set) array $aliases = self::DEFAULT_ALIASES;
+    /** @var array<string, non-empty-string> */
+    public private(set) array $aliases = self::DEFAULT_ALIASES;
 
-    /** @var array<string, list<callable|string|array>> */
-    private(set) array $delegators = [];
+    /** @var array<string, list<DelegatorSpecification>> */
+    public private(set) array $delegators = [];
 
     /** @var array<string, mixed> */
-    private(set) array $services = [];
+    public private(set) array $services = [];
 
     /** @var list<array{0: mixed, 1: int}> */
-    private(set) array $parameterResolvers = [];
+    public private(set) array $parameterResolvers = [];
 
     /** @var list<mixed> */
-    private(set) array $attributeHandlers = [];
+    public private(set) array $attributeHandlers = [];
 
-    private(set) bool $replaceParameterResolvers = false;
+    public private(set) bool $replaceParameterResolvers = false;
 
-    private(set) bool $replaceAttributeHandlers = false;
+    public private(set) bool $replaceAttributeHandlers = false;
 
-
-    private(set) ?Config $config = null;
+    public private(set) ?Config $config = null;
 
     private ?string $compiledFactoryBaseDir = null;
 
-    /** The generated cache has already passed the complete binding validation. */
+    /** Current builder state has passed complete binding validation. */
     private bool $bindingsValidated = false;
-
-    /** Compiled shard paths and class names came from the generated cache. */
-    private bool $compiledFactoriesTrusted = false;
 
     /** @var array<class-string, ParameterResolverInterface&AttributeHandlerInterface>|null */
     private ?array $sharedResolvers = null;
+
+    public function __construct() {}
 
     public static function configure(Config $config): static
     {
@@ -130,6 +143,7 @@ class ContainerBuilder
             );
         }
 
+        /** @var array<string, mixed> $dependencies */
         return static::configureWithDependencies($config, $dependencies);
     }
 
@@ -138,10 +152,9 @@ class ContainerBuilder
         Config $config,
         array $dependencies,
     ): static {
-        self::assertDependencyShape($dependencies);
+        DependencyConfiguration::assertShape($dependencies);
 
-        $builder = new static();
-
+        $builder = self::newBuilder();
         $builder->factories = array_merge(
             $builder->factories,
             $dependencies[ConfigKey::FACTORIES] ?? [],
@@ -150,10 +163,19 @@ class ContainerBuilder
             $builder->aliases,
             $dependencies[ConfigKey::ALIASES] ?? [],
         );
-        $builder->services = $dependencies[ConfigKey::SERVICES] ?? [];
+        $builder->services = array_merge(
+            $builder->services,
+            $dependencies[ConfigKey::SERVICES] ?? [],
+        );
 
         foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $delegatorList) {
-            $builder->delegators[$id] = self::normalizeDelegatorList($delegatorList, $id);
+            $builder->delegators[$id] = [
+                ...($builder->delegators[$id] ?? []),
+                ...DependencyConfiguration::normalizeDelegatorList(
+                    $delegatorList,
+                    $id,
+                ),
+            ];
         }
 
         foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $key => $value) {
@@ -161,27 +183,44 @@ class ContainerBuilder
                 $builder->invokables[] = $value;
             }
 
-            if (is_string($key) && !isset($builder->aliases[$key])) {
-                $builder->aliases[$key] = $value;
+            if (is_string($key)) {
+                DependencyConfiguration::assertInvokableAliasCompatible(
+                    $builder->aliases,
+                    $key,
+                    $value,
+                );
+                $builder->aliases[$key] ??= $value;
             }
         }
 
         foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
-            $builder->parameterResolvers[] = [$resolver, $priority];
+            $replaced = false;
+
+            foreach ($builder->parameterResolvers as $index => [, $registeredPriority]) {
+                if ($registeredPriority !== $priority) {
+                    continue;
+                }
+
+                $builder->parameterResolvers[$index] = [$resolver, $priority];
+                $replaced = true;
+                break;
+            }
+
+            if (!$replaced) {
+                $builder->parameterResolvers[] = [$resolver, $priority];
+            }
         }
 
         foreach ($dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [] as $handler) {
             $builder->attributeHandlers[] = $handler;
         }
 
-        $builder->replaceParameterResolvers = (bool) (
-            $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false
-        );
-        $builder->replaceAttributeHandlers = (bool) (
-            $dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE] ?? false
-        );
-
-
+        $builder->replaceParameterResolvers = $dependencies[
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE
+        ] ?? $builder->replaceParameterResolvers;
+        $builder->replaceAttributeHandlers = $dependencies[
+            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE
+        ] ?? $builder->replaceAttributeHandlers;
         $builder->config = self::configWithDependencies($config, $dependencies);
 
         return $builder;
@@ -193,33 +232,15 @@ class ContainerBuilder
         array $cache,
         ?string $baseDir = null,
     ): static {
-        if (array_key_exists('version', $cache)
-            || array_key_exists(ConfigKey::DEPENDENCIES, $cache)
-        ) {
-            $version = $cache['version'] ?? self::CACHE_VERSION;
-            if ($version !== self::CACHE_VERSION) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Unsupported container cache version "%s"; expected "%d".',
-                    is_scalar($version) ? (string) $version : get_debug_type($version),
-                    self::CACHE_VERSION,
-                ));
-            }
-
-            $dependencies = $cache[ConfigKey::DEPENDENCIES] ?? [];
-            if (!is_array($dependencies)) {
-                throw new InvalidConfigurationException(
-                    'Container cache dependencies section must be an array.',
-                );
-            }
-
-        } else {
-            $dependencies = $cache;
-        }
-
+        $dependencies = DependencyConfiguration::dependenciesFromCache(
+            $cache,
+            self::CACHE_VERSION,
+        );
         $builder = static::configureWithDependencies($config, $dependencies);
         $builder->compiledFactoryBaseDir = $baseDir;
-        $builder->bindingsValidated = ($cache[self::CACHE_VALIDATED_KEY] ?? false) === true;
-        $builder->compiledFactoriesTrusted = $builder->bindingsValidated;
+
+        $builder->assertNoReservedBindings();
+        $builder->bindingsValidated = true;
 
         return $builder;
     }
@@ -230,56 +251,11 @@ class ContainerBuilder
      */
     public static function normalizeDependencies(array $dependencies): array
     {
-        self::assertDependencyShape($dependencies);
-
-        $aliases = array_merge(
+        $normalized = DependencyConfiguration::normalize(
+            $dependencies,
             self::DEFAULT_ALIASES,
-            $dependencies[ConfigKey::ALIASES] ?? [],
-        );
-        $invokables = [];
-
-        foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $key => $value) {
-            if (!in_array($value, $invokables, true)) {
-                $invokables[] = $value;
-            }
-
-            if (is_string($key) && !isset($aliases[$key])) {
-                $aliases[$key] = $value;
-            }
-        }
-
-        $delegators = [];
-        foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $list) {
-            $delegators[$id] = self::normalizeDelegatorList($list, $id);
-        }
-
-        $normalized = [
-            ConfigKey::FACTORIES => $dependencies[ConfigKey::FACTORIES] ?? [],
-            ConfigKey::INVOKABLES => $invokables,
-            ConfigKey::ALIASES => $aliases,
-            ConfigKey::DELEGATORS => $delegators,
-            ConfigKey::SERVICES => $dependencies[ConfigKey::SERVICES] ?? [],
-            ConfigKey::PARAMETER_RESOLVERS
-                => $dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [],
-            ConfigKey::PARAMETER_RESOLVERS_REPLACE => (bool) (
-                $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false
-            ),
-            ConfigKey::ATTRIBUTE_HANDLERS
-                => $dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [],
-            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE => (bool) (
-                $dependencies[ConfigKey::ATTRIBUTE_HANDLERS_REPLACE] ?? false
-            ),
-        ];
-
-        $normalized = array_filter(
-            $normalized,
-            static fn (mixed $value): bool => $value !== []
-                && $value !== false
-                && $value !== null,
         );
 
-        // Cache generation is the trust boundary. Production builds can skip
-        // this full graph validation after loading the resulting artifact.
         $validator = static::configureWithDependencies(new Config([]), $normalized);
         $validator->assertNoReservedBindings();
 
@@ -292,34 +268,38 @@ class ContainerBuilder
             $this->assertNoReservedBindings();
             $this->bindingsValidated = true;
         }
-        $this->sharedResolvers = null;
 
-        $entryResolver = null;
-        $callableExecutor = null;
+        $this->sharedResolvers = null;
         $config = $this->config;
+
         if ($config === null) {
             $environment = new Environment([]);
             $config = new Config([], $environment);
         } else {
             $environment = $config->environment ?? new Environment([]);
         }
+
         $parametersResolver = new ParametersResolver();
         $handlerRegistry = new AttributeHandlerRegistry();
         $attributeProcessor = new AttributeProcessor($handlerRegistry);
-        $aliases = new AliasResolver(
-            [
-                ...$this->aliases,
-                'config' => Config::class,
-            ],
-            skipValidation: $this->aliases === self::DEFAULT_ALIASES,
-        );
+        $aliases = new AliasResolver([
+            ...$this->aliases,
+            'config' => Config::class,
+        ]);
+        $cache = new EntryCache();
+        foreach ($this->services as $id => $service) {
+            $cache->putBase($aliases->resolve($id), $service);
+        }
         $proxyFactory = $this->createProxyFactory();
+        $bootstrap = new ContainerBootstrapState();
 
-        $container = Reflection::class(Container::class)->newLazyGhost(
+        /** @var ReflectionClass<Container> $containerClass */
+        $containerClass = new ReflectionClass(Container::class);
+        $container = $containerClass->newLazyGhost(
             static function (Container $container) use (
-                &$entryResolver,
-                &$callableExecutor,
+                $bootstrap,
                 $aliases,
+                $cache,
                 $proxyFactory,
                 $config,
                 $environment,
@@ -328,9 +308,10 @@ class ContainerBuilder
                 $attributeProcessor,
             ): void {
                 $container->__construct(
-                    resolver: $entryResolver,
+                    resolver: $bootstrap->entryResolver(),
                     aliases: $aliases,
-                    callableExecutor: $callableExecutor,
+                    callableExecutor: $bootstrap->callableExecutor(),
+                    cache: $cache,
                     proxyFactory: $proxyFactory,
                     bootstrapServices: [
                         Config::class => $config,
@@ -346,21 +327,15 @@ class ContainerBuilder
 
         $callableResolver = new CallableResolver($container);
         $callableExecutor = new CallableExecutor($callableResolver, $parametersResolver);
-
         $entryResolver = $this->createEntryResolver(
             $parametersResolver,
             $attributeProcessor,
             $container,
             $proxyFactory,
         );
+        $bootstrap->initialize($entryResolver, $callableExecutor);
 
-        // Trigger the one-shot lazy constructor only after every captured
-        // collaborator has been assigned. Core services are installed atomically
-        // inside Container::__construct() and can never be rebound afterwards.
         $container->get(Config::class);
-        foreach ($this->services as $id => $service) {
-            $container->set($id, $service);
-        }
 
         foreach ($this->delegators as $id => $delegatorList) {
             foreach ($delegatorList as $delegator) {
@@ -373,6 +348,7 @@ class ContainerBuilder
             $handlerRegistry,
             $container,
         );
+
         $parametersResolver->seal();
         $handlerRegistry->seal();
 
@@ -401,35 +377,27 @@ class ContainerBuilder
             throw new InvalidConfigurationException('Runtime DI compiler services are unavailable.');
         }
 
-        $excluded = array_fill_keys([
+        $aliases = new AliasResolver($this->aliases);
+        $excluded = [];
+
+        foreach (ProtectedServiceIds::ids() as $id) {
+            $excluded[$id] = true;
+        }
+
+        foreach ([
             ...array_keys($this->factories),
             ...array_keys($this->services),
-            ...array_keys($this->aliases),
             ...$this->invokables,
-        ], true);
-        $classes = (new AutowireClassGraph())->expand($entries, $excluded);
+        ] as $id) {
+            $excluded[$aliases->resolve($id)] = true;
+        }
+
+        $classes = (new AutowireClassGraph($this->aliases))->expand(
+            $entries,
+            $excluded,
+        );
 
         if ($classes === []) {
-            return [];
-        }
-
-        $compiledClasses = [];
-        foreach ($classes as $class) {
-            $reflection = new ReflectionClass($class);
-            $constructor = $reflection->getConstructor();
-            $invocations = $attributes->invocations($reflection);
-
-            if (($constructor === null || $constructor->getNumberOfParameters() === 0)
-                && self::supportsInvokableAttributes($invocations)
-            ) {
-                $this->addInvokable($class);
-                continue;
-            }
-
-            $compiledClasses[] = $class;
-        }
-
-        if ($compiledClasses === []) {
             return [];
         }
 
@@ -437,15 +405,21 @@ class ContainerBuilder
         $parameterCode = new ParameterCodeGenerator($parameters, $generators);
         $factoryCode = new FactoryCodeGenerator($parameterCode, $attributes);
 
-        return (new CompiledFactoryShardCompiler($factoryCode))->compile(
-            $compiledClasses,
+        return (new CompiledFactoryShardCompiler(
+            $factoryCode,
+            CompiledFactoryPipelineFingerprint::calculate($parameters, $attributes->registry),
+        ))->compile(
+            $classes,
             $directory,
             $maxShardBytes,
             $namespace,
         );
     }
+
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
+        /** @var array<string, mixed> $data */
         $data = $this->config?->toArray() ?? [];
         $data[ConfigKey::DEPENDENCIES] = [
             ConfigKey::FACTORIES => $this->factories,
@@ -479,12 +453,8 @@ class ContainerBuilder
                 $parametersResolver,
                 $attributeProcessor,
                 $this->compiledFactoryBaseDir,
-                $this->compiledFactoriesTrusted,
             ),
-            new InvokableResolver(
-                $this->invokables,
-                $proxyFactory,
-            ),
+            new InvokableResolver($this->invokables),
             new ReflectionResolver(
                 new InstanceCreator($parametersResolver),
                 $attributeProcessor,
@@ -493,15 +463,6 @@ class ContainerBuilder
         );
     }
 
-    /**
-     * Builds both extension pipelines in dependency-safe order.
-     *
-     * Default parameter resolvers are required to autowire custom handlers;
-     * default attribute handlers are required to initialize custom parameter
-     * resolvers materialized through the container. Register both default
-     * layers before either custom layer so extension services observe the same
-     * complete baseline pipeline as ordinary application services.
-     */
     protected function fillPipelines(
         ParametersResolver $parameters,
         AttributeHandlerRegistry $handlers,
@@ -630,7 +591,6 @@ class ContainerBuilder
         return $value;
     }
 
-
     private function assertNoReservedBindings(): void
     {
         if ($this->factories === []
@@ -651,10 +611,6 @@ class ContainerBuilder
             'invokable' => $this->invokables,
         ] as $kind => $ids) {
             foreach ($ids as $id) {
-                if (!is_string($id)) {
-                    continue;
-                }
-
                 self::assertBindingIdAvailable($id, $kind);
 
                 if (($kind === 'factory' || $kind === 'invokable') && $aliases->has($id)) {
@@ -684,25 +640,6 @@ class ContainerBuilder
         $this->assertSingleBindingPerCanonicalId($aliases);
     }
 
-    /**
-     * InvokableResolver preserves class-level Lazy and Proxy strategies. Any
-     * other attribute invocation still needs the generated attribute pipeline.
-     *
-     * @param array{before: list<\Componenta\DI\Resolver\Attribute\AttributeInvocation>, after: list<\Componenta\DI\Resolver\Attribute\AttributeInvocation>} $invocations
-     */
-    private static function supportsInvokableAttributes(array $invocations): bool
-    {
-        foreach ([...$invocations['before'], ...$invocations['after']] as $invocation) {
-            if (!$invocation->target instanceof ReflectionClass
-                || !in_array($invocation->attributeClass, [Lazy::class, Proxy::class], true)
-            ) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private function invalidateBindingValidationFor(string $id, string $kind): void
     {
         if (!$this->bindingsValidated) {
@@ -726,7 +663,7 @@ class ContainerBuilder
         }
     }
 
-    private function assertSingleBindingPerCanonicalId(AliasResolverInterface $aliases): void
+    private function assertSingleBindingPerCanonicalId(AliasResolver $aliases): void
     {
         /** @var array<string, array{kind: string, id: string}> $owners */
         $owners = [];
@@ -737,10 +674,6 @@ class ContainerBuilder
             'service' => array_keys($this->services),
         ] as $kind => $ids) {
             foreach ($ids as $id) {
-                if (!is_string($id)) {
-                    continue;
-                }
-
                 $canonical = $aliases->resolve($id);
                 $owner = $owners[$canonical] ?? null;
 
@@ -778,9 +711,7 @@ class ContainerBuilder
         }
     }
 
-    /**
-     * @return array<class-string, ParameterResolverInterface&AttributeHandlerInterface>
-     */
+    /** @return array<class-string, ParameterResolverInterface&AttributeHandlerInterface> */
     private function sharedResolvers(ContainerInterface $container): array
     {
         if ($this->sharedResolvers !== null) {
@@ -846,22 +777,42 @@ class ContainerBuilder
         mixed $config,
         ContainerInterface $container,
     ): object {
-        if (is_object($config)
-            && ($config instanceof ParameterResolverInterface
-                || $config instanceof AttributeHandlerInterface)
+        if ($config instanceof ParameterResolverInterface
+            || $config instanceof AttributeHandlerInterface
         ) {
             return $config;
         }
 
-        $extension = match (true) {
-            $config instanceof Closure => $config($container),
-            is_callable($config) => $config($container),
-            is_string($config) => $container->get($config),
-            default => throw new InvalidConfigurationException(sprintf(
+        if ($config instanceof Closure) {
+            $extension = $config($container);
+        } elseif (is_string($config)) {
+            $extension = $container->has($config)
+                ? $container->get($config)
+                : (is_callable($config) ? $config($container) : $container->get($config));
+        } elseif (is_array($config)
+            && !is_callable($config)
+            && array_keys($config) === [0, 1]
+            && is_string($config[0])
+            && is_string($config[1])
+            && $container->has($config[0])
+        ) {
+            $factory = [$container->get($config[0]), $config[1]];
+            if (!is_callable($factory)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Extension service method "%s::%s" is not callable.',
+                    $config[0],
+                    $config[1],
+                ));
+            }
+            $extension = $factory($container);
+        } elseif (is_callable($config)) {
+            $extension = $config($container);
+        } else {
+            throw new InvalidConfigurationException(sprintf(
                 'Extension specification must be an instance, callable or service id; got %s.',
                 get_debug_type($config),
-            )),
-        };
+            ));
+        }
 
         if (!is_object($extension)) {
             throw new InvalidConfigurationException(sprintf(
@@ -873,10 +824,14 @@ class ContainerBuilder
         return $extension;
     }
 
-    /** @param list<array{0: mixed, 1: int}> $resolvers */
+    /**
+     * @param list<array{0: mixed, 1: int}> $resolvers
+     * @return array<int, mixed>
+     */
     private function resolversToMap(array $resolvers): array
     {
         $map = [];
+
         foreach ($resolvers as [$resolver, $priority]) {
             if (array_key_exists($priority, $map)) {
                 throw new InvalidConfigurationException(sprintf(
@@ -891,210 +846,42 @@ class ContainerBuilder
         return $map;
     }
 
-    /**
-     * @return list<callable|string|array>
-     */
-    private static function normalizeDelegatorList(mixed $value, string $id): array
-    {
-        $items = self::isCallableArraySpecification($value)
-            ? [$value]
-            : (is_array($value) && array_is_list($value) ? $value : [$value]);
-
-        foreach ($items as $delegator) {
-            self::assertDelegatorSpecification($delegator, $id);
-        }
-
-        /** @var list<callable|string|array> $items */
-        return array_values($items);
-    }
-
-    private static function assertDelegatorSpecification(mixed $delegator, string $id): void
-    {
-        if (is_callable($delegator)
-            || is_string($delegator)
-            || self::isCallableArraySpecification($delegator)
-        ) {
-            return;
-        }
-
-        throw new InvalidConfigurationException(sprintf(
-            'Delegator for "%s" must be callable, string or [class|object, method]; got %s.',
-            $id,
-            get_debug_type($delegator),
-        ));
-    }
-
-    private static function assertExtensionSpecification(mixed $extension, string $kind): void
-    {
-        if ($extension instanceof ParameterResolverInterface
-            || $extension instanceof AttributeHandlerInterface
-            || $extension instanceof Closure
-            || is_callable($extension)
-            || (is_string($extension) && $extension !== '')
-        ) {
-            return;
-        }
-
-        throw new InvalidConfigurationException(sprintf(
-            '%s specification must be an instance, callable or non-empty service id; got %s.',
-            ucfirst($kind),
-            get_debug_type($extension),
-        ));
-    }
-
-    private static function isCallableArraySpecification(mixed $value): bool
-    {
-        if (!is_array($value)
-            || array_keys($value) !== [0, 1]
-            || !is_string($value[1])
-        ) {
-            return false;
-        }
-
-        if (is_callable($value)) {
-            return true;
-        }
-
-        // A non-static [Class::class, method] pair is resolved through the
-        // container later and is therefore not directly callable yet.
-        return is_string($value[0])
-            && class_exists($value[0])
-            && method_exists($value[0], $value[1]);
-    }
-
-    /** @param array<string, mixed> $dependencies */
-    private static function assertDependencyShape(array $dependencies): void
-    {
-        $allowed = array_fill_keys(ConfigKey::dependencyKeys(), true);
-
-        foreach ($dependencies as $key => $_value) {
-            if (!is_string($key) || !isset($allowed[$key])) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Unsupported container dependency key "%s".',
-                    is_scalar($key) ? (string) $key : get_debug_type($key),
-                ));
-            }
-        }
-
-        foreach ([
-            ConfigKey::FACTORIES,
-            ConfigKey::INVOKABLES,
-            ConfigKey::ALIASES,
-            ConfigKey::DELEGATORS,
-            ConfigKey::SERVICES,
-            ConfigKey::PARAMETER_RESOLVERS,
-            ConfigKey::ATTRIBUTE_HANDLERS,
-        ] as $key) {
-            if (array_key_exists($key, $dependencies)
-                && !is_array($dependencies[$key])
-            ) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Container dependency "%s" must be an array; got %s.',
-                    $key,
-                    get_debug_type($dependencies[$key]),
-                ));
-            }
-        }
-
-        foreach ([
-            ConfigKey::PARAMETER_RESOLVERS_REPLACE,
-            ConfigKey::ATTRIBUTE_HANDLERS_REPLACE,
-        ] as $key) {
-            if (array_key_exists($key, $dependencies)
-                && !is_bool($dependencies[$key])
-            ) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Container dependency "%s" must be bool; got %s.',
-                    $key,
-                    get_debug_type($dependencies[$key]),
-                ));
-            }
-        }
-
-        foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
-            if (!is_int($priority)) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Parameter resolver priority must be int; got %s.',
-                    get_debug_type($priority),
-                ));
-            }
-
-            self::assertExtensionSpecification($resolver, 'parameter resolver');
-        }
-
-        $handlers = $dependencies[ConfigKey::ATTRIBUTE_HANDLERS] ?? [];
-        if ($handlers !== [] && !array_is_list($handlers)) {
-            throw new InvalidConfigurationException(
-                'Attribute handlers must be configured as a list in registration order.',
-            );
-        }
-
-        foreach ($handlers as $handler) {
-            self::assertExtensionSpecification($handler, 'attribute handler');
-        }
-
-        foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $class) {
-            if (!is_string($class) || $class === '') {
-                throw new InvalidConfigurationException(sprintf(
-                    'Invokable entry must be a non-empty class-string; got %s.',
-                    get_debug_type($class),
-                ));
-            }
-        }
-
-        foreach ($dependencies[ConfigKey::ALIASES] ?? [] as $alias => $target) {
-            if (!is_string($alias) || $alias === ''
-                || !is_string($target) || $target === ''
-            ) {
-                throw new InvalidConfigurationException(
-                    'Aliases must map non-empty string ids to non-empty string targets.',
-                );
-            }
-        }
-
-        foreach ([
-            ConfigKey::FACTORIES,
-            ConfigKey::DELEGATORS,
-            ConfigKey::SERVICES,
-        ] as $key) {
-            foreach ($dependencies[$key] ?? [] as $id => $_value) {
-                if (!is_string($id) || $id === '') {
-                    throw new InvalidConfigurationException(sprintf(
-                        'Container dependency "%s" requires non-empty string ids.',
-                        $key,
-                    ));
-                }
-            }
-        }
-    }
-
     /** @param array<string, mixed> $dependencies */
     private static function configWithDependencies(
         Config $config,
         array $dependencies,
     ): Config {
+        /** @var array<string, mixed> $data */
         $data = $config->toArray();
         $data[ConfigKey::DEPENDENCIES] = $dependencies;
 
         return new Config($data, $config->environment);
     }
 
-    /** @param callable(ContainerValue, array<string|int, mixed>):mixed $factory */
+    /** @return static */
+    private static function newBuilder(): static
+    {
+        // Extensibility is intentional: subclasses may initialize state in constructors.
+        // @phpstan-ignore new.static
+        return new static();
+    }
+
+    /** @param callable(ContainerValue, array<string|int, mixed>): mixed $factory */
     public function addFactory(string $id, callable $factory): static
     {
         self::assertBindingIdAvailable($id, 'factory');
         $this->invalidateBindingValidationFor($id, 'factory');
         $this->factories[$id] = $factory;
+
         return $this;
     }
 
+    /** @param array<array-key, mixed> $factories */
     public function addFactories(array $factories): static
     {
         foreach ($factories as $id => $factory) {
             if (!is_string($id)) {
-                throw new InvalidConfigurationException(
-                    'Factory ids must be strings.',
-                );
+                throw new InvalidConfigurationException('Factory ids must be strings.');
             }
 
             if (!is_callable($factory)) {
@@ -1125,20 +912,27 @@ class ContainerBuilder
 
         if ($class !== null) {
             self::assertBindingIdAvailable($classOrAlias, 'alias');
+            DependencyConfiguration::assertInvokableAliasCompatible(
+                $this->aliases,
+                $classOrAlias,
+                $class,
+            );
             $this->bindingsValidated = false;
         }
 
+        /** @var class-string $target */
         if (!in_array($target, $this->invokables, true)) {
             $this->invokables[] = $target;
         }
 
-        if ($class !== null && !isset($this->aliases[$classOrAlias])) {
-            $this->aliases[$classOrAlias] = $class;
+        if ($class !== null) {
+            $this->aliases[$classOrAlias] ??= $class;
         }
 
         return $this;
     }
 
+    /** @param array<array-key, mixed> $invokables */
     public function addInvokables(array $invokables): static
     {
         foreach ($invokables as $key => $value) {
@@ -1149,22 +943,18 @@ class ContainerBuilder
                 ));
             }
 
-            if (!is_int($key) && !is_string($key)) {
-                throw new InvalidConfigurationException(
-                    'Invokable aliases must be strings.',
-                );
-            }
-
             is_int($key)
                 ? $this->addInvokable($value)
                 : $this->addInvokable($key, $value);
         }
+
         return $this;
     }
 
     public function addAlias(string $alias, string $target): static
     {
         self::assertBindingIdAvailable($alias, 'alias');
+
         if ($target === '') {
             throw new InvalidConfigurationException(
                 'Alias target must be a non-empty DI id.',
@@ -1173,16 +963,16 @@ class ContainerBuilder
 
         $this->bindingsValidated = false;
         $this->aliases[$alias] = $target;
+
         return $this;
     }
 
+    /** @param array<array-key, mixed> $aliases */
     public function addAliases(array $aliases): static
     {
         foreach ($aliases as $alias => $target) {
             if (!is_string($alias)) {
-                throw new InvalidConfigurationException(
-                    'Alias ids must be strings.',
-                );
+                throw new InvalidConfigurationException('Alias ids must be strings.');
             }
 
             if (!is_string($target)) {
@@ -1199,29 +989,35 @@ class ContainerBuilder
         return $this;
     }
 
+    /** @param DelegatorSpecification $delegator */
     public function addDelegator(
         string $id,
         callable|string|array $delegator,
     ): static {
         self::assertBindingIdAvailable($id, 'delegator');
-        self::assertDelegatorSpecification($delegator, $id);
+        $normalized = DependencyConfiguration::normalizeDelegatorSpecification(
+            $delegator,
+            $id,
+        );
+
         if (isset($this->aliases[$id]) || in_array($id, $this->aliases, true)) {
             $this->bindingsValidated = false;
         }
-        $this->delegators[$id][] = $delegator;
+
+        $this->delegators[$id][] = $normalized;
+
         return $this;
     }
 
+    /** @param array<array-key, mixed> $delegators */
     public function addDelegators(array $delegators): static
     {
         foreach ($delegators as $id => $list) {
             if (!is_string($id)) {
-                throw new InvalidConfigurationException(
-                    'Delegator ids must be strings.',
-                );
+                throw new InvalidConfigurationException('Delegator ids must be strings.');
             }
 
-            foreach (self::normalizeDelegatorList($list, $id) as $delegator) {
+            foreach (DependencyConfiguration::normalizeDelegatorList($list, $id) as $delegator) {
                 $this->addDelegator($id, $delegator);
             }
         }
@@ -1234,16 +1030,16 @@ class ContainerBuilder
         self::assertBindingIdAvailable($id, 'service');
         $this->invalidateBindingValidationFor($id, 'service');
         $this->services[$id] = $service;
+
         return $this;
     }
 
+    /** @param array<array-key, mixed> $services */
     public function addServices(array $services): static
     {
         foreach ($services as $id => $service) {
             if (!is_string($id)) {
-                throw new InvalidConfigurationException(
-                    'Service ids must be strings.',
-                );
+                throw new InvalidConfigurationException('Service ids must be strings.');
             }
 
             $this->addService($id, $service);
@@ -1256,7 +1052,10 @@ class ContainerBuilder
         mixed $resolver,
         int $priority = 0,
     ): static {
-        self::assertExtensionSpecification($resolver, 'parameter resolver');
+        DependencyConfiguration::assertExtensionSpecification(
+            $resolver,
+            'parameter resolver',
+        );
 
         foreach ($this->parameterResolvers as [, $registeredPriority]) {
             if ($registeredPriority === $priority) {
@@ -1268,25 +1067,32 @@ class ContainerBuilder
         }
 
         $this->parameterResolvers[] = [$resolver, $priority];
+
         return $this;
     }
 
     public function replaceParameterResolvers(bool $replace = true): static
     {
         $this->replaceParameterResolvers = $replace;
+
         return $this;
     }
 
     public function addAttributeHandler(mixed $handler): static
     {
-        self::assertExtensionSpecification($handler, 'attribute handler');
+        DependencyConfiguration::assertExtensionSpecification(
+            $handler,
+            'attribute handler',
+        );
         $this->attributeHandlers[] = $handler;
+
         return $this;
     }
 
     public function replaceAttributeHandlers(bool $replace = true): static
     {
         $this->replaceAttributeHandlers = $replace;
+
         return $this;
     }
 }

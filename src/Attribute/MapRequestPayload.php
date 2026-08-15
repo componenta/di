@@ -15,6 +15,10 @@ class MapRequestPayload extends RequestMapper implements RequestDataExtractorInt
     public function extract(ServerRequestInterface $request): array
     {
         $body = $request->getParsedBody() ?? [];
-        return array_merge($this->extractSharedData($request), is_array($body) ? $body : get_object_vars($body));
+
+        return $this->mergeRequestData([
+            ...$this->extractSharedSources($request),
+            'parsed body' => is_array($body) ? $body : get_object_vars($body),
+        ]);
     }
 }
