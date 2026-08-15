@@ -4,18 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Definition;
 
-/**
- * Static factory for creating definitions.
- *
- * @example
- * ```php
- * return [
- *     LoggerInterface::class => Definition::factory(fn($c, array $context) => new Logger()),
- *     UserService::class => Definition::autowire(UserService::class),
- *     'db' => Definition::reference(Connection::class),
- * ];
- * ```
- */
+/** Static factory for immutable dependency definitions. */
 final class Definition
 {
     /**
@@ -26,16 +15,12 @@ final class Definition
         return new FactoryDefinition($factory);
     }
 
-    public static function autowire(string $className): ClassDefinition
-    {
-        return new ClassDefinition($className);
-    }
-
     public static function reference(string $entryId): ReferenceDefinition
     {
         return new ReferenceDefinition($entryId);
     }
 
+    /** @param class-string $className */
     public static function invokable(string $className): InvokableDefinition
     {
         return new InvokableDefinition($className);

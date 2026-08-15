@@ -22,6 +22,7 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
         return $target->className !== null;
     }
 
+    /** @return array{0: int, 1: mixed}|null */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -33,7 +34,10 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
         );
     }
 
-    /** @param class-string|null $typeName */
+    /**
+     * @param class-string|null $typeName
+     * @return array{0: int, 1: mixed}|null
+     */
     private function resolveType(
         ?string $typeName,
         ParameterTarget $target,

@@ -14,7 +14,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 
-/** Inlines lookup of explicitly provided objects by type key or instanceof. */
+/** Inlines lookup of explicitly provided objects registered by type key. */
 final class ArrayTypedResolverCodeGenerator implements ParameterResolverCodeGeneratorInterface
 {
     public function generate(
@@ -47,13 +47,6 @@ foreach (%s as %s) {
         goto %s;
     }
 }
-
-foreach (%s->provided as %s) {
-    if (is_object(%s) && %s->accepts(%s)) {
-        %s = %s;
-        goto %s;
-    }
-}
 PHP,
             $types,
             $typeVariable,
@@ -62,14 +55,6 @@ PHP,
             $valueVariable,
             $context->contextExpression,
             $typeVariable,
-            $valueVariable,
-            $context->targetExpression,
-            $valueVariable,
-            $context->argumentVariable,
-            $valueVariable,
-            $context->resolvedLabel,
-            $context->contextExpression,
-            $valueVariable,
             $valueVariable,
             $context->targetExpression,
             $valueVariable,

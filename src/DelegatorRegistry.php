@@ -5,21 +5,16 @@ declare(strict_types=1);
 namespace Componenta\DI;
 
 use Closure;
+use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\DelegatorException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+use ReflectionMethod;
 use Throwable;
 
 /**
- * Keeps track of delegator (decorator) callables attached to container
- * entries and applies them in order.
- *
- * Delegators are stored in their raw registration form (Closure, service id,
- * `[class, method]`) and normalised to callables on first use; the resolved
- * callables are cached until the registry is invalidated for that entry.
- *
- * Container-typed exceptions raised by a delegator surface unchanged
- * (PSR-11 contract); other Throwables are wrapped into {@see DelegatorException}.
+ * Keeps track of delegator callables attached to container entries and applies
+ * them in registration order.
  *
  * @internal
  */
@@ -31,38 +26,64 @@ final class DelegatorRegistry
     /** @var array<string, list<callable>> Normalised callables cache. */
     private array $callables = [];
 
+    /** @var array<string, array<string, true>> */
+    private array $dependents = [];
+
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
     ) {}
 
-    /**
-     * Records a new delegator and invalidates the resolved-callable cache for
-     * the entry so subsequent applications re-normalise the chain.
-     */
     public function register(string $id, mixed $delegator): void
     {
+        $delegator = DependencyConfiguration::normalizeDelegatorSpecification(
+            $delegator,
+            $id,
+        );
         $this->raw[$id][] = $delegator;
+
+        foreach (self::dependencyIds($delegator) as $dependencyId) {
+            $this->dependents[$dependencyId][$id] = true;
+        }
+
         unset($this->callables[$id]);
     }
 
-    /**
-     * Drops the resolved-callable cache for the entry; raw registrations are
-     * preserved. Container invokes this from its invalidation flow so the
-     * chain is re-normalised on next use.
-     */
     public function invalidate(string $id): void
     {
         unset($this->callables[$id]);
     }
 
+    /** @return list<string> */
+    public function deferredDependencies(): array
+    {
+        return array_keys($this->dependents);
+    }
+
     /**
-     * Runs every registered delegator on the entry in registration order.
-     *
-     * @param ContainerInterface $container Container reference passed as the
-     *                                      second argument to each delegator.
-     *
-     * @throws DelegatorException If a delegator or its resolution raised a
-     *                            non-container exception.
+     * @param iterable<string> $dependencyIds
+     * @return list<string>
+     */
+    public function invalidateDependencies(iterable $dependencyIds): array
+    {
+        /** @var array<string, true> $entries */
+        $entries = [];
+
+        foreach ($dependencyIds as $dependencyId) {
+            foreach ($this->dependents[$dependencyId] ?? [] as $entry => $_) {
+                $entries[$entry] = true;
+            }
+        }
+
+        foreach ($entries as $entry => $_) {
+            unset($this->callables[$entry]);
+        }
+
+        return array_keys($entries);
+    }
+
+    /**
+     * @param ContainerInterface $container Container passed as the second delegator argument.
+     * @throws DelegatorException
      */
     public function apply(string $id, mixed $entry, ContainerInterface $container): mixed
     {
@@ -85,11 +106,7 @@ final class DelegatorRegistry
         return $entry;
     }
 
-    /**
-     * @return list<callable>
-     *
-     * @throws DelegatorException
-     */
+    /** @return list<callable> */
     private function resolveChain(string $id): array
     {
         $callables = [];
@@ -113,10 +130,52 @@ final class DelegatorRegistry
             return $delegator;
         }
 
+        if (is_string($delegator)) {
+            return $this->callableResolver->resolve($delegator);
+        }
+
         if (is_callable($delegator)) {
             return $delegator;
         }
 
         return $this->callableResolver->resolve($delegator);
+    }
+
+    /** @return list<string> */
+    private static function dependencyIds(mixed $delegator): array
+    {
+        if (is_string($delegator)) {
+            if ($delegator === '') {
+                return [];
+            }
+
+            $ids = [$delegator => true];
+
+            if (str_contains($delegator, '::')) {
+                [$owner, $method] = explode('::', $delegator, 2);
+
+                if ($owner !== ''
+                    && $method !== ''
+                    && (class_exists($owner) || interface_exists($owner))
+                    && method_exists($owner, $method)
+                    && !(new ReflectionMethod($owner, $method))->isStatic()
+                ) {
+                    $ids[$owner] = true;
+                }
+            }
+
+            return array_keys($ids);
+        }
+
+        if (is_array($delegator)
+            && !is_callable($delegator)
+            && array_keys($delegator) === [0, 1]
+            && is_string($delegator[0])
+            && $delegator[0] !== ''
+        ) {
+            return [$delegator[0]];
+        }
+
+        return [];
     }
 }

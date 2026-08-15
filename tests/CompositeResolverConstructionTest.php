@@ -45,6 +45,6 @@ it('normalizes named variadic arguments without changing their call order', func
 it('rejects duplicate resolver identities supplied through the constructor', function () {
     $resolver = new ConstructorEntryResolverForTest('entry', 'value');
 
-    expect(fn () => new CompositeResolver($resolver, $resolver))
+    expect(fn() => new CompositeResolver($resolver, $resolver))
         ->toThrow(InvalidArgumentException::class);
 });

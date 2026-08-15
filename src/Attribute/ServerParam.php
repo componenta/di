@@ -20,18 +20,18 @@ readonly class ServerParam implements ExtractorInterface, CastableInterface
 
     public function extract(ServerRequestInterface $request): mixed
     {
-        $value = $request->getServerParams()[$this->name] ?? null;
+        $params = $request->getServerParams();
 
-        if ($value === null) {
+        if (!array_key_exists($this->name, $params)) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required server parameter "%s" is missing', $this->name)
+                    sprintf('Required server parameter "%s" is missing', $this->name),
                 );
             }
 
             return $this->default;
         }
 
-        return $value;
+        return $params[$this->name];
     }
 }

@@ -15,8 +15,10 @@ namespace Componenta\DI\Attribute;
  * 1. The parameter/property type (if it's a class or interface)
  * 2. The parameter/property name (otherwise)
  *
- * For lazy resolution combine with {@see Lazy} (lazy object) or
- * {@see Proxy} (virtual proxy).
+ * For an injection-point virtual proxy combine this attribute with
+ * {@see Proxy}. Interface-typed or service-id proxies must name their concrete
+ * proxy class in `#[Proxy(ConcreteClass::class)]`. Native lazy ghosts are a
+ * class-level concern: mark the concrete entry class with {@see Lazy}.
  *
  * @example Basic usage with explicit entry
  * ```php
@@ -51,14 +53,14 @@ namespace Componenta\DI\Attribute;
  * }
  * ```
  *
- * @example Combined with lazy resolution
+ * @example Combined with virtual-proxy resolution
  * ```php
  * public function process(
- *     #[Make(HeavyAnalyzer::class), Lazy]
+ *     #[Make(HeavyAnalyzer::class), Proxy]
  *     HeavyAnalyzer $analyzer,
  *
- *     #[Make, Proxy]
- *     CacheInterface $cache,  // entry = CacheInterface::class from type
+ *     #[Make(CacheInterface::class), Proxy(RedisCache::class)]
+ *     CacheInterface $cache,
  * ) {}
  * ```
  */

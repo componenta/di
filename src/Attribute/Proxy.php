@@ -7,51 +7,46 @@ namespace Componenta\DI\Attribute;
 use Attribute;
 
 /**
- * Marks a class, parameter, or property for virtual-proxy instantiation.
+ * Marks a class, parameter, or property for native virtual-proxy creation.
  *
- * The wrapper is a generated subtype of the target class that forwards
- * all operations to a real backing instance produced lazily on first
- * observable access.
+ * A virtual proxy is an instance of a concrete proxy class whose backing
+ * object is produced lazily on first observable access. PHP therefore needs a
+ * concrete class even when the injection point itself is typed as an
+ * interface or the service is addressed by an arbitrary container id.
  *
- * `instanceof` and type hints work transparently; `get_class()` reports
- * the generated proxy class name, not the marked class.
+ * On a class, omit the argument: the marked class is the proxy class. On a
+ * parameter or property, pass the concrete class when it cannot be inferred
+ * from the declared type or from #[Make]'s entry.
  *
- * ## When to use
- *
- * Use {@see Proxy} when the wrapped class:
- *
- *  - Is built by an opaque factory whose constructor cannot be called
- *    directly on a pre-allocated instance (vendor builders, decorators,
- *    subclass-returning factories).
- *  - Is referenced through an interface and the concrete class is not
- *    known statically.
- *
- * For services where preserving class identity is important (the common
- * case), prefer {@see Lazy} which produces a lazy object - same class,
- * `get_class()` intact.
+ * For services that can initialize the same object in place, prefer
+ * class-level {@see Lazy}; it avoids a separate backing object.
  *
  * Reference: {@see \ReflectionClass::newLazyProxy()} on PHP 8.4+.
  *
  * ## Examples
  *
  * ```php
- * // On class - every resolution returns a virtual proxy.
+ * // Class-level proxy: HeavyService is both the declared and proxy class.
  * #[Proxy]
  * class HeavyService {}
  *
- * // On parameter - only this injection point gets a proxy.
+ * // Concrete parameter type can be inferred.
  * public function __construct(
  *     #[Proxy] HeavyService $service,
  * ) {}
  *
- * // On property - only this injection point gets a proxy.
- * class Controller {
- *     #[Proxy]
- *     private HeavyService $service;
- * }
+ * // Interface-typed injection requires a concrete proxy class.
+ * public function __construct(
+ *     #[Make(CacheInterface::class), Proxy(RedisCache::class)]
+ *     CacheInterface $cache,
+ * ) {}
  * ```
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
 final readonly class Proxy
 {
+    /** @param class-string|null $class Concrete proxy class for an injection point. */
+    public function __construct(
+        public ?string $class = null,
+    ) {}
 }

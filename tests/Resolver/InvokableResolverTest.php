@@ -5,10 +5,28 @@ declare(strict_types=1);
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\ProxyFactory;
+use Componenta\DI\Exception\NotFoundException;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
-use Componenta\DI\Tests\Fixture\ServiceWithoutConstructor;
 use Componenta\DI\Tests\Fixture\SimpleService;
+
+final class InvokableOptionalConstructor
+{
+    public function __construct(public string $value = 'default') {}
+}
+
+final class InvokableRequiredConstructor
+{
+    public function __construct(public string $value) {}
+}
+
+final class InvokableThrowingConstructor
+{
+    public function __construct()
+    {
+        throw new RuntimeException('constructor failed');
+    }
+}
 
 describe('Resolver\\InvokableResolver', function () {
     describe('can()', function () {
@@ -20,8 +38,8 @@ describe('Resolver\\InvokableResolver', function () {
         });
     });
 
-    describe('resolve() without a proxy factory (eager by default)', function () {
-        it('instantiates the registered class directly', function () {
+    describe('resolve()', function () {
+        it('instantiates a registered class with a plain zero-argument new', function () {
             $resolver = new InvokableResolver([SimpleService::class]);
 
             $instance = $resolver->resolve(SimpleService::class);
@@ -33,29 +51,55 @@ describe('Resolver\\InvokableResolver', function () {
         it('produces a fresh instance on each resolve call', function () {
             $resolver = new InvokableResolver([SimpleService::class]);
 
-            $a = $resolver->resolve(SimpleService::class);
-            $b = $resolver->resolve(SimpleService::class);
-
-            expect($a)->not->toBe($b);
-        });
-    });
-
-    describe('resolve() with a real PHP84 proxy factory', function () {
-        it('returns an instance of the target class (eager for classes without Lazy/Proxy attributes)', function () {
-            $resolver = new InvokableResolver([SimpleService::class], new ProxyFactory());
-
-            $instance = $resolver->resolve(SimpleService::class);
-
-            expect($instance)->toBeInstanceOf(SimpleService::class);
+            expect($resolver->resolve(SimpleService::class))
+                ->not->toBe($resolver->resolve(SimpleService::class));
         });
 
-        it('handles classes without a constructor (avoids calling __construct on null)', function () {
-            $resolver = new InvokableResolver([ServiceWithoutConstructor::class], new ProxyFactory());
+        it('ignores resolution context', function () {
+            $resolver = new InvokableResolver([InvokableOptionalConstructor::class]);
 
-            $instance = $resolver->resolve(ServiceWithoutConstructor::class);
+            $instance = $resolver->resolve(
+                InvokableOptionalConstructor::class,
+                ['value' => 'runtime', 0 => 'positional'],
+            );
 
-            expect($instance)->toBeInstanceOf(ServiceWithoutConstructor::class)
-                ->and($instance->tag)->toBe('empty');
+            expect($instance->value)->toBe('default');
+        });
+
+        it('throws NotFoundException for an id it does not own', function () {
+            expect(fn() => (new InvokableResolver())->resolve('missing'))
+                ->toThrow(NotFoundException::class);
+        });
+
+        it('wraps constructor argument failures in ResolutionException', function () {
+            $resolver = new InvokableResolver([InvokableRequiredConstructor::class]);
+
+            try {
+                $resolver->resolve(InvokableRequiredConstructor::class);
+            } catch (ResolutionException $e) {
+                expect($e->serviceId)->toBe(InvokableRequiredConstructor::class)
+                    ->and($e->getPrevious())->toBeInstanceOf(ArgumentCountError::class);
+
+                return;
+            }
+
+            self::fail('expected ResolutionException');
+        });
+
+        it('wraps constructor throwables in ResolutionException', function () {
+            $resolver = new InvokableResolver([InvokableThrowingConstructor::class]);
+
+            try {
+                $resolver->resolve(InvokableThrowingConstructor::class);
+            } catch (ResolutionException $e) {
+                expect($e->serviceId)->toBe(InvokableThrowingConstructor::class)
+                    ->and($e->getPrevious())->toBeInstanceOf(RuntimeException::class)
+                    ->and($e->getPrevious()?->getMessage())->toBe('constructor failed');
+
+                return;
+            }
+
+            self::fail('expected ResolutionException');
         });
     });
 
@@ -64,7 +108,7 @@ describe('Resolver\\InvokableResolver', function () {
             $resolver = new InvokableResolver([]);
 
             expect($resolver->supportsDefinition(new InvokableDefinition(SimpleService::class)))->toBeTrue()
-                ->and($resolver->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeFalse();
+                ->and($resolver->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeFalse();
         });
 
         it('setDefinition registers the class, making can() and resolve() succeed', function () {
@@ -79,7 +123,7 @@ describe('Resolver\\InvokableResolver', function () {
         it('setDefinition rejects unsupported definition types', function () {
             $resolver = new InvokableResolver([]);
 
-            expect(fn () => $resolver->setDefinition('x', new FactoryDefinition(fn () => null)))
+            expect(fn() => $resolver->setDefinition('x', new FactoryDefinition(fn() => null)))
                 ->toThrow(InvalidConfigurationException::class);
         });
     });

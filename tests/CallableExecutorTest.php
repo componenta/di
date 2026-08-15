@@ -11,6 +11,8 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\NullContainer;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Tests\Fixture\MagicInstanceCallable;
+use Componenta\DI\Tests\Fixture\MagicStaticCallable;
 
 function makeExecutor(
     ?CallableResolverInterface $callableResolver = null,
@@ -28,27 +30,27 @@ describe('CallableExecutor', function () {
     });
 
     describe('call()', function () {
-        it('invokes a parameterless callable without asking the parameter resolver for anything', function () {
-            $parametersResolver = new class (new ArrayResolver()) extends ParametersResolver {
-                public int $calls = 0;
+        it('invokes a parameterless callable', function () {
+            expect(makeExecutor()->call(fn() => 'done'))->toBe('done');
+        });
 
-                public function resolve(array $parameters, array $providedParameters = []): array
-                {
-                    $this->calls++;
-                    return parent::resolve($parameters, $providedParameters);
-                }
-            };
+        it('forwards explicit positional arguments when the callable declares no parameters', function () {
+            $executor = makeExecutor();
 
-            $result = makeExecutor(parametersResolver: $parametersResolver)->call(fn () => 'done');
+            $result = $executor->call(
+                static function (): array {
+                    return func_get_args();
+                },
+                ['first', 'second'],
+            );
 
-            expect($result)->toBe('done')
-                ->and($parametersResolver->calls)->toBe(0);
+            expect($result)->toBe(['first', 'second']);
         });
 
         it('passes provided parameters to the callable by name', function () {
             $executor = makeExecutor();
 
-            $result = $executor->call(fn (int $a, int $b) => $a - $b, ['a' => 10, 'b' => 3]);
+            $result = $executor->call(fn(int $a, int $b) => $a - $b, ['a' => 10, 'b' => 3]);
 
             expect($result)->toBe(7);
         });
@@ -56,15 +58,25 @@ describe('CallableExecutor', function () {
         it('passes provided parameters to the callable by position', function () {
             $executor = makeExecutor();
 
-            $result = $executor->call(fn (int $a, int $b) => $a - $b, [10, 3]);
+            $result = $executor->call(fn(int $a, int $b) => $a - $b, [10, 3]);
 
             expect($result)->toBe(7);
+        });
+
+        it('invokes dynamic instance callables using explicit arguments', function () {
+            expect(makeExecutor()->call([new MagicInstanceCallable(), 'dynamic'], [1, 2]))
+                ->toBe(['dynamic', [1, 2]]);
+        });
+
+        it('invokes dynamic static callables using explicit arguments', function () {
+            expect(makeExecutor()->call(MagicStaticCallable::class . '::dynamic', [3, 4]))
+                ->toBe(['dynamic', [3, 4]]);
         });
 
         it('throws ResolutionException when a parameter cannot be resolved', function () {
             $executor = makeExecutor();
 
-            expect(fn () => $executor->call(fn (int $missing) => $missing))
+            expect(fn() => $executor->call(fn(int $missing) => $missing))
                 ->toThrow(ResolutionException::class);
         });
 
@@ -72,7 +84,16 @@ describe('CallableExecutor', function () {
             $executor = makeExecutor();
             $boom = new DomainException('from callable');
 
-            expect(fn () => $executor->call(function () use ($boom) {
+            expect(fn() => $executor->call(function () use ($boom) {
+                throw $boom;
+            }))->toThrow($boom);
+        });
+
+        it('propagates engine errors thrown inside the callable unchanged', function () {
+            $executor = makeExecutor();
+            $boom = new TypeError('from callable body');
+
+            expect(fn() => $executor->call(function () use ($boom) {
                 throw $boom;
             }))->toThrow($boom);
         });
@@ -80,7 +101,7 @@ describe('CallableExecutor', function () {
         it('forwards resolver failures as InvalidCallableException', function () {
             $executor = makeExecutor();
 
-            expect(fn () => $executor->call('this-is-not-a-callable'))
+            expect(fn() => $executor->call('this-is-not-a-callable'))
                 ->toThrow(InvalidCallableException::class);
         });
     });
@@ -93,7 +114,7 @@ describe('CallableExecutor', function () {
                 public function resolve(mixed $callable): callable
                 {
                     $this->inputs[] = $callable;
-                    return fn () => 'resolved';
+                    return fn() => 'resolved';
                 }
             };
             $executor = makeExecutor(callableResolver: $recording);

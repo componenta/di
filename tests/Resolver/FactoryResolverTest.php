@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\Definition\ClassDefinition;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
@@ -54,7 +54,7 @@ function makeFactoryResolver(array $factories, ?ContainerInterface $container = 
 describe('Resolver\\FactoryResolver', function () {
     describe('can()', function () {
         it('reports true only for registered ids', function () {
-            $resolver = makeFactoryResolver(['svc' => fn () => 'v']);
+            $resolver = makeFactoryResolver(['svc' => fn() => 'v']);
 
             expect($resolver->can('svc'))->toBeTrue()
                 ->and($resolver->can('missing'))->toBeFalse();
@@ -62,10 +62,15 @@ describe('Resolver\\FactoryResolver', function () {
     });
 
     describe('resolve()', function () {
+        it('throws NotFoundException for an id it does not own', function () {
+            expect(fn() => makeFactoryResolver([])->resolve('missing'))
+                ->toThrow(NotFoundException::class);
+        });
+
         it('invokes a closure factory with a container value', function () {
             $container = smallContainer();
             $resolver = makeFactoryResolver([
-                'svc' => fn (ContainerInterface $c) => [$c, 'produced'],
+                'svc' => fn(ContainerInterface $c) => [$c, 'produced'],
             ], container: $container);
 
             $result = $resolver->resolve('svc');
@@ -78,7 +83,7 @@ describe('Resolver\\FactoryResolver', function () {
         it('exposes config to closure factories through the container value', function () {
             $config = new Config(['app' => ['name' => 'Componenta']]);
             $resolver = makeFactoryResolver([
-                'svc' => fn (ContainerValue $container): string => $container->config->string(new \Componenta\Config\ConfigPath('app.name')),
+                'svc' => fn(ContainerValue $container): string => $container->config->string(new \Componenta\Config\ConfigPath('app.name')),
             ], container: smallContainer([
                 Config::class => $config,
             ]));
@@ -88,7 +93,7 @@ describe('Resolver\\FactoryResolver', function () {
 
         it('passes resolution context as the second factory argument', function () {
             $resolver = makeFactoryResolver([
-                'svc' => fn (ContainerInterface $container, array $context): array => [
+                'svc' => fn(ContainerInterface $container, array $context): array => [
                     'context' => $context,
                     'container' => $container,
                 ],
@@ -102,14 +107,14 @@ describe('Resolver\\FactoryResolver', function () {
 
         it('unwraps FactoryDefinition and invokes the callable inside', function () {
             $resolver = makeFactoryResolver([
-                'svc' => Definition::factory(fn () => 'from-definition'),
+                'svc' => Definition::factory(fn() => 'from-definition'),
             ]);
 
             expect($resolver->resolve('svc'))->toBe('from-definition');
         });
 
         it('builds an instance from a ClassDefinition with constructor params', function () {
-            $definition = Definition::autowire(ServiceWithParam::class)
+            $definition = ClassDefinition::create(ServiceWithParam::class)
                 ->constructor(['value' => 'hello']);
             $resolver = makeFactoryResolver(['svc' => $definition]);
 
@@ -119,16 +124,31 @@ describe('Resolver\\FactoryResolver', function () {
                 ->and($instance->value)->toBe('hello');
         });
 
+        it('lets runtime context override configured ClassDefinition constructor params', function () {
+            $definition = ClassDefinition::create(ServiceWithParam::class)
+                ->constructor(['value' => 'configured']);
+            $resolver = makeFactoryResolver(['svc' => $definition]);
+
+            expect($resolver->resolve('svc', ['value' => 'runtime'])->value)->toBe('runtime');
+        });
+
+        it('uses runtime context when ClassDefinition has no configured constructor params', function () {
+            $definition = ClassDefinition::create(ServiceWithParam::class);
+            $resolver = makeFactoryResolver(['svc' => $definition]);
+
+            expect($resolver->resolve('svc', ['value' => 'runtime'])->value)->toBe('runtime');
+        });
+
         it('resolves ReferenceDefinition values in ClassDefinition constructor params via the container', function () {
             $container = smallContainer(['value.key' => 'referenced']);
-            $definition = Definition::autowire(ServiceWithParam::class)
+            $definition = ClassDefinition::create(ServiceWithParam::class)
                 ->constructor(['value' => Definition::reference('value.key')]);
             $resolver = makeFactoryResolver(['svc' => $definition], container: $container);
 
             expect($resolver->resolve('svc')->value)->toBe('referenced');
         });
 
-        it('invokes methodCalls on the constructed instance in registration order', function () {
+        it('invokes repeated methodCalls in registration order', function () {
             $recorder = new class () {
                 public array $calls = [];
 
@@ -137,24 +157,21 @@ describe('Resolver\\FactoryResolver', function () {
                     $this->calls[] = $v;
                 }
             };
-            $definition = Definition::autowire($recorder::class)
+            $definition = ClassDefinition::create($recorder::class)
                 ->method('append', ['first'])
                 ->method('append', ['second']);
-            // NOTE: associative map keyed by method name means the last
-            // registration overwrites earlier ones. This test guards that
-            // method() replaces per-method params (documented semantics).
             $resolver = makeFactoryResolver(['svc' => $definition]);
 
             $instance = $resolver->resolve('svc');
 
-            expect($instance->calls)->toBe(['second']);
+            expect($instance->calls)->toBe(['first', 'second']);
         });
 
         it('resolves a string-form factory reference through the container', function () {
-            $callable = fn () => 'produced';
+            $callable = fn() => 'produced';
             $resolver = makeFactoryResolver(
                 ['svc' => 'factory.id'],
-                container: smallContainer(['factory.id' => fn () => $callable]),
+                container: smallContainer(['factory.id' => fn() => $callable]),
             );
 
             expect($resolver->resolve('svc'))->toBe('produced');
@@ -169,7 +186,7 @@ describe('Resolver\\FactoryResolver', function () {
             };
             $resolver = makeFactoryResolver(
                 ['svc' => [$service::class, 'make']],
-                container: smallContainer([$service::class => fn () => $service]),
+                container: smallContainer([$service::class => fn() => $service]),
             );
 
             expect($resolver->resolve('svc'))->toBe('made');
@@ -211,12 +228,8 @@ describe('Resolver\\FactoryResolver', function () {
                     $this->seenContext = $context;
 
                     return new class ($context) {
-                        /**
-                         * @param array<string|int, mixed> $context
-                         */
-                        public function __construct(
-                            public array $context,
-                        ) {}
+                        /** @param array<string|int, mixed> $context */
+                        public function __construct(public array $context) {}
                     };
                 }
 
@@ -236,7 +249,9 @@ describe('Resolver\\FactoryResolver', function () {
         it('wraps foreign Throwables from the factory into ResolutionException', function () {
             $boom = new RuntimeException('factory boom');
             $resolver = makeFactoryResolver([
-                'svc' => function () use ($boom) { throw $boom; },
+                'svc' => function () use ($boom) {
+                    throw $boom;
+                },
             ]);
 
             try {
@@ -252,7 +267,9 @@ describe('Resolver\\FactoryResolver', function () {
         it('lets ContainerExceptionInterface exceptions propagate unchanged', function () {
             $original = NotFoundException::forService('inner');
             $resolver = makeFactoryResolver([
-                'svc' => function () use ($original) { throw $original; },
+                'svc' => function () use ($original) {
+                    throw $original;
+                },
             ]);
 
             try {
@@ -270,7 +287,7 @@ describe('Resolver\\FactoryResolver', function () {
         it('supportsDefinition is true for FactoryDefinition and ClassDefinition', function () {
             $resolver = makeFactoryResolver([]);
 
-            expect($resolver->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeTrue()
+            expect($resolver->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeTrue()
                 ->and($resolver->supportsDefinition(new ClassDefinition(SimpleService::class)))->toBeTrue();
         });
 
@@ -284,7 +301,7 @@ describe('Resolver\\FactoryResolver', function () {
         it('setDefinition registers the factory and makes can() return true', function () {
             $resolver = makeFactoryResolver([]);
 
-            $resolver->setDefinition('svc', new FactoryDefinition(fn () => 'v'));
+            $resolver->setDefinition('svc', new FactoryDefinition(fn() => 'v'));
 
             expect($resolver->can('svc'))->toBeTrue()
                 ->and($resolver->resolve('svc'))->toBe('v');
@@ -293,7 +310,7 @@ describe('Resolver\\FactoryResolver', function () {
         it('setDefinition throws InvalidConfigurationException for unsupported types', function () {
             $resolver = makeFactoryResolver([]);
 
-            expect(fn () => $resolver->setDefinition('svc', new InvokableDefinition(SimpleService::class)))
+            expect(fn() => $resolver->setDefinition('svc', new InvokableDefinition(SimpleService::class)))
                 ->toThrow(InvalidConfigurationException::class);
         });
     });

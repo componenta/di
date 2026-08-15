@@ -4,22 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry\SetUp;
 
+use ArrayAccess;
 use Componenta\DI\Attribute\Config;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\ConfigValueExtractor;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
-/**
- * Unwraps {@see Config} value-objects inside SetUp params by reading the value
- * from the configuration entry registered in the container.
- *
- * Delegation-only: lookup lives in {@see ConfigValueExtractor}. Native
- * {@see \InvalidArgumentException} / {@see \OutOfBoundsException} raised by
- * the extractor are wrapped into {@see ResolutionException}; PSR-11 and DI
- * exceptions pass through unchanged.
- */
+/** Unwraps #[Config] values inside SetUp parameters. */
 final readonly class ConfigUnwrapper implements SetUpValueUnwrapperInterface
 {
     private ConfigValueExtractor $extractor;
@@ -42,6 +36,16 @@ final readonly class ConfigUnwrapper implements SetUpValueUnwrapperInterface
         try {
             $configData = $this->container->get(Config::KEY);
 
+            if (!is_array($configData) && !$configData instanceof ArrayAccess) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Configuration service "%s" must be an array or %s; got %s.',
+                    Config::KEY,
+                    ArrayAccess::class,
+                    get_debug_type($configData),
+                ));
+            }
+
+            /** @var array<string, mixed>|ArrayAccess<string, mixed> $configData */
             return $this->extractor->extract($configData, $value, $key);
         } catch (ContainerExceptionInterface $e) {
             throw $e;

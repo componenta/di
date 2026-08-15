@@ -21,6 +21,4 @@ use Throwable;
  * @see DelegatorException              Delegator (decorator) misbehaved.
  * @see CallableExceptionInterface      Anything in the callable pipeline.
  */
-interface ExceptionInterface extends Throwable, ContainerExceptionInterface
-{
-}
+interface ExceptionInterface extends Throwable, ContainerExceptionInterface {}

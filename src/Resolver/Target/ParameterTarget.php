@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Target;
 
-use ReflectionAttribute;
 use Componenta\DI\Resolver\TypeHints;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionParameter;
 use ReflectionType;
@@ -25,9 +25,10 @@ final class ParameterTarget
     /** @var list<class-string> */
     public readonly array $typeNames;
 
-    /** One concrete named class/interface type, when the declaration has one. */
+    /** @var class-string|null */
     public readonly ?string $className;
 
+    /** @var ReflectionClass<object>|null */
     private readonly ?ReflectionClass $declaringClass;
 
     public readonly string $name;
@@ -109,7 +110,16 @@ final class ParameterTarget
      */
     public function firstAttribute(string $attributeClass): ?object
     {
-        return ($this->attributeReflectors($attributeClass)[0] ?? null)?->newInstance();
+        $reflector = $this->attributeReflectors($attributeClass)[0] ?? null;
+
+        if ($reflector === null) {
+            return null;
+        }
+
+        /** @var T $attribute */
+        $attribute = $reflector->newInstance();
+
+        return $attribute;
     }
 
     /** @return list<ReflectionAttribute<object>> */

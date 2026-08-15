@@ -27,7 +27,7 @@ readonly class Header implements ExtractorInterface, CastableInterface
         if ($value === null) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required header "%s" is missing', $this->name)
+                    sprintf('Required header "%s" is missing', $this->name),
                 );
             }
 

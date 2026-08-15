@@ -46,7 +46,7 @@ final class InitHandler implements AttributeHandlerInterface
             throw new LogicException('InitHandler received an unsupported attribute target.');
         }
 
-        if (!$context->claimProperty($target)) {
+        if (!$context->claimProperty($target, allowPromoted: true)) {
             return;
         }
 

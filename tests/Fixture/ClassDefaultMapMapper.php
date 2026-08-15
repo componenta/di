@@ -9,5 +9,5 @@ use Componenta\DI\Attribute\MapQueryString;
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
 final class ClassDefaultMapMapper extends MapQueryString
 {
-    protected(set) array $map = ['class_default' => 'class_default_field'];
+    public protected(set) array $map = ['class_default' => 'class_default_field'];
 }

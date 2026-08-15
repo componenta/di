@@ -13,20 +13,15 @@ use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 function entryResolver(array $handledIds, array $values = []): EntryResolverInterface
 {
     return new class ($handledIds, $values) implements EntryResolverInterface {
-        public int $canCalls = 0;
-        public int $resolveCalls = 0;
-
         public function __construct(private array $ids, private array $values) {}
 
         public function can(string $id): bool
         {
-            $this->canCalls++;
             return in_array($id, $this->ids, true);
         }
 
         public function resolve(string $id, array $context = []): mixed
         {
-            $this->resolveCalls++;
             return $this->values[$id] ?? new stdClass();
         }
     };
@@ -70,7 +65,7 @@ describe('Resolver\\CompositeResolver', function () {
         $composite = new CompositeResolver();
         $composite->addResolver(entryResolver([]));
 
-        expect(fn () => $composite->resolve('missing'))
+        expect(fn() => $composite->resolve('missing'))
             ->toThrow(NotFoundException::class);
     });
 
@@ -90,7 +85,11 @@ describe('Resolver\\CompositeResolver', function () {
         $capturing = new class () implements EntryResolverInterface {
             public array $context = [];
 
-            public function can(string $id): bool { return $id === 'svc'; }
+            public function can(string $id): bool
+            {
+                return $id === 'svc';
+            }
+
             public function resolve(string $id, array $context = []): mixed
             {
                 $this->context = $context;
@@ -104,48 +103,15 @@ describe('Resolver\\CompositeResolver', function () {
         expect($capturing->context)->toBe(['k' => 'v']);
     });
 
-    it('caches the owner so a later resolve() does not re-scan can() on other resolvers', function () {
+    it('recognizes a resolver added after a previous miss', function () {
         $composite = new CompositeResolver();
-        $owner = entryResolver(['svc']);
-        $other = entryResolver([]);
-        $composite->addResolver($owner);
-        $composite->addResolver($other);
-
-        $composite->can('svc');
-        $composite->resolve('svc');
-
-        // owner::can was called once during the cache-populating can()
-        // check; other::can should never have been consulted because the
-        // first resolver already claimed the id.
-        expect($owner->canCalls)->toBe(1)
-            ->and($other->canCalls)->toBe(0);
-    });
-
-    it('negative-caches misses so a subsequent has()+resolve() does not re-scan', function () {
-        $composite = new CompositeResolver();
-        $a = entryResolver([]);
-        $b = entryResolver([]);
-        $composite->addResolver($a);
-        $composite->addResolver($b);
-
-        $composite->can('missing');
-        $composite->can('missing');
-        $composite->can('missing');
-
-        expect($a->canCalls)->toBe(1)
-            ->and($b->canCalls)->toBe(1);
-    });
-
-    it('invalidates the owner cache when a resolver is added', function () {
-        $composite = new CompositeResolver();
-        $first = entryResolver([]);
-        $composite->addResolver($first);
+        $composite->addResolver(entryResolver([]));
         expect($composite->can('svc'))->toBeFalse();
 
-        $late = entryResolver(['svc']);
-        $composite->addResolver($late);
+        $composite->addResolver(entryResolver(['svc']));
 
-        expect($composite->can('svc'))->toBeTrue();
+        expect($composite->can('svc'))->toBeTrue()
+            ->and($composite->resolve('svc'))->toBeInstanceOf(stdClass::class);
     });
 
     describe('DefinitionAwareResolverInterface delegation', function () {
@@ -153,7 +119,7 @@ describe('Resolver\\CompositeResolver', function () {
             $composite = new CompositeResolver();
             $composite->addResolver(entryResolver([]));
 
-            expect($composite->supportsDefinition(new FactoryDefinition(fn () => null)))->toBeFalse();
+            expect($composite->supportsDefinition(new FactoryDefinition(fn() => null)))->toBeFalse();
         });
 
         it('forwards setDefinition to the first supporting resolver', function () {
@@ -163,7 +129,7 @@ describe('Resolver\\CompositeResolver', function () {
             $composite->addResolver($plain);
             $composite->addResolver($aware);
 
-            $definition = new FactoryDefinition(fn () => 'value');
+            $definition = new FactoryDefinition(fn() => 'value');
             $composite->setDefinition('svc', $definition);
 
             expect($aware->definitions)->toBe(['svc' => $definition]);
@@ -176,19 +142,20 @@ describe('Resolver\\CompositeResolver', function () {
             $composite = new CompositeResolver();
             $composite->addResolver(definitionAwareResolver(supported: [FactoryDefinition::class]));
 
-            expect(fn () => $composite->setDefinition('svc', $unsupportedDefinition))
+            expect(fn() => $composite->setDefinition('svc', $unsupportedDefinition))
                 ->toThrow(InvalidConfigurationException::class);
         });
 
-        it('invalidates the owner cache when a definition is set', function () {
+        it('recognizes a definition registered after a previous miss', function () {
             $composite = new CompositeResolver();
             $aware = definitionAwareResolver();
             $composite->addResolver($aware);
 
             expect($composite->can('svc'))->toBeFalse();
-            $composite->setDefinition('svc', new FactoryDefinition(fn () => 'v'));
+            $composite->setDefinition('svc', new FactoryDefinition(fn() => 'v'));
 
-            expect($composite->can('svc'))->toBeTrue();
+            expect($composite->can('svc'))->toBeTrue()
+                ->and($composite->resolve('svc'))->toBe('resolved:svc');
         });
     });
 });

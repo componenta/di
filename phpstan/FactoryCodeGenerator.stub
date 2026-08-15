@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Compile\Factory;
+
+use ReflectionClass;
+
+class FactoryCodeGenerator
+{
+    /** @var ReflectionClass<object> */
+    private ReflectionClass $class;
+
+    /** @param ReflectionClass<object> $class */
+    private function reset(ReflectionClass $class): void {}
+}

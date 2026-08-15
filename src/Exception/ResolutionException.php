@@ -61,7 +61,6 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
          * produced where an object was required.
          */
         public readonly ?string $actualType = null,
-
         ?Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);

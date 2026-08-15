@@ -24,7 +24,6 @@ final class DelegatorException extends RuntimeException implements ExceptionInte
          * Entry id whose delegator chain failed.
          */
         public readonly ?string $entryId = null,
-
         ?Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);

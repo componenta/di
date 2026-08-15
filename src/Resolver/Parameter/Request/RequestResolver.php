@@ -12,37 +12,26 @@ use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\Reflection\ReflectionType;
+use Componenta\DI\Resolver\TypeHints;
 use Componenta\Validation\Context;
 use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Exception\ValidationExceptionInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
+use InvalidArgumentException;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
+use ReflectionIntersectionType;
+use ReflectionNamedType;
 use ReflectionParameter;
+use ReflectionType;
+use ReflectionUnionType;
+use Throwable;
 
 /** Resolves parameters from a PSR-7 request. */
 final class RequestResolver implements ParameterResolverInterface
 {
     public const string PARAMETER_NAME_ATTRIBUTE = '__parameter_name';
-
-    /** @var array<string, true> */
-    private const array BUILTIN_TYPES = [
-        'array' => true,
-        'bool' => true,
-        'callable' => true,
-        'false' => true,
-        'float' => true,
-        'int' => true,
-        'iterable' => true,
-        'mixed' => true,
-        'never' => true,
-        'null' => true,
-        'object' => true,
-        'string' => true,
-        'true' => true,
-        'void' => true,
-    ];
 
     /** @var array<class-string, bool> */
     private static array $inheritanceCache = [];
@@ -61,39 +50,52 @@ final class RequestResolver implements ParameterResolverInterface
             }
         }
 
-        return $target->type !== null
-            && ReflectionType::contains($target->type, UriInterface::class);
+        return in_array(UriInterface::class, $target->typeNames, true);
     }
 
-    /** @throws ValidationExceptionInterface|CasterExceptionInterface */
+    /**
+     * @return array{0: int, 1: mixed}|null
+     * @throws ValidationExceptionInterface|CasterExceptionInterface
+     */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        $attribute = $this->getAttribute($target);
+        try {
+            $attribute = $this->getAttribute($target);
 
-        if ($attribute === null) {
-            return $this->resolveByType($target, $context);
-        }
+            if ($attribute === null) {
+                return $this->resolveByType($target, $context);
+            }
 
-        $request = RequestParameter::get($context->provided);
+            $request = RequestParameter::get($context->provided);
 
-        if ($request === null) {
+            if ($request === null) {
+                throw ResolutionException::forParameter(
+                    $target->reflection,
+                    reason: sprintf(
+                        'PSR-7 request is required for #[%s]',
+                        $this->attributeShortName($attribute),
+                    ),
+                    providedParameters: $context->provided,
+                    resolvedParameters: $context->resolved,
+                );
+            }
+
+            return [
+                $target->position,
+                $this->extractValue($request, $attribute, $target->reflection),
+            ];
+        } catch (ValidationExceptionInterface|CasterExceptionInterface|ContainerExceptionInterface|InvalidArgumentException $e) {
+            throw $e;
+        } catch (Throwable $e) {
             throw ResolutionException::forParameter(
                 $target->reflection,
-                reason: sprintf(
-                    'PSR-7 request is required for #[%s]',
-                    $this->attributeShortName($attribute),
-                ),
+                previous: $e,
                 providedParameters: $context->provided,
                 resolvedParameters: $context->resolved,
             );
         }
-
-        return [
-            $target->position,
-            $this->extractValue($request, $attribute, $target->reflection),
-        ];
     }
 
     /** @throws ValidationExceptionInterface|CasterExceptionInterface */
@@ -149,12 +151,12 @@ final class RequestResolver implements ParameterResolverInterface
         );
     }
 
+    /** @return array{0: int, 1: mixed}|null */
     private function resolveByType(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        return $target->type !== null
-            && ReflectionType::contains($target->type, UriInterface::class)
+        return in_array(UriInterface::class, $target->typeNames, true)
             ? $this->resolveUri($target, $context)
             : null;
     }
@@ -183,15 +185,36 @@ final class RequestResolver implements ParameterResolverInterface
 
     private function getAttribute(ParameterTarget $target): ?object
     {
-        foreach ($target->attributeClasses as $attributeClass) {
-            if ($this->isRequestAttribute($attributeClass)) {
-                return $target->firstAttribute($attributeClass);
+        $attributes = [];
+
+        foreach ($target->reflection->getAttributes() as $reflectionAttribute) {
+            /** @var class-string $attributeClass */
+            $attributeClass = $reflectionAttribute->getName();
+
+            if (!$this->isRequestAttribute($attributeClass)) {
+                continue;
             }
+
+            $attributes[] = $reflectionAttribute->newInstance();
         }
 
-        return null;
+        if (count($attributes) > 1) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: sprintf(
+                    'multiple request extraction attributes are ambiguous: %s',
+                    implode(', ', array_map(
+                        fn(object $attribute): string => '#[' . $this->attributeShortName($attribute) . ']',
+                        $attributes,
+                    )),
+                ),
+            );
+        }
+
+        return $attributes[0] ?? null;
     }
 
+    /** @param class-string $class */
     private function isRequestAttribute(string $class): bool
     {
         return self::$inheritanceCache[$class] ??= (
@@ -208,7 +231,10 @@ final class RequestResolver implements ParameterResolverInterface
         return $position === false ? $class : substr($class, $position + 1);
     }
 
-    /** @throws ValidationExceptionInterface */
+    /**
+     * @return array<string|int, mixed>|object
+     * @throws ValidationExceptionInterface
+     */
     private function processMapping(
         ServerRequestInterface $request,
         RequestDataExtractorInterface&MapperInterface $mapper,
@@ -216,29 +242,70 @@ final class RequestResolver implements ParameterResolverInterface
     ): array|object {
         $typeName = $this->resolveTypeName($parameter);
         $rawData = $mapper->extract($request);
+        $this->assertNamedDtoData($typeName, $rawData, $parameter);
         $this->validateData($typeName, $rawData);
         $data = $mapper->transform($rawData);
+        $this->assertNamedDtoData($typeName, $data, $parameter);
 
         return $typeName !== null
             ? $this->factory->make($typeName, $data)
             : $data;
     }
 
+    /** @return class-string|null */
     private function resolveTypeName(ReflectionParameter $parameter): ?string
     {
         $type = $parameter->getType();
 
-        if (ReflectionType::contains($type, 'array')) {
+        if ($type === null || self::containsBuiltinType($type, 'array')) {
             return null;
         }
 
-        return array_find(
-            ReflectionType::getTypeNames($type),
-            static fn(string $typeName): bool => !isset(self::BUILTIN_TYPES[$typeName]),
+        $classTypes = TypeHints::classNames(
+            $type,
+            $parameter->getDeclaringClass(),
         );
+
+        if (count($classTypes) > 1) {
+            throw ResolutionException::forParameter(
+                $parameter,
+                reason: sprintf(
+                    'request DTO mapping requires exactly one class type; got %s',
+                    implode('|', $classTypes),
+                ),
+            );
+        }
+
+        return $classTypes[0] ?? null;
     }
 
-    /** @throws ValidationExceptionInterface */
+    private static function containsBuiltinType(
+        ReflectionType $type,
+        string $name,
+    ): bool {
+        if ($type instanceof ReflectionNamedType) {
+            return $type->isBuiltin() && $type->getName() === $name;
+        }
+
+        if (!$type instanceof ReflectionUnionType
+            && !$type instanceof ReflectionIntersectionType
+        ) {
+            return false;
+        }
+
+        foreach ($type->getTypes() as $nested) {
+            if (self::containsBuiltinType($nested, $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string|int, mixed> $data
+     * @throws ValidationExceptionInterface
+     */
     private function validateData(?string $typeName, array $data): void
     {
         if ($typeName === null || $this->validationProvider === null) {
@@ -251,4 +318,25 @@ final class RequestResolver implements ParameterResolverInterface
         );
     }
 
+    /** @param array<string|int, mixed> $data */
+    private function assertNamedDtoData(
+        ?string $typeName,
+        array $data,
+        ReflectionParameter $parameter,
+    ): void {
+        if ($typeName === null) {
+            return;
+        }
+
+        foreach ($data as $key => $_value) {
+            if (is_string($key)) {
+                continue;
+            }
+
+            throw ResolutionException::forParameter(
+                $parameter,
+                reason: 'HTTP DTO mapping accepts only named string keys',
+            );
+        }
+    }
 }

@@ -7,9 +7,8 @@ namespace Componenta\DI\Resolver;
 final class CurrentUserProvider implements CurrentUserProviderInterface
 {
     public function __construct(
-        private ?object $user = null
-    ) {
-    }
+        private ?object $user = null,
+    ) {}
 
     public function getUser(): ?object
     {

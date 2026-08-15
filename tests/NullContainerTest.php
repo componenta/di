@@ -21,7 +21,7 @@ describe('NullContainer', function () {
     ]);
 
     it('throws NotFoundException on get() regardless of the id', function () {
-        expect(fn () => (new NullContainer())->get('anything'))
+        expect(fn() => (new NullContainer())->get('anything'))
             ->toThrow(NotFoundException::class);
     });
 
@@ -37,7 +37,7 @@ describe('NullContainer', function () {
     });
 
     it('includes the requested id in the not-found message', function () {
-        expect(fn () => (new NullContainer())->get('some.service'))
+        expect(fn() => (new NullContainer())->get('some.service'))
             ->toThrow(NotFoundException::class, 'some.service');
     });
 });

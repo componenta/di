@@ -9,8 +9,8 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
@@ -18,6 +18,7 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use ReflectionAttribute;
+use ReflectionClass;
 use ReflectionProperty;
 use Reflector;
 use Throwable;
@@ -94,6 +95,7 @@ final class MakeAttributeResolver implements
         $context->writeProperty($target, $value);
     }
 
+    /** @return array{0: int, 1: object}|null */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -127,7 +129,12 @@ final class MakeAttributeResolver implements
     }
 
     /**
-     * @return array{entry: string, params: array<string, mixed>, proxy: bool}
+     * @param class-string|null $typeName
+     * @return array{
+     *     entry: non-empty-string,
+     *     params: array<string, mixed>,
+     *     proxyClass: class-string<object>|null
+     * }
      */
     private static function configuration(
         string $name,
@@ -135,11 +142,73 @@ final class MakeAttributeResolver implements
         ?Make $make,
         ?Proxy $proxy,
     ): array {
+        $entry = $make->entry ?? $typeName ?? $name;
+
+        if ($entry === '') {
+            throw new LogicException('Make entry must be a non-empty string.');
+        }
+
         return [
-            'entry' => $make?->entry ?? $typeName ?? $name,
-            'params' => $make?->params ?? [],
-            'proxy' => $proxy !== null,
+            'entry' => $entry,
+            'params' => $make->params ?? [],
+            'proxyClass' => $proxy === null
+                ? null
+                : self::resolveProxyClass($entry, $typeName, $proxy),
         ];
+    }
+
+    /**
+     * @param non-empty-string $entry
+     * @param class-string|null $typeName
+     * @return class-string<object>
+     */
+    private static function resolveProxyClass(
+        string $entry,
+        ?string $typeName,
+        Proxy $proxy,
+    ): string {
+        $class = $proxy->class;
+
+        if ($class === null && $typeName !== null && class_exists($typeName)) {
+            $class = $typeName;
+        }
+
+        if ($class === null && class_exists($entry)) {
+            $class = $entry;
+        }
+
+        if ($class === null) {
+            throw new LogicException(sprintf(
+                'Virtual proxy entry "%s" is not a concrete class; specify #[Proxy(ConcreteClass::class)].',
+                $entry,
+            ));
+        }
+
+        /** @var ReflectionClass<object> $reflection */
+        $reflection = new ReflectionClass($class);
+
+        if (!$reflection->isInstantiable()) {
+            throw new LogicException(sprintf(
+                'Virtual proxy class "%s" must be concrete and instantiable.',
+                $class,
+            ));
+        }
+
+        if ($typeName !== null
+            && (class_exists($typeName) || interface_exists($typeName))
+            && !is_a($class, $typeName, true)
+        ) {
+            throw new LogicException(sprintf(
+                'Virtual proxy class "%s" is incompatible with declared type "%s".',
+                $class,
+                $typeName,
+            ));
+        }
+
+        /** @var class-string<object> $resolved */
+        $resolved = $reflection->getName();
+
+        return $resolved;
     }
 
     /**
@@ -151,26 +220,70 @@ final class MakeAttributeResolver implements
         ReflectionProperty $property,
         string $attributeClass,
     ): ?object {
-        /** @var ReflectionAttribute<T>|null $attribute */
-        $attribute = $property->getAttributes(
+        /** @var ReflectionAttribute<T>|null $reflector */
+        $reflector = $property->getAttributes(
             $attributeClass,
             ReflectionAttribute::IS_INSTANCEOF,
         )[0] ?? null;
 
-        return $attribute?->newInstance();
+        if ($reflector === null) {
+            return null;
+        }
+
+        /** @var T $attribute */
+        $attribute = $reflector->newInstance();
+
+        return $attribute;
     }
 
-    /** @param array{entry: string, params: array<string, mixed>, proxy: bool} $config */
+    /**
+     * @param array{
+     *     entry: non-empty-string,
+     *     params: array<string, mixed>,
+     *     proxyClass: class-string<object>|null
+     * } $config
+     */
     private function create(array $config): object
     {
-        return $config['proxy']
-            ? $this->proxyFactory->makeProxy(
-                $config['entry'],
-                fn(object $proxy): object => $this->factory->make(
-                    $config['entry'],
-                    $config['params'],
-                ),
-            )
-            : $this->factory->make($config['entry'], $config['params']);
+        if ($config['proxyClass'] === null) {
+            return $this->factory->make($config['entry'], $config['params']);
+        }
+
+        return $this->createProxy(
+            $config['proxyClass'],
+            $config['entry'],
+            $config['params'],
+        );
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $proxyClass
+     * @param non-empty-string $entry
+     * @param array<string, mixed> $params
+     * @return T
+     */
+    private function createProxy(
+        string $proxyClass,
+        string $entry,
+        array $params,
+    ): object {
+        return $this->proxyFactory->makeProxy(
+            $proxyClass,
+            function (object $proxy) use ($proxyClass, $entry, $params): object {
+                $backing = $this->factory->make($entry, $params);
+
+                if (!$backing instanceof $proxyClass) {
+                    throw new LogicException(sprintf(
+                        'Virtual proxy backing entry "%s" must be an instance of "%s"; got "%s".',
+                        $entry,
+                        $proxyClass,
+                        $backing::class,
+                    ));
+                }
+
+                return $backing;
+            },
+        );
     }
 }

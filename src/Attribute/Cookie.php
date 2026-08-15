@@ -25,7 +25,7 @@ readonly class Cookie implements ExtractorInterface, CastableInterface
         if (!array_key_exists($this->name, $cookies)) {
             if ($this->default === DefaultValue::None) {
                 throw new \RuntimeException(
-                    sprintf('Required cookie "%s" is missing', $this->name)
+                    sprintf('Required cookie "%s" is missing', $this->name),
                 );
             }
 

@@ -8,7 +8,9 @@ use Componenta\Caster\CasterExceptionInterface;
 use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Caster\NullCasterProvider;
+use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
+use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 use Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline;
 
 /**
@@ -82,10 +84,9 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      * If found, `orderBy` is set to the mapped value; otherwise `orderBy`
      * is set to null. The raw `sort` and `order` keys are always removed.
      *
-     * Values must be arrays compatible with SortableInterface::$orderBy
-     * (i.e. `array<non-empty-string, Direction>`).
+     * Values must be arrays compatible with SortableInterface::$orderBy.
      *
-     * @var array<string, array>
+     * @var array<string, array<string, mixed>>
      */
     protected array $sortMap = [];
 
@@ -97,6 +98,13 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
     protected array $exclude = [];
 
     /**
+     * How duplicate keys from request attributes, files, and the mapper's
+     * primary source are handled. Rejecting conflicts preserves source trust
+     * boundaries and is the safe default. Identical values are not conflicts.
+     */
+    protected RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject;
+
+    /**
      * Field mapping rules: source key -> target key.
      *
      * Merged from the class-level default and constructor argument.
@@ -105,16 +113,66 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      *
      * @var array<string, string>
      */
-    protected(set) array $map = [];
+    public protected(set) array $map = [];
 
-    public function __construct(array $map = [])
-    {
+    /** @param array<string, string> $map */
+    public function __construct(
+        array $map = [],
+        ?RequestDataConflictPolicy $conflictPolicy = null,
+    ) {
         $this->map = array_merge($this->map, $map);
+
+        if ($conflictPolicy !== null) {
+            $this->conflictPolicy = $conflictPolicy;
+        }
+    }
+
+    /**
+     * Merges named extraction sources without silently losing provenance.
+     *
+     * Source order controls FirstWins. Reject treats two equal values as one
+     * unambiguous value and rejects only different values.
+     *
+     * @param array<string, array<string|int, mixed>> $sources
+     * @return array<string|int, mixed>
+     */
+    protected function mergeRequestData(array $sources): array
+    {
+        $data = [];
+        $owners = [];
+
+        foreach ($sources as $source => $values) {
+            foreach ($values as $key => $value) {
+                if (!array_key_exists($key, $data)) {
+                    $data[$key] = $value;
+                    $owners[$key] = $source;
+                    continue;
+                }
+
+                if ($data[$key] === $value) {
+                    continue;
+                }
+
+                if ($this->conflictPolicy === RequestDataConflictPolicy::FirstWins) {
+                    continue;
+                }
+
+                throw new RequestDataConflictException(
+                    key: $key,
+                    existingSource: $owners[$key],
+                    incomingSource: $source,
+                );
+            }
+        }
+
+        return $data;
     }
 
     /**
      * Applies mapper aliases, casts, defaults, sort aliases, and exclusions.
      *
+     * @param array<string|int, mixed> $data
+     * @return array<string|int, mixed>
      * @throws CasterExceptionInterface
      */
     public function transform(array $data): array

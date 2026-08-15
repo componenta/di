@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
-use Componenta\Config\DefaultValue;
 use Componenta\Config\ConfigPath;
+use Componenta\Config\DefaultValue;
 
 /**
  * Marks a parameter or property as configuration-bound.

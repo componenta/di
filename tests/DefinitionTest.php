@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\Definition\Definition;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Tests\Fixture\ServiceWithParam;
@@ -12,7 +13,7 @@ use Psr\Container\ContainerInterface;
 
 describe('Definition', function () {
     it('returns a new class definition when constructor params are configured', function () {
-        $definition = Definition::autowire(ServiceWithParam::class);
+        $definition = ClassDefinition::create(ServiceWithParam::class);
 
         $configured = $definition->constructor(['value' => 'configured']);
 
@@ -22,13 +23,31 @@ describe('Definition', function () {
     });
 
     it('returns a new class definition when a method call is configured', function () {
-        $definition = Definition::autowire(SimpleService::class);
+        $definition = ClassDefinition::create(SimpleService::class);
 
         $configured = $definition->method('boot', ['warmup']);
 
         expect($configured)->not->toBe($definition)
             ->and($definition->methodCalls)->toBe([])
-            ->and($configured->methodCalls)->toBe(['boot' => ['warmup']]);
+            ->and($configured->methodCalls)->toBe([
+                ['method' => 'boot', 'params' => ['warmup']],
+            ]);
+    });
+
+    it('preserves repeated method calls instead of overwriting them', function () {
+        $configured = ClassDefinition::create(SimpleService::class)
+            ->method('boot', ['first'])
+            ->method('boot', ['second']);
+
+        expect($configured->methodCalls)->toBe([
+            ['method' => 'boot', 'params' => ['first']],
+            ['method' => 'boot', 'params' => ['second']],
+        ]);
+    });
+
+    it('rejects empty class definition method names', function () {
+        expect(fn() => ClassDefinition::create(SimpleService::class)->method(''))
+            ->toThrow(InvalidConfigurationException::class);
     });
 
     it('keeps lazy factory objects intact inside factory definitions', function () {

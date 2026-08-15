@@ -71,7 +71,7 @@ describe('Resolver\\Entry\\SetUp\\EnvUnwrapper', function () {
         it('throws ResolutionException when variable is missing and no default is declared', function () {
             $unwrapper = new EnvUnwrapper(configContainerForEnv(new Environment([])));
 
-            expect(fn () => $unwrapper->unwrap(new Env('ABSENT'), 'key'))
+            expect(fn() => $unwrapper->unwrap(new Env('ABSENT'), 'key'))
                 ->toThrow(ResolutionException::class, 'ABSENT');
         });
 
@@ -84,7 +84,7 @@ describe('Resolver\\Entry\\SetUp\\EnvUnwrapper', function () {
         it('throws ResolutionException when environment is unavailable and no default is set', function () {
             $unwrapper = new EnvUnwrapper(configContainerForEnv(null));
 
-            expect(fn () => $unwrapper->unwrap(new Env('X'), 'key'))
+            expect(fn() => $unwrapper->unwrap(new Env('X'), 'key'))
                 ->toThrow(ResolutionException::class);
         });
     });

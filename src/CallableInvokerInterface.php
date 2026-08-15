@@ -19,9 +19,10 @@ use Componenta\DI\Exception\ExceptionInterface;
  *    {@see call_user_func_array()} verbatim - no resolution, no DI. Useful
  *    for hot paths or non-DI callers (CQRS handlers, tests).
  *
- * Domain exceptions thrown by the callable itself propagate unchanged so
- * callers can handle them directly. Failures inside the invoker (unresolvable
- * callable, invocation error) surface as DI-container exceptions.
+ * Failures to resolve or normalize a callable surface as DI-container
+ * exceptions. Once target invocation begins, throwables raised by PHP or by
+ * the target callable propagate unchanged so callers keep the original error
+ * type and stack trace.
  */
 interface CallableInvokerInterface
 {
@@ -35,7 +36,7 @@ interface CallableInvokerInterface
      *
      * @return mixed The result of the callable execution.
      *
-     * @throws CallableExceptionInterface If the callable cannot be resolved or invoked.
+     * @throws CallableExceptionInterface If the callable cannot be resolved or normalized.
      * @throws ExceptionInterface         If a parameter cannot be resolved (DI implementations only).
      */
     public function call(mixed $callable, array $params = []): mixed;

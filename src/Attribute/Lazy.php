@@ -29,6 +29,4 @@ use Attribute;
  * Reference: {@see \ReflectionClass::newLazyGhost()} on PHP 8.4+.
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-final readonly class Lazy
-{
-}
+final readonly class Lazy {}

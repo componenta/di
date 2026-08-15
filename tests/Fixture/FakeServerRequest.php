@@ -38,27 +38,60 @@ final class FakeServerRequest implements ServerRequestInterface
         $this->uri = $uri instanceof UriInterface ? $uri : new FakeUri($uri);
     }
 
-    public function getMethod(): string { return $this->method; }
-    public function getUri(): UriInterface { return $this->uri; }
+    public function getMethod(): string
+    {
+        return $this->method;
+    }
+    public function getUri(): UriInterface
+    {
+        return $this->uri;
+    }
 
-    public function getQueryParams(): array { return $this->queryParams; }
-    public function getCookieParams(): array { return $this->cookieParams; }
-    public function getServerParams(): array { return $this->serverParams; }
-    public function getUploadedFiles(): array { return $this->uploadedFiles; }
-    public function getAttributes(): array { return $this->attributes; }
+    public function getQueryParams(): array
+    {
+        return $this->queryParams;
+    }
+    public function getCookieParams(): array
+    {
+        return $this->cookieParams;
+    }
+    public function getServerParams(): array
+    {
+        return $this->serverParams;
+    }
+    public function getUploadedFiles(): array
+    {
+        return $this->uploadedFiles;
+    }
+    public function getAttributes(): array
+    {
+        return $this->attributes;
+    }
 
     public function getAttribute(string $name, mixed $default = null): mixed
     {
         return $this->attributes[$name] ?? $default;
     }
 
-    public function getParsedBody(): null|array|object { return $this->parsedBody; }
+    public function getParsedBody(): null|array|object
+    {
+        return $this->parsedBody;
+    }
 
-    public function getHeaders(): array { return $this->headers; }
+    public function getHeaders(): array
+    {
+        return $this->headers;
+    }
 
-    public function hasHeader(string $name): bool { return isset($this->headers[$name]); }
+    public function hasHeader(string $name): bool
+    {
+        return isset($this->headers[$name]);
+    }
 
-    public function getHeader(string $name): array { return $this->headers[$name] ?? []; }
+    public function getHeader(string $name): array
+    {
+        return $this->headers[$name] ?? [];
+    }
 
     public function getHeaderLine(string $name): string
     {
