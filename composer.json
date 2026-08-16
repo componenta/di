@@ -79,7 +79,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-dev": "4.x-dev"
+            "dev-main": "4.x-dev"
         },
         "componenta": {
             "config-providers": [
