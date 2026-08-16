@@ -31,7 +31,7 @@
         "componenta/config": "^2.0.1",
         "componenta/priority-list": "^1.0",
         "componenta/reflection": "^2.0",
-        "componenta/validation": "^1.0",
+        "componenta/validation": "^1.0 || ^2.0",
         "componenta/var-export": "^1.0",
         "psr/container": "^2.0",
         "psr/http-message": "^2.0"
