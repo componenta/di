@@ -8,6 +8,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
 use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use LogicException;
 use ReflectionClass;
 use ReflectionProperty;
@@ -39,6 +40,13 @@ final class ObjectCreationContext
         public readonly ReflectionClass $class,
         array $parameters = [],
     ) {
+        /** @var class-string $className */
+        $className = $class->getName();
+        MappedRequestParameterSourceGuard::assertClassContextNoConflicts(
+            $className,
+            $parameters,
+        );
+
         $this->resolutionParameters = $parameters;
         $this->parameters = MappedRequestContext::strip($parameters);
     }
