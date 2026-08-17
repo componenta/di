@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter\Request;
 
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
@@ -29,11 +30,6 @@ final class MappedRequestParameterSourceGuard
     private static array $sourceCache = [];
 
     /**
-     * Checks the declared request-mapper type before nested factory resolution.
-     *
-     * The provenance marker is still propagated because aliases and factory
-     * definitions may construct a different concrete class later.
-     *
      * @param class-string $dtoClass
      * @param array<string|int, mixed> $data
      */
@@ -53,6 +49,9 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
+     * Used before ClassDefinition override projection, while provenance still
+     * lives in the raw nested-factory transport array.
+     *
      * @param iterable<ParameterTarget> $targets
      * @param array<string|int, mixed> $context
      */
@@ -60,43 +59,25 @@ final class MappedRequestParameterSourceGuard
         iterable $targets,
         array $context,
     ): void {
-        if (MappedRequestContext::get($context) === null) {
-            return;
-        }
-
-        foreach ($targets as $target) {
-            self::assertTargetContextNoConflicts($target, $context);
-        }
-    }
-
-    /** @param array<string|int, mixed> $context */
-    public static function assertTargetContextNoConflicts(
-        ParameterTarget $target,
-        array $context,
-    ): void {
         $provenance = MappedRequestContext::get($context);
         if ($provenance === null) {
             return;
         }
 
-        $binding = self::targetBinding($target);
-        if ($binding === null) {
+        foreach ($targets as $target) {
+            self::assertTargetProvenanceNoConflicts($target, $provenance);
+        }
+    }
+
+    public static function assertTargetContextNoConflicts(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): void {
+        if ($context->mappedRequest === null) {
             return;
         }
 
-        $declaringClass = $target->reflection->getDeclaringClass();
-        if ($declaringClass === null) {
-            return;
-        }
-
-        /** @var class-string $class */
-        $class = $declaringClass->getName();
-
-        foreach ($binding['keys'] as $key) {
-            if ($provenance->contains($key)) {
-                self::throwConflict($class, $binding, $key);
-            }
-        }
+        self::assertTargetProvenanceNoConflicts($target, $context->mappedRequest);
     }
 
     public static function supportsTarget(ParameterTarget $target): bool
@@ -132,8 +113,6 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
-     * Exposes build-time source bindings for reflection-free generated code.
-     *
      * @internal
      * @return list<SourceBinding>
      */
@@ -174,6 +153,30 @@ final class MappedRequestParameterSourceGuard
         }
 
         return self::$sourceCache[$class] = $bindings;
+    }
+
+    private static function assertTargetProvenanceNoConflicts(
+        ParameterTarget $target,
+        MappedRequestContext $provenance,
+    ): void {
+        $binding = self::targetBinding($target);
+        if ($binding === null) {
+            return;
+        }
+
+        $declaringClass = $target->reflection->getDeclaringClass();
+        if ($declaringClass === null) {
+            return;
+        }
+
+        /** @var class-string $class */
+        $class = $declaringClass->getName();
+
+        foreach ($binding['keys'] as $key) {
+            if ($provenance->contains($key)) {
+                self::throwConflict($class, $binding, $key);
+            }
+        }
     }
 
     /** @return SourceBinding|null */
