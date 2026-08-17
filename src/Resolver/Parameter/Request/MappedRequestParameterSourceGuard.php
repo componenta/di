@@ -109,8 +109,8 @@ final class MappedRequestParameterSourceGuard
         }
 
         foreach ($typeNames as $typeName) {
-            if (is_a($typeName, ServerRequestInterface::class, true)
-                || is_a($typeName, UriInterface::class, true)
+            if ($typeName === ServerRequestInterface::class
+                || $typeName === UriInterface::class
             ) {
                 return $typeName;
             }

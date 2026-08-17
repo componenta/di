@@ -7,8 +7,8 @@ namespace Componenta\DI\Resolver\Parameter;
 /**
  * Marks a parameter attribute that explicitly declares the value source.
  *
- * During HTTP DTO mapping, transformed request data must not bind a constructor
- * parameter carrying such an attribute. A same-named mapped field is treated
- * as a source conflict rather than as an explicit DI override.
+ * During HTTP DTO mapping, transformed request data must not provide a key
+ * that generic explicit-value resolvers could bind to such a parameter. This
+ * includes the parameter name and its declared class/interface type names.
  */
 interface ParameterSourceAttributeInterface {}
