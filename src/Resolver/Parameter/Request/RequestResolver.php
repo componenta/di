@@ -253,10 +253,10 @@ final class RequestResolver implements ParameterResolverInterface
 
         MappedRequestParameterSourceGuard::assertNoConflicts($typeName, $data);
 
-        return $this->factory->make(
-            $typeName,
-            RequestParameter::with($data, $request),
-        );
+        $context = RequestParameter::with($data, $request);
+        $context = MappedRequestContext::with($context, $data);
+
+        return $this->factory->make($typeName, $context);
     }
 
     /** @return class-string|null */
