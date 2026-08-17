@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\ConfigProvider;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
@@ -64,7 +65,7 @@ it('does not let explicit parameter values shadow CurrentUser by name position o
         ->and($byType)->toBe($authenticated);
 });
 
-it('does not let mapped request data shadow CurrentUser inside a DTO', function (): void {
+it('rejects mapped request data that collides with CurrentUser inside a DTO', function (): void {
     $authenticated = new CurrentUserTrustActor('authenticated');
     $spoofed = new CurrentUserTrustActor('spoofed');
     $container = currentUserTrustContainer($authenticated);
@@ -73,15 +74,21 @@ it('does not let mapped request data shadow CurrentUser inside a DTO', function 
         'value' => 'payload-value',
     ]);
 
-    $dto = $container->call(
-        static fn(
-            #[MapRequestPayload]
-            CurrentUserTrustDto $command,
-        ): CurrentUserTrustDto => $command,
-        [ServerRequestInterface::class => $request],
-    );
+    try {
+        $container->call(
+            static fn(
+                #[MapRequestPayload]
+                CurrentUserTrustDto $command,
+            ): CurrentUserTrustDto => $command,
+            [ServerRequestInterface::class => $request],
+        );
+    } catch (RequestParameterSourceConflictException $exception) {
+        expect($exception->dtoClass)->toBe(CurrentUserTrustDto::class)
+            ->and($exception->key)->toBe('actor')
+            ->and($exception->source)->toBe(CurrentUser::class);
 
-    expect($dto->actor)->toBe($authenticated)
-        ->and($dto->actor)->not->toBe($spoofed)
-        ->and($dto->value)->toBe('payload-value');
+        return;
+    }
+
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
