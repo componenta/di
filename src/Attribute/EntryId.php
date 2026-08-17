@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
+
 /**
  * Specifies explicit service ID for resolution from DI container.
  *
@@ -27,7 +29,7 @@ namespace Componenta\DI\Attribute;
  * ```
  */
 #[\Attribute(\Attribute::TARGET_PARAMETER | \Attribute::TARGET_PROPERTY)]
-readonly class EntryId
+readonly class EntryId implements ParameterSourceAttributeInterface
 {
     /**
      * @param string $value The service identifier in the DI container.

@@ -6,6 +6,7 @@ namespace Componenta\DI\Attribute;
 
 use Componenta\Config\ConfigPath;
 use Componenta\Config\DefaultValue;
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 
 /**
  * Marks a parameter or property as configuration-bound.
@@ -54,7 +55,7 @@ use Componenta\Config\DefaultValue;
  * ```
  */
 #[\Attribute(\Attribute::TARGET_PARAMETER | \Attribute::TARGET_PROPERTY)]
-readonly class Config
+readonly class Config implements ParameterSourceAttributeInterface
 {
     /**
      * Container key for retrieving the root configuration.

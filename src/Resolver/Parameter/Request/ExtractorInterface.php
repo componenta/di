@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter\Request;
 
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-interface ExtractorInterface
+interface ExtractorInterface extends ParameterSourceAttributeInterface
 {
     /**
      * Extracts a single value from the PSR-7 request.

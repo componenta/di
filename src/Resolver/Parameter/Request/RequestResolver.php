@@ -247,12 +247,16 @@ final class RequestResolver implements ParameterResolverInterface
         $data = $mapper->transform($rawData);
         $this->assertNamedDtoData($typeName, $data, $parameter);
 
-        return $typeName !== null
-            ? $this->factory->make(
-                $typeName,
-                RequestParameter::with($data, $request),
-            )
-            : $data;
+        if ($typeName === null) {
+            return $data;
+        }
+
+        MappedRequestParameterSourceGuard::assertNoConflicts($typeName, $data);
+
+        return $this->factory->make(
+            $typeName,
+            RequestParameter::with($data, $request),
+        );
     }
 
     /** @return class-string|null */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute;
 
 use Componenta\Config\DefaultValue;
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 
 /**
  * Injects environment variable values into parameters or properties.
@@ -53,7 +54,7 @@ use Componenta\Config\DefaultValue;
  * ```
  */
 #[\Attribute(\Attribute::TARGET_PARAMETER | \Attribute::TARGET_PROPERTY)]
-readonly class Env
+readonly class Env implements ParameterSourceAttributeInterface
 {
     /**
      * @param string|null $name Environment variable name. Null uses parameter/property name converted to UPPER_SNAKE_CASE.

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
+
 /**
  * Creates a new instance via factory.
  *
@@ -65,7 +67,7 @@ namespace Componenta\DI\Attribute;
  * ```
  */
 #[\Attribute(\Attribute::TARGET_PARAMETER | \Attribute::TARGET_PROPERTY)]
-final readonly class Make
+final readonly class Make implements ParameterSourceAttributeInterface
 {
     /**
      * @param string|null $entry Class name or container service ID. Null = use type or name.

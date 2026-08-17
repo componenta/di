@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute;
 
 use Attribute;
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 
 /**
  * Marks parameter or property to be injected with current authenticated user.
@@ -41,7 +42,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
-final readonly class CurrentUser
+final readonly class CurrentUser implements ParameterSourceAttributeInterface
 {
     /**
      * @param class-string|null $type Optional type constraint for user object.
