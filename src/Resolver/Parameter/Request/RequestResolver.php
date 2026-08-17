@@ -248,7 +248,10 @@ final class RequestResolver implements ParameterResolverInterface
         $this->assertNamedDtoData($typeName, $data, $parameter);
 
         return $typeName !== null
-            ? $this->factory->make($typeName, $data)
+            ? $this->factory->make(
+                $typeName,
+                RequestParameter::with($data, $request),
+            )
             : $data;
     }
 
