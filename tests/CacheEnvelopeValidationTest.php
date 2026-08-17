@@ -25,6 +25,16 @@ it('rejects a cache envelope with dependencies but no version', function (): voi
     ))->toThrow(InvalidConfigurationException::class);
 });
 
+it('rejects v9 caches that predate mapped request provenance guards', function (): void {
+    expect(fn() => ContainerBuilder::configureFromCache(
+        new Config([]),
+        [
+            'version' => 9,
+            ConfigKey::DEPENDENCIES => [],
+        ],
+    ))->toThrow(InvalidConfigurationException::class, 'expected "10"');
+});
+
 it('accepts the deprecated validated producer marker without trusting it', function (): void {
     $builder = ContainerBuilder::configureFromCache(
         new Config([]),
