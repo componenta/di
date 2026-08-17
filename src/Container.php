@@ -12,6 +12,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
+use Componenta\DI\Resolver\Entry\EntryResolverContext;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
@@ -266,7 +267,10 @@ final class Container implements
 
         try {
             try {
-                $instance = $this->resolver->resolve($resolved, $params);
+                $instance = $this->resolver->resolve(
+                    $resolved,
+                    EntryResolverContext::for($this->resolver, $params),
+                );
             } catch (ContainerExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
