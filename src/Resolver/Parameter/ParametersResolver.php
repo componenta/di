@@ -151,7 +151,7 @@ class ParametersResolver
 
         MappedRequestParameterSourceGuard::assertTargetContextNoConflicts(
             $target,
-            $context->provided,
+            $context,
         );
 
         foreach ($this->resolverSlotsFor($target) as $slot) {
