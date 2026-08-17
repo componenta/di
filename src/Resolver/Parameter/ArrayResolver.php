@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -12,7 +13,9 @@ final class ArrayResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        return true;
+        // #[CurrentUser] is an authoritative security source. Generic caller-
+        // provided values must never shadow the authenticated user resolver.
+        return !$target->hasAttribute(CurrentUser::class);
     }
 
     public function resolveParameter(
