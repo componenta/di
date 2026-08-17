@@ -12,6 +12,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ConfigProvider;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
@@ -133,7 +134,7 @@ it('propagates the trusted PSR-7 request through nested request DTO construction
         ->and($entry->dto->query->q)->toBe('query-value');
 });
 
-it('overwrites a mapped ServerRequestInterface context key with the trusted request', function (): void {
+it('rejects a mapped ServerRequestInterface context key instead of treating it as nested DI context', function (): void {
     $spoofed = new FakeServerRequest(
         method: 'POST',
         uri: '/spoofed',
@@ -150,14 +151,20 @@ it('overwrites a mapped ServerRequestInterface context key with the trusted requ
     ))->withHeader('X-Token', 'trusted-header');
     $container = nestedRequestContextBuilder()->build();
 
-    $entry = $container->make(NestedRequestContextEntry::class, [
-        ServerRequestInterface::class => $request,
-    ]);
+    try {
+        $container->make(NestedRequestContextEntry::class, [
+            ServerRequestInterface::class => $request,
+        ]);
+    } catch (RequestParameterSourceConflictException $exception) {
+        expect($exception->dtoClass)->toBe(NestedRequestContextDto::class)
+            ->and($exception->key)->toBe(ServerRequestInterface::class)
+            ->and($exception->source)->toBe(ServerRequestInterface::class)
+            ->and($exception->parameter)->toBe('request');
 
-    expect($entry->dto->request)->toBe($request)
-        ->and((string) $entry->dto->uri)->toBe('/trusted')
-        ->and($entry->dto->token)->toBe('trusted-header')
-        ->and($entry->dto->query->q)->toBe('trusted-query');
+        return;
+    }
+
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('keeps nested request context identical in reflection and compiled factories', function (): void {
