@@ -10,7 +10,7 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 /** Stable identity of the ordered runtime slots consumed by generated factories. */
 final class CompiledFactoryPipelineFingerprint
 {
-    private const int FORMAT_VERSION = 1;
+    private const int FORMAT_VERSION = 2;
 
     public static function calculate(
         ParametersResolver $parameters,
