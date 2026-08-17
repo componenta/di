@@ -61,7 +61,7 @@ PHP,
 
         if (MappedRequestParameterSourceGuard::supportsTarget($target)) {
             $parts[] = sprintf(
-                '\\%s::assertTargetContextNoConflicts(%s, %s->provided);',
+                '\\%s::assertTargetContextNoConflicts(%s, %s);',
                 MappedRequestParameterSourceGuard::class,
                 $context->targetExpression,
                 $context->contextExpression,
