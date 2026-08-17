@@ -17,9 +17,7 @@ use ReflectionClass;
 use Throwable;
 
 /** Reflection fallback for entries without an explicit or generated factory. */
-final class ReflectionResolver implements
-    EntryResolverInterface,
-    MappedRequestAwareEntryResolverInterface
+final class ReflectionResolver implements EntryResolverInterface
 {
     /** @var array<string, true> */
     private array $missingClasses = [];
