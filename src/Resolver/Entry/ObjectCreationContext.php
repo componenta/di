@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\CreationStrategy;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
 use LogicException;
 use ReflectionClass;
 use ReflectionProperty;
@@ -21,6 +22,12 @@ final class ObjectCreationContext
 
     public private(set) ?object $entry = null;
 
+    /** @var array<string|int, mixed> */
+    public readonly array $parameters;
+
+    /** @var array<string|int, mixed> */
+    private readonly array $resolutionParameters;
+
     /** @var array<string, true> */
     private array $claimedProperties = [];
 
@@ -30,8 +37,22 @@ final class ObjectCreationContext
      */
     public function __construct(
         public readonly ReflectionClass $class,
-        public readonly array $parameters = [],
-    ) {}
+        array $parameters = [],
+    ) {
+        $this->resolutionParameters = $parameters;
+        $this->parameters = MappedRequestContext::strip($parameters);
+    }
+
+    /**
+     * Internal constructor-resolution context, including mapped provenance.
+     *
+     * @internal
+     * @return array<string|int, mixed>
+     */
+    public function resolutionParameters(): array
+    {
+        return $this->resolutionParameters;
+    }
 
     public function disableConstructor(): void
     {
