@@ -167,7 +167,7 @@ Unknown keys and malformed shapes throw `InvalidConfigurationException`.
 
 Raw dependency arrays are rejected. The former `validated: true` marker is accepted only as a deprecated, ignored compatibility field for older application-level cache producers; it never skips validation or makes compiled factories trusted. New producers must omit it. When `$baseDir` is supplied, relative compiled-factory paths are confined to that base directory.
 
-Cache envelope versions are strict. Version 9 is intentionally incompatible with earlier generated caches: regenerate the persistent cache and all compiled-factory shards during deployment instead of reusing or editing old artifacts.
+Cache envelope versions are strict. Version 10 rejects v9 and earlier artifacts because mapped-request provenance is now enforced against the actual constructor target, including persistent `ClassDefinition` closures. Regenerate the persistent cache and all compiled-factory shards during deployment instead of reusing or editing older artifacts.
 
 ## Attributes
 
@@ -196,7 +196,7 @@ Request mappers are `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`
 
 Class-typed HTTP DTO mapping accepts only named top-level string keys, both before validation and after mapper transformation. Integer keys, including numeric JSON object keys decoded as integers by PHP, are rejected instead of being interpreted as constructor positions. This restriction is limited to HTTP DTO mapping; trusted programmatic `Container::make()` calls continue to accept arguments by name or position.
 
-Parameter attributes that implement `ParameterSourceAttributeInterface` declare an explicit value source during HTTP DTO mapping. After mapper transformation, mapped data may not provide the source-bound parameter name or any of its declared class/interface type keys; such input throws `RequestParameterSourceConflictException` instead of becoming an explicit DI override. The exact `ServerRequestInterface` and `UriInterface` types are also treated as implicit trusted sources. Their subtypes are not reserved implicitly unless a source attribute marks the parameter, because the runtime request resolvers do not source arbitrary PSR-7 subtypes.
+Parameter attributes that implement `ParameterSourceAttributeInterface` declare an explicit value source during HTTP DTO mapping. After mapper transformation, mapped data may not provide the source-bound parameter name or any of its declared class/interface type keys; such input throws `RequestParameterSourceConflictException` instead of becoming an explicit DI override. Mapped-key provenance follows the nested `make()` operation through aliases to the actual constructor target and is checked before any built-in or custom parameter resolver runs, so resolver priority cannot bypass the source boundary. Runtime and persistent `ClassDefinition` construction apply the same mapped-input guard while ordinary programmatic constructor parameters keep their existing override semantics. The exact `ServerRequestInterface` and `UriInterface` types are also treated as implicit trusted sources. Their subtypes are not reserved implicitly unless a source attribute marks the parameter, because the runtime request resolvers do not source arbitrary PSR-7 subtypes.
 
 When validation is available for a DTO, extracted raw transport data is validated before mapper transformation. This is intentional: mapping, defaults, casts and exclusions must not hide malformed request input.
 
@@ -233,7 +233,7 @@ The compiler follows statically knowable concrete constructor, `#[Inject]` and `
 
 Each `CompiledFactoryDefinition` stores a relative shard file, generated class and method. Shards use content-addressed names and are loaded on first use. Untrusted relative paths are resolved inside the configured cache base directory; traversal and out-of-root symlinks are rejected. Dynamic classes continue through reflection autowiring.
 
-Before loading an untrusted shard, the runtime verifies that its bytes match the digest encoded in its filename. Every generated shard also embeds the ordered parameter-resolver and attribute-handler pipeline fingerprint; a runtime mismatch is rejected and requires recompilation. Deploy generated artifacts in a directory that is immutable to the request process: integrity checks complement, but do not replace, filesystem permissions.
+Before loading an untrusted shard, the runtime verifies that its bytes match the digest encoded in its filename. Every generated shard also embeds the parameter-resolver/attribute-handler pipeline fingerprint. Generated parameter code enforces mapped-source provenance before resolver fragments, and the fingerprint format changes when this compiler invariant changes; a runtime mismatch is rejected and requires recompilation. Deploy generated artifacts in a directory that is immutable to the request process: integrity checks complement, but do not replace, filesystem permissions.
 
 Application-level root discovery normally belongs to `componenta/app`; this package only compiles the roots it is given.
 
