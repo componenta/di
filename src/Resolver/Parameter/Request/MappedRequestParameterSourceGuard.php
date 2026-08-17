@@ -49,6 +49,31 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
+     * Checks a concrete object-creation class while provenance still lives in
+     * the raw nested-factory transport array.
+     *
+     * @param class-string $class
+     * @param array<string|int, mixed> $context
+     */
+    public static function assertClassContextNoConflicts(
+        string $class,
+        array $context,
+    ): void {
+        $provenance = MappedRequestContext::get($context);
+        if ($provenance === null) {
+            return;
+        }
+
+        foreach (self::bindings($class) as $binding) {
+            foreach ($binding['keys'] as $key) {
+                if ($provenance->contains($key)) {
+                    self::throwConflict($class, $binding, $key);
+                }
+            }
+        }
+    }
+
+    /**
      * Used before ClassDefinition override projection, while provenance still
      * lives in the raw nested-factory transport array.
      *
