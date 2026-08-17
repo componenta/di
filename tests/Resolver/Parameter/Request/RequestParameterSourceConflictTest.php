@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Attribute;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Caster\NullCasterProvider;
 use Componenta\Config\Config as ApplicationConfig;
@@ -35,7 +34,6 @@ use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
-use RuntimeException;
 
 final readonly class SourceBoundHeaderDto
 {
@@ -70,7 +68,7 @@ final readonly class SourceBoundConfigEntry
     ) {}
 }
 
-#[Attribute(Attribute::TARGET_PARAMETER)]
+#[\Attribute(\Attribute::TARGET_PARAMETER)]
 final readonly class ExternalParameterSource implements ParameterSourceAttributeInterface {}
 
 final readonly class ExternalSourceDto
@@ -204,7 +202,7 @@ function requestParameterSourceConflictSnapshot(
         ];
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 }
 
 it('marks built-in parameter sources while leaving Cast as a transformer', function (): void {
@@ -259,7 +257,7 @@ it('rejects transformed mapped data that targets a request source-bound paramete
         return;
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('rejects mapped data that targets a non-request DI source', function (): void {
@@ -281,7 +279,7 @@ it('rejects mapped data that targets a non-request DI source', function (): void
         return;
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('honours source markers declared by integration packages', function (): void {
@@ -303,7 +301,7 @@ it('honours source markers declared by integration packages', function (): void 
         return;
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('reserves the ServerRequestInterface constructor parameter name during mapping', function (): void {
@@ -324,7 +322,7 @@ it('reserves the ServerRequestInterface constructor parameter name during mappin
         return;
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('reserves the UriInterface constructor parameter name during mapping', function (): void {
@@ -345,7 +343,7 @@ it('reserves the UriInterface constructor parameter name during mapping', functi
         return;
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('rejects mapped data that targets a nested mapper source', function (): void {
@@ -366,7 +364,7 @@ it('rejects mapped data that targets a nested mapper source', function (): void 
         return;
     }
 
-    throw new RuntimeException('Expected request parameter source conflict.');
+    throw new \RuntimeException('Expected request parameter source conflict.');
 });
 
 it('does not change ordinary programmatic make explicit overrides', function (): void {
