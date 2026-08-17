@@ -77,7 +77,10 @@ final class ReflectionResolver implements EntryResolverInterface
     ): object {
         try {
             $entry = $context->constructorEnabled
-                ? $this->instanceCreator->create($context->class, $context->parameters)
+                ? $this->instanceCreator->create(
+                    $context->class,
+                    $context->resolutionParameters(),
+                )
                 : $context->class->newInstanceWithoutConstructor();
 
             $this->complete($context, $entry, $plan);
@@ -104,7 +107,7 @@ final class ReflectionResolver implements EntryResolverInterface
                         $this->instanceCreator->initialize(
                             $entry,
                             $attempt->class,
-                            $attempt->parameters,
+                            $attempt->resolutionParameters(),
                         );
                     }
 
