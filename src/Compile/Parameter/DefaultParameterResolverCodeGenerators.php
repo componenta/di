@@ -21,6 +21,7 @@ use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
 use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
 use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestSourceConflictResolver;
 use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
 
 /** Creates the built-in resolver-to-generator registrations. */
@@ -35,6 +36,10 @@ final class DefaultParameterResolverCodeGenerators
         $registry->register(AutowireByTypeResolver::class, new AutowireByTypeResolverCodeGenerator());
         $registry->register(DefaultValueResolver::class, new DefaultValueResolverCodeGenerator());
         $registry->register(NullableResolver::class, new NullableResolverCodeGenerator());
+        $registry->register(
+            MappedRequestSourceConflictResolver::class,
+            new RuntimeParameterResolverCodeGenerator(terminal: false),
+        );
 
         $runtime = new RuntimeParameterResolverCodeGenerator(terminal: true);
 
