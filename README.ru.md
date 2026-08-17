@@ -105,7 +105,7 @@ Persistent cache загружается только из versioned envelope:
 
 Старый raw dependency cache не поддерживается. Прежний маркер `validated: true` принимается только как deprecated и полностью игнорируемое поле совместимости для старых application-level генераторов: он не отключает проверки и не делает compiled factories доверенными. Новые генераторы должны его пропускать. Relative compiled-factory paths при заданном `$baseDir` ограничиваются этим каталогом.
 
-Версия cache envelope проверяется строго. Версия 9 намеренно несовместима с ранее сгенерированными кэшами: при деплое нужно заново собрать persistent cache и все compiled-factory shards, а не переносить или редактировать старые артефакты.
+Версия cache envelope проверяется строго. Версия 10 отклоняет артефакты v9 и более ранние, поскольку provenance mapped request теперь проверяется на фактическом constructor target, включая persistent closures из `ClassDefinition`. При деплое нужно заново собрать persistent cache и все compiled-factory shards, а не переносить или редактировать старые артефакты.
 
 ## Атрибуты и request mapping
 
@@ -119,7 +119,7 @@ Mappers: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCoo
 
 Для class-typed HTTP DTO разрешены только именованные строковые ключи верхнего уровня — как до валидации, так и после mapper transform. Целочисленные ключи, включая числовые ключи JSON-объекта, которые PHP декодировал как integer, отклоняются и не интерпретируются как позиции конструктора. Ограничение относится только к HTTP DTO mapping; доверенные программные вызовы `Container::make()` по-прежнему принимают аргументы по имени и позиции.
 
-Атрибут параметра, реализующий `ParameterSourceAttributeInterface`, объявляет явный источник значения при HTTP DTO mapping. После mapper transform mapped data не могут содержать имя такого параметра или любой из ключей его объявленных class/interface types; такой input приводит к `RequestParameterSourceConflictException`, а не становится explicit DI override. Точные типы `ServerRequestInterface` и `UriInterface` также считаются неявными доверенными источниками. Их подтипы автоматически не резервируются, если параметр не отмечен source-атрибутом, поскольку runtime request resolvers не разрешают произвольные PSR-7 subtypes как текущий request/URI.
+Атрибут параметра, реализующий `ParameterSourceAttributeInterface`, объявляет явный источник значения при HTTP DTO mapping. После mapper transform mapped data не могут содержать имя такого параметра или любой из ключей его объявленных class/interface types; такой input приводит к `RequestParameterSourceConflictException`, а не становится explicit DI override. Provenance mapped-ключей передаётся вместе с вложенным `make()` через alias до фактического constructor target и проверяется до запуска любого встроенного или пользовательского parameter resolver, поэтому priority resolver-а не может обойти границу источника. Runtime и persistent `ClassDefinition` применяют ту же защиту mapped input, при этом обычные программные constructor parameters сохраняют прежнюю семантику explicit override. Точные типы `ServerRequestInterface` и `UriInterface` также считаются неявными доверенными источниками. Их подтипы автоматически не резервируются, если параметр не отмечен source-атрибутом, поскольку runtime request resolvers не разрешают произвольные PSR-7 subtypes как текущий request/URI.
 
 Если DTO валидируется, сначала проверяются исходные transport-data, затем выполняется mapper transform. Это не позволяет casts/defaults/exclusions скрыть некорректный input. Конфликт разных значений одного ключа по умолчанию приводит к `RequestDataConflictException`; `FirstWins` включается явно.
 
@@ -143,7 +143,7 @@ Mappers: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCoo
 
 Shard-файлы имеют content-addressed имена и загружаются по требованию. Недоверенные пути ограничиваются cache base directory; traversal и symlink за пределы корня отклоняются. Динамические классы продолжают разрешаться через reflection.
 
-Перед загрузкой недоверенного shard runtime проверяет, что его байты соответствуют digest в имени файла. Каждый сгенерированный shard также содержит fingerprint упорядоченных parameter resolvers и attribute handlers; несовпадение с runtime pipeline отклоняется и требует перекомпиляции. Сгенерированные артефакты нужно размещать в каталоге, недоступном для записи request-процессу: integrity-проверки дополняют, но не заменяют filesystem permissions.
+Перед загрузкой недоверенного shard runtime проверяет, что его байты соответствуют digest в имени файла. Каждый generated shard также содержит fingerprint parameter-resolver/attribute-handler pipeline. Сгенерированный parameter code проверяет mapped provenance до resolver fragments, а версия формата fingerprint меняется при изменении этого compiler invariant; несовпадение отклоняется и требует перекомпиляции. Сгенерированные артефакты нужно размещать в каталоге, недоступном для записи request-процессу: integrity-проверки дополняют, но не заменяют filesystem permissions.
 
 `DiCacheGeneratorInterface::generate()` нормализует переданную dependency-конфигурацию, запускает компиляцию declarative definitions и атомарно записывает полученный PHP cache. Он не выполняет discovery классов приложения и не запускает `compileFactories()` для autowiring roots.
 
