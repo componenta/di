@@ -20,6 +20,7 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Parameter\ExplicitParametersResolver;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -95,10 +96,14 @@ class FactoryResolver implements DefinitionAwareResolverInterface
 
             $factory = $this->resolveFactory($id);
             $container = new ContainerValue($this->container);
+            $factoryContext = $definition instanceof ClassDefinition
+                || $factory instanceof MappedRequestAwareFactoryInterface
+                    ? $context
+                    : MappedRequestContext::strip($context);
 
             return $factory instanceof LazyServiceFactoryInterface
-                ? $factory->lazy($container, $this->proxyFactory, $context)
-                : $factory($container, $context);
+                ? $factory->lazy($container, $this->proxyFactory, $factoryContext)
+                : $factory($container, $factoryContext);
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (\Throwable $e) {
