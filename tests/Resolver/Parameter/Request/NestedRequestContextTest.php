@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Componenta\Caster\CasterProviderInterface;
+use Componenta\Caster\NullCasterProvider;
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\MapQueryString;
@@ -40,22 +42,30 @@ final readonly class NestedRequestContextEntry
     ) {}
 }
 
+function nestedRequestContextBuilder(): ContainerBuilder
+{
+    return ContainerBuilder::configure(
+        new Config((new ConfigProvider())()),
+    )->addService(
+        CasterProviderInterface::class,
+        new NullCasterProvider(),
+    );
+}
+
 /** @return array{0: Container, 1: Container, 2: string} */
 function nestedRequestContextContainers(): array
 {
     $directory = sys_get_temp_dir()
         . '/componenta-nested-request-context-'
         . bin2hex(random_bytes(5));
-    $provider = new ConfigProvider();
-    $configData = $provider();
-    $development = ContainerBuilder::configure(new Config($configData))->build();
-    $compiledFactories = ContainerBuilder::configure(new Config($configData))
-        ->compileFactories([
-            NestedRequestContextEntry::class,
-            NestedRequestContextDto::class,
-            NestedRequestContextQueryDto::class,
-        ], $directory);
-
+    $development = nestedRequestContextBuilder()->build();
+    $compiler = nestedRequestContextBuilder();
+    $compiledFactories = $compiler->compileFactories([
+        NestedRequestContextEntry::class,
+        NestedRequestContextDto::class,
+        NestedRequestContextQueryDto::class,
+    ], $directory);
+    $configData = $compiler->toArray();
     $dependencies = $configData[ConfigKey::DEPENDENCIES] ?? [];
     $dependencies[ConfigKey::FACTORIES] = array_replace(
         $dependencies[ConfigKey::FACTORIES] ?? [],
@@ -110,9 +120,7 @@ it('propagates the trusted PSR-7 request through nested request DTO construction
         queryParams: ['q' => 'query-value'],
         parsedBody: ['value' => 'payload-value'],
     ))->withHeader('X-Token', 'header-value');
-    $container = ContainerBuilder::configure(
-        new Config((new ConfigProvider())()),
-    )->build();
+    $container = nestedRequestContextBuilder()->build();
 
     $entry = $container->make(NestedRequestContextEntry::class, [
         ServerRequestInterface::class => $request,
@@ -140,9 +148,7 @@ it('overwrites a mapped ServerRequestInterface context key with the trusted requ
             ServerRequestInterface::class => $spoofed,
         ],
     ))->withHeader('X-Token', 'trusted-header');
-    $container = ContainerBuilder::configure(
-        new Config((new ConfigProvider())()),
-    )->build();
+    $container = nestedRequestContextBuilder()->build();
 
     $entry = $container->make(NestedRequestContextEntry::class, [
         ServerRequestInterface::class => $request,
