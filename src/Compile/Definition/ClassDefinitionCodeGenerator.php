@@ -9,6 +9,7 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\TypeHints;
 use Componenta\VarExport\Export;
 use ReflectionClass;
@@ -59,7 +60,19 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
             $capturedObjectVariables,
             $capturedObjectAssignments,
         );
-        $body = ['$configured = ' . $configured . ';'];
+        $body = [];
+        $sourceBindings = MappedRequestParameterSourceGuard::bindings($className);
+
+        if ($sourceBindings !== []) {
+            $body[] = sprintf(
+                '\\%s::assertBindingsContextNoConflicts(%s, %s, $context);',
+                MappedRequestParameterSourceGuard::class,
+                var_export($className, true),
+                var_export($sourceBindings, true),
+            );
+        }
+
+        $body[] = '$configured = ' . $configured . ';';
         $constructor = $class->getConstructor();
 
         if ($constructor === null) {
