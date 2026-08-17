@@ -10,6 +10,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
+use Componenta\DI\Resolver\Entry\MappedRequestAwareFactory;
 
 final readonly class DefinitionCacheDependency {}
 
@@ -90,7 +91,7 @@ it('compiles resolver definitions to canonical persistent cache forms', function
         $dependencies = $cache[ConfigKey::DEPENDENCIES];
 
         expect($dependencies[ConfigKey::FACTORIES][DefinitionCacheConfiguredService::class])
-            ->toBeInstanceOf(Closure::class)
+            ->toBeInstanceOf(MappedRequestAwareFactory::class)
             ->and($dependencies[ConfigKey::ALIASES]['definition-cache.invokable'])
             ->toBe(DefinitionCacheInvokable::class)
             ->and($dependencies[ConfigKey::INVOKABLES])
