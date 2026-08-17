@@ -44,6 +44,19 @@ final readonly class MappedRequestContext
         return $provenance instanceof self ? $provenance : null;
     }
 
+    /**
+     * Removes DI-owned provenance before exposing a context to extensions.
+     *
+     * @param array<string|int, mixed> $context
+     * @return array<string|int, mixed>
+     */
+    public static function strip(array $context): array
+    {
+        unset($context[self::KEY]);
+
+        return $context;
+    }
+
     public function contains(string $key): bool
     {
         return isset($this->keys[$key]);
