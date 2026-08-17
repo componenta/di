@@ -119,6 +119,8 @@ Mappers: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCoo
 
 Для class-typed HTTP DTO разрешены только именованные строковые ключи верхнего уровня — как до валидации, так и после mapper transform. Целочисленные ключи, включая числовые ключи JSON-объекта, которые PHP декодировал как integer, отклоняются и не интерпретируются как позиции конструктора. Ограничение относится только к HTTP DTO mapping; доверенные программные вызовы `Container::make()` по-прежнему принимают аргументы по имени и позиции.
 
+Атрибут параметра, реализующий `ParameterSourceAttributeInterface`, объявляет явный источник значения при HTTP DTO mapping. После mapper transform mapped data не могут содержать имя такого параметра или любой из ключей его объявленных class/interface types; такой input приводит к `RequestParameterSourceConflictException`, а не становится explicit DI override. Точные типы `ServerRequestInterface` и `UriInterface` также считаются неявными доверенными источниками. Их подтипы автоматически не резервируются, если параметр не отмечен source-атрибутом, поскольку runtime request resolvers не разрешают произвольные PSR-7 subtypes как текущий request/URI.
+
 Если DTO валидируется, сначала проверяются исходные transport-data, затем выполняется mapper transform. Это не позволяет casts/defaults/exclusions скрыть некорректный input. Конфликт разных значений одного ключа по умолчанию приводит к `RequestDataConflictException`; `FirstWins` включается явно.
 
 ## Callable
@@ -149,4 +151,4 @@ Shard-файлы имеют content-addressed имена и загружаютс
 
 ## Исключения
 
-Все исключения реализуют `Componenta\DI\Exception\ExceptionInterface`. Основные: `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException`, `RequestDataConflictException`.
+Все исключения реализуют `Componenta\DI\Exception\ExceptionInterface`. Основные: `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException`, `RequestDataConflictException`, `RequestParameterSourceConflictException`.

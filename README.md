@@ -196,6 +196,8 @@ Request mappers are `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`
 
 Class-typed HTTP DTO mapping accepts only named top-level string keys, both before validation and after mapper transformation. Integer keys, including numeric JSON object keys decoded as integers by PHP, are rejected instead of being interpreted as constructor positions. This restriction is limited to HTTP DTO mapping; trusted programmatic `Container::make()` calls continue to accept arguments by name or position.
 
+Parameter attributes that implement `ParameterSourceAttributeInterface` declare an explicit value source during HTTP DTO mapping. After mapper transformation, mapped data may not provide the source-bound parameter name or any of its declared class/interface type keys; such input throws `RequestParameterSourceConflictException` instead of becoming an explicit DI override. The exact `ServerRequestInterface` and `UriInterface` types are also treated as implicit trusted sources. Their subtypes are not reserved implicitly unless a source attribute marks the parameter, because the runtime request resolvers do not source arbitrary PSR-7 subtypes.
+
 When validation is available for a DTO, extracted raw transport data is validated before mapper transformation. This is intentional: mapping, defaults, casts and exclusions must not hide malformed request input.
 
 When multiple request sources provide different values for one key, the default policy throws `RequestDataConflictException`. `RequestDataConflictPolicy::FirstWins` must be selected explicitly when source precedence is part of the endpoint contract.
@@ -241,4 +243,4 @@ Persistent-cache export preserves repeated identity for supported readonly objec
 
 ## Exceptions
 
-Package exceptions implement `Componenta\DI\Exception\ExceptionInterface`. Main exceptions are `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException` and `RequestDataConflictException`.
+Package exceptions implement `Componenta\DI\Exception\ExceptionInterface`. Main exceptions are `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException`, `RequestDataConflictException` and `RequestParameterSourceConflictException`.
