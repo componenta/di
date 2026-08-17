@@ -13,6 +13,7 @@ use Componenta\DI\ConfigProvider;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Resolver\Entry\MappedRequestAwareFactory;
 use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Tests\Fixture\FakeServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
@@ -113,7 +114,7 @@ it('embeds the mapped source guard in persistent ClassDefinition cache code', fu
 
         $cache = require $cacheFile;
         expect($cache[ConfigKey::DEPENDENCIES][ConfigKey::FACTORIES][MappedDefinitionCommandContract::class])
-            ->toBeInstanceOf(Closure::class);
+            ->toBeInstanceOf(MappedRequestAwareFactory::class);
 
         $container = ContainerBuilder::configureFromCache(
             new Config([]),
