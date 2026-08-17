@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Componenta\Stdlib\PriorityList;
@@ -147,6 +148,11 @@ class ParametersResolver
                 resolvedParameters: $context->resolved,
             );
         }
+
+        MappedRequestParameterSourceGuard::assertTargetContextNoConflicts(
+            $target,
+            $context->provided,
+        );
 
         foreach ($this->resolverSlotsFor($target) as $slot) {
             $resolver = $this->resolverList[$slot];
