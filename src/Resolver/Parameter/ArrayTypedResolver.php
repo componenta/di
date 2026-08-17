@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
 /** Resolves an explicit object registered under its declared class/interface type. */
@@ -11,7 +12,10 @@ final class ArrayTypedResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        return $target->typeNames !== [];
+        // #[CurrentUser] is authoritative and must not be replaced by an
+        // object supplied under its declared class/interface key.
+        return $target->typeNames !== []
+            && !$target->hasAttribute(CurrentUser::class);
     }
 
     public function resolveParameter(
