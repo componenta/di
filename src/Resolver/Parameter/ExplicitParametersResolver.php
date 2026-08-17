@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use ReflectionParameter;
 
 /** Resolves caller-provided values and PHP defaults without DI autowiring. */
@@ -28,7 +29,13 @@ final readonly class ExplicitParametersResolver
      */
     public function resolve(array $parameters, array $provided = []): array
     {
-        return $this->resolver->resolve($parameters, $provided);
+        $targets = $this->resolver->targets($parameters);
+        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
+            $targets,
+            $provided,
+        );
+
+        return $this->resolver->resolveTargets($targets, $provided);
     }
 
     /**
@@ -54,6 +61,10 @@ final readonly class ExplicitParametersResolver
         }
 
         $targets = $this->resolver->targets($parameters);
+        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
+            $targets,
+            $overrides,
+        );
         $provided = $base;
 
         foreach ($targets as $target) {
