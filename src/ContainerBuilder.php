@@ -80,11 +80,11 @@ class ContainerBuilder
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int CACHE_VERSION = 10;
+    public const int CACHE_VERSION = 11;
 
     /**
      * @deprecated Cache readers never trust this marker. It remains only so
-     * older application-level cache producers can emit a v10 envelope while
+     * older application-level cache producers can emit a v11 envelope while
      * they migrate to the two-key version/dependencies format.
      */
     public const string CACHE_VALIDATED_KEY = 'validated';
