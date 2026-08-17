@@ -8,13 +8,10 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
 use InvalidArgumentException;
 
 /** Ordered entry-resolver chain with positive and negative owner caching. */
-class CompositeResolver implements
-    DefinitionAwareResolverInterface,
-    MappedRequestAwareEntryResolverInterface
+class CompositeResolver implements DefinitionAwareResolverInterface
 {
     /** @var list<EntryResolverInterface> */
     protected array $resolvers = [];
@@ -82,11 +79,10 @@ class CompositeResolver implements
             throw NotFoundException::forService($id);
         }
 
-        $ownerContext = $owner instanceof MappedRequestAwareEntryResolverInterface
-            ? $context
-            : MappedRequestContext::strip($context);
-
-        return $owner->resolve($id, $ownerContext);
+        return $owner->resolve(
+            $id,
+            EntryResolverContext::for($owner, $context),
+        );
     }
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
