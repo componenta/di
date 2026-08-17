@@ -29,13 +29,7 @@ final readonly class ExplicitParametersResolver
      */
     public function resolve(array $parameters, array $provided = []): array
     {
-        $targets = $this->resolver->targets($parameters);
-        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
-            $targets,
-            $provided,
-        );
-
-        return $this->resolver->resolveTargets($targets, $provided);
+        return $this->resolver->resolve($parameters, $provided);
     }
 
     /**
@@ -61,10 +55,15 @@ final readonly class ExplicitParametersResolver
         }
 
         $targets = $this->resolver->targets($parameters);
+
+        // The merge below intentionally projects runtime overrides onto
+        // constructor parameter keys. Check provenance first because the
+        // internal mapped-request marker is not itself a constructor argument.
         MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
             $targets,
             $overrides,
         );
+
         $provided = $base;
 
         foreach ($targets as $target) {
