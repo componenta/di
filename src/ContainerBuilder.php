@@ -547,6 +547,7 @@ class ContainerBuilder
             throw new InvalidConfigurationException(sprintf(
                 'Internal service "%s" must implement %s; got %s.',
                 CallableInvokerInterface::class,
+                CallableInvokerInterface::class,
                 get_debug_type($callableInvoker),
             ));
         }
