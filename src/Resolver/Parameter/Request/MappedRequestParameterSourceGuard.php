@@ -13,18 +13,19 @@ use Psr\Http\Message\UriInterface;
 use ReflectionClass;
 use ReflectionParameter;
 
-/** Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources. */
+/**
+ * Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources.
+ *
+ * @internal
+ * @phpstan-type SourceBinding array{
+ *     parameter: string,
+ *     source: class-string,
+ *     keys: list<string>
+ * }
+ */
 final class MappedRequestParameterSourceGuard
 {
-    /**
-     * @phpstan-type SourceBinding array{
-     *     parameter: string,
-     *     source: class-string,
-     *     keys: list<string>
-     * }
-     *
-     * @var array<class-string, list<SourceBinding>>
-     */
+    /** @var array<class-string, list<SourceBinding>> */
     private static array $sourceCache = [];
 
     /**
@@ -49,20 +50,6 @@ final class MappedRequestParameterSourceGuard
                 }
             }
         }
-    }
-
-    /**
-     * Checks the concrete class represented by a resolution id when available.
-     *
-     * @param array<string|int, mixed> $context
-     */
-    public static function assertContextNoConflicts(string $class, array $context): void
-    {
-        self::assertBindingsContextNoConflicts(
-            $class,
-            self::bindings($class),
-            $context,
-        );
     }
 
     /**
@@ -97,14 +84,17 @@ final class MappedRequestParameterSourceGuard
             return;
         }
 
+        $declaringClass = $target->reflection->getDeclaringClass();
+        if ($declaringClass === null) {
+            return;
+        }
+
+        /** @var class-string $class */
+        $class = $declaringClass->getName();
+
         foreach ($binding['keys'] as $key) {
             if ($provenance->contains($key)) {
-                self::throwConflict(
-                    $target->reflection->getDeclaringClass()?->getName()
-                        ?? $target->declaringContext,
-                    $binding,
-                    $key,
-                );
+                self::throwConflict($class, $binding, $key);
             }
         }
     }
@@ -118,7 +108,8 @@ final class MappedRequestParameterSourceGuard
      * Runtime helper used by generated ClassDefinition factories. The binding
      * list is emitted at build time, so this path stays reflection-free.
      *
-     * @param list<array{parameter: string, source: class-string, keys: list<string>}> $bindings
+     * @param class-string $class
+     * @param list<SourceBinding> $bindings
      * @param array<string|int, mixed> $context
      */
     public static function assertBindingsContextNoConflicts(
@@ -144,7 +135,7 @@ final class MappedRequestParameterSourceGuard
      * Exposes build-time source bindings for reflection-free generated code.
      *
      * @internal
-     * @return list<array{parameter: string, source: class-string, keys: list<string>}>
+     * @return list<SourceBinding>
      */
     public static function bindings(string $class): array
     {
@@ -185,9 +176,7 @@ final class MappedRequestParameterSourceGuard
         return self::$sourceCache[$class] = $bindings;
     }
 
-    /**
-     * @return array{parameter: string, source: class-string, keys: list<string>}|null
-     */
+    /** @return SourceBinding|null */
     private static function targetBinding(ParameterTarget $target): ?array
     {
         $source = self::declaredTargetSource($target);
@@ -200,7 +189,7 @@ final class MappedRequestParameterSourceGuard
     /**
      * @param class-string $source
      * @param list<class-string> $typeNames
-     * @return array{parameter: string, source: class-string, keys: list<string>}
+     * @return SourceBinding
      */
     private static function binding(
         string $parameter,
@@ -267,7 +256,8 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
-     * @param array{parameter: string, source: class-string, keys: list<string>} $binding
+     * @param class-string $class
+     * @param SourceBinding $binding
      */
     private static function throwConflict(
         string $class,
