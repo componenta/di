@@ -9,6 +9,7 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Resolver\Entry\MappedRequestAwareFactory;
 use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\TypeHints;
 use Componenta\VarExport\Export;
@@ -129,14 +130,18 @@ final class ClassDefinitionCodeGenerator implements DefinitionCodeGeneratorInter
             self::indent(implode("\n\n", $body)),
         );
 
-        if ($capturedObjectAssignments === []) {
-            return new GeneratedDefinitionCode($factory);
+        if ($capturedObjectAssignments !== []) {
+            $factory = sprintf(
+                "(static function (): \\Closure {\n%s\n\n%s\n})()",
+                self::indent(implode("\n", $capturedObjectAssignments)),
+                self::indent('return ' . $factory . ';'),
+            );
         }
 
         return new GeneratedDefinitionCode(sprintf(
-            "(static function (): \\Closure {\n%s\n\n%s\n})()",
-            self::indent(implode("\n", $capturedObjectAssignments)),
-            self::indent('return ' . $factory . ';'),
+            'new \\%s(%s)',
+            MappedRequestAwareFactory::class,
+            $factory,
         ));
     }
 
