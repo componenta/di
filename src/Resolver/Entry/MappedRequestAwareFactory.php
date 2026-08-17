@@ -8,7 +8,7 @@ use Closure;
 use Componenta\Config\ContainerValue;
 
 /** @internal */
-final readonly class MappedRequestAwareFactory implements MappedRequestAwareFactoryInterface
+final readonly class MappedRequestAwareFactory
 {
     /** @param Closure(ContainerValue, array<string|int, mixed>): object $factory */
     public function __construct(private Closure $factory) {}
