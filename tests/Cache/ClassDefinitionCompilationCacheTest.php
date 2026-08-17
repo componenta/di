@@ -11,6 +11,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
+use Componenta\DI\Resolver\Entry\MappedRequestAwareFactory;
 
 final readonly class CompiledClassDefinitionDependency {}
 
@@ -74,7 +75,7 @@ final class CompiledClassDefinitionLiveReferenceTarget
     public function __construct(public object $dependency) {}
 }
 
-it('compiles configured ClassDefinition objects to closure factories in the persistent cache', function (): void {
+it('compiles configured ClassDefinition objects to provenance-aware factories in the persistent cache', function (): void {
     $root = sys_get_temp_dir() . '/componenta-class-definition-cache-' . bin2hex(random_bytes(5));
     $cacheFile = $root . '/container.php';
 
@@ -103,9 +104,9 @@ it('compiles configured ClassDefinition objects to closure factories in the pers
         $factories = $cache[ConfigKey::DEPENDENCIES][ConfigKey::FACTORIES];
 
         expect($factories[CompiledClassDefinitionTarget::class])
-            ->toBeInstanceOf(Closure::class)
+            ->toBeInstanceOf(MappedRequestAwareFactory::class)
             ->and($factories[CompiledClassDefinitionNativeDefault::class])
-            ->toBeInstanceOf(Closure::class);
+            ->toBeInstanceOf(MappedRequestAwareFactory::class);
 
         $container = ContainerBuilder::configureFromCache(
             new Config([]),
