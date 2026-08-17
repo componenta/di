@@ -7,6 +7,7 @@ namespace Componenta\DI\Compile\Parameter;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionResult;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use ReflectionParameter;
 
 /** Specializes the exact runtime resolver chain into a linear PHP block. */
@@ -57,6 +58,16 @@ PHP,
         $terminal = false;
         $usesDeclaredDefaultWhenEmpty = false;
         $emptyContextStillSkips = true;
+
+        if (MappedRequestParameterSourceGuard::supportsTarget($target)) {
+            $parts[] = sprintf(
+                '\\%s::assertTargetContextNoConflicts(%s, %s->provided);',
+                MappedRequestParameterSourceGuard::class,
+                $context->targetExpression,
+                $context->contextExpression,
+            );
+            $usesTarget = true;
+        }
 
         foreach ($this->parameters->resolverSlotsFor($target) as $slot) {
             $resolver = $this->parameters->resolverList[$slot];
