@@ -35,7 +35,7 @@ jobs:
           for chunk in .v5-final-patch/archive-*; do
             base64 -d "$chunk" >> /tmp/v5-final-src-tests.tar.gz
           done
-          echo '5a67e6df52ea506d4f80343c3b17f8222066b0e517a661f38bad533605a08df4  /tmp/v5-final-src-tests.tar.gz' | sha256sum --check
+          echo '32d0660379059bbb9f7d80f26eb86dd8db53f4d33f0164217da86369bbe35d45  /tmp/v5-final-src-tests.tar.gz' | sha256sum --check
           rm -rf src tests
           tar -xzf /tmp/v5-final-src-tests.tar.gz
           git rm -r .v5-final-patch
