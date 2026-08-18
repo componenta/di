@@ -1,0 +1,466 @@
+LifecycleHookHandlerInterface
++final readonly class SetUpLifecycleHandler implements LifecycleHookHandlerInterface, AutowireDependencyProviderInterface
+ {
+     public function __construct(private CallableExecutorInterface $executor) {}
+ 
++    public function autowireDependencies(object $attribute, Reflector $target): iterable
++    {
++        if (!$attribute instanceof SetUp || !$target instanceof ReflectionClass || !$target->hasMethod($attribute->method)) {
++            return [];
++        }
++
++        $dependencies = [];
++        $method = $target->getMethod($attribute->method);
++        foreach ($method->getParameters() as $parameter) {
++            $class = \Componenta\DI\Resolver\TypeHints::classOf(
++                $parameter->getType(),
++                $parameter->getDeclaringClass(),
++            );
++            if ($class !== null) {
++                $dependencies[] = $class;
++            }
++        }
++
++        return $dependencies;
++    }
++
+     public function run(
+         object $attribute,
+         object $entry,
+diff --git a/src/Attribute/Handler/Builtin/VirtualProxyValueDecorator.php b/src/Attribute/Handler/Builtin/VirtualProxyValueDecorator.php
+new file mode 100644
+index 0000000..671f69a
+--- /dev/null
++++ b/src/Attribute/Handler/Builtin/VirtualProxyValueDecorator.php
+@@ -0,0 +1,78 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Componenta\DI\Attribute\Handler\Builtin;
++
++use Closure;
++use Componenta\DI\Attribute\Handler\ValueProviderDecoratorHandlerInterface;
++use Componenta\DI\Attribute\VirtualProxy;
++use Componenta\DI\Exception\InvalidConfigurationException;
++use Componenta\DI\ProxyFactoryInterface;
++use Componenta\DI\Resolver\Target\ValueTargetInterface;
++use Componenta\DI\Value\ValueContext;
++use LogicException;
++
++final readonly class VirtualProxyValueDecorator implements ValueProviderDecoratorHandlerInterface
++{
++    public function __construct(private ProxyFactoryInterface $proxies) {}
++
++    public function decorate(
++        object $attribute,
++        Closure $next,
++        ValueTargetInterface $target,
++        ValueContext $context,
++    ): mixed {
++        if (!$attribute instanceof VirtualProxy) {
++            throw new LogicException('VirtualProxyValueDecorator received an unsupported attribute.');
++        }
++
++        $class = $attribute->class ?? $target->className;
++        if ($class === null || !class_exists($class)) {
++            throw new InvalidConfigurationException(sprintf(
++                '#[VirtualProxy] on %s requires an explicit concrete proxy class.',
++                $target->declaringContext,
++            ));
++        }
++
++        foreach ($target->typeNames as $type) {
++            if (is_a($class, $type, true)) {
++                return $this->proxy($class, $next, $target);
++            }
++        }
++
++        if ($target->typeNames === []) {
++            return $this->proxy($class, $next, $target);
++        }
++
++        throw new InvalidConfigurationException(sprintf(
++            'Virtual proxy class %s is incompatible with %s.',
++            $class,
++            $target->declaringContext,
++        ));
++    }
++
++    /**
++     * @param class-string $class
++     * @param Closure(): mixed $next
++     */
++    private function proxy(string $class, Closure $next, ValueTargetInterface $target): object
++    {
++        return $this->proxies->makeProxy(
++            $class,
++            static function (object $_proxy) use ($class, $next, $target): object {
++                $value = $next();
++                if (!$value instanceof $class) {
++                    throw new InvalidConfigurationException(sprintf(
++                        'Virtual proxy provider for %s resolved %s; expected %s.',
++                        $target->declaringContext,
++                        get_debug_type($value),
++                        $class,
++                    ));
++                }
++
++                return $value;
++            },
++        );
++    }
++}
+diff --git a/src/Attribute/Handler/ValueProviderDecoratorHandlerInterface.php b/src/Attribute/Handler/ValueProviderDecoratorHandlerInterface.php
+new file mode 100644
+index 0000000..6887f77
+--- /dev/null
++++ b/src/Attribute/Handler/ValueProviderDecoratorHandlerInterface.php
+@@ -0,0 +1,20 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Componenta\DI\Attribute\Handler;
++
++use Closure;
++use Componenta\DI\Resolver\Target\ValueTargetInterface;
++use Componenta\DI\Value\ValueContext;
++
++interface ValueProviderDecoratorHandlerInterface extends AttributeHandlerInterface
++{
++    /** @param Closure(): mixed $next */
++    public function decorate(
++        object $attribute,
++        Closure $next,
++        ValueTargetInterface $target,
++        ValueContext $context,
++    ): mixed;
++}
+diff --git a/src/Attribute/Lazy.php b/src/Attribute/Lazy.php
+index fe5d96b..2232091 100644
+--- a/src/Attribute/Lazy.php
++++ b/src/Attribute/Lazy.php
+@@ -19,7 +19,7 @@ use Attribute;
+  *
+  * - **Autowired services** (resolved by reflection): fully supported.
+  *   The constructor is invoked on the lazy instance using arguments resolved
+- *   by the configured parameter-resolver pipeline.
++ *   by the shared parameter value pipeline.
+  * - **Factory-bound services** (resolved by an application factory):
+  *   not supported. Ghost mode requires constructor visibility, which
+  *   opaque factories do not provide. Use {@see Proxy} instead, or
+diff --git a/src/Attribute/MapRequest.php b/src/Attribute/MapRequest.php
+index c2af957..3e66190 100644
+--- a/src/Attribute/MapRequest.php
++++ b/src/Attribute/MapRequest.php
+@@ -13,11 +13,13 @@ final readonly class MapRequest
+ {
+     /**
+      * @param list<RequestDataSource> $sources
++     * @param list<string> $only optional projection applied after source merge
+      * @param array<string, string> $map source key => target key; prefix source with ? for optional
+      * @param list<string> $exclude
+      */
+     public function __construct(
+         public array $sources = [RequestDataSource::Payload],
++        public array $only = [],
+         public array $map = [],
+         public array $exclude = [],
+         public RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject,
+diff --git a/src/Attribute/VirtualProxy.php b/src/Attribute/VirtualProxy.php
+new file mode 100644
+index 0000000..d74aff4
+--- /dev/null
++++ b/src/Attribute/VirtualProxy.php
+@@ -0,0 +1,15 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Componenta\DI\Attribute;
++
++use Attribute;
++
++/** Lazily materializes the target value behind a native PHP virtual proxy. */
++#[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
++final readonly class VirtualProxy
++{
++    /** @param class-string|null $class Concrete proxy class; null infers a concrete target type. */
++    public function __construct(public ?string $class = null) {}
++}
+diff --git a/src/CallableExecutor.php b/src/CallableExecutor.php
+index e0ceb1a..8a077f5 100644
+--- a/src/CallableExecutor.php
++++ b/src/CallableExecutor.php
+@@ -8,7 +8,7 @@ use Closure;
+ use Componenta\DI\Exception\InvalidCallableException;
+ use Componenta\DI\Exception\ResolutionException;
+ use Componenta\DI\Resolver\Parameter\ParametersResolver;
+-use Componenta\DI\Resolver\Target\ParameterTarget;
++use Componenta\DI\Resolver\Parameter\ParameterValuePlan;
+ use Componenta\Reflection\Reflection;
+ use LogicException;
+ use ReflectionFunction;
+@@ -18,13 +18,13 @@ use WeakMap;
+ /** DI-aware callable executor. */
+ final class CallableExecutor implements CallableExecutorInterface
+ {
+-    /** @var WeakMap<Closure, list<ParameterTarget>>|null */
++    /** @var WeakMap<Closure, list<ParameterValuePlan>>|null */
+     private ?WeakMap $closureTargets = null;
+ 
+-    /** @var array<string, list<ParameterTarget>> */
++    /** @var array<string, list<ParameterValuePlan>> */
+     private array $closureSignatures = [];
+ 
+-    /** @var array<string, list<ParameterTarget>> */
++    /** @var array<string, list<ParameterValuePlan>> */
+     private array $callableTargets = [];
+ 
+     private readonly CallableInvoker $invoker;
+@@ -42,10 +42,10 @@ final class CallableExecutor implements CallableExecutorInterface
+         ResolutionContext $context = new ResolutionContext(),
+     ): mixed {
+         $resolved = $this->callableResolver->resolve($callable);
+-        $targets = $this->targets($resolved);
+-        $arguments = $targets === []
++        $plans = $this->plans($resolved);
++        $arguments = $plans === []
+             ? array_values($context->explicit)
+-            : $this->parameters->resolveTargets($targets, $context);
++            : $this->parameters->resolvePlans($plans, $context);
+ 
+         return $this->invoker->call($resolved, $arguments);
+     }
+@@ -55,8 +55,8 @@ final class CallableExecutor implements CallableExecutorInterface
+         return $this->callableResolver->resolve($callable);
+     }
+ 
+-    /** @return list<ParameterTarget> */
+-    private function targets(callable $callable): array
++    /** @return list<ParameterValuePlan> */
++    private function plans(callable $callable): array
+     {
+         if ($callable instanceof Closure) {
+             $cache = $this->closureTargets ??= new WeakMap();
+@@ -74,7 +74,7 @@ final class CallableExecutor implements CallableExecutorInterface
+             $parameters = array_values($reflection->getParameters());
+ 
+             return $cache[$callable] = $this->closureSignatures[$signature]
+-                ??= $this->parameters->targets($parameters);
++                ??= $this->parameters->plans($parameters);
+         }
+ 
+         if (self::isDynamicMethodCallable($callable)) {
+@@ -85,7 +85,7 @@ final class CallableExecutor implements CallableExecutorInterface
+         /** @var list<ReflectionParameter> $parameters */
+         $parameters = array_values(Reflection::callable($callable)->getParameters());
+ 
+-        return $this->callableTargets[$key] ??= $this->parameters->targets($parameters);
++        return $this->callableTargets[$key] ??= $this->parameters->plans($parameters);
+     }
+ 
+     private static function isDynamicMethodCallable(callable $callable): bool
+diff --git a/src/Compile/Autowire/AutowireClassGraph.php b/src/Compile/Autowire/AutowireClassGraph.php
+index 382f6c3..419ea82 100644
+--- a/src/Compile/Autowire/AutowireClassGraph.php
++++ b/src/Compile/Autowire/AutowireClassGraph.php
+@@ -4,26 +4,30 @@ declare(strict_types=1);
+ 
+ namespace Componenta\DI\Compile\Autowire;
+ 
+-use Componenta\DI\Attribute\Inject;
+-use Componenta\DI\Attribute\NoConstructor;
+-use Componenta\DI\Attribute\SetUp;
++use Componenta\DI\Attribute\Composition\AttributePlan;
++use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
++use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
++use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
++use Componenta\DI\Attribute\Composition\Capability\ValueProviderDecorator;
++use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
+ use Componenta\DI\Resolver\Entry\EntryClassEligibility;
+-use Componenta\DI\Resolver\TypeHints;
++use Componenta\DI\Resolver\Target\ParameterTarget;
++use Componenta\DI\Resolver\Target\PropertyTarget;
+ use InvalidArgumentException;
+-use ReflectionAttribute;
+ use ReflectionClass;
+-use ReflectionMethod;
+ use ReflectionProperty;
+ 
+-/** Expands explicit AOT roots through statically obvious class dependencies. */
++/** Expands explicit AOT roots through statically knowable value/lifecycle dependencies. */
+ final readonly class AutowireClassGraph
+ {
+     /** @var array<string, non-empty-string> */
+     private array $aliases;
+ 
+     /** @param array<string, non-empty-string> $aliases */
+-    public function __construct(array $aliases = [])
+-    {
++    public function __construct(
++        array $aliases,
++        private AttributePlanBuilder $plans,
++    ) {
+         $this->aliases = $aliases;
+     }
+ 
+@@ -91,31 +95,72 @@ final readonly class AutowireClassGraph
+     {
+         /** @var array<class-string, true> $dependencies */
+         $dependencies = [];
+-        $constructorDisabled = $class->getAttributes(NoConstructor::class, ReflectionAttribute::IS_INSTANCEOF) !== [];
++
+         $constructor = $class->getConstructor();
+-        if (!$constructorDisabled && $constructor !== null) {
+-            $this->appendMethodDependencies($dependencies, $constructor);
++        if ($constructor !== null) {
++            foreach ($constructor->getParameters() as $parameter) {
++                $target = new ParameterTarget($parameter);
++                $this->appendValueDependencies($dependencies, $target->className, $this->plans->build($parameter));
++            }
+         }
+ 
+         foreach (self::properties($class) as $property) {
+-            if ($property->getAttributes(Inject::class, ReflectionAttribute::IS_INSTANCEOF) !== []) {
+-                $this->appendDependency(
+-                    $dependencies,
+-                    TypeHints::classOf($property->getType(), $property->getDeclaringClass()),
+-                );
++            $plan = $this->plans->build($property);
++            if (!$plan->has(ValueProvider::class)
++                && !$plan->has(ValueProviderDecorator::class)
++                && !$plan->has(ValueTransformer::class)
++            ) {
++                continue;
+             }
++
++            $target = new PropertyTarget($property);
++            $this->appendValueDependencies($dependencies, $target->className, $plan);
+         }
+ 
+-        foreach ($class->getAttributes(SetUp::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+-            $setup = $attribute->newInstance();
+-            if ($class->hasMethod($setup->method)) {
+-                $this->appendMethodDependencies($dependencies, $class->getMethod($setup->method));
+-            }
++        $classPlan = $this->plans->build($class);
++        foreach ($classPlan->all(LifecycleHook::class) as $usage) {
++            $this->appendHandlerDependencies($dependencies, $usage->definition->handler, $usage->attribute, $usage->target);
+         }
+ 
+         return array_keys($dependencies);
+     }
+ 
++    /**
++     * @param array<class-string, true> $dependencies
++     * @param class-string|null $implicitClass
++     */
++    private function appendValueDependencies(array &$dependencies, ?string $implicitClass, AttributePlan $plan): void
++    {
++        $provider = $plan->one(ValueProvider::class);
++        if ($provider === null) {
++            $this->appendDependency($dependencies, $implicitClass);
++            return;
++        }
++
++        $this->appendHandlerDependencies(
++            $dependencies,
++            $provider->definition->handler,
++            $provider->attribute,
++            $provider->target,
++        );
++    }
++
++    /** @param array<class-string, true> $dependencies */
++    private function appendHandlerDependencies(
++        array &$dependencies,
++        object $handler,
++        object $attribute,
++        \Reflector $target,
++    ): void {
++        if (!$handler instanceof AutowireDependencyProviderInterface) {
++            return;
++        }
++
++        foreach ($handler->autowireDependencies($attribute, $target) as $dependency) {
++            $this->appendDependency($dependencies, $dependency);
++        }
++    }
++
+     /**
+      * @param ReflectionClass<object> $class
+      * @return list<ReflectionProperty>
+@@ -133,21 +178,10 @@ final readonly class AutowireClassGraph
+         return $properties;
+     }
+ 
+-    /** @param array<class-string, true> $dependencies */
+-    private function appendMethodDependencies(array &$dependencies, ReflectionMethod $method): void
+-    {
+-        foreach ($method->getParameters() as $parameter) {
+-            $this->appendDependency(
+-                $dependencies,
+-                TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass()),
+-            );
+-        }
+-    }
+-
+     /** @param array<class-string, true> $dependencies */
+     private function appendDependency(array &$dependencies, ?string $dependency): void
+     {
+-        if ($dependency === null) {
++        if ($dependency === null || $dependency === '') {
+             return;
+         }
+         $dependency = $this->resolveAlias($dependency);
+diff --git a/src/Compile/Autowire/AutowireDependencyProviderInterface.php b/src/Compile/Autowire/AutowireDependencyProviderInterface.php
+new file mode 100644
+index 0000000..61724a6
+--- /dev/null
++++ b/src/Compile/Autowire/AutowireDependencyProviderInterface.php
+@@ -0,0 +1,16 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Componenta\DI\Compile\Autowire;
++
++use Reflector;
++
++/** Optional compile-time contract for attribute handlers with statically known entry dependencies. */
++interface AutowireDependencyProviderInterface
++{
++    /**
++     * @return iterable<string> Container ids or class names required by this attribute usage.
++     */
++    public function autowireDependencies(object $attribute, Reflector $target): iterable;
++}
+diff --git a/src/Compile/Autowire/AutowireEntryContributorInterface.php b/src/Compile/Autowire/AutowireEntryContributorInterface.php
+deleted file mode 100644
+index 0f70467..0000000
+--- a/src/Compile/Autowire/AutowireEntryContributorInterface.php
++++ /dev/null
+@@ -1,12 +0,0 @@
+-<?php
+-
+-declare(strict_types=1);
+-
+-namespace Componenta\DI\Compile\Autowire;
+-
+-/** Supplies known autowiring roots to the production container compiler. */
+-interface AutowireEntryContributorInterface
+-{
+-    /** @return iterable<AutowireEntry> */
+-    public function entries(): iterable;
+-}
+diff --git a/src/Compile/Factory/CompiledFactoryPipelineFingerprint.php b/src/Compile/Factory/CompiledFactoryPipelineFingerprint.php
+index 5a4b63f..64afab1 100644
+--- a/src/Compile/Factory/CompiledFactoryPipelineFingerprint.php
++++ b/src/Compile/Factory/CompiledFactoryPipelineFingerprint.php
+@@ -10,7 +10,7 @@ use Componenta\DI\Value\ValueFallbackRegistry;
+ /** Stable digest of the semantic runtime consumed by generated entry shards. */
+ final class CompiledFactoryPipelineFingerprint
+ {
+-    public
