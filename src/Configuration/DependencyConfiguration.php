@@ -246,6 +246,7 @@ final class DependencyConfiguration
             ConfigKey::ATTRIBUTE_DEFINITIONS,
             static fn(mixed $value): bool => $value instanceof AttributeDefinition
                 || is_callable($value)
+                || self::deferredServiceMethod($value)
                 || (is_string($value) && $value !== ''),
             'Attribute definitions must be AttributeDefinition instances, factories or service ids.',
         );
@@ -272,6 +273,7 @@ final class DependencyConfiguration
             ConfigKey::VALUE_FALLBACKS,
             static fn(mixed $value): bool => $value instanceof ValueFallbackDefinition
                 || is_callable($value)
+                || self::deferredServiceMethod($value)
                 || (is_string($value) && $value !== ''),
             'Value fallbacks must be ValueFallbackDefinition instances, factories or service ids.',
         );
@@ -353,6 +355,13 @@ final class DependencyConfiguration
             && (is_object($value[0]) || (is_string($value[0]) && $value[0] !== ''))
             && is_string($value[1])
             && $value[1] !== '';
+    }
+
+    private static function deferredServiceMethod(mixed $value): bool
+    {
+        return self::callablePair($value)
+            && is_string($value[0])
+            && $value[0] !== '';
     }
 
     /**
