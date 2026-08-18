@@ -28,14 +28,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Apply final v5 candidate
-        if: matrix.php == '8.4' && hashFiles('.v5-final-patch/payload-0') != ''
+      - name: Install exact final v5 candidate
+        if: matrix.php == '8.4' && hashFiles('.v5-final-patch/archive-00') != ''
         run: |
-          cat .v5-final-patch/payload-* | base64 -d | gzip -d > /tmp/v5-final.patch
-          git apply --check /tmp/v5-final.patch
-          git apply /tmp/v5-final.patch
+          cat .v5-final-patch/archive-* | base64 -d > /tmp/v5-final-src-tests.tar.gz
+          echo '28761f08664546558724ab370c840d3e4822e181b65546703d41dbeb87cd9826  /tmp/v5-final-src-tests.tar.gz' | sha256sum --check
+          rm -rf src tests
+          tar -xzf /tmp/v5-final-src-tests.tar.gz
           git rm -r .v5-final-patch
           git add src tests
+          git diff --check --cached
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Finalize v5 attribute runtime'
