@@ -21,8 +21,9 @@ final readonly class FactoryCodeGenerator
             throw new InvalidArgumentException(sprintf('Cannot compile ineligible entry "%s".', $class));
         }
 
-        $class = $reflection->getName();
-        $method ??= 'create_' . substr(hash('sha256', $class), 0, 16);
+        /** @var class-string $resolvedClass */
+        $resolvedClass = $reflection->getName();
+        $method ??= 'create_' . substr(hash('sha256', $resolvedClass), 0, 16);
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $method) !== 1) {
             throw new InvalidArgumentException(sprintf('Invalid generated factory method "%s".', $method));
         }
@@ -36,9 +37,9 @@ public function %s(\%s $context): object
 PHP,
             $method,
             ResolutionContext::class,
-            '\\' . $class,
+            '\\' . $resolvedClass,
         );
 
-        return new GeneratedFactory($class, $method, $code);
+        return new GeneratedFactory($resolvedClass, $method, $code);
     }
 }

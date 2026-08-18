@@ -24,7 +24,10 @@ final readonly class CompiledFactoryShardCompiler
         }
     }
 
-    /** @param iterable<class-string> $classes @return array<class-string, CompiledFactoryDefinition> */
+    /**
+     * @param iterable<class-string> $classes
+     * @return array<class-string, CompiledFactoryDefinition>
+     */
     public function compile(
         iterable $classes,
         string $directory,
@@ -36,10 +39,13 @@ final readonly class CompiledFactoryShardCompiler
         }
         self::assertNamespace($namespace);
 
+        /** @var array<class-string, CompiledFactoryDefinition> $definitions */
         $definitions = [];
+        /** @var list<GeneratedFactory> $current */
         $current = [];
         $size = 0;
         $index = 0;
+
         foreach ($classes as $class) {
             $factory = $this->factories->generate($class, 'createEntry' . $index++);
             $bytes = strlen($factory->code);
@@ -51,6 +57,7 @@ final readonly class CompiledFactoryShardCompiler
             $current[] = $factory;
             $size += $bytes;
         }
+
         if ($current !== []) {
             $this->writeShard($current, $directory, $namespace, $definitions);
         }
@@ -58,10 +65,20 @@ final readonly class CompiledFactoryShardCompiler
         return $definitions;
     }
 
-    /** @param list<GeneratedFactory> $shard @param array<class-string, CompiledFactoryDefinition> $definitions */
-    private function writeShard(array $shard, string $directory, string $namespace, array &$definitions): void
-    {
-        $payload = implode("\n\n", array_map(static fn(GeneratedFactory $factory): string => $factory->code, $shard));
+    /**
+     * @param list<GeneratedFactory> $shard
+     * @param array<class-string, CompiledFactoryDefinition> $definitions
+     */
+    private function writeShard(
+        array $shard,
+        string $directory,
+        string $namespace,
+        array &$definitions,
+    ): void {
+        $payload = implode("\n\n", array_map(
+            static fn(GeneratedFactory $factory): string => $factory->code,
+            $shard,
+        ));
         $id = substr(hash('sha256', self::FORMAT_VERSION . "\0" . $namespace . "\0" . $payload), 0, 32);
         $class = 'CompiledFactoryShard_' . $id;
         $code = $this->code($namespace, $class, $payload);
@@ -71,7 +88,11 @@ final readonly class CompiledFactoryShardCompiler
         /** @var class-string $generatedClass */
         $generatedClass = $namespace . '\\' . $class;
         foreach ($shard as $factory) {
-            $definitions[$factory->class] = new CompiledFactoryDefinition($file, $generatedClass, $factory->method);
+            $definitions[$factory->class] = new CompiledFactoryDefinition(
+                $file,
+                $generatedClass,
+                $factory->method,
+            );
         }
     }
 
@@ -108,7 +129,9 @@ PHP,
     private static function assertNamespace(string $namespace): void
     {
         $identifier = '[A-Za-z_\\x80-\\xff][A-Za-z0-9_\\x80-\\xff]*';
-        if ($namespace === '' || preg_match('/^(?:' . $identifier . ')(?:\\\\' . $identifier . ')*$/D', $namespace) !== 1) {
+        if ($namespace === ''
+            || preg_match('/^(?:' . $identifier . ')(?:\\\\' . $identifier . ')*$/D', $namespace) !== 1
+        ) {
             throw new InvalidArgumentException(sprintf('Invalid generated namespace "%s".', $namespace));
         }
     }

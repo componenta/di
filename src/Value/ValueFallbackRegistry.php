@@ -24,7 +24,10 @@ final class ValueFallbackRegistry
             throw new LogicException('Value fallback registry is sealed.');
         }
         if (isset($this->items[$definition->id])) {
-            throw new InvalidConfigurationException(sprintf('Value fallback id "%s" is already registered.', $definition->id));
+            throw new InvalidConfigurationException(sprintf(
+                'Value fallback id "%s" is already registered.',
+                $definition->id,
+            ));
         }
 
         $this->items[$definition->id] = [
@@ -43,10 +46,11 @@ final class ValueFallbackRegistry
     /** @return list<ValueFallbackInterface> */
     public function fallbacks(): array
     {
-        return array_map(
-            static fn(ValueFallbackDefinition $definition): ValueFallbackInterface => $definition->fallback,
-            $this->definitions(),
-        );
+        $fallbacks = [];
+        foreach ($this->definitions() as $definition) {
+            $fallbacks[] = $definition->fallback;
+        }
+        return $fallbacks;
     }
 
     /** @return list<ValueFallbackDefinition> */
@@ -59,8 +63,11 @@ final class ValueFallbackRegistry
             return $this->ordered = [];
         }
 
+        /** @var array<non-empty-string, array<non-empty-string, true>> $edges */
         $edges = [];
+        /** @var array<non-empty-string, int> $indegree */
         $indegree = array_fill_keys(array_keys($this->items), 0);
+
         foreach ($this->items as $id => $item) {
             foreach ($item['definition']->before as $other) {
                 $this->assertKnown($id, $other);
@@ -72,11 +79,14 @@ final class ValueFallbackRegistry
             }
         }
 
+        /** @var array<non-empty-string, true> $remaining */
         $remaining = array_fill_keys(array_keys($this->items), true);
+        /** @var list<ValueFallbackDefinition> $result */
         $result = [];
+
         while ($remaining !== []) {
             $next = null;
-            foreach ($remaining as $id => $_) {
+            foreach (array_keys($remaining) as $id) {
                 if ($indegree[$id] !== 0) {
                     continue;
                 }
@@ -113,7 +123,12 @@ final class ValueFallbackRegistry
         }
     }
 
-    /** @param array<string, array<string, true>> $edges @param array<string, int> $indegree */
+    /**
+     * @param array<non-empty-string, array<non-empty-string, true>> $edges
+     * @param array<non-empty-string, int> $indegree
+     * @param non-empty-string $from
+     * @param non-empty-string $to
+     */
     private static function edge(array &$edges, array &$indegree, string $from, string $to): void
     {
         if ($from === $to || isset($edges[$from][$to])) {

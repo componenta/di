@@ -12,6 +12,7 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\Reflection\Reflection;
 use LogicException;
 use ReflectionFunction;
+use ReflectionParameter;
 use WeakMap;
 
 /** DI-aware callable executor. */
@@ -69,9 +70,11 @@ final class CallableExecutor implements CallableExecutorInterface
                 $reflection->getClosureCalledClass()?->getName() ?? '',
                 (string) $reflection,
             ]);
+            /** @var list<ReflectionParameter> $parameters */
+            $parameters = array_values($reflection->getParameters());
 
             return $cache[$callable] = $this->closureSignatures[$signature]
-                ??= $this->parameters->targets($reflection->getParameters());
+                ??= $this->parameters->targets($parameters);
         }
 
         if (self::isDynamicMethodCallable($callable)) {
@@ -79,10 +82,10 @@ final class CallableExecutor implements CallableExecutorInterface
         }
 
         $key = self::cacheKey($callable);
+        /** @var list<ReflectionParameter> $parameters */
+        $parameters = array_values(Reflection::callable($callable)->getParameters());
 
-        return $this->callableTargets[$key] ??= $this->parameters->targets(
-            Reflection::callable($callable)->getParameters(),
-        );
+        return $this->callableTargets[$key] ??= $this->parameters->targets($parameters);
     }
 
     private static function isDynamicMethodCallable(callable $callable): bool
@@ -90,13 +93,11 @@ final class CallableExecutor implements CallableExecutorInterface
         if (is_array($callable) && count($callable) === 2) {
             [$owner, $method] = $callable;
             $class = is_object($owner) ? $owner::class : $owner;
-
             return !method_exists($class, $method);
         }
 
         if (is_string($callable) && str_contains($callable, '::')) {
             [$class, $method] = explode('::', $callable, 2);
-
             return $class !== '' && $method !== '' && !method_exists($class, $method);
         }
 
@@ -108,18 +109,14 @@ final class CallableExecutor implements CallableExecutorInterface
         if (is_string($callable)) {
             return 'function:' . strtolower($callable);
         }
-
         if (is_array($callable)) {
             [$owner, $method] = $callable;
             $class = is_object($owner) ? $owner::class : $owner;
-
             return 'method:' . $class . '::' . strtolower((string) $method);
         }
-
         if (!is_object($callable)) {
             throw new LogicException('Resolved callable must be a function, method or invokable object.');
         }
-
         return 'invoke:' . $callable::class;
     }
 }
