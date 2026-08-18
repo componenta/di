@@ -39,7 +39,25 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Run checks
+        id: checks
+        continue-on-error: true
         run: composer check
+
+      - name: Collect PHPStan diagnostics
+        if: steps.checks.outcome == 'failure'
+        run: vendor/bin/phpstan analyse src --level=max --error-format=json > phpstan-${{ matrix.php }}.json || true
+
+      - name: Upload PHPStan diagnostics
+        if: steps.checks.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          name: phpstan-${{ matrix.php }}
+          path: phpstan-${{ matrix.php }}.json
+          if-no-files-found: ignore
+
+      - name: Fail when checks failed
+        if: steps.checks.outcome == 'failure'
+        run: exit 1
 
       - name: Publish diagnostic status
         if: always()
