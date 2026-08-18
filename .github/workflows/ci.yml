@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - v5
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -44,7 +45,7 @@ jobs:
         run: composer check
 
       - name: Publish check status
-        if: always() && github.event_name == 'push'
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
