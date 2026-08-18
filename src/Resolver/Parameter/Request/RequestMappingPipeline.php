@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter\Request;
 
-use Componenta\Caster\CasterNotFoundException;
 use Componenta\Caster\CasterProviderInterface;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Stateless request-data transformation pipeline shared by #[MapRequest].
@@ -53,7 +53,7 @@ final readonly class RequestMappingPipeline
             }
 
             $caster = $casters?->provide($casterName)
-                ?? throw CasterNotFoundException::forName($casterName);
+                ?? throw new LogicException(sprintf('Caster "%s" is not registered.', $casterName));
             $data[$key] = $caster->cast($data[$key]);
         }
 
