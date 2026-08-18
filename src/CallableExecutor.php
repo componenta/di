@@ -38,13 +38,14 @@ final class CallableExecutor implements CallableExecutorInterface
 
     /**
      * v4-compatible convenience API over the provenance-aware v5 executor.
-     * Caller-provided values are explicit input; dependency resolution remains DI-aware.
+     * Caller values remain explicit, while the legacy PSR-7 request transport
+     * key is promoted to trusted framework context.
      *
      * @param array<string|int, mixed> $params
      */
     public function call(mixed $callable, array $params = []): mixed
     {
-        return $this->execute($callable, ResolutionContext::explicit($params));
+        return $this->execute($callable, ResolutionContext::fromLegacyParameters($params));
     }
 
     /** @throws InvalidCallableException|ResolutionException */
