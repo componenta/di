@@ -40,6 +40,28 @@ final readonly class ResolutionContext
     }
 
     /**
+     * Adapts the v4 `call(..., $params)` convention without erasing provenance.
+     * The PSR-7 request used to travel under its interface key and is framework
+     * context rather than a caller override, so it is promoted to trusted input.
+     * Every other legacy value remains explicit.
+     *
+     * @param array<string|int, mixed> $values
+     */
+    public static function fromLegacyParameters(array $values): self
+    {
+        $explicit = $values;
+        $trusted = [];
+        $request = $explicit[ServerRequestInterface::class] ?? null;
+
+        if ($request instanceof ServerRequestInterface) {
+            unset($explicit[ServerRequestInterface::class]);
+            $trusted[ServerRequestInterface::class] = $request;
+        }
+
+        return new self(explicit: $explicit, trusted: $trusted);
+    }
+
+    /**
      * @param array<string, mixed> $values
      * @param array<string|int, mixed> $trusted
      */
