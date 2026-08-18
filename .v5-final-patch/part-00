@@ -1,0 +1,433 @@
+diff --git a/src/Attribute/Autowire.php b/src/Attribute/Autowire.php
+deleted file mode 100644
+index bffcbfb..0000000
+--- a/src/Attribute/Autowire.php
++++ /dev/null
+@@ -1,9 +0,0 @@
+-<?php
+-
+-declare(strict_types=1);
+-
+-namespace Componenta\DI\Attribute;
+-
+-/** Marks a class as a build-time compiled-autowiring root. */
+-#[\Attribute(\Attribute::TARGET_CLASS)]
+-final readonly class Autowire {}
+diff --git a/src/Attribute/Composition/AttributeDefinitionRegistry.php b/src/Attribute/Composition/AttributeDefinitionRegistry.php
+index a057668..cbb5f3e 100644
+--- a/src/Attribute/Composition/AttributeDefinitionRegistry.php
++++ b/src/Attribute/Composition/AttributeDefinitionRegistry.php
+@@ -16,11 +16,10 @@ final class AttributeDefinitionRegistry
+     /** @var array<class-string<AttributeCapabilityInterface>, CapabilityPolicy> */
+     private array $policies = [];
+ 
+-    /** @var array<class-string, AttributeDefinition|null> */
+-    private array $resolvedDefinitions = [];
+-
+     private bool $sealed = false;
+ 
++    private int $revision = 0;
++
+     public function register(AttributeDefinition $definition): void
+     {
+         $this->assertMutable();
+@@ -43,7 +42,7 @@ final class AttributeDefinitionRegistry
+         }
+ 
+         $this->definitions[$definition->attribute] = $definition;
+-        $this->resolvedDefinitions = [];
++        ++$this->revision;
+     }
+ 
+     public function defineCapability(CapabilityPolicy $policy): void
+@@ -57,6 +56,7 @@ final class AttributeDefinitionRegistry
+             ));
+         }
+         $this->policies[$policy->capability] = $policy;
++        ++$this->revision;
+     }
+ 
+     public function seal(): void
+@@ -64,24 +64,25 @@ final class AttributeDefinitionRegistry
+         $this->sealed = true;
+     }
+ 
++
++    public function revision(): int
++    {
++        return $this->revision;
++    }
++
+     /** @param class-string $attributeClass */
+     public function definition(string $attributeClass): ?AttributeDefinition
+     {
+-        if (array_key_exists($attributeClass, $this->resolvedDefinitions)) {
+-            return $this->resolvedDefinitions[$attributeClass];
+-        }
+-
+         if (isset($this->definitions[$attributeClass])) {
+-            return $this->resolvedDefinitions[$attributeClass] = $this->definitions[$attributeClass];
++            return $this->definitions[$attributeClass];
+         }
+ 
+         foreach ($this->definitions as $registered => $definition) {
+             if (is_a($attributeClass, $registered, true)) {
+-                return $this->resolvedDefinitions[$attributeClass] = $definition;
++                return $definition;
+             }
+         }
+-
+-        return $this->resolvedDefinitions[$attributeClass] = null;
++        return null;
+     }
+ 
+     /** @param class-string<AttributeCapabilityInterface> $capability */
+diff --git a/src/Attribute/Composition/AttributePlanBuilder.php b/src/Attribute/Composition/AttributePlanBuilder.php
+index 6e04a61..9261d2f 100644
+--- a/src/Attribute/Composition/AttributePlanBuilder.php
++++ b/src/Attribute/Composition/AttributePlanBuilder.php
+@@ -4,26 +4,83 @@ declare(strict_types=1);
+ 
+ namespace Componenta\DI\Attribute\Composition;
+ 
++use Attribute;
++use Closure;
+ use Componenta\DI\Exception\AttributeCompositionException;
++use ReflectionAttribute;
+ use ReflectionClass;
++use ReflectionFunction;
+ use ReflectionMethod;
+ use ReflectionParameter;
+ use ReflectionProperty;
++use WeakMap;
+ 
+ /** Builds, validates and orders the semantic DI attribute plan for one target. */
+-final readonly class AttributePlanBuilder
++final class AttributePlanBuilder
+ {
+-    public function __construct(private AttributeDefinitionRegistry $registry) {}
++    /** @var array<string, array{revision: int, plan: AttributePlan}> */
++    private array $cache = [];
++
++    /** @var array<class-string, int|null> */
++    private array $attributeTargets = [];
++
++    /** @var WeakMap<Closure, array<int, array{revision: int, plan: AttributePlan}>> */
++    private WeakMap $closureParameterCache;
++
++    public function __construct(private readonly AttributeDefinitionRegistry $registry)
++    {
++        $this->closureParameterCache = new WeakMap();
++    }
+ 
+     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+     public function build(
+         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
++    ): AttributePlan {
++        $revision = $this->registry->revision();
++
++        if ($target instanceof ReflectionParameter) {
++            $function = $target->getDeclaringFunction();
++            if ($function instanceof ReflectionFunction && $function->isClosure()) {
++                $closure = $function->getClosure();
++                $plans = $this->closureParameterCache[$closure] ?? [];
++                $cached = $plans[$target->getPosition()] ?? null;
++                if ($cached !== null && $cached['revision'] === $revision) {
++                    return $cached['plan'];
++                }
++
++                $plan = $this->create($target);
++                $plans[$target->getPosition()] = ['revision' => $revision, 'plan' => $plan];
++                $this->closureParameterCache[$closure] = $plans;
++
++                return $plan;
++            }
++        }
++
++        $key = self::cacheKey($target);
++        $cached = $this->cache[$key] ?? null;
++        if ($cached !== null && $cached['revision'] === $revision) {
++            return $cached['plan'];
++        }
++
++        $plan = $this->create($target);
++        $this->cache[$key] = ['revision' => $revision, 'plan' => $plan];
++
++        return $plan;
++    }
++
++    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
++    private function create(
++        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+     ): AttributePlan {
+         $usages = [];
+ 
+         foreach ($target->getAttributes() as $index => $reflectionAttribute) {
+             /** @var class-string $attributeClass */
+             $attributeClass = $reflectionAttribute->getName();
++            if ($this->isPromotedProjection($target, $reflectionAttribute, $attributeClass)) {
++                continue;
++            }
++
+             $definition = $this->registry->definition($attributeClass);
+             if ($definition === null) {
+                 continue;
+@@ -238,6 +295,76 @@ final readonly class AttributePlanBuilder
+         ++$indegree[$to];
+     }
+ 
++    /**
++     * PHP exposes promoted attributes through both ReflectionParameter and
++     * ReflectionProperty even when the attribute declaration allows only one
++     * of those targets. Ignore only that synthetic projection; invalid usage
++     * on a non-promoted target must still fail when instantiated.
++     *
++     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
++     * @param ReflectionAttribute<object> $attribute
++     * @param class-string $attributeClass
++     */
++    private function isPromotedProjection(
++        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
++        ReflectionAttribute $attribute,
++        string $attributeClass,
++    ): bool {
++        $expectedTarget = match (true) {
++            $target instanceof ReflectionParameter && $target->isPromoted() => Attribute::TARGET_PARAMETER,
++            $target instanceof ReflectionProperty && $target->isPromoted() => Attribute::TARGET_PROPERTY,
++            default => null,
++        };
++        if ($expectedTarget === null || $attribute->getTarget() !== $expectedTarget) {
++            return false;
++        }
++
++        $flags = $this->attributeTargets[$attributeClass] ?? null;
++        if (!array_key_exists($attributeClass, $this->attributeTargets)) {
++            $reflection = new ReflectionClass($attributeClass);
++            $metadata = $reflection->getAttributes(Attribute::class)[0] ?? null;
++            $flags = $metadata?->newInstance()->flags;
++            $this->attributeTargets[$attributeClass] = $flags;
++        }
++
++        return $flags !== null && ($flags & $expectedTarget) === 0;
++    }
++
++    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
++    private static function cacheKey(
++        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
++    ): string {
++        return match (true) {
++            $target instanceof ReflectionClass => 'class:' . $target->getName(),
++            $target instanceof ReflectionProperty => sprintf(
++                'property:%s::$%s',
++                $target->getDeclaringClass()->getName(),
++                $target->getName(),
++            ),
++            $target instanceof ReflectionMethod => sprintf(
++                'method:%s::%s',
++                $target->getDeclaringClass()->getName(),
++                $target->getName(),
++            ),
++            default => self::parameterCacheKey($target),
++        };
++    }
++
++    private static function parameterCacheKey(ReflectionParameter $parameter): string
++    {
++        $function = $parameter->getDeclaringFunction();
++        $class = $parameter->getDeclaringClass();
++
++        return $class === null
++            ? sprintf('function:%s:%d', $function->getName(), $parameter->getPosition())
++            : sprintf(
++                'parameter:%s::%s:%d',
++                $class->getName(),
++                $function->getName(),
++                $parameter->getPosition(),
++            );
++    }
++
+     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+     private static function targetName(
+         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+diff --git a/src/Attribute/Composition/Capability/ValueProviderDecorator.php b/src/Attribute/Composition/Capability/ValueProviderDecorator.php
+new file mode 100644
+index 0000000..bc7f681
+--- /dev/null
++++ b/src/Attribute/Composition/Capability/ValueProviderDecorator.php
+@@ -0,0 +1,10 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Componenta\DI\Attribute\Composition\Capability;
++
++use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
++
++/** Wraps value acquisition before the raw value is materialized. */
++interface ValueProviderDecorator extends AttributeCapabilityInterface {}
+diff --git a/src/Attribute/Handler/Builtin/EntryIdValueProvider.php b/src/Attribute/Handler/Builtin/EntryIdValueProvider.php
+index c692fd8..d54c430 100644
+--- a/src/Attribute/Handler/Builtin/EntryIdValueProvider.php
++++ b/src/Attribute/Handler/Builtin/EntryIdValueProvider.php
+@@ -7,12 +7,14 @@ namespace Componenta\DI\Attribute\Handler\Builtin;
+ use Componenta\DI\Attribute\EntryId;
+ use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
+ use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
++use Componenta\DI\Compile\Autowire\AutowireDependencyProviderInterface;
+ use Componenta\DI\Resolver\Target\ValueTargetInterface;
+ use Componenta\DI\Value\ValueContext;
+ use LogicException;
+ use Psr\Container\ContainerInterface;
++use Reflector;
+ 
+-final class EntryIdValueProvider implements ValueProviderHandlerInterface
++final class EntryIdValueProvider implements ValueProviderHandlerInterface, AutowireDependencyProviderInterface
+ {
+     public ValueProviderPrecedence $precedence {
+         get => ValueProviderPrecedence::ProviderFirst;
+@@ -20,6 +22,11 @@ final class EntryIdValueProvider implements ValueProviderHandlerInterface
+ 
+     public function __construct(private readonly ContainerInterface $container) {}
+ 
++    public function autowireDependencies(object $attribute, Reflector $target): iterable
++    {
++        return $attribute instanceof EntryId ? [$attribute->value] : [];
++    }
++
+     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
+     {
+         if (!$attribute instanceof EntryId) {
+diff --git a/src/Attribute/Handler/Builtin/InjectValueProvider.php b/src/Attribute/Handler/Builtin/InjectValueProvider.php
+index bed3e75..ac4d005 100644
+--- a/src/Attribute/Handler/Builtin/InjectValueProvider.php
++++ b/src/Attribute/Handler/Builtin/InjectValueProvider.php
+@@ -7,12 +7,16 @@ namespace Componenta\DI\Attribute\Handler\Builtin;
+ use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
+ use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
+ use Componenta\DI\Attribute\Inject;
++use Componenta\DI\Compile\Autowire\AutowireDependencyProviderInterface;
+ use Componenta\DI\Resolver\Target\ValueTargetInterface;
+ use Componenta\DI\Value\ValueContext;
+ use LogicException;
+ use Psr\Container\ContainerInterface;
++use ReflectionParameter;
++use ReflectionProperty;
++use Reflector;
+ 
+-final class InjectValueProvider implements ValueProviderHandlerInterface
++final class InjectValueProvider implements ValueProviderHandlerInterface, AutowireDependencyProviderInterface
+ {
+     public ValueProviderPrecedence $precedence {
+         get => ValueProviderPrecedence::ProviderFirst;
+@@ -20,6 +24,20 @@ final class InjectValueProvider implements ValueProviderHandlerInterface
+ 
+     public function __construct(private readonly ContainerInterface $container) {}
+ 
++    public function autowireDependencies(object $attribute, Reflector $target): iterable
++    {
++        if (!$attribute instanceof Inject || (!$target instanceof ReflectionParameter && !$target instanceof ReflectionProperty)) {
++            return [];
++        }
++
++        $class = \Componenta\DI\Resolver\TypeHints::classOf(
++            $target->getType(),
++            $target->getDeclaringClass(),
++        );
++
++        return $class === null ? [] : [$class];
++    }
++
+     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
+     {
+         if (!$attribute instanceof Inject) {
+diff --git a/src/Attribute/Handler/Builtin/MakeValueProvider.php b/src/Attribute/Handler/Builtin/MakeValueProvider.php
+index d674c1e..eeeeb1d 100644
+--- a/src/Attribute/Handler/Builtin/MakeValueProvider.php
++++ b/src/Attribute/Handler/Builtin/MakeValueProvider.php
+@@ -7,13 +7,17 @@ namespace Componenta\DI\Attribute\Handler\Builtin;
+ use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
+ use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
+ use Componenta\DI\Attribute\Make;
++use Componenta\DI\Compile\Autowire\AutowireDependencyProviderInterface;
+ use Componenta\DI\FactoryInterface;
+ use Componenta\DI\ResolutionContext;
+ use Componenta\DI\Resolver\Target\ValueTargetInterface;
+ use Componenta\DI\Value\ValueContext;
+ use LogicException;
++use ReflectionParameter;
++use ReflectionProperty;
++use Reflector;
+ 
+-final class MakeValueProvider implements ValueProviderHandlerInterface
++final class MakeValueProvider implements ValueProviderHandlerInterface, AutowireDependencyProviderInterface
+ {
+     public ValueProviderPrecedence $precedence {
+         get => ValueProviderPrecedence::ProviderFirst;
+@@ -21,6 +25,24 @@ final class MakeValueProvider implements ValueProviderHandlerInterface
+ 
+     public function __construct(private readonly FactoryInterface $factory) {}
+ 
++    public function autowireDependencies(object $attribute, Reflector $target): iterable
++    {
++        if (!$attribute instanceof Make || (!$target instanceof ReflectionParameter && !$target instanceof ReflectionProperty)) {
++            return [];
++        }
++
++        if ($attribute->entry !== null) {
++            return [$attribute->entry];
++        }
++
++        $class = \Componenta\DI\Resolver\TypeHints::classOf(
++            $target->getType(),
++            $target->getDeclaringClass(),
++        );
++
++        return $class === null ? [] : [$class];
++    }
++
+     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
+     {
+         if (!$attribute instanceof Make) {
+diff --git a/src/Attribute/Handler/Builtin/RequestValueProvider.php b/src/Attribute/Handler/Builtin/RequestValueProvider.php
+index e5ada41..fddd85b 100644
+--- a/src/Attribute/Handler/Builtin/RequestValueProvider.php
++++ b/src/Attribute/Handler/Builtin/RequestValueProvider.php
+@@ -174,6 +174,7 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
+         }
+ 
+         $data = $this->merge($sources, $attribute->conflictPolicy);
++        $data = $this->only($data, $attribute->only);
+         $data = $this->mapFields($data, $attribute->map);
+ 
+         foreach ($attribute->exclude as $key) {
+@@ -265,6 +266,27 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
+         return $data;
+     }
+ 
++    /**
++     * @param array<string|int, mixed> $data
++     * @param list<string> $keys
++     * @return array<string|int, mixed>
++     */
++    private function only(array $data, array $keys): array
++    {
++        if ($keys === []) {
++            return $data;
++        }
++
++        $selected = [];
++        foreach ($keys as $key) {
++            if (array_key_exists($key, $data)) {
++                $selected[$key] = $data[$key];
++            }
++        }
++
++        return $selected;
++    }
++
+     /**
+      * @param array<string|int, mixed> $data
+      * @param array<string, string> $map
+      * @return array<string|int, mixed>
+      */
+     private function mapFields(array $data, array $map): array
