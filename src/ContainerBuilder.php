@@ -68,6 +68,10 @@ use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
+use Componenta\DI\Resolver\Entry\SetUp\ConfigUnwrapper;
+use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
+use Componenta\DI\Resolver\Entry\SetUp\EntryIdUnwrapper;
+use Componenta\DI\Resolver\Entry\SetUp\EnvUnwrapper;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Value\Fallback\AutowireValueFallback;
 use Componenta\DI\Value\Fallback\DefaultValueFallback;
@@ -89,7 +93,7 @@ use ReflectionClass;
  */
 class ContainerBuilder
 {
-    public const int CACHE_VERSION = 12;
+    public const int CACHE_VERSION = 13;
 
     /** @var array<string, non-empty-string> */
     private const array DEFAULT_ALIASES = [
@@ -159,7 +163,13 @@ class ContainerBuilder
      */
     public static function normalizeDependencies(array $dependencies): array
     {
-        return DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
+        $normalized = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
+        $validator = static::configureWithDependencies(
+            new Config([], new Environment([])),
+            $normalized,
+        );
+        $validator->assertBindings();
+        return $normalized;
     }
 
     public function build(): Container
@@ -174,7 +184,13 @@ class ContainerBuilder
         $values = new ValuePipeline($fallbacks);
         $parameters = new ParametersResolver($plans, $values);
         $proxyFactory = $this->createProxyFactory();
-        $objects = new ObjectPipeline($plans, new InstanceCreator($parameters), $values, $proxyFactory);
+        $objects = new ObjectPipeline(
+            $plans,
+            new InstanceCreator($parameters),
+            $values,
+            $proxyFactory,
+            $attributes,
+        );
 
         $aliases = new AliasResolver([...$this->aliases, ConfigAttribute::KEY => Config::class]);
         $cache = new EntryCache();
@@ -382,7 +398,17 @@ class ContainerBuilder
         $registry->register(new AttributeDefinition(Lazy::class, new LazyCreationHandler(), [CreationStrategy::class]));
         $registry->register(new AttributeDefinition(Proxy::class, new ProxyCreationHandler(), [CreationStrategy::class]));
         $registry->register(new AttributeDefinition(NoConstructor::class, new NoConstructorPolicyHandler(), [ConstructorPolicy::class]));
-        $registry->register(new AttributeDefinition(SetUp::class, new SetUpLifecycleHandler($executor), [LifecycleHook::class]));
+        $registry->register(new AttributeDefinition(
+            SetUp::class,
+            new SetUpLifecycleHandler(
+                $executor,
+                new ContainerValueUnwrapper($this->containerValue($container)),
+                new EntryIdUnwrapper($container),
+                new ConfigUnwrapper($container),
+                new EnvUnwrapper($container),
+            ),
+            [LifecycleHook::class],
+        ));
     }
 
     private function registerBuiltInFallbacks(ValueFallbackRegistry $registry, ContainerInterface $container): void
@@ -431,6 +457,19 @@ class ContainerBuilder
     protected function createProxyFactory(): ProxyFactoryInterface
     {
         return new ProxyFactory();
+    }
+
+    private function containerValue(ContainerInterface $container): ContainerValue
+    {
+        $value = $container->get(ContainerValue::class);
+        if (!$value instanceof ContainerValue) {
+            throw new InvalidConfigurationException(sprintf(
+                'Internal service "%s" must be an instance of %s.',
+                ContainerValue::class,
+                ContainerValue::class,
+            ));
+        }
+        return $value;
     }
 
     public function addFactory(string $id, callable $factory): static
@@ -566,7 +605,9 @@ class ContainerBuilder
     private function assertBindings(): void
     {
         $aliases = new AliasResolver($this->aliases);
+        /** @var array<string, array{kind: string, id: string}> $owners */
         $owners = [];
+
         foreach ([
             'factory' => array_keys($this->factories),
             'invokable' => $this->invokables,
@@ -574,21 +615,54 @@ class ContainerBuilder
         ] as $kind => $ids) {
             foreach ($ids as $id) {
                 self::assertId($id, $kind);
+
+                if (($kind === 'factory' || $kind === 'invokable') && $aliases->has($id)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        '%s id "%s" is also an alias and would be unreachable after canonicalization.',
+                        ucfirst($kind),
+                        $id,
+                    ));
+                }
+
                 $canonical = $aliases->resolve($id);
-                if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
-                    throw new InvalidConfigurationException(sprintf('Cannot register %s for protected DI id "%s".', $kind, $id));
+                if (ProtectedServiceIds::contains($canonical)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Cannot register %s for id "%s" because it resolves to protected DI id "%s".',
+                        $kind,
+                        $id,
+                        $canonical,
+                    ));
                 }
-                if (isset($owners[$canonical])) {
-                    throw new InvalidConfigurationException(sprintf('Canonical DI id "%s" has multiple bindings.', $canonical));
+
+                $owner = $owners[$canonical] ?? null;
+                if ($owner !== null) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Canonical DI id "%s" has multiple bindings: %s "%s" and %s "%s".',
+                        $canonical,
+                        $owner['kind'],
+                        $owner['id'],
+                        $kind,
+                        $id,
+                    ));
                 }
-                $owners[$canonical] = true;
+                $owners[$canonical] = ['kind' => $kind, 'id' => $id];
             }
         }
+
+        foreach (array_keys($this->delegators) as $id) {
+            self::assertId($id, 'delegator');
+            $canonical = $aliases->resolve($id);
+            if (ProtectedServiceIds::contains($canonical)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Cannot register delegator for id "%s" because it resolves to protected DI id "%s".',
+                    $id,
+                    $canonical,
+                ));
+            }
+        }
+
         foreach (array_keys($this->aliases) as $alias) {
             self::assertId($alias, 'alias');
-            if (ProtectedServiceIds::contains($alias)) {
-                throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $alias));
-            }
         }
     }
 
@@ -604,6 +678,13 @@ class ContainerBuilder
     {
         if ($id === '') {
             throw new InvalidConfigurationException(sprintf('%s id must be non-empty.', ucfirst($kind)));
+        }
+        if (ProtectedServiceIds::contains($id)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot register %s for protected DI id "%s".',
+                $kind,
+                $id,
+            ));
         }
     }
 

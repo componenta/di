@@ -9,6 +9,7 @@ use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Value\ValueFallbackRegistry;
@@ -20,6 +21,7 @@ final class ProtectedServiceIds
 {
     /** @var array<string,class-string|false> */
     private const array IDS = [
+        ConfigAttribute::KEY => false,
         Config::class => Config::class,
         Environment::class => Environment::class,
         ContainerValue::class => ContainerValue::class,
