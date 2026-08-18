@@ -19,7 +19,7 @@ final readonly class TestCasterProvider implements CasterProviderInterface
     }
 }
 
-final readonly class TrimCaster implements CasterInterface
+final class TrimCaster implements CasterInterface
 {
     public string $name { get => 'trim'; }
 
@@ -29,7 +29,7 @@ final readonly class TrimCaster implements CasterInterface
     }
 }
 
-final readonly class IntCaster implements CasterInterface
+final class IntCaster implements CasterInterface
 {
     public string $name { get => 'int'; }
 
