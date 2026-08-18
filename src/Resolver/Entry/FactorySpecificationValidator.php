@@ -16,11 +16,18 @@ use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
 use InvalidArgumentException;
 use ReflectionClass;
+use ReflectionFunction;
+use ReflectionFunctionAbstract;
+use ReflectionMethod;
 use ReflectionParameter;
+use WeakMap;
 
 /** Validates v5 factory forms and their runtime `(ContainerValue, ResolutionContext)` ABI. */
 final class FactorySpecificationValidator
 {
+    /** @var WeakMap<ReflectionFunctionAbstract, true>|null */
+    private static ?WeakMap $validatedCallables = null;
+
     private static ?ContainerValue $containerArgument = null;
 
     public static function assertValid(string $id, mixed $factory): void
@@ -45,6 +52,9 @@ final class FactorySpecificationValidator
             }
             throw new InvalidConfigurationException(sprintf('Factory "%s" contains malformed compiled metadata.', $id));
         }
+
+        // String callables are ambiguous with factory service ids. FactoryResolver
+        // gives an existing service id precedence and validates the resolved callable.
         if (is_string($factory) && $factory !== '') {
             return;
         }
@@ -68,26 +78,60 @@ final class FactorySpecificationValidator
         try {
             $reflection = Reflection::callable($factory);
         } catch (InvalidArgumentException) {
+            // Magic __call()/__callStatic() dispatch has no concrete signature to validate.
             return;
         }
 
-        if ($reflection->getNumberOfRequiredParameters() > 2) {
-            throw new InvalidConfigurationException(sprintf(
-                'Factory "%s" requires more than the two runtime arguments ContainerValue and ResolutionContext.',
-                $id,
-            ));
+        $validated = self::$validatedCallables ??= new WeakMap();
+        if (isset($validated[$reflection])) {
+            return;
         }
 
+        if (self::isMagicClosureTrampoline($reflection)) {
+            $validated[$reflection] = true;
+            return;
+        }
+
+        self::assertArgumentCount($id, $reflection);
+
         $parameters = $reflection->getParameters();
-        $scope = $reflection instanceof \ReflectionMethod ? $reflection->getDeclaringClass() : null;
+        $scope = self::callableScope($reflection);
         self::assertArgument($id, $parameters, 0, self::containerArgument(), $scope);
         self::assertArgument($id, $parameters, 1, new ResolutionContext(), $scope);
+
+        $validated[$reflection] = true;
     }
 
     private static function assertKnownCallable(string $id, callable $factory): void
     {
         if (!is_string($factory)) {
             self::assertResolvedCallable($id, $factory);
+        }
+    }
+
+    private static function assertArgumentCount(string $id, ReflectionFunctionAbstract $reflection): void
+    {
+        $required = $reflection->getNumberOfRequiredParameters();
+        if ($required > 2) {
+            throw new InvalidConfigurationException(sprintf(
+                'Factory "%s" requires %d arguments, but the v5 factory runtime supplies 2.',
+                $id,
+                $required,
+            ));
+        }
+
+        // Userland callables deliberately tolerate extra positional arguments,
+        // while internal functions commonly reject them. Fail during composition
+        // instead of waiting for the first resolution.
+        if ($reflection->isInternal()
+            && !$reflection->isVariadic()
+            && $reflection->getNumberOfParameters() < 2
+        ) {
+            throw new InvalidConfigurationException(sprintf(
+                'Factory "%s" internal callable accepts at most %d arguments, but the v5 factory runtime supplies 2.',
+                $id,
+                $reflection->getNumberOfParameters(),
+            ));
         }
     }
 
@@ -133,12 +177,70 @@ final class FactorySpecificationValidator
     /** @param list<ReflectionParameter> $parameters */
     private static function parameterAt(array $parameters, int $position): ?ReflectionParameter
     {
-        foreach ($parameters as $parameter) {
-            if ($parameter->isVariadic() || $parameter->getPosition() === $position) {
-                return $parameter;
-            }
+        if (isset($parameters[$position])) {
+            return $parameters[$position];
+        }
+        if ($parameters === []) {
+            return null;
+        }
+
+        $last = $parameters[count($parameters) - 1];
+        return $last->isVariadic() ? $last : null;
+    }
+
+    /** @return ReflectionClass<object>|null */
+    private static function callableScope(ReflectionFunctionAbstract $reflection): ?ReflectionClass
+    {
+        if ($reflection instanceof ReflectionMethod) {
+            return $reflection->getDeclaringClass();
+        }
+        if ($reflection instanceof ReflectionFunction) {
+            return $reflection->getClosureScopeClass();
         }
         return null;
+    }
+
+    /**
+     * Reflection exposes magic callables as internal closure trampolines whose
+     * reflected parameters do not describe the arguments accepted by dispatch.
+     */
+    private static function isMagicClosureTrampoline(ReflectionFunctionAbstract $reflection): bool
+    {
+        if (!$reflection instanceof ReflectionFunction || !$reflection->isInternal()) {
+            return false;
+        }
+
+        $name = $reflection->getName();
+        $scope = $reflection->getClosureScopeClass();
+        if ($scope !== null && $scope->hasMethod($name)) {
+            $method = $scope->getMethod($name);
+            if ($method->isInternal() && $method->getDeclaringClass()->getName() === $scope->getName()) {
+                return false;
+            }
+        }
+
+        $bound = $reflection->getClosureThis();
+        if ($bound !== null) {
+            $candidate = [$bound, $name];
+        } else {
+            $class = $reflection->getClosureCalledClass() ?? $scope;
+            if ($class === null) {
+                return false;
+            }
+            $candidate = [$class->getName(), $name];
+        }
+
+        if (!is_callable($candidate)) {
+            return false;
+        }
+
+        try {
+            Reflection::callable($candidate);
+        } catch (InvalidArgumentException) {
+            return true;
+        }
+
+        return false;
     }
 
     private static function containerArgument(): ContainerValue
@@ -148,12 +250,62 @@ final class FactorySpecificationValidator
 
     private static function assertClassDefinition(string $id, ClassDefinition $definition): void
     {
-        if (!class_exists($definition->value)) {
-            throw new InvalidConfigurationException(sprintf('ClassDefinition for "%s" references unknown class "%s".', $id, $definition->value));
+        $className = $definition->value;
+        if (!class_exists($className) && !interface_exists($className)) {
+            throw new InvalidConfigurationException(sprintf(
+                'ClassDefinition for "%s" references unknown class "%s".',
+                $id,
+                $className,
+            ));
         }
-        foreach ($definition->methodCalls as $call) {
-            if (!isset($call['method']) || !is_string($call['method']) || $call['method'] === '') {
-                throw new InvalidConfigurationException(sprintf('ClassDefinition for "%s" contains an invalid method call.', $id));
+
+        /** @var class-string $className */
+        /** @var ReflectionClass<object> $class */
+        $class = new ReflectionClass($className);
+        if (!$class->isInstantiable()) {
+            throw new InvalidConfigurationException(sprintf(
+                'ClassDefinition for "%s" targets non-instantiable class "%s".',
+                $id,
+                $className,
+            ));
+        }
+
+        $magicCall = $class->hasMethod('__call') && $class->getMethod('__call')->isPublic();
+        foreach ($definition->methodCalls as $index => $call) {
+            if (!is_array($call)
+                || !array_key_exists('method', $call)
+                || !is_string($call['method'])
+                || $call['method'] === ''
+                || !array_key_exists('params', $call)
+                || !is_array($call['params'])
+            ) {
+                throw new InvalidConfigurationException(sprintf(
+                    'ClassDefinition for "%s" contains malformed method call #%d.',
+                    $id,
+                    $index,
+                ));
+            }
+
+            $method = $call['method'];
+            if (!$class->hasMethod($method)) {
+                if ($magicCall) {
+                    continue;
+                }
+                throw new InvalidConfigurationException(sprintf(
+                    'ClassDefinition for "%s" calls missing method "%s::%s".',
+                    $id,
+                    $className,
+                    $method,
+                ));
+            }
+
+            if (!$class->getMethod($method)->isPublic() && !$magicCall) {
+                throw new InvalidConfigurationException(sprintf(
+                    'ClassDefinition for "%s" calls non-public method "%s::%s".',
+                    $id,
+                    $className,
+                    $method,
+                ));
             }
         }
     }
@@ -162,7 +314,8 @@ final class FactorySpecificationValidator
     {
         return is_array($factory)
             && array_keys($factory) === [0, 1]
-            && (is_string($factory[0]) || is_object($factory[0]))
+            && is_string($factory[0])
+            && $factory[0] !== ''
             && is_string($factory[1])
             && $factory[1] !== '';
     }
