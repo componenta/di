@@ -6,13 +6,18 @@ namespace Componenta\DI\Value;
 
 use Componenta\DI\ResolutionContext;
 
-/** Immutable context visible to one value-provider/transform operation. */
+/** Per-value resolution state shared by providers, fallbacks and transformers. */
 final readonly class ValueContext
 {
+    /** @var array<int, mixed> */
+    public array $resolvedParameters;
+
     /** @param array<int, mixed> $resolvedParameters */
     public function __construct(
         public ResolutionContext $resolution,
-        public array $resolvedParameters = [],
+        array $resolvedParameters = [],
         public ?object $object = null,
-    ) {}
+    ) {
+        $this->resolvedParameters = $resolvedParameters;
+    }
 }

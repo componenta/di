@@ -34,15 +34,15 @@ use Psr\Http\Message\UploadedFileInterface;
 use ReflectionNamedType;
 
 /** Owns all PSR-7 value providers; request attributes remain passive DTOs. */
-final readonly class RequestValueProvider implements ValueProviderHandlerInterface
+final class RequestValueProvider implements ValueProviderHandlerInterface
 {
     public ValueProviderPrecedence $precedence {
         get => ValueProviderPrecedence::ProviderFirst;
     }
 
     public function __construct(
-        private FactoryInterface $factory,
-        private ContainerInterface $container,
+        private readonly FactoryInterface $factory,
+        private readonly ContainerInterface $container,
     ) {}
 
     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
@@ -65,11 +65,9 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
 
     private function header(Header $attribute, ServerRequestInterface $request): mixed
     {
-        if ($request->hasHeader($attribute->name)) {
-            return $request->getHeaderLine($attribute->name);
-        }
-
-        return $this->requiredOrDefault('header', $attribute->name, $attribute->default);
+        return $request->hasHeader($attribute->name)
+            ? $request->getHeaderLine($attribute->name)
+            : $this->requiredOrDefault('header', $attribute->name, $attribute->default);
     }
 
     private function cookie(Cookie $attribute, ServerRequestInterface $request): mixed
@@ -81,8 +79,11 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
             : $this->requiredOrDefault('cookie', $attribute->name, $attribute->default);
     }
 
-    private function query(QueryParam $attribute, ValueTargetInterface $target, ServerRequestInterface $request): mixed
-    {
+    private function query(
+        QueryParam $attribute,
+        ValueTargetInterface $target,
+        ServerRequestInterface $request,
+    ): mixed {
         $name = $attribute->name ?? $target->name;
         $values = $request->getQueryParams();
 
@@ -91,18 +92,20 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
             : $this->requiredOrDefault('query parameter', $name, $attribute->default);
     }
 
-    private function payload(PayloadParam $attribute, ValueTargetInterface $target, ServerRequestInterface $request): mixed
-    {
+    private function payload(
+        PayloadParam $attribute,
+        ValueTargetInterface $target,
+        ServerRequestInterface $request,
+    ): mixed {
         $values = $this->payloadArray($request);
         $name = $attribute->name ?? $target->name;
 
         if ($name instanceof ConfigPath) {
-            $found = false;
-            $value = $this->path($values, $name->toArray(), $found);
+            $result = $this->path($values, $name->toArray());
 
-            return $found
-                ? $value
-                : $this->requiredOrDefault('payload parameter', (string) $name, $attribute->default);
+            return $result['found']
+                ? $result['value']
+                : $this->requiredOrDefault('payload parameter', $name->value, $attribute->default);
         }
 
         return array_key_exists($name, $values)
@@ -134,6 +137,7 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
 
     private function file(UploadedFile $attribute, ServerRequestInterface $request): mixed
     {
+        /** @var mixed $current */
         $current = $request->getUploadedFiles();
 
         foreach (explode('.', $attribute->name) as $segment) {
@@ -154,16 +158,17 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
         ServerRequestInterface $request,
         ValueContext $context,
     ): mixed {
+        /** @var array<string, array<string|int, mixed>> $sources */
         $sources = [];
+        /** @var array<string, true> $seen */
         $seen = [];
 
         foreach ($attribute->sources as $source) {
-            if (!$source instanceof RequestDataSource) {
-                throw new InvalidArgumentException('MapRequest sources must contain RequestDataSource cases.');
-            }
-
             if (isset($seen[$source->value])) {
-                throw new InvalidArgumentException(sprintf('MapRequest source "%s" is declared more than once.', $source->value));
+                throw new InvalidArgumentException(sprintf(
+                    'MapRequest source "%s" is declared more than once.',
+                    $source->value,
+                ));
             }
             $seen[$source->value] = true;
             $sources[$source->value] = $this->source($source, $request);
@@ -190,15 +195,12 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
             }
         }
 
+        /** @var array<string, mixed> $data */
         $this->validate($class, $data);
 
         return $this->factory->make(
             $class,
-            ResolutionContext::mapped(
-                $data,
-                $request,
-                $context->resolution->trusted,
-            ),
+            ResolutionContext::mapped($data, $request, $context->resolution->trusted),
         );
     }
 
@@ -242,6 +244,7 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
     private function merge(array $sources, RequestDataConflictPolicy $policy): array
     {
         $data = [];
+        /** @var array<string|int, string> $owners */
         $owners = [];
 
         foreach ($sources as $source => $values) {
@@ -263,7 +266,11 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
         return $data;
     }
 
-    /** @param array<string|int, mixed> $data @param array<string, string> $map @return array<string|int, mixed> */
+    /**
+     * @param array<string|int, mixed> $data
+     * @param array<string, string> $map
+     * @return array<string|int, mixed>
+     */
     private function mapFields(array $data, array $map): array
     {
         if ($map === []) {
@@ -271,9 +278,12 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
         }
 
         $original = $data;
+        /** @var list<array{0: string, 1: string, 2: mixed}> $moves */
         $moves = [];
-        $sources = [];
-        $targets = [];
+        /** @var array<string, true> $mappedSources */
+        $mappedSources = [];
+        /** @var array<string, string> $targetOwners */
+        $targetOwners = [];
 
         foreach ($map as $rawSource => $target) {
             $source = $rawSource;
@@ -293,19 +303,19 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
                 throw new InvalidArgumentException(sprintf('Required mapped key "%s" is missing.', $source));
             }
 
-            if (isset($targets[$target]) && $targets[$target] !== $source) {
+            if (isset($targetOwners[$target]) && $targetOwners[$target] !== $source) {
                 throw new InvalidArgumentException(sprintf('Mapped target "%s" has multiple sources.', $target));
             }
 
-            $sources[$source] = true;
-            $targets[$target] = $source;
+            $mappedSources[$source] = true;
+            $targetOwners[$target] = $source;
             $moves[] = [$source, $target, $original[$source]];
         }
 
         foreach ($moves as [$source, $target]) {
             if ($source !== $target
                 && array_key_exists($target, $original)
-                && !isset($sources[$target])
+                && !isset($mappedSources[$target])
             ) {
                 throw new InvalidArgumentException(sprintf('Mapped target "%s" already exists.', $target));
             }
@@ -324,7 +334,7 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
         return $data;
     }
 
-    /** @param class-string $class @param array<string|int, mixed> $data */
+    /** @param class-string $class @param array<string, mixed> $data */
     private function validate(string $class, array $data): void
     {
         if (!$this->container->has(ValidationProviderInterface::class)) {
@@ -333,7 +343,10 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
 
         $provider = $this->container->get(ValidationProviderInterface::class);
         if (!$provider instanceof ValidationProviderInterface) {
-            throw new LogicException(sprintf('Container entry %s has an invalid type.', ValidationProviderInterface::class));
+            throw new LogicException(sprintf(
+                'Container entry %s has an invalid type.',
+                ValidationProviderInterface::class,
+            ));
         }
 
         $provider->provide($class)?->validate(
@@ -351,20 +364,42 @@ final readonly class RequestValueProvider implements ValueProviderHandlerInterfa
         throw new InvalidArgumentException(sprintf('Required %s "%s" is missing.', $kind, $name));
     }
 
-    /** @param array<string|int, mixed> $data @param list<string> $segments */
-    private function path(array $data, array $segments, bool &$found): mixed
+    /**
+     * @param array<string|int, mixed> $data
+     * @param list<string> $segments
+     * @return array{found: bool, value: mixed}
+     */
+    private function path(array $data, array $segments): array
     {
         $current = $data;
-
         foreach ($segments as $segment) {
-            if (!is_array($current) || !array_key_exists($segment, $current)) {
-                $found = false;
-                return null;
+            if (!array_key_exists($segment, $current)) {
+                return ['found' => false, 'value' => null];
             }
-            $current = $current[$segment];
+
+            $value = $current[$segment];
+            if ($segment !== $segments[array_key_last($segments)] && !is_array($value)) {
+                return ['found' => false, 'value' => null];
+            }
+            $current = is_array($value) ? $value : [];
         }
 
-        $found = true;
-        return $current;
+        if ($segments === []) {
+            return ['found' => true, 'value' => $data];
+        }
+
+        $last = $segments[array_key_last($segments)];
+        $parent = $data;
+        foreach (array_slice($segments, 0, -1) as $segment) {
+            $value = $parent[$segment] ?? null;
+            if (!is_array($value)) {
+                return ['found' => false, 'value' => null];
+            }
+            $parent = $value;
+        }
+
+        return array_key_exists($last, $parent)
+            ? ['found' => true, 'value' => $parent[$last]]
+            : ['found' => false, 'value' => null];
     }
 }

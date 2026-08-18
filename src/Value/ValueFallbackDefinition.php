@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Value;
 
-use InvalidArgumentException;
-
-/** Declarative ordering metadata for one implicit value fallback. */
+/** Immutable ordering definition for one fallback strategy. */
 final readonly class ValueFallbackDefinition
 {
+    /** @var list<non-empty-string> */
+    public array $before;
+
+    /** @var list<non-empty-string> */
+    public array $after;
+
     /**
      * @param non-empty-string $id
      * @param list<non-empty-string> $before
@@ -17,17 +21,13 @@ final readonly class ValueFallbackDefinition
     public function __construct(
         public string $id,
         public ValueFallbackInterface $fallback,
-        public array $before = [],
-        public array $after = [],
+        array $before = [],
+        array $after = [],
     ) {
         if ($id === '') {
-            throw new InvalidArgumentException('Value fallback id must be non-empty.');
+            throw new \InvalidArgumentException('Value fallback id must be non-empty.');
         }
-
-        foreach ([...$before, ...$after] as $dependency) {
-            if ($dependency === '') {
-                throw new InvalidArgumentException('Value fallback ordering ids must be non-empty.');
-            }
-        }
+        $this->before = array_values($before);
+        $this->after = array_values($after);
     }
 }

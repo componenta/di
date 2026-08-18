@@ -6,29 +6,42 @@ namespace Componenta\DI;
 
 use Psr\Http\Message\ServerRequestInterface;
 
-/** Immutable provenance-aware input for one DI resolution operation. */
+/** Immutable, provenance-aware input to every DI resolution operation. */
 final readonly class ResolutionContext
 {
+    /** @var array<string|int, mixed> */
+    public array $explicit;
+
+    /** @var array<string, mixed> */
+    public array $mapped;
+
+    /** @var array<string|int, mixed> */
+    public array $trusted;
+
     /**
      * @param array<string|int, mixed> $explicit
      * @param array<string, mixed> $mapped
-     * @param array<string, mixed> $trusted
+     * @param array<string|int, mixed> $trusted
      */
     public function __construct(
-        public array $explicit = [],
-        public array $mapped = [],
-        public array $trusted = [],
-    ) {}
+        array $explicit = [],
+        array $mapped = [],
+        array $trusted = [],
+    ) {
+        $this->explicit = $explicit;
+        $this->mapped = $mapped;
+        $this->trusted = $trusted;
+    }
 
     /** @param array<string|int, mixed> $values */
-    public static function explicit(array $values = []): self
+    public static function explicit(array $values): self
     {
         return new self(explicit: $values);
     }
 
     /**
      * @param array<string, mixed> $values
-     * @param array<string, mixed> $trusted
+     * @param array<string|int, mixed> $trusted
      */
     public static function mapped(
         array $values,
@@ -38,7 +51,6 @@ final readonly class ResolutionContext
         if ($request !== null) {
             $trusted[ServerRequestInterface::class] = $request;
         }
-
         return new self(mapped: $values, trusted: $trusted);
     }
 
@@ -52,10 +64,24 @@ final readonly class ResolutionContext
         );
     }
 
-    /** Nested service construction keeps trusted framework context but not unrelated mapped DTO fields. */
-    public function nested(array $explicit = []): self
+    /** @param array<string, mixed> $values */
+    public function withMapped(array $values): self
     {
-        return new self(explicit: $explicit, trusted: $this->trusted);
+        return new self(
+            explicit: $this->explicit,
+            mapped: array_replace($this->mapped, $values),
+            trusted: $this->trusted,
+        );
+    }
+
+    /** @param array<string|int, mixed> $values */
+    public function withTrusted(array $values): self
+    {
+        return new self(
+            explicit: $this->explicit,
+            mapped: $this->mapped,
+            trusted: array_replace($this->trusted, $values),
+        );
     }
 
     /** @return array<string|int, mixed> */
@@ -64,17 +90,14 @@ final readonly class ResolutionContext
         return array_replace($this->mapped, $this->trusted, $this->explicit);
     }
 
-    public function request(): ?ServerRequestInterface
-    {
-        $request = $this->trusted[ServerRequestInterface::class]
-            ?? $this->explicit[ServerRequestInterface::class]
-            ?? null;
-
-        return $request instanceof ServerRequestInterface ? $request : null;
-    }
-
     public function hasMapped(string $key): bool
     {
         return array_key_exists($key, $this->mapped);
+    }
+
+    public function request(): ?ServerRequestInterface
+    {
+        $request = $this->trusted[ServerRequestInterface::class] ?? null;
+        return $request instanceof ServerRequestInterface ? $request : null;
     }
 }

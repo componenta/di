@@ -5,21 +5,20 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
-use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
-use Reflector;
 
 /** Builds, validates and orders the semantic DI attribute plan for one target. */
 final readonly class AttributePlanBuilder
 {
     public function __construct(private AttributeDefinitionRegistry $registry) {}
 
-    public function build(Reflector $target): AttributePlan
-    {
-        self::assertSupportedTarget($target);
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    public function build(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): AttributePlan {
         $usages = [];
 
         foreach ($target->getAttributes() as $index => $reflectionAttribute) {
@@ -44,9 +43,14 @@ final readonly class AttributePlanBuilder
         return new AttributePlan($target, $this->ordered($target, $usages));
     }
 
-    /** @param list<AttributeUsage> $usages */
-    private function assertCapabilityCardinality(Reflector $target, array $usages): void
-    {
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertCapabilityCardinality(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
         /** @var array<class-string<AttributeCapabilityInterface>, list<AttributeUsage>> $byCapability */
         $byCapability = [];
         foreach ($usages as $usage) {
@@ -74,9 +78,14 @@ final readonly class AttributePlanBuilder
         }
     }
 
-    /** @param list<AttributeUsage> $usages */
-    private function assertDependencies(Reflector $target, array $usages): void
-    {
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertDependencies(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
         foreach ($usages as $usage) {
             foreach ($usage->definition->requires as $selector) {
                 if ($this->matching($selector, $usages, $usage) !== []) {
@@ -91,8 +100,7 @@ final readonly class AttributePlanBuilder
             }
 
             foreach ($usage->definition->forbids as $selector) {
-                $matches = $this->matching($selector, $usages, $usage);
-                if ($matches === []) {
+                if ($this->matching($selector, $usages, $usage) === []) {
                     continue;
                 }
                 throw new AttributeCompositionException(sprintf(
@@ -106,11 +114,14 @@ final readonly class AttributePlanBuilder
     }
 
     /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param list<AttributeUsage> $usages
      * @return list<AttributeUsage>
      */
-    private function ordered(Reflector $target, array $usages): array
-    {
+    private function ordered(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): array {
         if (count($usages) < 2) {
             return $usages;
         }
@@ -176,10 +187,9 @@ final readonly class AttributePlanBuilder
     {
         $matches = [];
         foreach ($usages as $usage) {
-            if ($usage === $except || !$this->matches($selector, $usage)) {
-                continue;
+            if ($usage !== $except && $this->matches($selector, $usage)) {
+                $matches[] = $usage;
             }
-            $matches[] = $usage;
         }
         return $matches;
     }
@@ -228,8 +238,10 @@ final readonly class AttributePlanBuilder
         ++$indegree[$to];
     }
 
-    private static function targetName(Reflector $target): string
-    {
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function targetName(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): string {
         return match (true) {
             $target instanceof ReflectionParameter => sprintf(
                 '$%s of %s',
@@ -248,24 +260,7 @@ final readonly class AttributePlanBuilder
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            $target instanceof ReflectionClass => $target->getName(),
-            default => get_debug_type($target),
+            default => $target->getName(),
         };
-    }
-
-    private static function assertSupportedTarget(Reflector $target): void
-    {
-        if ($target instanceof ReflectionClass
-            || $target instanceof ReflectionMethod
-            || $target instanceof ReflectionParameter
-            || $target instanceof ReflectionProperty
-        ) {
-            return;
-        }
-
-        throw new InvalidArgumentException(sprintf(
-            'Unsupported attribute target %s.',
-            get_debug_type($target),
-        ));
     }
 }

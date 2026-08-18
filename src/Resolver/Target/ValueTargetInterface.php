@@ -14,10 +14,10 @@ interface ValueTargetInterface
 
     public ?ReflectionType $type { get; }
 
-    /** @var list<class-string> */
+    /** @return list<class-string> */
     public array $typeNames { get; }
 
-    /** @var class-string|null */
+    /** @return class-string|null */
     public ?string $className { get; }
 
     public bool $allowsNull { get; }

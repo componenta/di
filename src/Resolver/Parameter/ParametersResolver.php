@@ -16,14 +16,14 @@ use ReflectionParameter;
 /** Resolves constructor/callable parameters through the shared semantic value pipeline. */
 final class ParametersResolver
 {
-    private ParameterTargetFactory $targets;
+    private ParameterTargetFactory $targetFactory;
 
     public function __construct(
         private readonly AttributePlanBuilder $plans,
         private readonly ValuePipeline $values,
-        ?ParameterTargetFactory $targets = null,
+        ?ParameterTargetFactory $targetFactory = null,
     ) {
-        $this->targets = $targets ?? new ParameterTargetFactory();
+        $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
     }
 
     /**
@@ -37,13 +37,23 @@ final class ParametersResolver
         return $this->resolveTargets($this->targets($parameters), $context);
     }
 
-    /** @param list<ReflectionParameter> $parameters @return list<ParameterTarget> */
+    /**
+     * @param list<ReflectionParameter> $parameters
+     * @return list<ParameterTarget>
+     */
     public function targets(array $parameters): array
     {
-        return array_map($this->target(...), $parameters);
+        $targets = [];
+        foreach ($parameters as $parameter) {
+            $targets[] = $this->target($parameter);
+        }
+        return $targets;
     }
 
-    /** @param list<ParameterTarget> $targets @return array<int, mixed> */
+    /**
+     * @param list<ParameterTarget> $targets
+     * @return array<int, mixed>
+     */
     public function resolveTargets(
         array $targets,
         ResolutionContext $context = new ResolutionContext(),
@@ -82,6 +92,6 @@ final class ParametersResolver
 
     public function target(ReflectionParameter $parameter): ParameterTarget
     {
-        return $this->targets->create($parameter);
+        return $this->targetFactory->create($parameter);
     }
 }
