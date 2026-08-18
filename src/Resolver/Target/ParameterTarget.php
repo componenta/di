@@ -9,9 +9,10 @@ use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionParameter;
 use ReflectionType;
+use Reflector;
 
 /** Immutable, precomputed view of one reflected parameter. */
-final class ParameterTarget
+final class ParameterTarget implements ValueTargetInterface
 {
     /** @var list<ReflectionAttribute<object>> */
     private readonly array $attributeReflectors;
@@ -32,33 +33,21 @@ final class ParameterTarget
     private readonly ?ReflectionClass $declaringClass;
 
     public readonly string $name;
-
     public readonly int $position;
-
     public readonly ?ReflectionType $type;
-
     public readonly bool $allowsNull;
-
     public readonly bool $hasDefault;
 
-    /**
-     * Reflection defaults are read on demand. This matters for `new Foo()`
-     * defaults: PHP creates a fresh object for every invocation, while caching
-     * getDefaultValue() in the target would incorrectly share one instance.
-     */
     public mixed $default {
         get => $this->hasDefault ? $this->reflection->getDefaultValue() : null;
     }
 
     public readonly bool $variadic;
-
     public readonly bool $byReference;
-
     public readonly string $declaringContext;
 
-    public function __construct(
-        public readonly ReflectionParameter $reflection,
-    ) {
+    public function __construct(public readonly ReflectionParameter $reflection)
+    {
         $this->name = $reflection->getName();
         $this->position = $reflection->getPosition();
         $this->type = $reflection->getType();
@@ -86,6 +75,11 @@ final class ParameterTarget
         $this->attributeReflectors = $allAttributes;
         $this->attributesByClass = $attributes;
         $this->attributeClasses = array_keys($classes);
+    }
+
+    public function reflector(): Reflector
+    {
+        return $this->reflection;
     }
 
     public function hasAttribute(string $attributeClass): bool
@@ -127,9 +121,6 @@ final class ParameterTarget
     {
         $attributes = [];
 
-        // Preserve native declaration order across exact and inherited
-        // matches. Grouping by concrete class first would incorrectly prefer
-        // an exact base attribute declared later over an earlier subclass.
         foreach ($this->attributeReflectors as $attribute) {
             if (is_a($attribute->getName(), $attributeClass, true)) {
                 $attributes[] = $attribute;
@@ -139,7 +130,6 @@ final class ParameterTarget
         return $attributes;
     }
 
-    /** Whether a value satisfies this parameter's declared lexical type. */
     public function accepts(mixed $value): bool
     {
         return TypeHints::matches($this->type, $value, $this->declaringClass);
@@ -154,8 +144,6 @@ final class ParameterTarget
             return sprintf('%s::%s()', $class->getName(), $function->getName());
         }
 
-        return $function->isClosure()
-            ? 'Closure'
-            : sprintf('%s()', $function->getName());
+        return $function->isClosure() ? 'Closure' : sprintf('%s()', $function->getName());
     }
 }
