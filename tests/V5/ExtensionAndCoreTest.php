@@ -41,8 +41,15 @@ final readonly class MessageFallback implements ValueFallbackInterface
 
 final readonly class NullFallback implements ValueFallbackInterface
 {
-    public function supports(ValueTargetInterface $target): bool { return false; }
-    public function resolve(ValueTargetInterface $target, ValueContext $context): ?ValueResult { return null; }
+    public function supports(ValueTargetInterface $target): bool
+    {
+        return false;
+    }
+
+    public function resolve(ValueTargetInterface $target, ValueContext $context): ?ValueResult
+    {
+        return null;
+    }
 }
 
 test('get remains shared while make remains fresh', function (): void {
