@@ -101,7 +101,7 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
         $name = $attribute->name ?? $target->name;
 
         if ($name instanceof ConfigPath) {
-            $result = $this->path($values, $name->toArray());
+            $result = $this->path($values, array_values($name->toArray()));
 
             return $result['found']
                 ? $result['value']
@@ -137,7 +137,6 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
 
     private function file(UploadedFile $attribute, ServerRequestInterface $request): mixed
     {
-        /** @var mixed $current */
         $current = $request->getUploadedFiles();
 
         foreach (explode('.', $attribute->name) as $segment) {
@@ -334,7 +333,10 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
         return $data;
     }
 
-    /** @param class-string $class @param array<string, mixed> $data */
+    /**
+     * @param class-string $class
+     * @param array<string, mixed> $data
+     */
     private function validate(string $class, array $data): void
     {
         if (!$this->container->has(ValidationProviderInterface::class)) {

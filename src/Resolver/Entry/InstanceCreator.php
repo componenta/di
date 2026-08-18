@@ -13,7 +13,11 @@ final readonly class InstanceCreator
 {
     public function __construct(private ParametersResolver $parameters) {}
 
-    /** @template T of object @param ReflectionClass<T> $class @return T */
+    /**
+     * @template T of object
+     * @param ReflectionClass<T> $class
+     * @return T
+     */
     public function create(
         ReflectionClass $class,
         ResolutionContext $context = new ResolutionContext(),

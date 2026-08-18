@@ -201,7 +201,10 @@ final readonly class ObjectPipeline
         }
     }
 
-    /** @param ReflectionClass<object> $class @return list<ReflectionProperty> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionProperty>
+     */
     private static function properties(ReflectionClass $class): array
     {
         $properties = $class->getProperties();

@@ -24,7 +24,7 @@ use Componenta\DI\Value\ValueFallbackDefinition;
  *     factories?: array<string, mixed>,
  *     invokables?: list<class-string>,
  *     aliases?: array<string, non-empty-string>,
- *     delegators?: array<string, list<mixed>>,
+ *     delegators?: array<string, list<callable|string|array{object|string, string}>>,
  *     services?: array<string, mixed>,
  *     attribute_definitions?: list<mixed>,
  *     attribute_capabilities?: list<CapabilityPolicy>,
@@ -36,7 +36,7 @@ final class DependencyConfiguration
     private function __construct() {}
 
     /**
-     * @param array<string, mixed> $dependencies
+     * @param array<array-key, mixed> $dependencies
      * @param array<string, non-empty-string> $defaultAliases
      * @return DependencyShape
      */
@@ -117,7 +117,7 @@ final class DependencyConfiguration
     }
 
     /**
-     * @param array<string, mixed> $dependencies
+     * @param array<array-key, mixed> $dependencies
      * @phpstan-assert DependencyShape $dependencies
      */
     public static function assertShape(array &$dependencies): void
@@ -147,7 +147,7 @@ final class DependencyConfiguration
         }
         /** @var list<class-string> $invokables */
         $invokables = [];
-        /** @var array<string, non-empty-string> $invokableAliases */
+        /** @var array<string, class-string> $invokableAliases */
         $invokableAliases = [];
         foreach ($invokableInput as $key => $value) {
             $class = $value instanceof InvokableDefinition ? $value->value : $value;
@@ -157,13 +157,6 @@ final class DependencyConfiguration
             /** @var class-string $class */
             $invokables[] = $class;
             if (is_string($key)) {
-                self::assertInvokableAliasCompatible(
-                    is_array($dependencies[ConfigKey::ALIASES] ?? null)
-                        ? $dependencies[ConfigKey::ALIASES]
-                        : [],
-                    $key,
-                    $class,
-                );
                 $invokableAliases[$key] = $class;
             }
         }
@@ -284,7 +277,7 @@ final class DependencyConfiguration
         );
     }
 
-    /** @return list<mixed> */
+    /** @return list<callable|string|array{object|string, string}> */
     public static function normalizeDelegatorList(mixed $value, string $id): array
     {
         $items = self::callablePair($value)
@@ -298,12 +291,20 @@ final class DependencyConfiguration
         return $normalized;
     }
 
+    /** @return callable|string|array{object|string, string} */
     public static function normalizeDelegatorSpecification(mixed $delegator, string $id): mixed
     {
-        if (is_callable($delegator)
-            || (is_string($delegator) && $delegator !== '')
-            || self::callablePair($delegator)
-        ) {
+        if (is_string($delegator) && $delegator !== '') {
+            return $delegator;
+        }
+
+        if (self::callablePair($delegator)) {
+            /** @var array{object|string, string} $delegator */
+            return $delegator;
+        }
+
+        if (is_callable($delegator)) {
+            /** @var callable $delegator */
             return $delegator;
         }
 
@@ -374,7 +375,7 @@ final class DependencyConfiguration
             }
         }
         if ($input !== []) {
-            $dependencies[$key] = array_values($input);
+            $dependencies[$key] = $input;
         }
     }
 }

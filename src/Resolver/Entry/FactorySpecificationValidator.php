@@ -91,7 +91,10 @@ final class FactorySpecificationValidator
         }
     }
 
-    /** @param list<ReflectionParameter> $parameters @param ReflectionClass<object>|null $scope */
+    /**
+     * @param list<ReflectionParameter> $parameters
+     * @param ReflectionClass<object>|null $scope
+     */
     private static function assertArgument(
         string $id,
         array $parameters,

@@ -82,7 +82,11 @@ use Componenta\DI\Value\ValuePipeline;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
-/** v5 composition root: entries + attribute definitions + value fallbacks. */
+/**
+ * v5 composition root: entries + attribute definitions + value fallbacks.
+ *
+ * @phpstan-consistent-constructor
+ */
 class ContainerBuilder
 {
     public const int CACHE_VERSION = 12;
@@ -98,7 +102,7 @@ class ContainerBuilder
     public private(set) array $invokables = [];
     /** @var array<string,non-empty-string> */
     public private(set) array $aliases = self::DEFAULT_ALIASES;
-    /** @var array<string,list<mixed>> */
+    /** @var array<string, list<callable|string|array{object|string, string}>> */
     public private(set) array $delegators = [];
     /** @var array<string,mixed> */
     public private(set) array $services = [];
@@ -121,7 +125,7 @@ class ContainerBuilder
         return static::configureWithDependencies($config, $dependencies);
     }
 
-    /** @param array<string,mixed> $dependencies */
+    /** @param array<array-key, mixed> $dependencies */
     public static function configureWithDependencies(Config $config, array $dependencies): static
     {
         $dependencies = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
@@ -149,7 +153,10 @@ class ContainerBuilder
         return $builder;
     }
 
-    /** @param array<string,mixed> $dependencies @return array<string,mixed> */
+    /**
+     * @param array<array-key, mixed> $dependencies
+     * @return array<string, mixed>
+     */
     public static function normalizeDependencies(array $dependencies): array
     {
         return DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
@@ -295,6 +302,7 @@ class ContainerBuilder
     /** @return array<string,mixed> */
     public function toArray(): array
     {
+        /** @var array<string, mixed> $data */
         $data = $this->config?->toArray() ?? [];
         $data[ConfigKey::DEPENDENCIES] = array_filter([
             ConfigKey::FACTORIES => $this->factories,
@@ -463,6 +471,9 @@ class ContainerBuilder
     {
         $target = $class ?? $classOrAlias;
         self::assertId($target, 'invokable');
+        if (!class_exists($target)) {
+            throw new InvalidConfigurationException(sprintf('Invokable class "%s" does not exist.', $target));
+        }
         if (!in_array($target, $this->invokables, true)) {
             $this->invokables[] = $target;
         }
