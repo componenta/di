@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Handler\Builtin;
 
+use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\ConfigPath;
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Cookie;
@@ -21,6 +22,7 @@ use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
+use Componenta\DI\Resolver\Parameter\Request\RequestMappingPipeline;
 use Componenta\DI\Resolver\Target\ValueTargetInterface;
 use Componenta\DI\Value\ValueContext;
 use Componenta\Validation\Context;
@@ -40,10 +42,15 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
         get => ValueProviderPrecedence::ProviderFirst;
     }
 
+    private readonly RequestMappingPipeline $mapping;
+
     public function __construct(
         private readonly FactoryInterface $factory,
         private readonly ContainerInterface $container,
-    ) {}
+        ?RequestMappingPipeline $mapping = null,
+    ) {
+        $this->mapping = $mapping ?? new RequestMappingPipeline();
+    }
 
     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
     {
@@ -157,12 +164,88 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
         ServerRequestInterface $request,
         ValueContext $context,
     ): mixed {
+        $rawData = $this->merge(
+            $this->mapRequestSources($attribute, $request),
+            $attribute->conflictPolicy,
+        );
+
+        $type = $target->type;
+        $isArray = $type instanceof ReflectionNamedType
+            && $type->isBuiltin()
+            && $type->getName() === 'array';
+        $class = $isArray ? null : $target->className;
+
+        if (!$isArray && $class === null) {
+            throw new LogicException('#[MapRequest] requires an array or a single class/interface target type.');
+        }
+
+        if ($class !== null) {
+            $this->assertNamedDtoData($rawData);
+            // Keep the v4 contract: validation sees transport data before aliases,
+            // casts, defaults, sort normalization or exclusions can hide it.
+            $this->validate($class, $rawData);
+        }
+
+        $data = $this->mapping->run(
+            $rawData,
+            $attribute->map,
+            $attribute->defaults,
+            $attribute->cast,
+            $attribute->sortMap,
+            $attribute->exclude,
+            $this->casters($attribute),
+        );
+
+        if ($isArray) {
+            return $data;
+        }
+
+        /** @var class-string $class */
+        $this->assertNamedDtoData($data);
+
+        return $this->factory->make(
+            $class,
+            ResolutionContext::mapped($data, $request, $context->resolution->trusted),
+        );
+    }
+
+    /**
+     * @return array<string, array<string|int, mixed>>
+     */
+    private function mapRequestSources(MapRequest $attribute, ServerRequestInterface $request): array
+    {
         /** @var array<string, array<string|int, mixed>> $sources */
         $sources = [];
         /** @var array<string, true> $seen */
         $seen = [];
 
+        if ($attribute->attributes !== []
+            && !in_array(RequestDataSource::Attributes, $attribute->sources, true)
+        ) {
+            $sources['request attributes'] = $this->select(
+                $request->getAttributes(),
+                $attribute->attributes,
+                'request attributes',
+            );
+        }
+        if ($attribute->files !== []
+            && !in_array(RequestDataSource::Files, $attribute->sources, true)
+        ) {
+            $sources['uploaded files'] = $this->select(
+                $request->getUploadedFiles(),
+                $attribute->files,
+                'uploaded files',
+            );
+        }
+
         foreach ($attribute->sources as $source) {
+            if (!$source instanceof RequestDataSource) {
+                throw new InvalidArgumentException(sprintf(
+                    'MapRequest sources must contain %s values; got %s.',
+                    RequestDataSource::class,
+                    get_debug_type($source),
+                ));
+            }
             if (isset($seen[$source->value])) {
                 throw new InvalidArgumentException(sprintf(
                     'MapRequest source "%s" is declared more than once.',
@@ -170,37 +253,50 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
                 ));
             }
             $seen[$source->value] = true;
-            $sources[$source->value] = $this->source($source, $request);
+
+            $values = $this->source($source, $request);
+            if ($source === RequestDataSource::Attributes && $attribute->attributes !== []) {
+                $values = $this->select($values, $attribute->attributes, 'request attributes');
+            } elseif ($source === RequestDataSource::Files && $attribute->files !== []) {
+                $values = $this->select($values, $attribute->files, 'uploaded files');
+            }
+
+            $sources[$source->value] = $values;
         }
 
-        $data = $this->merge($sources, $attribute->conflictPolicy);
-        $data = $this->mapFields($data, $attribute->map);
+        return $sources;
+    }
 
-        foreach ($attribute->exclude as $key) {
-            unset($data[$key]);
+    /**
+     * @param array<string|int, mixed> $values
+     * @param list<string> $selectors
+     * @return array<string|int, mixed>
+     */
+    private function select(array $values, array $selectors, string $kind): array
+    {
+        if ($selectors === [MapRequest::ALL]) {
+            return $values;
+        }
+        if (in_array(MapRequest::ALL, $selectors, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'MapRequest wildcard for %s must be the only selector.',
+                $kind,
+            ));
         }
 
-        $type = $target->type;
-        if ($type instanceof ReflectionNamedType && $type->isBuiltin() && $type->getName() === 'array') {
-            return $data;
-        }
-
-        $class = $target->className
-            ?? throw new LogicException('#[MapRequest] requires an array or a single class/interface target type.');
-
-        foreach (array_keys($data) as $key) {
-            if (!is_string($key)) {
-                throw new InvalidArgumentException('Class-typed request mapping accepts only named string keys.');
+        $selected = [];
+        foreach ($selectors as $selector) {
+            if (!is_string($selector) || $selector === '') {
+                throw new InvalidArgumentException(sprintf(
+                    'MapRequest %s selectors must be non-empty strings.',
+                    $kind,
+                ));
+            }
+            if (array_key_exists($selector, $values)) {
+                $selected[$selector] = $values[$selector];
             }
         }
-
-        /** @var array<string, mixed> $data */
-        $this->validate($class, $data);
-
-        return $this->factory->make(
-            $class,
-            ResolutionContext::mapped($data, $request, $context->resolution->trusted),
-        );
+        return $selected;
     }
 
     /** @return array<string|int, mixed> */
@@ -265,72 +361,26 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
         return $data;
     }
 
-    /**
-     * @param array<string|int, mixed> $data
-     * @param array<string, string> $map
-     * @return array<string|int, mixed>
-     */
-    private function mapFields(array $data, array $map): array
+    private function casters(MapRequest $attribute): ?CasterProviderInterface
     {
-        if ($map === []) {
-            return $data;
+        if ($attribute->cast === []) {
+            return null;
+        }
+        if (!$this->container->has(CasterProviderInterface::class)) {
+            throw new LogicException(sprintf(
+                '#[MapRequest] defines casts but %s is not configured.',
+                CasterProviderInterface::class,
+            ));
         }
 
-        $original = $data;
-        /** @var list<array{0: string, 1: string, 2: mixed}> $moves */
-        $moves = [];
-        /** @var array<string, true> $mappedSources */
-        $mappedSources = [];
-        /** @var array<string, string> $targetOwners */
-        $targetOwners = [];
-
-        foreach ($map as $rawSource => $target) {
-            $source = $rawSource;
-            $optional = str_starts_with($source, '?');
-            if ($optional) {
-                $source = substr($source, 1);
-            }
-
-            if ($source === '' || $target === '') {
-                throw new InvalidArgumentException('MapRequest keys must be non-empty strings.');
-            }
-
-            if (!array_key_exists($source, $original)) {
-                if ($optional) {
-                    continue;
-                }
-                throw new InvalidArgumentException(sprintf('Required mapped key "%s" is missing.', $source));
-            }
-
-            if (isset($targetOwners[$target]) && $targetOwners[$target] !== $source) {
-                throw new InvalidArgumentException(sprintf('Mapped target "%s" has multiple sources.', $target));
-            }
-
-            $mappedSources[$source] = true;
-            $targetOwners[$target] = $source;
-            $moves[] = [$source, $target, $original[$source]];
+        $provider = $this->container->get(CasterProviderInterface::class);
+        if (!$provider instanceof CasterProviderInterface) {
+            throw new LogicException(sprintf(
+                'Container entry %s has an invalid type.',
+                CasterProviderInterface::class,
+            ));
         }
-
-        foreach ($moves as [$source, $target]) {
-            if ($source !== $target
-                && array_key_exists($target, $original)
-                && !isset($mappedSources[$target])
-            ) {
-                throw new InvalidArgumentException(sprintf('Mapped target "%s" already exists.', $target));
-            }
-        }
-
-        foreach ($moves as [$source, $target]) {
-            if ($source !== $target) {
-                unset($data[$source]);
-            }
-        }
-
-        foreach ($moves as [, $target, $value]) {
-            $data[$target] = $value;
-        }
-
-        return $data;
+        return $provider;
     }
 
     /**
@@ -355,6 +405,16 @@ final class RequestValueProvider implements ValueProviderHandlerInterface
             $data,
             new Context([ContextInterface::THROW_ON_FAILURE_ATTRIBUTE => true]),
         );
+    }
+
+    /** @param array<string|int, mixed> $data */
+    private function assertNamedDtoData(array $data): void
+    {
+        foreach (array_keys($data) as $key) {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException('Class-typed request mapping accepts only named string keys.');
+            }
+        }
     }
 
     private function requiredOrDefault(string $kind, string $name, mixed $default): mixed
