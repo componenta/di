@@ -12,13 +12,13 @@ use Componenta\DI\Value\ValueContext;
 use LogicException;
 use Psr\Container\ContainerInterface;
 
-final readonly class InjectValueProvider implements ValueProviderHandlerInterface
+final class InjectValueProvider implements ValueProviderHandlerInterface
 {
     public ValueProviderPrecedence $precedence {
         get => ValueProviderPrecedence::ProviderFirst;
     }
 
-    public function __construct(private ContainerInterface $container) {}
+    public function __construct(private readonly ContainerInterface $container) {}
 
     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
     {

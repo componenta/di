@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use LogicException;
-use ReflectionClass;
-use ReflectionMethod;
-use ReflectionParameter;
-use ReflectionProperty;
+use Reflector;
 
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
 final readonly class AttributePlan
@@ -19,20 +16,18 @@ final readonly class AttributePlan
     /** @var array<class-string, list<AttributeUsage>> */
     private array $byAttribute;
 
-    /**
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     * @param list<AttributeUsage> $usages
-     */
+    /** @param list<AttributeUsage> $usages */
     public function __construct(
-        public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        public Reflector $target,
         public array $usages,
     ) {
+        /** @var array<class-string<AttributeCapabilityInterface>, list<AttributeUsage>> $byCapability */
         $byCapability = [];
+        /** @var array<class-string, list<AttributeUsage>> $byAttribute */
         $byAttribute = [];
 
         foreach ($usages as $usage) {
             $byAttribute[$usage->attribute::class][] = $usage;
-
             foreach ($usage->definition->capabilities as $capability) {
                 $byCapability[$capability][] = $usage;
             }
@@ -42,7 +37,10 @@ final readonly class AttributePlan
         $this->byAttribute = $byAttribute;
     }
 
-    /** @param class-string<AttributeCapabilityInterface> $capability @return list<AttributeUsage> */
+    /**
+     * @param class-string<AttributeCapabilityInterface> $capability
+     * @return list<AttributeUsage>
+     */
     public function all(string $capability): array
     {
         return $this->byCapability[$capability] ?? [];
@@ -52,12 +50,8 @@ final readonly class AttributePlan
     public function one(string $capability): ?AttributeUsage
     {
         $usages = $this->all($capability);
-
         if (count($usages) > 1) {
-            throw new LogicException(sprintf(
-                'Capability "%s" is not singular in this plan.',
-                $capability,
-            ));
+            throw new LogicException(sprintf('Capability "%s" is not singular in this plan.', $capability));
         }
 
         return $usages[0] ?? null;
@@ -69,14 +63,19 @@ final readonly class AttributePlan
         return isset($this->byCapability[$capability]);
     }
 
-    /** @param class-string $attributeClass @return list<AttributeUsage> */
+    /**
+     * @param class-string $attributeClass
+     * @return list<AttributeUsage>
+     */
     public function attributes(string $attributeClass): array
     {
         $matches = [];
-
         foreach ($this->byAttribute as $class => $usages) {
-            if (is_a($class, $attributeClass, true)) {
-                array_push($matches, ...$usages);
+            if (!is_a($class, $attributeClass, true)) {
+                continue;
+            }
+            foreach ($usages as $usage) {
+                $matches[] = $usage;
             }
         }
 

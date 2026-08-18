@@ -13,13 +13,13 @@ use Componenta\DI\Resolver\Target\ValueTargetInterface;
 use Componenta\DI\Value\ValueContext;
 use LogicException;
 
-final readonly class MakeValueProvider implements ValueProviderHandlerInterface
+final class MakeValueProvider implements ValueProviderHandlerInterface
 {
     public ValueProviderPrecedence $precedence {
         get => ValueProviderPrecedence::ProviderFirst;
     }
 
-    public function __construct(private FactoryInterface $factory) {}
+    public function __construct(private readonly FactoryInterface $factory) {}
 
     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
     {

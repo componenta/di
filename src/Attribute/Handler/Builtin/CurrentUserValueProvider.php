@@ -13,13 +13,13 @@ use Componenta\DI\Value\ValueContext;
 use LogicException;
 use Psr\Container\ContainerInterface;
 
-final readonly class CurrentUserValueProvider implements ValueProviderHandlerInterface
+final class CurrentUserValueProvider implements ValueProviderHandlerInterface
 {
     public ValueProviderPrecedence $precedence {
         get => ValueProviderPrecedence::RejectExplicit;
     }
 
-    public function __construct(private ContainerInterface $container) {}
+    public function __construct(private readonly ContainerInterface $container) {}
 
     public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
     {
@@ -37,7 +37,6 @@ final readonly class CurrentUserValueProvider implements ValueProviderHandlerInt
             if ($target->allowsNull) {
                 return null;
             }
-
             throw new LogicException('Current user is required but no authenticated user is available.');
         }
 
