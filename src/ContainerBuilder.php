@@ -312,6 +312,7 @@ class ContainerBuilder
         return (new CompiledFactoryShardCompiler(
             new FactoryCodeGenerator(),
             CompiledFactoryPipelineFingerprint::calculate($attributes, $fallbacks),
+            objects: $objects,
         ))->compile($classes, $directory, $maxShardBytes, $namespace);
     }
 
