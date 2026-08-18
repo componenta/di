@@ -4,35 +4,52 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
-use Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Value\ValueFallbackRegistry;
 
-/** Stable identity of the ordered runtime slots consumed by generated factories. */
+/** Stable digest of the semantic runtime consumed by generated entry shards. */
 final class CompiledFactoryPipelineFingerprint
 {
-    private const int FORMAT_VERSION = 3;
+    public const int FORMAT_VERSION = 5;
 
     public static function calculate(
-        ParametersResolver $parameters,
-        AttributeHandlerRegistry $attributes,
+        AttributeDefinitionRegistry $attributes,
+        ValueFallbackRegistry $fallbacks,
     ): string {
-        $payload = [
-            'format' => self::FORMAT_VERSION,
-            'parameter_resolvers' => array_map(
-                static fn(object $resolver): string => $resolver::class,
-                $parameters->resolverList,
-            ),
-            'attribute_handlers' => array_map(
-                static fn(array $registration): array => [
-                    'class' => $registration['handler']::class,
-                    'phase' => $registration['phase']->value,
-                    'priority' => $registration['priority'],
-                ],
-                $attributes->registrations(),
-            ),
-        ];
+        $definitions = [];
+        foreach ($attributes->definitions() as $definition) {
+            $definitions[] = [
+                'attribute' => $definition->attribute,
+                'handler' => $definition->handler::class,
+                'capabilities' => $definition->capabilities,
+                'requires' => $definition->requires,
+                'forbids' => $definition->forbids,
+                'before' => $definition->before,
+                'after' => $definition->after,
+            ];
+        }
 
-        return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
+        $policies = [];
+        foreach ($attributes->policies() as $policy) {
+            $policies[] = [$policy->capability, $policy->maxPerTarget];
+        }
+
+        $fallbackDefinitions = [];
+        foreach ($fallbacks->definitions() as $definition) {
+            $fallbackDefinitions[] = [
+                $definition->id,
+                $definition->fallback::class,
+                $definition->before,
+                $definition->after,
+            ];
+        }
+
+        return hash('sha256', serialize([
+            self::FORMAT_VERSION,
+            $definitions,
+            $policies,
+            $fallbackDefinitions,
+        ]));
     }
 
     private function __construct() {}

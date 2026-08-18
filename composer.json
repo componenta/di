@@ -1,6 +1,6 @@
 {
     "name": "componenta/di",
-    "description": "PSR-11 compatible dependency injection container for PHP 8.4+ with autowiring, lazy objects, and attribute-based configuration",
+    "description": "PSR-11 dependency injection container for PHP 8.4+ with composable attribute semantics, autowiring, lazy objects and AOT entry shards",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -14,11 +14,7 @@
         "php84",
         "attributes"
     ],
-    "authors": [
-        {
-            "name": "Componenta"
-        }
-    ],
+    "authors": [{"name": "Componenta"}],
     "homepage": "https://github.com/Componenta/di",
     "support": {
         "issues": "https://github.com/Componenta/di/issues",
@@ -26,10 +22,8 @@
     },
     "require": {
         "php": "^8.4",
-        "componenta/array": "^1.0",
         "componenta/caster": "^1.0",
         "componenta/config": "^2.0.2",
-        "componenta/priority-list": "^1.0",
         "componenta/reflection": "^2.0",
         "componenta/validation": "^1.0 || ^2.0.0",
         "componenta/var-export": "^1.0",
@@ -42,20 +36,10 @@
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0"
     },
-    "autoload": {
-        "psr-4": {
-            "Componenta\\DI\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Componenta\\DI\\Tests\\Fixture\\": "tests/Fixture/"
-        }
-    },
+    "autoload": {"psr-4": {"Componenta\\DI\\": "src/"}},
+    "autoload-dev": {"psr-4": {"Componenta\\DI\\Tests\\Fixture\\": "tests/Fixture/"}},
     "config": {
-        "allow-plugins": {
-            "pestphp/pest-plugin": true
-        },
+        "allow-plugins": {"pestphp/pest-plugin": true},
         "sort-packages": true,
         "preferred-install": "dist",
         "optimize-autoloader": true
@@ -66,25 +50,10 @@
         "phpstan": "phpstan analyse src --level=max",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
         "cs-fix": "php-cs-fixer fix",
-        "check": [
-            "@cs-check",
-            "@phpstan",
-            "@test"
-        ]
+        "check": ["@cs-check", "@phpstan", "@test"]
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "provide": {
-        "psr/container-implementation": "2.0"
-    },
-    "extra": {
-        "branch-alias": {
-            "dev-main": "4.x-dev"
-        },
-        "componenta": {
-            "config-providers": [
-                "Componenta\\DI\\ConfigProvider"
-            ]
-        }
-    }
+    "provide": {"psr/container-implementation": "2.0"},
+    "extra": {"branch-alias": {"dev-v5": "5.x-dev"}}
 }

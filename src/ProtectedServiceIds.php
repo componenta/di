@@ -7,23 +7,19 @@ namespace Componenta\DI;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Value\ValueFallbackRegistry;
+use Componenta\DI\Value\ValuePipeline;
 use Psr\Container\ContainerInterface;
 
-/** Single internal source of ids owned by the DI composition root. */
+/** Internal ids owned by the v5 composition root. */
 final class ProtectedServiceIds
 {
-    /**
-     * A class-string value means that the id may be supplied through the
-     * constructor bootstrap map and must satisfy that type. `false` marks an
-     * id that is installed directly by Container itself.
-     *
-     * @var array<string, class-string|false>
-     */
+    /** @var array<string,class-string|false> */
     private const array IDS = [
-        'config' => false,
         Config::class => Config::class,
         Environment::class => Environment::class,
         ContainerValue::class => ContainerValue::class,
@@ -36,9 +32,12 @@ final class ProtectedServiceIds
         ProxyFactoryInterface::class => false,
         LazyObjectFactoryInterface::class => false,
         VirtualProxyFactoryInterface::class => false,
+        AttributeDefinitionRegistry::class => AttributeDefinitionRegistry::class,
+        AttributePlanBuilder::class => AttributePlanBuilder::class,
+        ValueFallbackRegistry::class => ValueFallbackRegistry::class,
+        ValuePipeline::class => ValuePipeline::class,
         ParametersResolver::class => ParametersResolver::class,
-        AttributeHandlerRegistry::class => AttributeHandlerRegistry::class,
-        AttributeProcessor::class => AttributeProcessor::class,
+        ObjectPipeline::class => ObjectPipeline::class,
     ];
 
     public static function contains(string $id): bool
@@ -56,7 +55,6 @@ final class ProtectedServiceIds
     public static function bootstrapType(string $id): ?string
     {
         $type = self::IDS[$id] ?? false;
-
         return is_string($type) ? $type : null;
     }
 

@@ -16,154 +16,106 @@ use Componenta\DI\Exception\ValueProviderConflictException;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ValueTargetInterface;
 
-/** Provider -> transformers -> final type validation pipeline shared by value targets. */
+/** Provider -> transformer chain -> final declared-type validation. */
 final readonly class ValuePipeline
 {
-    /** @param list<ValueFallbackInterface> $fallbacks */
-    public function __construct(private array $fallbacks) {}
+    public function __construct(private ValueFallbackRegistry $fallbacks) {}
 
-    public function resolve(
-        ValueTargetInterface $target,
-        AttributePlan $plan,
-        ValueContext $context,
-    ): mixed {
+    public function resolve(ValueTargetInterface $target, AttributePlan $plan, ValueContext $context): mixed
+    {
         $provider = $plan->one(ValueProvider::class);
-
         if ($provider !== null) {
-            $value = $this->resolveProvider(
-                $target,
-                $provider->attribute,
-                $provider->definition->handler,
-                $context,
-            );
+            $value = $this->provider($target, $provider->attribute, $provider->definition->handler, $context);
         } else {
-            $result = $this->resolveFallback($target, $context);
-
+            $result = $this->fallback($target, $context);
             if ($result === null) {
-                $this->throwUnresolved($target, $context);
+                $this->unresolved($target, $context);
             }
-
             $value = $result->value;
         }
 
-        foreach ($plan->all(ValueTransformer::class) as $transformer) {
-            $handler = $transformer->definition->handler;
-
+        foreach ($plan->all(ValueTransformer::class) as $usage) {
+            $handler = $usage->definition->handler;
             if (!$handler instanceof ValueTransformerHandlerInterface) {
                 throw new InvalidConfigurationException(sprintf(
-                    'Attribute "%s" declares %s but handler %s does not implement %s.',
-                    $transformer->attribute::class,
-                    ValueTransformer::class,
+                    'Attribute %s declares ValueTransformer but handler %s does not implement %s.',
+                    $usage->attribute::class,
                     $handler::class,
                     ValueTransformerHandlerInterface::class,
                 ));
             }
-
-            $value = $handler->transform($transformer->attribute, $value, $target, $context);
+            $value = $handler->transform($usage->attribute, $value, $target, $context);
         }
 
         if (!$target->accepts($value)) {
-            $this->throwTypeMismatch($target, $value, $context);
+            $this->typeMismatch($target, $value, $context);
         }
 
         return $value;
     }
 
-    private function resolveProvider(
-        ValueTargetInterface $target,
-        object $attribute,
-        object $handler,
-        ValueContext $context,
-    ): mixed {
+    private function provider(ValueTargetInterface $target, object $attribute, object $handler, ValueContext $context): mixed
+    {
         if (!$handler instanceof ValueProviderHandlerInterface) {
             throw new InvalidConfigurationException(sprintf(
-                'Attribute "%s" declares %s but handler %s does not implement %s.',
+                'Attribute %s declares ValueProvider but handler %s does not implement %s.',
                 $attribute::class,
-                ValueProvider::class,
                 $handler::class,
                 ValueProviderHandlerInterface::class,
             ));
         }
 
         if ($context->resolution->hasMapped($target->name)) {
-            throw new ValueProviderConflictException(
-                target: $target->declaringContext,
-                provider: $attribute::class,
-                key: $target->name,
-                origin: 'mapped',
-            );
+            throw new ValueProviderConflictException($target->declaringContext, $attribute::class, $target->name, 'mapped');
         }
 
-        $explicit = self::explicitValue($target, $context);
-
+        $explicit = self::explicit($target, $context);
         if ($explicit !== null) {
             if ($handler->precedence === ValueProviderPrecedence::ExplicitFirst) {
                 return $explicit->value;
             }
-
             if ($handler->precedence === ValueProviderPrecedence::RejectExplicit) {
-                throw new ValueProviderConflictException(
-                    target: $target->declaringContext,
-                    provider: $attribute::class,
-                    key: $target->name,
-                    origin: 'explicit',
-                );
+                throw new ValueProviderConflictException($target->declaringContext, $attribute::class, $target->name, 'explicit');
             }
         }
 
         return $handler->provide($attribute, $target, $context);
     }
 
-    private function resolveFallback(ValueTargetInterface $target, ValueContext $context): ?ValueResult
+    private function fallback(ValueTargetInterface $target, ValueContext $context): ?ValueResult
     {
-        foreach ($this->fallbacks as $fallback) {
+        foreach ($this->fallbacks->fallbacks() as $fallback) {
             if (!$fallback->supports($target)) {
                 continue;
             }
-
             $result = $fallback->resolve($target, $context);
-
             if ($result !== null) {
                 return $result;
             }
         }
-
         return null;
     }
 
-    private static function explicitValue(
-        ValueTargetInterface $target,
-        ValueContext $context,
-    ): ?ValueResult {
-        $explicit = $context->resolution->explicit;
-
-        if (array_key_exists($target->name, $explicit)) {
-            return new ValueResult($explicit[$target->name]);
+    private static function explicit(ValueTargetInterface $target, ValueContext $context): ?ValueResult
+    {
+        $values = $context->resolution->explicit;
+        if (array_key_exists($target->name, $values)) {
+            return new ValueResult($values[$target->name]);
         }
-
-        if ($target instanceof ParameterTarget && array_key_exists($target->position, $explicit)) {
-            return new ValueResult($explicit[$target->position]);
+        if ($target instanceof ParameterTarget && array_key_exists($target->position, $values)) {
+            return new ValueResult($values[$target->position]);
         }
-
         foreach ($target->typeNames as $typeName) {
-            if (!array_key_exists($typeName, $explicit)) {
-                continue;
-            }
-
-            $value = $explicit[$typeName];
-
-            if (is_object($value) && $target->accepts($value)) {
-                return new ValueResult($value);
+            if (array_key_exists($typeName, $values)) {
+                return new ValueResult($values[$typeName]);
             }
         }
-
         return null;
     }
 
-    private function throwUnresolved(ValueTargetInterface $target, ValueContext $context): never
+    private function unresolved(ValueTargetInterface $target, ValueContext $context): never
     {
         $reflector = $target->reflector();
-
         if ($reflector instanceof \ReflectionParameter) {
             throw ResolutionException::forParameter(
                 $reflector,
@@ -171,28 +123,16 @@ final readonly class ValuePipeline
                 resolvedParameters: $context->resolvedParameters,
             );
         }
-
         if ($reflector instanceof \ReflectionProperty) {
-            throw ResolutionException::forProperty(
-                $reflector,
-                reason: 'no value provider or fallback could resolve the property',
-            );
+            throw ResolutionException::forProperty($reflector, reason: 'no value provider or fallback resolved the property');
         }
-
-        throw new \LogicException('Unsupported value target reflector.');
+        throw new \LogicException('Unsupported value target.');
     }
 
-    private function throwTypeMismatch(
-        ValueTargetInterface $target,
-        mixed $value,
-        ValueContext $context,
-    ): never {
+    private function typeMismatch(ValueTargetInterface $target, mixed $value, ValueContext $context): never
+    {
         $reflector = $target->reflector();
-        $reason = sprintf(
-            'final value of type "%s" does not satisfy the declared target type',
-            get_debug_type($value),
-        );
-
+        $reason = sprintf('final value type %s does not satisfy the declared target type', get_debug_type($value));
         if ($reflector instanceof \ReflectionParameter) {
             throw ResolutionException::forParameter(
                 $reflector,
@@ -201,11 +141,9 @@ final readonly class ValuePipeline
                 resolvedParameters: $context->resolvedParameters,
             );
         }
-
         if ($reflector instanceof \ReflectionProperty) {
             throw ResolutionException::forProperty($reflector, reason: $reason);
         }
-
-        throw new \LogicException('Unsupported value target reflector.');
+        throw new \LogicException('Unsupported value target.');
     }
 }

@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-/**
- * Resolves and executes callables with dependency injection.
- */
-interface CallableExecutorInterface extends CallableInvokerInterface, CallableResolverInterface {}
+/** Resolves callable representations and executes them through DI value resolution. */
+interface CallableExecutorInterface extends CallableResolverInterface
+{
+    public function execute(
+        mixed $callable,
+        ResolutionContext $context = new ResolutionContext(),
+    ): mixed;
+}

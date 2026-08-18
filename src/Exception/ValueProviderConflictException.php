@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Exception;
 
-/** Input tried to occupy a target already owned by a declared value provider. */
-final class ValueProviderConflictException extends InvalidConfigurationException
+use InvalidArgumentException;
+
+/** Caller or mapped input tried to occupy a target owned by a declared provider. */
+final class ValueProviderConflictException extends InvalidArgumentException implements ExceptionInterface
 {
     /** @param class-string $provider */
     public function __construct(

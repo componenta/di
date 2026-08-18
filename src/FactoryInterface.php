@@ -8,23 +8,17 @@ use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 
-/** Creates object instances with dependency injection. */
+/** Creates fresh object instances through the DI resolution pipeline. */
 interface FactoryInterface
 {
     /**
-     * Performs an uncached resolution of the specified entry.
-     *
-     * The container itself neither reads nor populates its shared-entry cache
-     * on this path. Object identity is still controlled by the selected
-     * resolver or user factory, which may deliberately return an existing
-     * object. Delegators are not applied.
-     *
-     * @param class-string|non-empty-string $entry Class name or service identifier.
-     * @param array<string|int, mixed> $params Resolution context forwarded to
-     *                                         the selected resolver or factory.
-     * @throws NotFoundException If no resolver owns the entry.
-     * @throws CircularDependencyException If fresh resolution forms a dependency cycle.
-     * @throws ResolutionException If instantiation fails or does not produce an object.
+     * @param class-string|non-empty-string $entry
+     * @throws NotFoundException
+     * @throws CircularDependencyException
+     * @throws ResolutionException
      */
-    public function make(string $entry, array $params = []): object;
+    public function make(
+        string $entry,
+        ResolutionContext $context = new ResolutionContext(),
+    ): object;
 }

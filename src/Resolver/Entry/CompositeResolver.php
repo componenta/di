@@ -7,95 +7,66 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\ResolutionContext;
 use InvalidArgumentException;
 
-/** Ordered entry-resolver chain with positive and negative owner caching. */
-class CompositeResolver implements DefinitionAwareResolverInterface
+/** Ordered entry resolver chain with owner caching. */
+final class CompositeResolver implements DefinitionAwareResolverInterface
 {
     /** @var list<EntryResolverInterface> */
-    protected array $resolvers = [];
+    private array $resolvers;
 
     /** @var array<string, EntryResolverInterface|null> */
-    private array $ownerCache = [];
+    private array $owners = [];
 
-    /**
-     * Definitions registered through this composite explicitly select their
-     * supporting resolver. This keeps the latest definition authoritative when
-     * the same id is reconfigured with a different definition kind.
-     *
-     * @var array<string, DefinitionAwareResolverInterface>
-     */
+    /** @var array<string, DefinitionAwareResolverInterface> */
     private array $definitionOwners = [];
 
     public function __construct(EntryResolverInterface ...$resolvers)
     {
-        if (!array_is_list($resolvers)) {
-            $resolvers = array_values($resolvers);
-        }
-
-        if ($resolvers === []) {
-            return;
-        }
-
-        $registered = [];
-
+        $seen = [];
         foreach ($resolvers as $resolver) {
-            $objectId = spl_object_id($resolver);
-            if (isset($registered[$objectId])) {
+            $id = spl_object_id($resolver);
+            if (isset($seen[$id])) {
                 throw new InvalidArgumentException(sprintf(
-                    'Entry resolver %s is already registered.',
+                    'Entry resolver %s is registered more than once.',
                     $resolver::class,
                 ));
             }
-
-            $registered[$objectId] = true;
+            $seen[$id] = true;
         }
 
-        $this->resolvers = $resolvers;
-    }
-
-    public function addResolver(EntryResolverInterface $resolver): void
-    {
-        $this->assertNotRegistered($resolver);
-        $this->resolvers[] = $resolver;
-        $this->ownerCache = [];
+        $this->resolvers = array_values($resolvers);
     }
 
     public function can(string $id): bool
     {
-        return $this->findOwner($id) !== null;
+        return $this->owner($id) !== null;
     }
 
-    /**
-     * @throws NotFoundException
-     * @throws ResolutionException
-     */
-    public function resolve(string $id, array $context = []): mixed
-    {
-        $owner = $this->findOwner($id);
+    public function resolve(
+        string $id,
+        ResolutionContext $context = new ResolutionContext(),
+    ): mixed {
+        $owner = $this->owner($id)
+            ?? throw NotFoundException::forService($id);
 
-        if ($owner === null) {
-            throw NotFoundException::forService($id);
-        }
-
-        return $owner->resolve(
-            $id,
-            EntryResolverContext::for($owner, $context),
-        );
+        return $owner->resolve($id, $context);
     }
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
         foreach ($this->resolvers as $resolver) {
-            if ($resolver instanceof DefinitionAwareResolverInterface
-                && $resolver->supportsDefinition($definition)
+            if (!$resolver instanceof DefinitionAwareResolverInterface
+                || !$resolver->supportsDefinition($definition)
             ) {
-                $resolver->setDefinition($id, $definition);
-                $this->definitionOwners[$id] = $resolver;
-                $this->ownerCache[$id] = $resolver;
-                return;
+                continue;
             }
+
+            $resolver->setDefinition($id, $definition);
+            $this->definitionOwners[$id] = $resolver;
+            $this->owners[$id] = $resolver;
+            return;
         }
 
         throw InvalidConfigurationException::forInvalidDefinition($definition);
@@ -114,34 +85,22 @@ class CompositeResolver implements DefinitionAwareResolverInterface
         return false;
     }
 
-    private function assertNotRegistered(EntryResolverInterface $resolver): void
-    {
-        foreach ($this->resolvers as $registered) {
-            if ($registered === $resolver) {
-                throw new InvalidArgumentException(sprintf(
-                    'Entry resolver %s is already registered.',
-                    $resolver::class,
-                ));
-            }
-        }
-    }
-
-    private function findOwner(string $id): ?EntryResolverInterface
+    private function owner(string $id): ?EntryResolverInterface
     {
         if (isset($this->definitionOwners[$id])) {
             return $this->definitionOwners[$id];
         }
 
-        if (array_key_exists($id, $this->ownerCache)) {
-            return $this->ownerCache[$id];
+        if (array_key_exists($id, $this->owners)) {
+            return $this->owners[$id];
         }
 
         foreach ($this->resolvers as $resolver) {
             if ($resolver->can($id)) {
-                return $this->ownerCache[$id] = $resolver;
+                return $this->owners[$id] = $resolver;
             }
         }
 
-        return $this->ownerCache[$id] = null;
+        return $this->owners[$id] = null;
     }
 }

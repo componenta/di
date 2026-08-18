@@ -4,53 +4,44 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionClass;
 
-/** Creates or initializes an object through the standard parameter pipeline. */
+/** Creates or initializes an object through the common parameter value pipeline. */
 final readonly class InstanceCreator
 {
-    public function __construct(
-        private ParametersResolver $parametersResolver,
-    ) {}
+    public function __construct(private ParametersResolver $parameters) {}
 
-    /**
-     * @template T of object
-     * @param ReflectionClass<T> $reflector
-     * @param array<string|int, mixed> $context
-     * @return T
-     */
-    public function create(ReflectionClass $reflector, array $context = []): object
-    {
-        $constructor = $reflector->getConstructor();
-
+    /** @template T of object @param ReflectionClass<T> $class @return T */
+    public function create(
+        ReflectionClass $class,
+        ResolutionContext $context = new ResolutionContext(),
+    ): object {
+        $constructor = $class->getConstructor();
         if ($constructor === null) {
-            return $reflector->newInstance();
+            return $class->newInstance();
         }
 
-        $params = $this->parametersResolver->resolve($constructor->getParameters(), $context);
-
-        return $reflector->newInstanceArgs($params);
+        return $class->newInstanceArgs(
+            $this->parameters->resolve($constructor->getParameters(), $context),
+        );
     }
 
-    /**
-     * Calls the constructor on an already-allocated lazy ghost.
-     *
-     * Reflection invocation is intentional: it preserves the constructor's
-     * declared visibility while initializing the already allocated instance.
-     *
-     * @param ReflectionClass<object> $reflector
-     * @param array<string|int, mixed> $context
-     */
-    public function initialize(object $entry, ReflectionClass $reflector, array $context = []): void
-    {
-        $constructor = $reflector->getConstructor();
-
+    /** @param ReflectionClass<object> $class */
+    public function initialize(
+        object $entry,
+        ReflectionClass $class,
+        ResolutionContext $context = new ResolutionContext(),
+    ): void {
+        $constructor = $class->getConstructor();
         if ($constructor === null) {
             return;
         }
 
-        $params = $this->parametersResolver->resolve($constructor->getParameters(), $context);
-        $constructor->invokeArgs($entry, $params);
+        $constructor->invokeArgs(
+            $entry,
+            $this->parameters->resolve($constructor->getParameters(), $context),
+        );
     }
 }

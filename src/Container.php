@@ -12,55 +12,28 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
-use Componenta\DI\Resolver\Entry\EntryResolverContext;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
-/**
- * PSR-11 dependency injection container.
- *
- * The container itself is a thin façade: each concern lives in its own
- * collaborator so responsibilities stay sharp and testable.
- *
- *  - {@see EntryResolverInterface}        - chain that actually builds entries.
- *  - {@see AliasResolver}                 - internal alias -> canonical id resolution.
- *  - {@see CallableExecutorInterface}     - resolve-and-invoke pipeline.
- *  - {@see ProxyFactoryInterface}         - produces lazy objects / virtual proxies.
- *  - {@see EntryCache}                    - two-tier base/decorated cache.
- *  - {@see DelegatorRegistry}             - decorator chain per entry.
- *  - {@see ExternalContainerRegistry}     - delegated PSR-11 containers.
- *  - {@see CycleGuard}                    - circular-dependency detection.
- */
+/** PSR-11 container and fresh-resolution façade. */
 final class Container implements
     ContainerInterface,
     FactoryInterface,
-    CallableInvokerInterface,
+    CallableExecutorInterface,
     ProxyFactoryInterface
 {
     private readonly EntryCache $cache;
-
     private readonly DelegatorRegistry $delegators;
-
     private ?ExternalContainerRegistry $externalContainers = null;
-
     private readonly CycleGuard $cycleGuard;
-
     private readonly ProxyFactoryInterface $proxyFactory;
 
-    /**
-     * Collaborators are wired via the constructor - no post-injection.
-     *
-     * Internal state holders are optional so tests and bespoke bootstrap code
-     * can plug in replacements. The external-container registry remains null
-     * until an external container is actually registered.
-     *
-     * @param array<array-key, mixed> $bootstrapServices
-     */
+    /** @param array<array-key, mixed> $bootstrapServices */
     public function __construct(
-        private readonly EntryResolverInterface    $resolver,
-        private readonly AliasResolver             $aliases,
+        private readonly EntryResolverInterface $resolver,
+        private readonly AliasResolver $aliases,
         private readonly CallableExecutorInterface $callableExecutor,
         ?EntryCache $cache = null,
         ?DelegatorRegistry $delegators = null,
@@ -69,27 +42,23 @@ final class Container implements
         ?ProxyFactoryInterface $proxyFactory = null,
         array $bootstrapServices = [],
     ) {
-        $coreServices = [
+        $core = [
             ContainerInterface::class => $this,
             FactoryInterface::class => $this,
-            CallableInvokerInterface::class => $this,
+            CallableInvokerInterface::class => new CallableInvoker(),
+            CallableResolverInterface::class => $this,
+            CallableExecutorInterface::class => $this,
             ProxyFactoryInterface::class => $this,
             LazyObjectFactoryInterface::class => $this,
             VirtualProxyFactoryInterface::class => $this,
             self::class => $this,
-            CallableResolverInterface::class => $this->callableExecutor,
-            CallableExecutorInterface::class => $this->callableExecutor,
         ];
-        $validatedBootstrapServices = [];
+        $validated = [];
 
         foreach ($bootstrapServices as $id => $service) {
             if (!is_string($id) || ($expected = ProtectedServiceIds::bootstrapType($id)) === null) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Unsupported bootstrap service id "%s".',
-                    (string) $id,
-                ));
+                throw new InvalidConfigurationException(sprintf('Unsupported bootstrap service id "%s".', (string) $id));
             }
-
             if (!$service instanceof $expected) {
                 throw new InvalidConfigurationException(sprintf(
                     'Bootstrap service "%s" must implement %s; got %s.',
@@ -98,70 +67,29 @@ final class Container implements
                     get_debug_type($service),
                 ));
             }
-
-            $validatedBootstrapServices[$id] = $service;
+            $validated[$id] = $service;
         }
 
-        if ($cache === null) {
-            $this->cache = new EntryCache(
-                $coreServices + $validatedBootstrapServices,
-            );
-        } else {
-            $this->cache = $cache;
-
-            foreach ($coreServices as $id => $service) {
-                $this->cache->putBase($id, $service);
-            }
-
-            foreach ($validatedBootstrapServices as $id => $service) {
-                if ($this->cache->tryGetBase($id, $existing)) {
-                    throw new InvalidConfigurationException(sprintf(
-                        'Bootstrap service "%s" is already initialized.',
-                        $id,
-                    ));
-                }
-
-                $this->cache->putBase($id, $service);
-            }
+        $this->cache = $cache ?? new EntryCache();
+        foreach ($core + $validated as $id => $service) {
+            $this->cache->putBase($id, $service);
         }
 
-        $this->delegators = $delegators ?? new DelegatorRegistry($this->callableExecutor);
+        $this->delegators = $delegators ?? new DelegatorRegistry($this);
         $this->externalContainers = $externalContainers;
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
     }
 
-    /** Creates a container from a {@see Config} instance. */
-    public static function create(Config $config): Container
+    public static function create(Config $config): self
     {
         return ContainerBuilder::configure($config)->build();
     }
 
-    /**
-     * Retrieves an entry by identifier.
-     *
-     * Resolution order:
-     * 1. External PSR-11 containers receive the original requested id.
-     * 2. Decorated local cache by requested id.
-     * 3. Local alias resolution to the canonical id.
-     * 4. Local base cache by canonical id.
-     * 5. Local resolver chain.
-     * 6. Local delegators and decorated cache.
-     *
-     * Local aliases are never forwarded to external containers. External
-     * entries are returned directly; the external container owns their
-     * caching and lifecycle.
-     *
-     * @throws NotFoundException           If no resolver can handle the entry.
-     * @throws CircularDependencyException If a cycle is detected.
-     * @throws ConcurrentResolutionException If another execution context is constructing the shared entry.
-     * @throws ResolutionException         If a resolver fails hard.
-     */
     public function get(string $id): mixed
     {
         $externalGuard = "\0external:" . $id;
         $this->cycleGuard->enter($externalGuard);
-
         try {
             $external = $this->externalContainers?->findOwning($id);
             if ($external !== null) {
@@ -177,7 +105,6 @@ final class Container implements
 
         $entryId = $this->aliases->resolve($id);
         $this->cycleGuard->enterShared($entryId);
-
         try {
             return $this->resolveAndStore($id, $entryId);
         } finally {
@@ -185,7 +112,6 @@ final class Container implements
         }
     }
 
-    /** Core local resolution step run inside the cycle guard. */
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
         if (!$this->cache->tryGetBase($entryId, $entry)) {
@@ -204,22 +130,17 @@ final class Container implements
         try {
             $guardId = "\0has:" . $id;
             $this->cycleGuard->enter($guardId);
-
             try {
                 if ($this->externalContainers?->findOwning($id) !== null) {
                     return true;
                 }
-
                 if ($this->cache->tryGetResolved($id, $resolved)) {
                     return true;
                 }
-
                 $entryId = $this->aliases->resolve($id);
-
                 if ($this->cache->tryGetBase($entryId, $base)) {
                     return true;
                 }
-
                 return $this->resolver->can($entryId);
             } finally {
                 $this->cycleGuard->leave($guardId);
@@ -233,23 +154,17 @@ final class Container implements
     {
         self::assertMutableId($id, 'entry');
         $canonical = $this->aliases->resolve($id);
-
         if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
-            throw new InvalidConfigurationException(sprintf(
-                'Cannot replace protected DI id "%s".',
-                $id,
-            ));
+            throw new InvalidConfigurationException(sprintf('Cannot replace protected DI id "%s".', $id));
         }
 
-        $affectedDependencies = $this->deferredDependenciesResolvingTo($canonical);
-
+        $affected = $this->deferredDependenciesResolvingTo($canonical);
         if ($entry instanceof DefinitionInterface) {
             if (!$this->resolver instanceof DefinitionAwareResolverInterface
                 || !$this->resolver->supportsDefinition($entry)
             ) {
                 throw InvalidConfigurationException::forInvalidDefinition($entry);
             }
-
             $this->resolver->setDefinition($canonical, $entry);
             $this->cache->removeBase($canonical);
         } else {
@@ -257,20 +172,18 @@ final class Container implements
         }
 
         $this->invalidate($id);
-        $this->invalidateDeferredDelegators($affectedDependencies);
+        $this->invalidateDeferredDelegators($affected);
     }
 
-    public function make(string $entry, array $params = []): object
-    {
+    public function make(
+        string $entry,
+        ResolutionContext $context = new ResolutionContext(),
+    ): object {
         $resolved = $this->aliases->resolve($entry);
         $this->cycleGuard->enter($resolved);
-
         try {
             try {
-                $instance = $this->resolver->resolve(
-                    $resolved,
-                    EntryResolverContext::for($this->resolver, $params),
-                );
+                $instance = $this->resolver->resolve($resolved, $context);
             } catch (ContainerExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -287,9 +200,16 @@ final class Container implements
         }
     }
 
-    public function call(mixed $callable, array $params = []): mixed
+    public function resolve(mixed $callable): callable
     {
-        return $this->callableExecutor->call($callable, $params);
+        return $this->callableExecutor->resolve($callable);
+    }
+
+    public function execute(
+        mixed $callable,
+        ResolutionContext $context = new ResolutionContext(),
+    ): mixed {
+        return $this->callableExecutor->execute($callable, $context);
     }
 
     public function makeLazy(string $class, callable $initializer): object
@@ -305,48 +225,40 @@ final class Container implements
     public function addContainer(ContainerInterface $container): void
     {
         if ($container === $this) {
-            throw new InvalidConfigurationException(
-                'The container cannot delegate lookups to itself.',
-            );
+            throw new InvalidConfigurationException('The container cannot delegate lookups to itself.');
         }
-
         if ($this->externalContainers?->contains($container) === true) {
             return;
         }
 
-        $affectedDependencies = $this->deferredDependenciesTakenOverBy($container);
+        $affected = $this->deferredDependenciesTakenOverBy($container);
         ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
-        $this->invalidateDeferredDelegators($affectedDependencies);
+        $this->invalidateDeferredDelegators($affected);
     }
 
     public function alias(string $alias, string $target): void
     {
         if (ProtectedServiceIds::contains($alias)) {
-            throw new InvalidConfigurationException(sprintf(
-                'Cannot replace protected DI alias "%s".',
-                $alias,
-            ));
+            throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $alias));
         }
 
         $before = $this->deferredDependencyTargets();
-        $previousCanonical = $this->aliases->resolve($alias);
+        $previous = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
-        $this->invalidate($alias, $previousCanonical);
+        $this->invalidate($alias, $previous);
 
-        $changedDependencies = [];
+        $changed = [];
         foreach ($before as $dependencyId => $previousTarget) {
             try {
                 $currentTarget = $this->aliases->resolve($dependencyId);
             } catch (Throwable) {
                 $currentTarget = null;
             }
-
             if ($currentTarget !== $previousTarget) {
-                $changedDependencies[] = $dependencyId;
+                $changed[] = $dependencyId;
             }
         }
-
-        $this->invalidateDeferredDelegators($changedDependencies);
+        $this->invalidateDeferredDelegators($changed);
     }
 
     /** @param callable|string|array{0: object|string, 1: string} $delegator */
@@ -355,10 +267,7 @@ final class Container implements
         self::assertMutableId($id, 'delegator');
         $canonical = $this->aliases->resolve($id);
         if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
-            throw new InvalidConfigurationException(sprintf(
-                'Cannot decorate protected DI id "%s".',
-                $id,
-            ));
+            throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
         }
 
         $this->delegators->register($id, $delegator);
@@ -369,10 +278,7 @@ final class Container implements
     private static function assertMutableId(string $id, string $kind): void
     {
         if ($id === '') {
-            throw new InvalidConfigurationException(sprintf(
-                'Cannot register %s with an empty DI id.',
-                $kind,
-            ));
+            throw new InvalidConfigurationException(sprintf('Cannot register %s with an empty DI id.', $kind));
         }
     }
 
@@ -386,7 +292,6 @@ final class Container implements
 
         $this->cache->invalidate($id, $canonical);
         $this->delegators->invalidate($id);
-
         if ($canonical !== $id) {
             $this->delegators->invalidate($canonical);
         }
@@ -396,7 +301,6 @@ final class Container implements
     private function deferredDependenciesResolvingTo(string $canonical): array
     {
         $dependencies = [];
-
         foreach ($this->delegators->deferredDependencies() as $dependencyId) {
             try {
                 if ($this->aliases->resolve($dependencyId) === $canonical) {
@@ -405,7 +309,6 @@ final class Container implements
             } catch (Throwable) {
             }
         }
-
         return $dependencies;
     }
 
@@ -413,17 +316,12 @@ final class Container implements
     private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
     {
         $dependencies = [];
-
         foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            if ($this->externalContainers?->findOwning($dependencyId) !== null
-                || !$container->has($dependencyId)
-            ) {
+            if ($this->externalContainers?->findOwning($dependencyId) !== null || !$container->has($dependencyId)) {
                 continue;
             }
-
             $dependencies[] = $dependencyId;
         }
-
         return $dependencies;
     }
 
@@ -431,7 +329,6 @@ final class Container implements
     private function deferredDependencyTargets(): array
     {
         $targets = [];
-
         foreach ($this->delegators->deferredDependencies() as $dependencyId) {
             try {
                 $targets[$dependencyId] = $this->aliases->resolve($dependencyId);
@@ -439,7 +336,6 @@ final class Container implements
                 $targets[$dependencyId] = null;
             }
         }
-
         return $targets;
     }
 
@@ -452,10 +348,8 @@ final class Container implements
             } catch (Throwable) {
                 $canonical = $entryId;
             }
-
             $this->cache->invalidate($entryId, $canonical);
             $this->delegators->invalidate($entryId);
-
             if ($canonical !== $entryId) {
                 $this->delegators->invalidate($canonical);
             }

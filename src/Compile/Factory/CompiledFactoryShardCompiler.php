@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
+use Componenta\DI\Object\ObjectPipeline;
 use InvalidArgumentException;
 
-/** Packs generated methods into content-addressed, independently loadable factory shards. */
+/** Packs generated entry methods into immutable content-addressed shards. */
 final readonly class CompiledFactoryShardCompiler
 {
-    public const int FORMAT_VERSION = 3;
+    public const int FORMAT_VERSION = 4;
     public const int DEFAULT_MAX_BYTES = 131072;
     public const string FILE_PREFIX = 'container.factories.';
 
@@ -19,16 +20,11 @@ final readonly class CompiledFactoryShardCompiler
         private CompiledFactoryShardWriter $writer = new CompiledFactoryShardWriter(),
     ) {
         if (preg_match('/^[a-f0-9]{64}$/D', $pipelineFingerprint) !== 1) {
-            throw new InvalidArgumentException(
-                'Compiled factory pipeline fingerprint must be a lowercase SHA-256 digest.',
-            );
+            throw new InvalidArgumentException('Compiled factory fingerprint must be a lowercase SHA-256 digest.');
         }
     }
 
-    /**
-     * @param iterable<class-string> $classes
-     * @return array<class-string, CompiledFactoryDefinition>
-     */
+    /** @param iterable<class-string> $classes @return array<class-string, CompiledFactoryDefinition> */
     public function compile(
         iterable $classes,
         string $directory,
@@ -36,30 +32,25 @@ final readonly class CompiledFactoryShardCompiler
         string $namespace = 'Componenta\\DI\\Generated',
     ): array {
         if ($directory === '' || $maxBytes < 1) {
-            throw new InvalidArgumentException('Factory shard directory must be non-empty and maxBytes must be positive.');
+            throw new InvalidArgumentException('Factory shard directory must be non-empty and maxBytes positive.');
         }
-
         self::assertNamespace($namespace);
 
         $definitions = [];
         $current = [];
         $size = 0;
         $index = 0;
-
         foreach ($classes as $class) {
             $factory = $this->factories->generate($class, 'createEntry' . $index++);
-            $factoryBytes = strlen($factory->code);
-
-            if ($current !== [] && $size + $factoryBytes > $maxBytes) {
+            $bytes = strlen($factory->code);
+            if ($current !== [] && $size + $bytes > $maxBytes) {
                 $this->writeShard($current, $directory, $namespace, $definitions);
                 $current = [];
                 $size = 0;
             }
-
             $current[] = $factory;
-            $size += $factoryBytes;
+            $size += $bytes;
         }
-
         if ($current !== []) {
             $this->writeShard($current, $directory, $namespace, $definitions);
         }
@@ -67,20 +58,10 @@ final readonly class CompiledFactoryShardCompiler
         return $definitions;
     }
 
-    /**
-     * @param list<GeneratedFactory> $shard
-     * @param array<class-string, CompiledFactoryDefinition> $definitions
-     */
-    private function writeShard(
-        array $shard,
-        string $directory,
-        string $namespace,
-        array &$definitions,
-    ): void {
-        $payload = implode("\n\n", array_map(
-            static fn(GeneratedFactory $factory): string => $factory->code,
-            $shard,
-        ));
+    /** @param list<GeneratedFactory> $shard @param array<class-string, CompiledFactoryDefinition> $definitions */
+    private function writeShard(array $shard, string $directory, string $namespace, array &$definitions): void
+    {
+        $payload = implode("\n\n", array_map(static fn(GeneratedFactory $factory): string => $factory->code, $shard));
         $id = substr(hash('sha256', self::FORMAT_VERSION . "\0" . $namespace . "\0" . $payload), 0, 32);
         $class = 'CompiledFactoryShard_' . $id;
         $code = $this->code($namespace, $class, $payload);
@@ -89,13 +70,8 @@ final readonly class CompiledFactoryShardCompiler
 
         /** @var class-string $generatedClass */
         $generatedClass = $namespace . '\\' . $class;
-
         foreach ($shard as $factory) {
-            $definitions[$factory->class] = new CompiledFactoryDefinition(
-                file: $file,
-                class: $generatedClass,
-                method: $factory->method,
-            );
+            $definitions[$factory->class] = new CompiledFactoryDefinition($file, $generatedClass, $factory->method);
         }
     }
 
@@ -113,11 +89,7 @@ final class %s
 {
     public const string PIPELINE_FINGERPRINT = %s;
 
-    public function __construct(
-        private readonly array $parameterResolvers,
-        private readonly array $attributeHandlers,
-        private readonly \%s $proxyFactory,
-    ) {}
+    public function __construct(private readonly \%s $objects) {}
 
 %s
 }
@@ -127,7 +99,7 @@ PHP,
             $namespace,
             $class,
             var_export($this->pipelineFingerprint, true),
-            \Componenta\DI\ProxyFactoryInterface::class,
+            ObjectPipeline::class,
             self::indent($methods, 4),
             $class,
         );
@@ -135,22 +107,15 @@ PHP,
 
     private static function assertNamespace(string $namespace): void
     {
-        $identifier = '[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*';
-
-        if ($namespace === ''
-            || preg_match('/^(?:' . $identifier . ')(?:\\\\' . $identifier . ')*$/D', $namespace) !== 1
-        ) {
-            throw new InvalidArgumentException(sprintf(
-                'Factory shard namespace "%s" is not a valid PHP namespace.',
-                $namespace,
-            ));
+        $identifier = '[A-Za-z_\\x80-\\xff][A-Za-z0-9_\\x80-\\xff]*';
+        if ($namespace === '' || preg_match('/^(?:' . $identifier . ')(?:\\\\' . $identifier . ')*$/D', $namespace) !== 1) {
+            throw new InvalidArgumentException(sprintf('Invalid generated namespace "%s".', $namespace));
         }
     }
 
     private static function indent(string $code, int $spaces): string
     {
         $indent = str_repeat(' ', $spaces);
-
         return $indent . str_replace("\n", "\n" . $indent, $code);
     }
 }

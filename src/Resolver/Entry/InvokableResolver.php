@@ -9,10 +9,11 @@ use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\ResolutionContext;
 use Throwable;
 
-/** Resolves explicitly registered invokable classes with zero-argument construction. */
-class InvokableResolver implements DefinitionAwareResolverInterface
+/** Resolves explicitly registered zero-argument invokable classes. */
+final class InvokableResolver implements DefinitionAwareResolverInterface
 {
     /** @var array<string, class-string> */
     private array $invokables = [];
@@ -23,16 +24,11 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         foreach ($invokables as $invokable) {
             if ($invokable instanceof InvokableDefinition) {
                 $this->setDefinition($invokable->value, $invokable);
-                continue;
+            } elseif (is_string($invokable) && $invokable !== '') {
+                $this->invokables[$invokable] = $invokable;
+            } else {
+                throw new InvalidConfigurationException('Invokable class must be a non-empty class-string.');
             }
-
-            if (!is_string($invokable) || $invokable === '') {
-                throw new InvalidConfigurationException(
-                    'Invokable class must be a non-empty string or InvokableDefinition.',
-                );
-            }
-
-            $this->invokables[$invokable] = $invokable;
         }
     }
 
@@ -41,15 +37,15 @@ class InvokableResolver implements DefinitionAwareResolverInterface
         return isset($this->invokables[$id]);
     }
 
-    /** @param array<string|int, mixed> $context */
-    public function resolve(string $id, array $context = []): object
-    {
+    public function resolve(
+        string $id,
+        ResolutionContext $context = new ResolutionContext(),
+    ): object {
         if (!$this->can($id)) {
             throw NotFoundException::forService($id);
         }
 
         $class = $this->invokables[$id];
-
         try {
             return new $class();
         } catch (Throwable $e) {
@@ -59,16 +55,9 @@ class InvokableResolver implements DefinitionAwareResolverInterface
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
-        if (!$definition instanceof InvokableDefinition) {
+        if (!$definition instanceof InvokableDefinition || $definition->value === '') {
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
-
-        if ($definition->value === '') {
-            throw new InvalidConfigurationException(
-                'Invokable definition class must be a non-empty string.',
-            );
-        }
-
         $this->invokables[$id] = $definition->value;
     }
 
