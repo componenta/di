@@ -36,6 +36,17 @@ final class CallableExecutor implements CallableExecutorInterface
         $this->invoker = new CallableInvoker();
     }
 
+    /**
+     * v4-compatible convenience API over the provenance-aware v5 executor.
+     * Caller-provided values are explicit input; dependency resolution remains DI-aware.
+     *
+     * @param array<string|int, mixed> $params
+     */
+    public function call(mixed $callable, array $params = []): mixed
+    {
+        return $this->execute($callable, ResolutionContext::explicit($params));
+    }
+
     /** @throws InvalidCallableException|ResolutionException */
     public function execute(
         mixed $callable,

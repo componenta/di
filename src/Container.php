@@ -42,7 +42,7 @@ final class Container implements
         $core = [
             ContainerInterface::class => $this,
             FactoryInterface::class => $this,
-            CallableInvokerInterface::class => new CallableInvoker(),
+            CallableInvokerInterface::class => $this,
             CallableResolverInterface::class => $this,
             CallableExecutorInterface::class => $this,
             ProxyFactoryInterface::class => $this,
@@ -195,6 +195,12 @@ final class Container implements
         } finally {
             $this->cycleGuard->leave($resolved);
         }
+    }
+
+    /** @param array<string|int, mixed> $params */
+    public function call(mixed $callable, array $params = []): mixed
+    {
+        return $this->callableExecutor->call($callable, $params);
     }
 
     public function resolve(mixed $callable): callable
