@@ -449,6 +449,25 @@ class ContainerBuilder
         if (is_string($spec)) {
             return $container->get($spec);
         }
+        if (is_array($spec)
+            && !is_callable($spec)
+            && array_keys($spec) === [0, 1]
+            && is_string($spec[0])
+            && $spec[0] !== ''
+            && is_string($spec[1])
+            && $spec[1] !== ''
+            && $container->has($spec[0])
+        ) {
+            $factory = [$container->get($spec[0]), $spec[1]];
+            if (!is_callable($factory)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Extension service method "%s::%s" is not callable.',
+                    $spec[0],
+                    $spec[1],
+                ));
+            }
+            return $factory($container);
+        }
         if (is_callable($spec)) {
             return $spec($container);
         }
@@ -468,6 +487,7 @@ class ContainerBuilder
                 'Internal service "%s" must be an instance of %s.',
                 ContainerValue::class,
                 ContainerValue::class,
+                get_debug_type($value),
             ));
         }
         return $value;
