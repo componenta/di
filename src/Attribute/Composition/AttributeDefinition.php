@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Componenta\DI\Attribute\Handler\AttributeHandlerInterface;
 use InvalidArgumentException;
 
-/**
- * Immutable semantic definition of one DI attribute class.
- *
- * The attribute itself remains a passive declarative DTO. The definition
- * supplies its runtime handler, composition capabilities and dependencies.
- */
+/** Immutable semantic definition of one DI attribute class. */
 final readonly class AttributeDefinition
 {
     /**
@@ -27,7 +23,7 @@ final readonly class AttributeDefinition
      */
     public function __construct(
         public string $attribute,
-        public object $handler,
+        public AttributeHandlerInterface $handler,
         public array $capabilities = [],
         public array $requires = [],
         public array $forbids = [],

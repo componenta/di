@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
+use Componenta\DI\Attribute\Handler\AttributeHandlerInterface;
 use Componenta\DI\Exception\AttributeCompositionException;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -28,7 +29,7 @@ interface CompositionCustomCapability extends AttributeCapabilityInterface {}
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class CompositionRequiresCustom {}
 
-final readonly class CompositionDummyHandler {}
+final readonly class CompositionDummyHandler implements AttributeHandlerInterface {}
 
 function compositionRegistry(): AttributeDefinitionRegistry
 {
@@ -83,10 +84,7 @@ it('keeps repeatable transforms in declaration order beside one provider', funct
 });
 
 it('validates declarative capability requirements', function (): void {
-    $callable = static function (
-        #[CompositionRequiresCustom]
-        string $value,
-    ): void {};
+    $callable = static function (#[CompositionRequiresCustom] string $value): void {};
     $parameter = (new ReflectionFunction($callable))->getParameters()[0];
 
     expect(fn() => (new AttributePlanBuilder(compositionRegistry()))->build($parameter))

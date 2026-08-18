@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use LogicException;
-use Reflector;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionProperty;
 
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
 final readonly class AttributePlan
@@ -16,9 +19,12 @@ final readonly class AttributePlan
     /** @var array<class-string, list<AttributeUsage>> */
     private array $byAttribute;
 
-    /** @param list<AttributeUsage> $usages */
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
     public function __construct(
-        public Reflector $target,
+        public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         public array $usages,
     ) {
         $byCapability = [];

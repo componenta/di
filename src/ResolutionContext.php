@@ -6,13 +6,7 @@ namespace Componenta\DI;
 
 use Psr\Http\Message\ServerRequestInterface;
 
-/**
- * Immutable provenance-aware input for one DI resolution operation.
- *
- * Explicit values are trusted caller overrides. Mapped values originate from
- * request DTO mapping and never acquire explicit-override authority. Trusted
- * values carry framework-owned context such as the current PSR-7 request.
- */
+/** Immutable provenance-aware input for one DI resolution operation. */
 final readonly class ResolutionContext
 {
     /**
@@ -46,6 +40,22 @@ final readonly class ResolutionContext
         }
 
         return new self(mapped: $values, trusted: $trusted);
+    }
+
+    /** @param array<string|int, mixed> $values */
+    public function withExplicit(array $values): self
+    {
+        return new self(
+            explicit: array_replace($this->explicit, $values),
+            mapped: $this->mapped,
+            trusted: $this->trusted,
+        );
+    }
+
+    /** Nested service construction keeps trusted framework context but not unrelated mapped DTO fields. */
+    public function nested(array $explicit = []): self
+    {
+        return new self(explicit: $explicit, trusted: $this->trusted);
     }
 
     /** @return array<string|int, mixed> */

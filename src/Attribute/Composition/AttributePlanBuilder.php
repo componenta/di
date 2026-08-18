@@ -6,17 +6,20 @@ namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
 use ReflectionAttribute;
-use Reflector;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionProperty;
 
 /** Builds, validates and orders the semantic DI attribute plan for one target. */
 final readonly class AttributePlanBuilder
 {
-    public function __construct(
-        private AttributeDefinitionRegistry $registry,
-    ) {}
+    public function __construct(private AttributeDefinitionRegistry $registry) {}
 
-    public function build(Reflector $target): AttributePlan
-    {
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    public function build(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): AttributePlan {
         $usages = [];
 
         /** @var ReflectionAttribute<object> $reflectionAttribute */
@@ -54,9 +57,14 @@ final readonly class AttributePlanBuilder
         return new AttributePlan($target, $this->ordered($target, $usages));
     }
 
-    /** @param list<AttributeUsage> $usages */
-    private function assertCapabilityCardinality(Reflector $target, array $usages): void
-    {
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertCapabilityCardinality(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
         $byCapability = [];
 
         foreach ($usages as $usage) {
@@ -86,9 +94,14 @@ final readonly class AttributePlanBuilder
         }
     }
 
-    /** @param list<AttributeUsage> $usages */
-    private function assertDependencies(Reflector $target, array $usages): void
-    {
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertDependencies(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
         foreach ($usages as $usage) {
             foreach ($usage->definition->requires as $selector) {
                 if ($this->matching($selector, $usages, $usage) !== []) {
@@ -124,9 +137,15 @@ final readonly class AttributePlanBuilder
         }
     }
 
-    /** @param list<AttributeUsage> $usages @return list<AttributeUsage> */
-    private function ordered(Reflector $target, array $usages): array
-    {
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     * @return list<AttributeUsage>
+     */
+    private function ordered(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): array {
         $count = count($usages);
 
         if ($count < 2) {
@@ -232,28 +251,29 @@ final readonly class AttributePlanBuilder
         ++$indegree[$to];
     }
 
-    private static function targetName(Reflector $target): string
-    {
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function targetName(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): string {
         return match (true) {
-            $target instanceof \ReflectionParameter => sprintf(
+            $target instanceof ReflectionParameter => sprintf(
                 '$%s of %s',
                 $target->getName(),
                 $target->getDeclaringClass() !== null
                     ? $target->getDeclaringClass()->getName() . '::' . $target->getDeclaringFunction()->getName() . '()'
                     : $target->getDeclaringFunction()->getName() . '()',
             ),
-            $target instanceof \ReflectionProperty => sprintf(
+            $target instanceof ReflectionProperty => sprintf(
                 '%s::$%s',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            $target instanceof \ReflectionMethod => sprintf(
+            $target instanceof ReflectionMethod => sprintf(
                 '%s::%s()',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            $target instanceof \ReflectionClass => $target->getName(),
-            default => get_debug_type($target),
+            default => $target->getName(),
         };
     }
 }
