@@ -10,7 +10,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
   statuses: write
 
 jobs:
@@ -27,18 +27,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Apply staged v5 source fix
-        if: matrix.php == '8.4' && hashFiles('.v5-static-fix.patch') != ''
-        run: |
-          git apply --check .v5-static-fix.patch
-          git apply .v5-static-fix.patch
-          git rm .v5-static-fix.patch
-          git add src
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Fix v5 static contracts'
-          git push origin HEAD:v5
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
