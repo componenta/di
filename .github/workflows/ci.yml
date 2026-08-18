@@ -38,6 +38,22 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
+      - name: Upload temporary workspace snapshot
+        if: matrix.php == '8.4'
+        uses: actions/upload-artifact@v6
+        with:
+          name: v5-workspace-php84
+          include-hidden-files: true
+          path: |
+            src
+            tests
+            vendor
+            composer.json
+            phpstan.neon.dist
+            phpunit.xml
+            .php-cs-fixer.dist.php
+          if-no-files-found: error
+
       - name: Run checks
         id: checks
         continue-on-error: true
