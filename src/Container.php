@@ -6,10 +6,7 @@ namespace Componenta\DI;
 
 use Componenta\Config\Config;
 use Componenta\DI\Definition\DefinitionInterface;
-use Componenta\DI\Exception\CircularDependencyException;
-use Componenta\DI\Exception\ConcurrentResolutionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
