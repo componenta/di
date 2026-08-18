@@ -1,0 +1,517 @@
+($plan->constructorParameters, $context);
++        if ($plan->constructor->isPublic()) {
++            return $plan->reflection->newInstanceArgs($arguments);
++        }
++
++        $entry = $plan->reflection->newInstanceWithoutConstructor();
++        $plan->constructor->invokeArgs($entry, $arguments);
++
++        return $entry;
++    }
++
++    private function initialize(object $entry, ObjectPlan $plan, ResolutionContext $context): void
++    {
++        if ($plan->constructor === null) {
++            return;
++        }
++
++        $plan->constructor->invokeArgs(
++            $entry,
++            $this->parameters->resolvePlans($plan->constructorParameters, $context),
++        );
++    }
++
++    private function useConstructor(ObjectPlan $plan, ResolutionContext $context): bool
++    {
++        $usage = $plan->attributes->one(ConstructorPolicy::class);
+         if ($usage === null) {
+             return true;
+         }
+@@ -125,16 +198,12 @@ final class ObjectPipeline
+             ));
+         }
+ 
+-        return $handler->useConstructor($usage->attribute, $class, $context);
++        return $handler->useConstructor($usage->attribute, $plan->reflection, $context);
+     }
+ 
+-    /** @param ReflectionClass<object> $class */
+-    private function strategy(
+-        ReflectionClass $class,
+-        AttributePlan $plan,
+-        ResolutionContext $context,
+-    ): CreationStrategy {
+-        $usage = $plan->one(CreationStrategyCapability::class);
++    private function strategy(ObjectPlan $plan, ResolutionContext $context): CreationStrategy
++    {
++        $usage = $plan->attributes->one(CreationStrategyCapability::class);
+         if ($usage === null) {
+             return CreationStrategy::Eager;
+         }
+@@ -148,16 +217,27 @@ final class ObjectPipeline
+             ));
+         }
+ 
+-        return $handler->strategy($usage->attribute, $class, $context);
++        return $handler->strategy($usage->attribute, $plan->reflection, $context);
+     }
+ 
+     private function populate(
+         object $entry,
+-        ObjectPlan $objectPlan,
++        ObjectPlan $plan,
+         ResolutionContext $context,
++        bool $useConstructor,
+     ): void {
+-        foreach ($objectPlan->properties as $propertyPlan) {
+-            $property = $propertyPlan->property;
++        foreach ($plan->properties as $propertyPlan) {
++            $property = $propertyPlan->reflection;
++            if ($useConstructor && $property->isPromoted()) {
++                continue;
++            }
++
++            if ($property->isStatic()) {
++                throw ResolutionException::forProperty(
++                    $property,
++                    reason: 'DI value attributes are not supported on static properties',
++                );
++            }
+ 
+             if ($property->isReadOnly() && $property->isInitialized($entry)) {
+                 throw ResolutionException::forProperty(
+@@ -175,14 +255,12 @@ final class ObjectPipeline
+         }
+     }
+ 
+-    /** @param ReflectionClass<object> $class */
+     private function lifecycle(
+         object $entry,
+-        ReflectionClass $class,
+-        AttributePlan $plan,
++        ObjectPlan $plan,
+         ResolutionContext $context,
+     ): void {
+-        foreach ($plan->all(LifecycleHook::class) as $usage) {
++        foreach ($plan->attributes->all(LifecycleHook::class) as $usage) {
+             $handler = $usage->definition->handler;
+             if (!$handler instanceof LifecycleHookHandlerInterface) {
+                 throw new LogicException(sprintf(
+@@ -192,51 +270,8 @@ final class ObjectPipeline
+                 ));
+             }
+ 
+-            $handler->run($usage->attribute, $entry, $class, $context);
+-        }
+-    }
+-
+-    /** @param class-string $class */
+-    private function objectPlan(string $class): ObjectPlan
+-    {
+-        if (isset($this->objectPlans[$class])) {
+-            return $this->objectPlans[$class];
+-        }
+-
+-        /** @var ReflectionClass<object> $reflection */
+-        $reflection = new ReflectionClass($class);
+-        $attributes = $this->plans->build($reflection);
+-        $properties = [];
+-
+-        foreach (self::properties($reflection) as $property) {
+-            if ($property->isPromoted()) {
+-                continue;
+-            }
+-
+-            $plan = $this->plans->build($property);
+-            if (!$plan->has(ValueProvider::class) && !$plan->has(ValueTransformer::class)) {
+-                continue;
+-            }
+-
+-            if ($property->isStatic()) {
+-                throw ResolutionException::forProperty(
+-                    $property,
+-                    reason: 'DI value attributes are not supported on static properties',
+-                );
+-            }
+-
+-            $properties[] = new PropertyValuePlan(
+-                $property,
+-                new PropertyTarget($property),
+-                $plan,
+-            );
++            $handler->run($usage->attribute, $entry, $plan->reflection, $context);
+         }
+-
+-        $objectPlan = new ObjectPlan($reflection, $attributes, $properties);
+-        $this->objectPlans[$class] = $objectPlan;
+-        $this->objectPlans[$reflection->getName()] = $objectPlan;
+-
+-        return $objectPlan;
+     }
+ 
+     /**
+diff --git a/src/Object/ObjectPlan.php b/src/Object/ObjectPlan.php
+index 191b444..5d6f386 100644
+--- a/src/Object/ObjectPlan.php
++++ b/src/Object/ObjectPlan.php
+@@ -5,18 +5,23 @@ declare(strict_types=1);
+ namespace Componenta\DI\Object;
+ 
+ use Componenta\DI\Attribute\Composition\AttributePlan;
++use Componenta\DI\Resolver\Parameter\ParameterValuePlan;
+ use ReflectionClass;
++use ReflectionMethod;
+ 
+-/** Immutable reflection metadata prepared once for repeated object creation. */
++/** Immutable warm metadata used by both reflection and compiled object creation. */
+ final readonly class ObjectPlan
+ {
+     /**
+-     * @param ReflectionClass<object> $class
++     * @param ReflectionClass<object> $reflection
++     * @param list<ParameterValuePlan> $constructorParameters
+      * @param list<PropertyValuePlan> $properties
+      */
+     public function __construct(
+-        public ReflectionClass $class,
++        public ReflectionClass $reflection,
+         public AttributePlan $attributes,
++        public ?ReflectionMethod $constructor,
++        public array $constructorParameters,
+         public array $properties,
+     ) {}
+ }
+diff --git a/src/Object/PropertyValuePlan.php b/src/Object/PropertyValuePlan.php
+index 1a73498..86932ee 100644
+--- a/src/Object/PropertyValuePlan.php
++++ b/src/Object/PropertyValuePlan.php
+@@ -8,11 +8,11 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
+ use Componenta\DI\Resolver\Target\PropertyTarget;
+ use ReflectionProperty;
+ 
+-/** Prepared value-resolution metadata for one injectable property. */
++/** Precomputed value metadata for one injectable property. */
+ final readonly class PropertyValuePlan
+ {
+     public function __construct(
+-        public ReflectionProperty $property,
++        public ReflectionProperty $reflection,
+         public PropertyTarget $target,
+         public AttributePlan $attributes,
+     ) {}
+diff --git a/src/Resolver/Entry/InstanceCreator.php b/src/Resolver/Entry/InstanceCreator.php
+deleted file mode 100644
+index 902707d..0000000
+--- a/src/Resolver/Entry/InstanceCreator.php
++++ /dev/null
+@@ -1,51 +0,0 @@
+-<?php
+-
+-declare(strict_types=1);
+-
+-namespace Componenta\DI\Resolver\Entry;
+-
+-use Componenta\DI\ResolutionContext;
+-use Componenta\DI\Resolver\Parameter\ParametersResolver;
+-use ReflectionClass;
+-
+-/** Creates or initializes an object through the common parameter value pipeline. */
+-final readonly class InstanceCreator
+-{
+-    public function __construct(private ParametersResolver $parameters) {}
+-
+-    /**
+-     * @template T of object
+-     * @param ReflectionClass<T> $class
+-     * @return T
+-     */
+-    public function create(
+-        ReflectionClass $class,
+-        ResolutionContext $context = new ResolutionContext(),
+-    ): object {
+-        $constructor = $class->getConstructor();
+-        if ($constructor === null) {
+-            return $class->newInstance();
+-        }
+-
+-        return $class->newInstanceArgs(
+-            $this->parameters->resolve($constructor->getParameters(), $context),
+-        );
+-    }
+-
+-    /** @param ReflectionClass<object> $class */
+-    public function initialize(
+-        object $entry,
+-        ReflectionClass $class,
+-        ResolutionContext $context = new ResolutionContext(),
+-    ): void {
+-        $constructor = $class->getConstructor();
+-        if ($constructor === null) {
+-            return;
+-        }
+-
+-        $constructor->invokeArgs(
+-            $entry,
+-            $this->parameters->resolve($constructor->getParameters(), $context),
+-        );
+-    }
+-}
+diff --git a/src/Resolver/Parameter/ParameterValuePlan.php b/src/Resolver/Parameter/ParameterValuePlan.php
+new file mode 100644
+index 0000000..bad6f58
+--- /dev/null
++++ b/src/Resolver/Parameter/ParameterValuePlan.php
+@@ -0,0 +1,17 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Componenta\DI\Resolver\Parameter;
++
++use Componenta\DI\Attribute\Composition\AttributePlan;
++use Componenta\DI\Resolver\Target\ParameterTarget;
++
++/** Immutable pairing of precomputed target metadata and its semantic attribute plan. */
++final readonly class ParameterValuePlan
++{
++    public function __construct(
++        public ParameterTarget $target,
++        public AttributePlan $attributes,
++    ) {}
++}
+diff --git a/src/Resolver/Parameter/ParametersResolver.php b/src/Resolver/Parameter/ParametersResolver.php
+index 7461f6c..3c355c8 100644
+--- a/src/Resolver/Parameter/ParametersResolver.php
++++ b/src/Resolver/Parameter/ParametersResolver.php
+@@ -4,7 +4,6 @@ declare(strict_types=1);
+ 
+ namespace Componenta\DI\Resolver\Parameter;
+ 
+-use Componenta\DI\Attribute\Composition\AttributePlan;
+ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+ use Componenta\DI\Exception\ResolutionException;
+ use Componenta\DI\ResolutionContext;
+@@ -13,23 +12,18 @@ use Componenta\DI\Resolver\Target\ParameterTargetFactory;
+ use Componenta\DI\Value\ValueContext;
+ use Componenta\DI\Value\ValuePipeline;
+ use ReflectionParameter;
+-use WeakMap;
+ 
+-/** Resolves constructor/callable parameters through the shared semantic value pipeline. */
++/** Resolves constructor/callable parameters through precomputed semantic value plans. */
+ final class ParametersResolver
+ {
+     private ParameterTargetFactory $targetFactory;
+ 
+-    /** @var WeakMap<ParameterTarget, AttributePlan> */
+-    private WeakMap $attributePlans;
+-
+     public function __construct(
+         private readonly AttributePlanBuilder $plans,
+         private readonly ValuePipeline $values,
+         ?ParameterTargetFactory $targetFactory = null,
+     ) {
+         $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
+-        $this->attributePlans = new WeakMap();
+     }
+ 
+     /**
+@@ -40,7 +34,7 @@ final class ParametersResolver
+         array $parameters,
+         ResolutionContext $context = new ResolutionContext(),
+     ): array {
+-        return $this->resolveTargets($this->targets($parameters), $context);
++        return $this->resolvePlans($this->plans($parameters), $context);
+     }
+ 
+     /**
+@@ -56,6 +50,23 @@ final class ParametersResolver
+         return $targets;
+     }
+ 
++    /**
++     * @param list<ReflectionParameter> $parameters
++     * @return list<ParameterValuePlan>
++     */
++    public function plans(array $parameters): array
++    {
++        $plans = [];
++        foreach ($parameters as $parameter) {
++            $target = $this->target($parameter);
++            $plans[] = new ParameterValuePlan(
++                $target,
++                $this->plans->build($target->reflection),
++            );
++        }
++        return $plans;
++    }
++
+     /**
+      * @param list<ParameterTarget> $targets
+      * @return array<int, mixed>
+@@ -63,10 +74,29 @@ final class ParametersResolver
+     public function resolveTargets(
+         array $targets,
+         ResolutionContext $context = new ResolutionContext(),
++    ): array {
++        $plans = [];
++        foreach ($targets as $target) {
++            $plans[] = new ParameterValuePlan(
++                $target,
++                $this->plans->build($target->reflection),
++            );
++        }
++        return $this->resolvePlans($plans, $context);
++    }
++
++    /**
++     * @param list<ParameterValuePlan> $plans
++     * @return array<int, mixed>
++     */
++    public function resolvePlans(
++        array $plans,
++        ResolutionContext $context = new ResolutionContext(),
+     ): array {
+         $resolved = [];
+ 
+-        foreach ($targets as $target) {
++        foreach ($plans as $plan) {
++            $target = $plan->target;
+             if ($target->variadic) {
+                 throw ResolutionException::forParameter(
+                     $target->reflection,
+@@ -85,11 +115,9 @@ final class ParametersResolver
+                 );
+             }
+ 
+-            $plan = $this->attributePlans[$target]
+-                ??= $this->plans->build($target->reflection);
+             $resolved[$target->position] = $this->values->resolve(
+                 $target,
+-                $plan,
++                $plan->attributes,
+                 new ValueContext($context, $resolved),
+             );
+         }
+diff --git a/src/Value/ValueFallbackRegistry.php b/src/Value/ValueFallbackRegistry.php
+index 5aa9688..aa4dfc8 100644
+--- a/src/Value/ValueFallbackRegistry.php
++++ b/src/Value/ValueFallbackRegistry.php
+@@ -17,7 +17,7 @@ final class ValueFallbackRegistry
+     private ?array $ordered = null;
+ 
+     /** @var list<ValueFallbackInterface>|null */
+-    private ?array $resolvedFallbacks = null;
++    private ?array $fallbacks = null;
+ 
+     private bool $sealed = false;
+ 
+@@ -38,23 +38,28 @@ final class ValueFallbackRegistry
+             'order' => count($this->items),
+         ];
+         $this->ordered = null;
+-        $this->resolvedFallbacks = null;
++        $this->fallbacks = null;
+     }
+ 
+     public function seal(): void
+     {
+-        $this->definitions();
++        $this->fallbacks();
+         $this->sealed = true;
+     }
+ 
+     /** @return list<ValueFallbackInterface> */
+     public function fallbacks(): array
+     {
++        if ($this->fallbacks !== null) {
++            return $this->fallbacks;
++        }
++
+         $fallbacks = [];
+         foreach ($this->definitions() as $definition) {
+             $fallbacks[] = $definition->fallback;
+         }
+-        return $fallbacks;
++
++        return $this->fallbacks = $fallbacks;
+     }
+ 
+     /** @return list<ValueFallbackDefinition> */
+diff --git a/src/Value/ValuePipeline.php b/src/Value/ValuePipeline.php
+index 82efde8..ce92baa 100644
+--- a/src/Value/ValuePipeline.php
++++ b/src/Value/ValuePipeline.php
+@@ -4,9 +4,12 @@ declare(strict_types=1);
+ 
+ namespace Componenta\DI\Value;
+ 
++use Closure;
+ use Componenta\DI\Attribute\Composition\AttributePlan;
+ use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
++use Componenta\DI\Attribute\Composition\Capability\ValueProviderDecorator;
+ use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
++use Componenta\DI\Attribute\Handler\ValueProviderDecoratorHandlerInterface;
+ use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
+ use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
+ use Componenta\DI\Attribute\Handler\ValueTransformerHandlerInterface;
+@@ -16,24 +19,37 @@ use Componenta\DI\Exception\ValueProviderConflictException;
+ use Componenta\DI\Resolver\Target\ParameterTarget;
+ use Componenta\DI\Resolver\Target\ValueTargetInterface;
+ 
+-/** Provider -> transformer chain -> final declared-type validation. */
++/** Acquisition -> provider decorators -> transformers -> final declared-type validation. */
+ final readonly class ValuePipeline
+ {
+     public function __construct(private ValueFallbackRegistry $fallbacks) {}
+ 
+     public function resolve(ValueTargetInterface $target, AttributePlan $plan, ValueContext $context): mixed
+     {
+-        $provider = $plan->one(ValueProvider::class);
+-        if ($provider !== null) {
+-            $value = $this->provider($target, $provider->attribute, $provider->definition->handler, $context);
+-        } else {
+-            $result = $this->fallback($target, $context);
+-            if ($result === null) {
+-                $this->unresolved($target, $context);
++        $acquire = $this->acquisition($target, $plan, $context);
++
++        foreach (array_reverse($plan->all(ValueProviderDecorator::class)) as $usage) {
++            $handler = $usage->definition->handler;
++            if (!$handler instanceof ValueProviderDecoratorHandlerInterface) {
++                throw new InvalidConfigurationException(sprintf(
++                    'Attribute %s declares ValueProviderDecorator but handler %s does not implement %s.',
++                    $usage->attribute::class,
++                    $handler::class,
++                    ValueProviderDecoratorHandlerInterface::class,
++                ));
+             }
+-            $value = $result->value;
++
++            $next = $acquire;
++            $acquire = fn(): mixed => $handler->decorate(
++                $usage->attribute,
++                $next,
++                $target,
++                $context,
++            );
+         }
+ 
++        $value = $acquire();
++
+         foreach ($plan->all(ValueTransformer::class) as $usage) {
+             $handler = $usage->definition->handler;
+             if (!$handler instanceof ValueTransformerHandlerInterface) {
+@@ -54,32 +70,63 @@ final readonly class ValuePipeline
+         return $value;
+     }
+ 
+-    private function provider(ValueTargetInterface $target, object $attribute, object $handler, ValueContext $context): mixed
+-    {
++    /** @return Closure(): mixed */
++    private function acquisition(
++        ValueTargetInterface $target,
++        AttributePlan $plan,
++        ValueContext $context,
++    ): Closure {
++        $provider = $plan->o
