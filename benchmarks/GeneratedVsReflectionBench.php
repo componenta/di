@@ -7,6 +7,7 @@ namespace Componenta\DI\Benchmarks;
 use Componenta\Config\Config;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\ResolutionContext;
 
 require dirname(__DIR__, 4) . '/vendor/autoload.php';
 
@@ -46,6 +47,7 @@ function benchmark(callable $operation, int $iterations, int $rounds = 7): array
 
 $iterations = max(10_000, (int) ($_SERVER['DI_BENCH_ITERATIONS'] ?? 100_000));
 $directory = sys_get_temp_dir() . '/componenta-di-benchmark-' . bin2hex(random_bytes(5));
+$override = ResolutionContext::explicit(['number' => 42]);
 
 try {
     $compileStarted = hrtime(true);
@@ -76,11 +78,11 @@ try {
         $iterations,
     );
     $reflectionOverride = benchmark(
-        static fn(): object => $reflection->make(BenchmarkEntry::class, ['number' => 42]),
+        static fn(): object => $reflection->make(BenchmarkEntry::class, $override),
         $iterations,
     );
     $compiledOverride = benchmark(
-        static fn(): object => $compiled->make(BenchmarkEntry::class, ['number' => 42]),
+        static fn(): object => $compiled->make(BenchmarkEntry::class, $override),
         $iterations,
     );
 
