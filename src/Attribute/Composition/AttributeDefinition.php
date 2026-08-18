@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
-use Componenta\DI\Attribute\Handler\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use InvalidArgumentException;
 
 /** Immutable semantic definition of one DI attribute class. */
@@ -13,6 +13,10 @@ final readonly class AttributeDefinition
     /**
      * Selectors in requires/forbids/before/after may reference either another
      * attribute class or an AttributeCapabilityInterface class.
+     *
+     * Handler is temporarily typed as object during the v5 migration: legacy
+     * specialized v5 handlers and the final generic AttributeHandlerInterface
+     * coexist until all built-ins have moved to the generic execution path.
      *
      * @param class-string $attribute
      * @param list<class-string<AttributeCapabilityInterface>> $capabilities
@@ -24,7 +28,7 @@ final readonly class AttributeDefinition
      */
     public function __construct(
         public string $attribute,
-        public AttributeHandlerInterface $handler,
+        public object $handler,
         public array $capabilities = [],
         public array $requires = [],
         public array $forbids = [],
@@ -32,6 +36,7 @@ final readonly class AttributeDefinition
         public array $after = [],
         public array $rules = [],
         public int $version = 1,
+        public AttributePhase $phase = AttributePhase::AfterInstantiation,
     ) {
         if (!class_exists($attribute) && !interface_exists($attribute)) {
             throw new InvalidArgumentException(sprintf(
