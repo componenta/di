@@ -16,7 +16,6 @@ use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
 use InvalidArgumentException;
 use ReflectionClass;
-use ReflectionFunctionAbstract;
 use ReflectionParameter;
 
 /** Validates v5 factory forms and their runtime `(ContainerValue, ResolutionContext)` ABI. */
