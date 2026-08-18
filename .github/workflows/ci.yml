@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   diagnose:
@@ -24,4 +25,19 @@ jobs:
           done
           sha256sum /tmp/v5-final-src-tests.tar.gz
           tar -tzf /tmp/v5-final-src-tests.tar.gz >/dev/null
-          exit 1
+      - name: Publish diagnostic status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPOSITORY/statuses/$SHA" \
+            -d "{\"state\":\"success\",\"context\":\"ci/archive-diagnostic\",\"description\":\"v5 archive diagnostic\",\"target_url\":\"$SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID\"}"
