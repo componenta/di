@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Object;
 
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
@@ -26,13 +27,18 @@ use ReflectionClass;
 use ReflectionProperty;
 
 /** Single runtime object-creation pipeline shared by reflection and compiled entries. */
-final readonly class ObjectPipeline
+final class ObjectPipeline
 {
+    /** @var array<class-string, ObjectMetadata> */
+    private array $metadata = [];
+    private int $metadataRevision = -1;
+
     public function __construct(
-        private AttributePlanBuilder $plans,
-        private InstanceCreator $instances,
-        private ValuePipeline $values,
-        private ProxyFactoryInterface $proxies,
+        private readonly AttributePlanBuilder $plans,
+        private readonly InstanceCreator $instances,
+        private readonly ValuePipeline $values,
+        private readonly ProxyFactoryInterface $proxies,
+        private readonly ?AttributeDefinitionRegistry $registry = null,
     ) {}
 
     /** @param class-string $class */
@@ -40,66 +46,106 @@ final readonly class ObjectPipeline
         string $class,
         ResolutionContext $context = new ResolutionContext(),
     ): object {
-        /** @var ReflectionClass<object> $reflection */
-        $reflection = new ReflectionClass($class);
-        $plan = $this->plans->build($reflection);
-        $useConstructor = $this->useConstructor($reflection, $plan, $context);
-        $strategy = $this->strategy($reflection, $plan, $context);
+        $metadata = $this->metadata($class);
+        $useConstructor = $this->useConstructor($metadata->class, $metadata->classPlan, $context);
+        $strategy = $this->strategy($metadata->class, $metadata->classPlan, $context);
 
         return match ($strategy) {
-            CreationStrategy::Eager => $this->eager($reflection, $plan, $context, $useConstructor),
-            CreationStrategy::Lazy => $this->lazy($reflection, $plan, $context, $useConstructor),
-            CreationStrategy::Proxy => $this->proxy($reflection, $plan, $context, $useConstructor),
+            CreationStrategy::Eager => $this->eager($metadata, $context, $useConstructor),
+            CreationStrategy::Lazy => $this->lazy($metadata, $context, $useConstructor),
+            CreationStrategy::Proxy => $this->proxy($metadata, $context, $useConstructor),
         };
     }
 
-    /** @param ReflectionClass<object> $class */
+    /** @param class-string $class */
+    private function metadata(string $class): ObjectMetadata
+    {
+        $revision = $this->registry?->revision ?? 0;
+        if ($revision !== $this->metadataRevision) {
+            $this->metadata = [];
+            $this->metadataRevision = $revision;
+        }
+
+        if (isset($this->metadata[$class])) {
+            return $this->metadata[$class];
+        }
+
+        /** @var ReflectionClass<object> $reflection */
+        $reflection = new ReflectionClass($class);
+        $classPlan = $this->plans->build($reflection);
+        $propertyPlans = [];
+
+        foreach (self::properties($reflection) as $property) {
+            if ($property->isPromoted()) {
+                continue;
+            }
+
+            $plan = $this->plans->build($property);
+            if (!$plan->has(ValueProvider::class) && !$plan->has(ValueTransformer::class)) {
+                continue;
+            }
+            if ($property->isStatic()) {
+                throw ResolutionException::forProperty(
+                    $property,
+                    reason: 'DI value attributes are not supported on static properties',
+                );
+            }
+
+            $propertyPlans[] = new PropertyValuePlan(
+                $property,
+                new PropertyTarget($property),
+                $plan,
+            );
+        }
+
+        return $this->metadata[$class] = new ObjectMetadata(
+            $reflection,
+            $classPlan,
+            $propertyPlans,
+        );
+    }
+
     private function eager(
-        ReflectionClass $class,
-        AttributePlan $plan,
+        ObjectMetadata $metadata,
         ResolutionContext $context,
         bool $useConstructor,
     ): object {
         $entry = $useConstructor
-            ? $this->instances->create($class, $context)
-            : $class->newInstanceWithoutConstructor();
+            ? $this->instances->create($metadata->class, $context)
+            : $metadata->class->newInstanceWithoutConstructor();
 
-        $this->populate($entry, $class, $context);
-        $this->lifecycle($entry, $class, $plan, $context);
+        $this->populate($entry, $metadata, $context);
+        $this->lifecycle($entry, $metadata->class, $metadata->classPlan, $context);
 
         return $entry;
     }
 
-    /** @param ReflectionClass<object> $class */
     private function lazy(
-        ReflectionClass $class,
-        AttributePlan $plan,
+        ObjectMetadata $metadata,
         ResolutionContext $context,
         bool $useConstructor,
     ): object {
         return $this->proxies->makeLazy(
-            $class->getName(),
-            function (object $entry) use ($class, $plan, $context, $useConstructor): void {
+            $metadata->class->getName(),
+            function (object $entry) use ($metadata, $context, $useConstructor): void {
                 if ($useConstructor) {
-                    $this->instances->initialize($entry, $class, $context);
+                    $this->instances->initialize($entry, $metadata->class, $context);
                 }
 
-                $this->populate($entry, $class, $context);
-                $this->lifecycle($entry, $class, $plan, $context);
+                $this->populate($entry, $metadata, $context);
+                $this->lifecycle($entry, $metadata->class, $metadata->classPlan, $context);
             },
         );
     }
 
-    /** @param ReflectionClass<object> $class */
     private function proxy(
-        ReflectionClass $class,
-        AttributePlan $plan,
+        ObjectMetadata $metadata,
         ResolutionContext $context,
         bool $useConstructor,
     ): object {
         return $this->proxies->makeProxy(
-            $class->getName(),
-            fn(object $_proxy): object => $this->eager($class, $plan, $context, $useConstructor),
+            $metadata->class->getName(),
+            fn(object $_proxy): object => $this->eager($metadata, $context, $useConstructor),
         );
     }
 
@@ -149,31 +195,20 @@ final readonly class ObjectPipeline
         return $handler->strategy($usage->attribute, $class, $context);
     }
 
-    /** @param ReflectionClass<object> $class */
-    private function populate(object $entry, ReflectionClass $class, ResolutionContext $context): void
+    private function populate(object $entry, ObjectMetadata $metadata, ResolutionContext $context): void
     {
-        foreach (self::properties($class) as $property) {
-            if ($property->isPromoted()) {
-                continue;
-            }
-
-            $plan = $this->plans->build($property);
-            if (!$plan->has(ValueProvider::class) && !$plan->has(ValueTransformer::class)) {
-                continue;
-            }
-
-            if ($property->isStatic()) {
-                throw ResolutionException::forProperty($property, reason: 'DI value attributes are not supported on static properties');
-            }
-
+        foreach ($metadata->properties as $propertyPlan) {
+            $property = $propertyPlan->property;
             if ($property->isReadOnly() && $property->isInitialized($entry)) {
-                throw ResolutionException::forProperty($property, reason: 'an initialized readonly property cannot be populated by DI');
+                throw ResolutionException::forProperty(
+                    $property,
+                    reason: 'an initialized readonly property cannot be populated by DI',
+                );
             }
 
-            $target = new PropertyTarget($property);
             $value = $this->values->resolve(
-                $target,
-                $plan,
+                $propertyPlan->target,
+                $propertyPlan->plan,
                 new ValueContext($context, object: $entry),
             );
             $property->setValue($entry, $value);
