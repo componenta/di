@@ -6,21 +6,45 @@ namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
 use ReflectionClass;
+use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
+use WeakMap;
 
-/** Builds, validates and orders the semantic DI attribute plan for one target. */
-final readonly class AttributePlanBuilder
+/** Builds, validates, orders and memoizes the semantic attribute plan for one target. */
+final class AttributePlanBuilder
 {
-    public function __construct(private AttributeDefinitionRegistry $registry) {}
+    public const int FORMAT_VERSION = 2;
+
+    /** @var array<string, AttributePlan> */
+    private array $namedPlans = [];
+
+    /** @var WeakMap<object, AttributePlan>|null */
+    private ?WeakMap $anonymousPlans = null;
+
+    private int $registryRevision = -1;
+
+    public function __construct(private readonly AttributeDefinitionRegistry $registry) {}
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function build(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): AttributePlan {
-        $usages = [];
+        $this->synchronizeRegistryRevision();
 
+        $key = self::cacheKey($target);
+        if ($key !== null && isset($this->namedPlans[$key])) {
+            return $this->namedPlans[$key];
+        }
+        if ($key === null) {
+            $anonymous = $this->anonymousPlans ??= new WeakMap();
+            if (isset($anonymous[$target])) {
+                return $anonymous[$target];
+            }
+        }
+
+        $usages = [];
         foreach ($target->getAttributes() as $index => $reflectionAttribute) {
             /** @var class-string $attributeClass */
             $attributeClass = $reflectionAttribute->getName();
@@ -39,8 +63,26 @@ final readonly class AttributePlanBuilder
 
         $this->assertCapabilityCardinality($target, $usages);
         $this->assertDependencies($target, $usages);
+        $this->assertCustomRules($usages);
 
-        return new AttributePlan($target, $this->ordered($target, $usages));
+        $plan = new AttributePlan($target, $this->ordered($target, $usages));
+        if ($key !== null) {
+            return $this->namedPlans[$key] = $plan;
+        }
+
+        ($this->anonymousPlans ??= new WeakMap())[$target] = $plan;
+        return $plan;
+    }
+
+    private function synchronizeRegistryRevision(): void
+    {
+        if ($this->registryRevision === $this->registry->revision) {
+            return;
+        }
+
+        $this->namedPlans = [];
+        $this->anonymousPlans = new WeakMap();
+        $this->registryRevision = $this->registry->revision;
     }
 
     /**
@@ -109,6 +151,21 @@ final readonly class AttributePlanBuilder
                     $selector,
                     $usage->attribute::class,
                 ));
+            }
+        }
+    }
+
+    /** @param list<AttributeUsage> $usages */
+    private function assertCustomRules(array $usages): void
+    {
+        if ($usages === []) {
+            return;
+        }
+
+        $set = new AttributeSet($usages);
+        foreach ($usages as $usage) {
+            foreach ($usage->definition->rules as $rule) {
+                $rule->validate($usage, $set);
             }
         }
     }
@@ -236,6 +293,42 @@ final readonly class AttributePlanBuilder
         }
         $edges[$from][$to] = true;
         ++$indegree[$to];
+    }
+
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function cacheKey(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): ?string {
+        return match (true) {
+            $target instanceof ReflectionClass => 'class:' . $target->getName(),
+            $target instanceof ReflectionProperty => sprintf(
+                'property:%s::$%s',
+                $target->getDeclaringClass()->getName(),
+                $target->getName(),
+            ),
+            $target instanceof ReflectionMethod => sprintf(
+                'method:%s::%s',
+                $target->getDeclaringClass()->getName(),
+                $target->getName(),
+            ),
+            default => self::parameterCacheKey($target),
+        };
+    }
+
+    private static function parameterCacheKey(ReflectionParameter $parameter): ?string
+    {
+        $function = $parameter->getDeclaringFunction();
+        if ($function instanceof ReflectionFunction && $function->isClosure()) {
+            return null;
+        }
+
+        $owner = $parameter->getDeclaringClass()?->getName();
+        return sprintf(
+            'parameter:%s%s:%d',
+            $owner === null ? '' : $owner . '::',
+            $function->getName(),
+            $parameter->getPosition(),
+        );
     }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */

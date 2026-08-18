@@ -17,6 +17,11 @@ final class AttributeDefinitionRegistry
     private array $policies = [];
 
     private bool $sealed = false;
+    private int $generation = 0;
+
+    public int $revision {
+        get => $this->generation;
+    }
 
     public function register(AttributeDefinition $definition): void
     {
@@ -40,6 +45,7 @@ final class AttributeDefinitionRegistry
         }
 
         $this->definitions[$definition->attribute] = $definition;
+        ++$this->generation;
     }
 
     public function defineCapability(CapabilityPolicy $policy): void
@@ -52,7 +58,10 @@ final class AttributeDefinitionRegistry
                 $policy->capability,
             ));
         }
-        $this->policies[$policy->capability] = $policy;
+        if ($existing === null) {
+            $this->policies[$policy->capability] = $policy;
+            ++$this->generation;
+        }
     }
 
     public function seal(): void
@@ -67,12 +76,44 @@ final class AttributeDefinitionRegistry
             return $this->definitions[$attributeClass];
         }
 
+        /** @var array<class-string, AttributeDefinition> $matches */
+        $matches = [];
         foreach ($this->definitions as $registered => $definition) {
             if (is_a($attributeClass, $registered, true)) {
-                return $definition;
+                $matches[$registered] = $definition;
             }
         }
-        return null;
+
+        if ($matches === []) {
+            return null;
+        }
+        if (count($matches) === 1) {
+            return array_values($matches)[0];
+        }
+
+        // Keep only the most-specific registrations. A class/interface that is
+        // an ancestor of another matching registration cannot win.
+        foreach (array_keys($matches) as $candidate) {
+            foreach (array_keys($matches) as $other) {
+                if ($candidate === $other) {
+                    continue;
+                }
+                if (is_a($other, $candidate, true)) {
+                    unset($matches[$candidate]);
+                    break;
+                }
+            }
+        }
+
+        if (count($matches) === 1) {
+            return array_values($matches)[0];
+        }
+
+        throw new InvalidConfigurationException(sprintf(
+            'Attribute "%s" matches multiple equally specific semantic definitions: %s.',
+            $attributeClass,
+            implode(', ', array_keys($matches)),
+        ));
     }
 
     /** @param class-string<AttributeCapabilityInterface> $capability */
@@ -84,21 +125,13 @@ final class AttributeDefinitionRegistry
     /** @return list<AttributeDefinition> */
     public function definitions(): array
     {
-        $result = [];
-        foreach ($this->definitions as $definition) {
-            $result[] = $definition;
-        }
-        return $result;
+        return array_values($this->definitions);
     }
 
     /** @return list<CapabilityPolicy> */
     public function policies(): array
     {
-        $result = [];
-        foreach ($this->policies as $policy) {
-            $result[] = $policy;
-        }
-        return $result;
+        return array_values($this->policies);
     }
 
     private function assertMutable(): void

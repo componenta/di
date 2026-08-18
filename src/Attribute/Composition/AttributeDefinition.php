@@ -20,6 +20,7 @@ final readonly class AttributeDefinition
      * @param list<class-string> $forbids
      * @param list<class-string> $before
      * @param list<class-string> $after
+     * @param list<AttributeCompositionRuleInterface> $rules
      */
     public function __construct(
         public string $attribute,
@@ -29,12 +30,17 @@ final readonly class AttributeDefinition
         public array $forbids = [],
         public array $before = [],
         public array $after = [],
+        public array $rules = [],
+        public int $version = 1,
     ) {
         if (!class_exists($attribute) && !interface_exists($attribute)) {
             throw new InvalidArgumentException(sprintf(
                 'Attribute definition target "%s" is not available.',
                 $attribute,
             ));
+        }
+        if ($version < 1) {
+            throw new InvalidArgumentException('Attribute definition version must be at least 1.');
         }
 
         foreach ($capabilities as $capability) {
@@ -44,6 +50,17 @@ final readonly class AttributeDefinition
                     $capability,
                     $attribute,
                     AttributeCapabilityInterface::class,
+                ));
+            }
+        }
+
+        foreach ($rules as $rule) {
+            if (!$rule instanceof AttributeCompositionRuleInterface) {
+                throw new InvalidArgumentException(sprintf(
+                    'Composition rule for attribute "%s" must implement %s; got %s.',
+                    $attribute,
+                    AttributeCompositionRuleInterface::class,
+                    get_debug_type($rule),
                 ));
             }
         }
