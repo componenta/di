@@ -8,12 +8,22 @@ use Componenta\DI\Attribute\Handler\LifecycleHookHandlerInterface;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\ResolutionContext;
+use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use LogicException;
 use ReflectionClass;
 
+/** Executes repeatable post-population #[SetUp] hooks in declaration order. */
 final readonly class SetUpLifecycleHandler implements LifecycleHookHandlerInterface
 {
-    public function __construct(private CallableExecutorInterface $executor) {}
+    /** @var list<SetUpValueUnwrapperInterface> */
+    private array $valueUnwrappers;
+
+    public function __construct(
+        private CallableExecutorInterface $executor,
+        SetUpValueUnwrapperInterface ...$valueUnwrappers,
+    ) {
+        $this->valueUnwrappers = array_values($valueUnwrappers);
+    }
 
     public function run(
         object $attribute,
@@ -41,10 +51,37 @@ final readonly class SetUpLifecycleHandler implements LifecycleHookHandlerInterf
         $this->executor->execute(
             [$entry, $attribute->method],
             new ResolutionContext(
-                explicit: array_replace($context->explicit, $attribute->params),
+                explicit: array_replace($context->explicit, $this->unwrapParams($attribute->params)),
                 mapped: $context->mapped,
                 trusted: $context->trusted,
             ),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function unwrapParams(array $params): array
+    {
+        if ($this->valueUnwrappers === []) {
+            return $params;
+        }
+
+        $resolved = [];
+        foreach ($params as $key => $value) {
+            $resolved[$key] = $this->unwrap($value, (string) $key);
+        }
+        return $resolved;
+    }
+
+    private function unwrap(mixed $value, string $key): mixed
+    {
+        foreach ($this->valueUnwrappers as $unwrapper) {
+            if ($unwrapper->supports($value)) {
+                return $unwrapper->unwrap($value, $key);
+            }
+        }
+        return $value;
     }
 }
