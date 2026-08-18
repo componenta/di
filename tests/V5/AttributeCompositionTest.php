@@ -48,7 +48,7 @@ final class ConflictingCreationStrategies {}
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class CustomValue {}
 
-final readonly class CustomValueHandler implements ValueProviderHandlerInterface
+final class CustomValueHandler implements ValueProviderHandlerInterface
 {
     public ValueProviderPrecedence $precedence { get => ValueProviderPrecedence::ProviderFirst; }
 
