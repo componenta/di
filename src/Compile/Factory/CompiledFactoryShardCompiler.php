@@ -10,7 +10,7 @@ use InvalidArgumentException;
 /** Packs generated entry methods into immutable content-addressed shards. */
 final readonly class CompiledFactoryShardCompiler
 {
-    public const int FORMAT_VERSION = 4;
+    public const int FORMAT_VERSION = 5;
     public const int DEFAULT_MAX_BYTES = 131072;
     public const string FILE_PREFIX = 'container.factories.';
 
@@ -18,6 +18,7 @@ final readonly class CompiledFactoryShardCompiler
         private FactoryCodeGenerator $factories,
         private string $pipelineFingerprint,
         private CompiledFactoryShardWriter $writer = new CompiledFactoryShardWriter(),
+        private ?ObjectPipeline $objects = null,
     ) {
         if (preg_match('/^[a-f0-9]{64}$/D', $pipelineFingerprint) !== 1) {
             throw new InvalidArgumentException('Compiled factory fingerprint must be a lowercase SHA-256 digest.');
@@ -47,6 +48,11 @@ final readonly class CompiledFactoryShardCompiler
         $index = 0;
 
         foreach ($classes as $class) {
+            // Production compilation is a consumer of the same validated
+            // metadata plan used by reflection runtime. Invalid combinations
+            // therefore fail now, never only after deploying the shard.
+            $this->objects?->prepare($class);
+
             $factory = $this->factories->generate($class, 'createEntry' . $index++);
             $bytes = strlen($factory->code);
             if ($current !== [] && $size + $bytes > $maxBytes) {

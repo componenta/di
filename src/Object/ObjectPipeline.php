@@ -41,6 +41,17 @@ final class ObjectPipeline
         private readonly ?AttributeDefinitionRegistry $registry = null,
     ) {}
 
+    /**
+     * Build and validate immutable metadata without instantiating the entry.
+     * The compiler calls this exact path before emitting a production shard.
+     *
+     * @param class-string $class
+     */
+    public function prepare(string $class): void
+    {
+        $this->metadata($class);
+    }
+
     /** @param class-string $class */
     public function create(
         string $class,
@@ -73,8 +84,16 @@ final class ObjectPipeline
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
         $classPlan = $this->plans->build($reflection);
-        $propertyPlans = [];
 
+        // Validate constructor target composition now, not on the first request.
+        $constructor = $reflection->getConstructor();
+        if ($constructor !== null) {
+            foreach ($constructor->getParameters() as $parameter) {
+                $this->plans->build($parameter);
+            }
+        }
+
+        $propertyPlans = [];
         foreach (self::properties($reflection) as $property) {
             if ($property->isPromoted()) {
                 continue;
