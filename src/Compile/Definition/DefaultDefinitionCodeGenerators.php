@@ -4,20 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Definition;
 
-use Componenta\DI\Definition\ClassDefinition;
-
-/** Creates the built-in definition code-generator registry. */
+/** Built-in v5 definitions are exported as immutable data and resolved by runtime pipelines. */
 final class DefaultDefinitionCodeGenerators
 {
     public static function create(): DefinitionCodeGeneratorRegistry
     {
-        $registry = new DefinitionCodeGeneratorRegistry();
-        $registry->register(
-            ClassDefinition::class,
-            new ClassDefinitionCodeGenerator(),
-        );
-
-        return $registry;
+        return new DefinitionCodeGeneratorRegistry();
     }
 
     private function __construct() {}
