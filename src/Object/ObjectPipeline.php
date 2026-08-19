@@ -12,6 +12,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 
@@ -33,6 +34,11 @@ final class ObjectPipeline
         ?AttributeProcessor $attributes = null,
     ) {
         $this->attributes = $attributes ?? new AttributeProcessor($registry, $plans);
+    }
+
+    public function parameters(): ParametersResolver
+    {
+        return $this->instances->parameters();
     }
 
     /** @param class-string|ReflectionClass<object> $class */
