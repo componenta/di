@@ -25,6 +25,8 @@ final class ParametersResolver
     private array $registered = [];
     /** @var WeakMap<ParameterTarget,list<int>>|null */
     private ?WeakMap $supportedSlots = null;
+    /** @var WeakMap<ParameterTarget,list<ParameterResolverInterface>>|null */
+    private ?WeakMap $supportedResolvers = null;
 
     private int $revision = 0;
     private int $order = 0;
@@ -62,6 +64,7 @@ final class ParametersResolver
         $this->orderedRegistrations = null;
         $this->ordered = null;
         $this->supportedSlots = null;
+        $this->supportedResolvers = null;
         ++$this->revision;
     }
 
@@ -124,9 +127,14 @@ final class ParametersResolver
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
         $state = new ParameterResolutionContext($providedParameters);
+        $guardMappedSources = $state->mappedRequest !== null;
 
         foreach ($targets as $target) {
-            [$position, $value] = $this->resolveParameter($target, $state);
+            [$position, $value] = $this->resolveTarget(
+                $target,
+                $state,
+                $guardMappedSources,
+            );
             $state->resolve($position, $value);
         }
 
@@ -138,36 +146,10 @@ final class ParametersResolver
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): array {
-        $unsupportedReason = match (true) {
-            $target->variadic => 'Variadic parameters are not supported by the DI resolver contract.',
-            $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
-            default => null,
-        };
-
-        if ($unsupportedReason !== null) {
-            throw ResolutionException::forParameter(
-                $target->reflection,
-                reason: $unsupportedReason,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
-            );
-        }
-
-        $this->plans->build($target->reflection);
-        MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
-
-        foreach ($this->resolverSlotsFor($target) as $slot) {
-            $resolver = $this->resolverList[$slot];
-            $result = $resolver->resolveParameter($target, $context);
-            if ($result !== null) {
-                return \Componenta\DI\validate_parameter_resolution_result($result, $resolver, $target, $context);
-            }
-        }
-
-        throw ResolutionException::forParameter(
-            $target->reflection,
-            providedParameters: $context->provided,
-            resolvedParameters: $context->resolved,
+        return $this->resolveTarget(
+            $target,
+            $context,
+            $context->mappedRequest !== null,
         );
     }
 
@@ -198,6 +180,62 @@ final class ParametersResolver
     public function target(ReflectionParameter $parameter): ParameterTarget
     {
         return $this->targetFactory->create($parameter);
+    }
+
+    /** @return array{0:int,1:mixed} */
+    private function resolveTarget(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        bool $guardMappedSources,
+    ): array {
+        $unsupportedReason = match (true) {
+            $target->variadic => 'Variadic parameters are not supported by the DI resolver contract.',
+            $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
+            default => null,
+        };
+
+        if ($unsupportedReason !== null) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: $unsupportedReason,
+                providedParameters: $context->provided,
+                resolvedParameters: $context->resolved,
+            );
+        }
+
+        $this->plans->build($target->reflection);
+        if ($guardMappedSources) {
+            MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
+        }
+
+        foreach ($this->resolversFor($target) as $resolver) {
+            $result = $resolver->resolveParameter($target, $context);
+            if ($result !== null) {
+                return \Componenta\DI\validate_parameter_resolution_result($result, $resolver, $target, $context);
+            }
+        }
+
+        throw ResolutionException::forParameter(
+            $target->reflection,
+            providedParameters: $context->provided,
+            resolvedParameters: $context->resolved,
+        );
+    }
+
+    /** @return list<ParameterResolverInterface> */
+    private function resolversFor(ParameterTarget $target): array
+    {
+        $cache = $this->supportedResolvers ??= new WeakMap();
+        if (isset($cache[$target])) {
+            return $cache[$target];
+        }
+
+        $resolvers = [];
+        foreach ($this->resolverSlotsFor($target) as $slot) {
+            $resolvers[] = $this->resolverList[$slot];
+        }
+
+        return $cache[$target] = $resolvers;
     }
 
     /** @return list<array{resolver:ParameterResolverInterface,priority:int,order:int}> */
