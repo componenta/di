@@ -12,7 +12,7 @@ final class CurrentUserProvider implements CurrentUserProviderInterface
 {
     private ?object $mainUser;
 
-    /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, object> */
+    /** @var WeakMap<object, object> */
     private WeakMap $fiberUsers;
 
     /** Sentinel representing an explicitly unauthenticated Fiber context. */
