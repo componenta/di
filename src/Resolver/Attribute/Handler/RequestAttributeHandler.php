@@ -41,8 +41,6 @@ use Throwable;
 /** Handles all request-source attributes on parameters. */
 final class RequestAttributeHandler implements ParameterAttributeHandlerInterface
 {
-    public const string PARAMETER_NAME_ATTRIBUTE = '__parameter_name';
-
     public function __construct(
         private readonly FactoryInterface $factory,
         private readonly CasterProviderInterface $casterProvider,
@@ -104,7 +102,10 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
 
         if ($attribute instanceof ExtractorInterface) {
             $value = $attribute->extract(
-                $request->withAttribute(self::PARAMETER_NAME_ATTRIBUTE, $parameter->getName()),
+                $request->withAttribute(
+                    RequestParameter::PARAMETER_NAME_ATTRIBUTE,
+                    $parameter->getName(),
+                ),
             );
             if ($attribute instanceof CastableInterface && $attribute->cast !== null) {
                 $caster = $this->casterProvider->provide($attribute->cast);
