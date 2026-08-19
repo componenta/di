@@ -12,7 +12,7 @@ use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use LogicException;
 use ReflectionClass;
 
-/** Executes repeatable post-population #[SetUp] hooks in declaration order. */
+/** @internal Transitional v5 handler; replaced by generic SetUp attribute handling. */
 final readonly class SetUpLifecycleHandler implements LifecycleHookHandlerInterface
 {
     /** @var list<SetUpValueUnwrapperInterface> */
@@ -48,20 +48,13 @@ final readonly class SetUpLifecycleHandler implements LifecycleHookHandlerInterf
             ));
         }
 
-        $this->executor->execute(
+        $this->executor->call(
             [$entry, $attribute->method],
-            new ResolutionContext(
-                explicit: array_replace($context->explicit, $this->unwrapParams($attribute->params)),
-                mapped: $context->mapped,
-                trusted: $context->trusted,
-            ),
+            array_replace($context->explicit, $this->unwrapParams($attribute->params)),
         );
     }
 
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>
-     */
+    /** @param array<string, mixed> $params @return array<string, mixed> */
     private function unwrapParams(array $params): array
     {
         if ($this->valueUnwrappers === []) {
