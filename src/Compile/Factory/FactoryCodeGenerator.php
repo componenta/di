@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
-use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Entry\EntryClassEligibility;
 use InvalidArgumentException;
 use ReflectionClass;
@@ -30,13 +29,13 @@ final readonly class FactoryCodeGenerator
 
         $code = sprintf(
             <<<'PHP'
-public function %s(\%s $context): object
+/** @param array<string|int, mixed> $params */
+public function %s(array $params = []): object
 {
-    return $this->objects->create(%s::class, $context);
+    return $this->objects->create(%s::class, $params);
 }
 PHP,
             $method,
-            ResolutionContext::class,
             '\\' . $resolvedClass,
         );
 
