@@ -77,23 +77,34 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
         if (!$attribute instanceof Cast || !$target instanceof ReflectionProperty) {
             throw new LogicException('CastHandler received an unsupported attribute target.');
         }
-        if (!$context->claimProperty($target)) {
-            return;
-        }
-
-        $name = $target->getName();
-        $hasValue = array_key_exists($name, $context->parameters);
-        if (!$hasValue && $attribute->default === DefaultValue::None) {
-            throw ResolutionException::forProperty(
-                $target,
-                reason: sprintf('missing context key "%s"', $name),
-            );
-        }
 
         try {
+            if ($context->propertyClaimed($target)) {
+                $context->writeProperty(
+                    $target,
+                    $this->caster($attribute->name)->cast($context->readProperty($target)),
+                );
+                return;
+            }
+
+            if (!$context->claimProperty($target)) {
+                return;
+            }
+
+            $name = $target->getName();
+            $hasValue = array_key_exists($name, $context->parameters);
+            if (!$hasValue && $attribute->default === DefaultValue::None) {
+                throw ResolutionException::forProperty(
+                    $target,
+                    reason: sprintf('missing context key "%s"', $name),
+                );
+            }
+
             $propertyValue = $hasValue ? $context->parameters[$name] : $attribute->default;
             $context->writeProperty($target, $this->caster($attribute->name)->cast($propertyValue));
         } catch (ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (ResolutionException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($target, previous: $e);
