@@ -164,7 +164,7 @@ test('Proxy rejects a concrete class incompatible with the declared type', funct
         ->toThrow(ResolutionException::class, 'is incompatible with declared type');
 });
 
-test('Proxy rejects a backing object incompatible with the proxy class', function (): void {
+test('Proxy normalizes a deferred backing type mismatch to ResolutionException', function (): void {
     $container = (new ContainerBuilder())
         ->addFactory(
             'lifecycle.wrong.proxy.service',
@@ -174,7 +174,7 @@ test('Proxy rejects a backing object incompatible with the proxy class', functio
     $consumer = $container->make(LifecycleWrongBackingProxyConsumer::class);
 
     expect(fn() => $consumer->service->value())
-        ->toThrow(\LogicException::class, 'must be an instance of');
+        ->toThrow(ResolutionException::class, 'must be an instance of');
 });
 
 test('Make detects cycles created by Make attributes', function (): void {
