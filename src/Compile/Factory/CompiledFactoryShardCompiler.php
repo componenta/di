@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace Componenta\DI\Compile\Factory;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Internal\Compile\Factory\PlainConstructorFastPathPlanner;
 use Componenta\DI\Object\ObjectPipeline;
-use Psr\Container\ContainerInterface;
 
 /** Packs generated entry methods into immutable content-addressed shards. */
 final readonly class CompiledFactoryShardCompiler
 {
-    public const int FORMAT_VERSION = 6;
+    public const int FORMAT_VERSION = 7;
     public const int DEFAULT_MAX_BYTES = 131072;
     public const string FILE_PREFIX = 'container.factories.';
 
@@ -21,7 +19,6 @@ final readonly class CompiledFactoryShardCompiler
         private string $pipelineFingerprint,
         private CompiledFactoryShardWriter $writer = new CompiledFactoryShardWriter(),
         private ?ObjectPipeline $objects = null,
-        private ?PlainConstructorFastPathPlanner $fastPaths = null,
     ) {
         if (preg_match('/^[a-f0-9]{64}$/D', $pipelineFingerprint) !== 1) {
             throw new InvalidConfigurationException(
@@ -47,14 +44,6 @@ final readonly class CompiledFactoryShardCompiler
         }
         self::assertNamespace($namespace);
 
-        $fastPaths = $this->fastPaths;
-        if ($fastPaths === null && $this->objects !== null) {
-            $fastPaths = new PlainConstructorFastPathPlanner(
-                $this->objects,
-                $this->objects->parameters(),
-            );
-        }
-
         /** @var array<class-string, CompiledFactoryDefinition> $definitions */
         $definitions = [];
         /** @var list<GeneratedFactory> $current */
@@ -71,11 +60,9 @@ final readonly class CompiledFactoryShardCompiler
                 ));
             }
 
-            $plainAutowireTypes = $fastPaths?->plan($class);
             $factory = $this->factories->generate(
                 $class,
                 'createEntry' . $index++,
-                plainAutowireTypes: $plainAutowireTypes,
             );
             $bytes = strlen($factory->code);
             if ($current !== [] && $size + $bytes > $maxBytes) {
@@ -108,22 +95,10 @@ final readonly class CompiledFactoryShardCompiler
             static fn(GeneratedFactory $factory): string => $factory->code,
             $shard,
         ));
-        $fastPaths = [];
-        foreach ($shard as $factory) {
-            if ($factory->plainAutowireTypes === null) {
-                continue;
-            }
-            $fastPaths[$factory->method] = [
-                'class' => $factory->class,
-                'fingerprint' => PlainConstructorFastPathPlanner::fingerprint(
-                    $factory->plainAutowireTypes,
-                ),
-            ];
-        }
 
         $id = substr(hash('sha256', self::FORMAT_VERSION . "\0" . $namespace . "\0" . $payload), 0, 32);
         $class = 'CompiledFactoryShard_' . $id;
-        $code = $this->code($namespace, $class, $payload, $fastPaths);
+        $code = $this->code($namespace, $class, $payload);
         $file = self::FILE_PREFIX . substr(hash('sha256', $code), 0, 32) . '.php';
         $this->writer->write(rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $file, $code);
 
@@ -138,15 +113,8 @@ final readonly class CompiledFactoryShardCompiler
         }
     }
 
-    /**
-     * @param array<string,array{class:class-string,fingerprint:string}> $fastPaths
-     */
-    private function code(
-        string $namespace,
-        string $class,
-        string $methods,
-        array $fastPaths,
-    ): string {
+    private function code(string $namespace, string $class, string $methods): string
+    {
         return sprintf(
             <<<'PHP'
 <?php
@@ -158,11 +126,9 @@ namespace %s;
 final class %s
 {
     public const string PIPELINE_FINGERPRINT = %s;
-    public const array FAST_PATHS = %s;
 
     public function __construct(
         private readonly \%s $objects,
-        private readonly \%s $container,
     ) {}
 
 %s
@@ -173,9 +139,7 @@ PHP,
             $namespace,
             $class,
             var_export($this->pipelineFingerprint, true),
-            var_export($fastPaths, true),
             ObjectPipeline::class,
-            ContainerInterface::class,
             self::indent($methods, 4),
             $class,
         );
