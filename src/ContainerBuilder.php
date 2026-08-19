@@ -166,7 +166,7 @@ class ContainerBuilder
     public static function configureWithDependencies(Config $config, array $dependencies): static
     {
         $dependencies = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
-        $builder = new static;
+        $builder = new static();
 
         $builder->factories = $dependencies[ConfigKey::FACTORIES] ?? [];
         $builder->invokables = $dependencies[ConfigKey::INVOKABLES] ?? [];
