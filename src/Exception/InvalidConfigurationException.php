@@ -15,14 +15,14 @@ use RuntimeException;
  */
 class InvalidConfigurationException extends RuntimeException implements ExceptionInterface
 {
-    public static function forSelfReferencingAlias(string $alias): static
+    public static function forSelfReferencingAlias(string $alias): self
     {
-        return new static(sprintf('Self-referencing alias: "%s".', $alias));
+        return new self(sprintf('Self-referencing alias: "%s".', $alias));
     }
 
-    public static function forInvalidDefinition(DefinitionInterface $definition): static
+    public static function forInvalidDefinition(DefinitionInterface $definition): self
     {
-        return new static(sprintf(
+        return new self(sprintf(
             'Definition of type "%s" is not supported.',
             $definition::class,
         ));
@@ -31,8 +31,8 @@ class InvalidConfigurationException extends RuntimeException implements Exceptio
     public static function forUnsupportedDefinition(
         DefinitionInterface $definition,
         string $resolverClass,
-    ): static {
-        return new static(sprintf(
+    ): self {
+        return new self(sprintf(
             'Definition of type "%s" is not supported by resolver "%s".',
             $definition::class,
             $resolverClass,
