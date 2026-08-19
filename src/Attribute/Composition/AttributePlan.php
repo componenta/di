@@ -43,7 +43,25 @@ final readonly class AttributePlan
      */
     public function all(string $capability): array
     {
-        return $this->byCapability[$capability] ?? [];
+        $matches = [];
+        $seen = [];
+
+        foreach ($this->byCapability as $registered => $usages) {
+            if (!is_a($registered, $capability, true)) {
+                continue;
+            }
+
+            foreach ($usages as $usage) {
+                $id = spl_object_id($usage);
+                if (isset($seen[$id])) {
+                    continue;
+                }
+                $seen[$id] = true;
+                $matches[] = $usage;
+            }
+        }
+
+        return $matches;
     }
 
     /** @param class-string<AttributeCapabilityInterface> $capability */
@@ -60,7 +78,7 @@ final readonly class AttributePlan
     /** @param class-string<AttributeCapabilityInterface> $capability */
     public function has(string $capability): bool
     {
-        return isset($this->byCapability[$capability]);
+        return $this->all($capability) !== [];
     }
 
     /**
