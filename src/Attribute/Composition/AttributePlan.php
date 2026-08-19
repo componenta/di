@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
-use LogicException;
+use Componenta\DI\Exception\AttributeCompositionException;
 use Reflector;
 
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
@@ -69,7 +69,10 @@ final readonly class AttributePlan
     {
         $usages = $this->all($capability);
         if (count($usages) > 1) {
-            throw new LogicException(sprintf('Capability "%s" is not singular in this plan.', $capability));
+            throw new AttributeCompositionException(sprintf(
+                'Capability "%s" is not singular in this plan.',
+                $capability,
+            ));
         }
 
         return $usages[0] ?? null;

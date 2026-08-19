@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Definition;
 
+use Componenta\DI\Exception\InvalidConfigurationException;
+
 /**
  * Immutable PHP expression returned by definition code generators.
  *
@@ -15,7 +17,7 @@ final readonly class GeneratedDefinitionCode
     public function __construct(public string $code)
     {
         if ($code === '') {
-            throw new \InvalidArgumentException('Generated definition code must not be empty.');
+            throw new InvalidConfigurationException('Generated definition code must not be empty.');
         }
     }
 }

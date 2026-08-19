@@ -9,11 +9,9 @@ use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Psr\Container\ContainerInterface;
 
-final class LazyCasterProvider implements CasterProviderInterface
+final readonly class LazyCasterProvider implements CasterProviderInterface
 {
-    private ?CasterProviderInterface $provider = null;
-
-    public function __construct(private readonly ContainerInterface $container) {}
+    public function __construct(private ContainerInterface $container) {}
 
     public function provide(string $name): ?CasterInterface
     {
@@ -22,9 +20,6 @@ final class LazyCasterProvider implements CasterProviderInterface
 
     private function provider(): CasterProviderInterface
     {
-        if ($this->provider !== null) {
-            return $this->provider;
-        }
         $provider = $this->container->get(CasterProviderInterface::class);
         if (!$provider instanceof CasterProviderInterface) {
             throw new InvalidConfigurationException(sprintf(
@@ -34,6 +29,6 @@ final class LazyCasterProvider implements CasterProviderInterface
                 get_debug_type($provider),
             ));
         }
-        return $this->provider = $provider;
+        return $provider;
     }
 }

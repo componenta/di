@@ -7,7 +7,6 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
-use InvalidArgumentException;
 
 /** Ordered entry resolver chain with owner caching. */
 final class CompositeResolver implements DefinitionAwareResolverInterface
@@ -25,7 +24,7 @@ final class CompositeResolver implements DefinitionAwareResolverInterface
         foreach ($resolvers as $resolver) {
             $id = spl_object_id($resolver);
             if (isset($seen[$id])) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Entry resolver %s is registered more than once.',
                     $resolver::class,
                 ));

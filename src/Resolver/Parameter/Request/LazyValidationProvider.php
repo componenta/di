@@ -9,12 +9,9 @@ use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use Psr\Container\ContainerInterface;
 
-final class LazyValidationProvider implements ValidationProviderInterface
+final readonly class LazyValidationProvider implements ValidationProviderInterface
 {
-    private bool $resolved = false;
-    private ?ValidationProviderInterface $provider = null;
-
-    public function __construct(private readonly ContainerInterface $container) {}
+    public function __construct(private ContainerInterface $container) {}
 
     public function provide(string $entryId): ?ValidatorInterface
     {
@@ -23,11 +20,7 @@ final class LazyValidationProvider implements ValidationProviderInterface
 
     private function provider(): ?ValidationProviderInterface
     {
-        if ($this->resolved) {
-            return $this->provider;
-        }
         if (!$this->container->has(ValidationProviderInterface::class)) {
-            $this->resolved = true;
             return null;
         }
         $provider = $this->container->get(ValidationProviderInterface::class);
@@ -39,8 +32,6 @@ final class LazyValidationProvider implements ValidationProviderInterface
                 get_debug_type($provider),
             ));
         }
-        $this->provider = $provider;
-        $this->resolved = true;
         return $provider;
     }
 }

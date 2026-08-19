@@ -24,14 +24,14 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
     }
 
     /** @var array<string,string> */
-    public protected(set) array $cast = [];
+    protected array $cast = [];
     /** @var array<string,mixed> */
-    public protected(set) array $defaults = [];
+    protected array $defaults = [];
     /** @var array<string,array<string,mixed>> */
-    public protected(set) array $sortMap = [];
+    protected array $sortMap = [];
     /** @var list<string> */
-    public protected(set) array $exclude = [];
-    public protected(set) RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject;
+    protected array $exclude = [];
+    protected RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject;
     /** @var array<string,string> */
     public protected(set) array $map = [];
 
