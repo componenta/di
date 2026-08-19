@@ -19,7 +19,9 @@ use Throwable;
 /**
  * Executes composed class/property/method attribute handlers.
  * Parameter plans are validated by the same composition model but executed
- * exclusively through AttributeParameterResolver.
+ * exclusively through AttributeParameterResolver. Runtime handlers receive
+ * isolated attribute instances so mutable attribute state cannot leak between
+ * object creations or concurrent execution contexts.
  */
 final class AttributeProcessor
 {
@@ -68,7 +70,7 @@ final class AttributeProcessor
             }
 
             try {
-                $handler->handle($usage->attribute, $usage->target, $context);
+                $handler->handle($usage->newInstance(), $usage->target, $context);
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
