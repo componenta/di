@@ -53,7 +53,6 @@ use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\CompilationException;
-use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\ContainerBootstrapState;
@@ -237,7 +236,7 @@ class ContainerBuilder
     {
         try {
             return $this->buildContainer();
-        } catch (ExceptionInterface $e) {
+        } catch (InvalidConfigurationException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw new InvalidConfigurationException(
@@ -378,7 +377,7 @@ class ContainerBuilder
     ): array {
         try {
             return $this->compileFactoryArtifacts($entries, $directory, $maxShardBytes, $namespace);
-        } catch (ExceptionInterface $e) {
+        } catch (InvalidConfigurationException|CompilationException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw CompilationException::forArtifact($directory, $e);
