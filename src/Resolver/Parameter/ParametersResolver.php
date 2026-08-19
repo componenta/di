@@ -12,6 +12,8 @@ use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use ReflectionParameter;
 use WeakMap;
 
+use function Componenta\DI\validate_parameter_resolution_result;
+
 /** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
 {
@@ -164,7 +166,7 @@ final class ParametersResolver
             $resolver = $this->resolverList[$slot];
             $result = $resolver->resolveParameter($target, $context);
             if ($result !== null) {
-                return ParameterResolutionResult::validate($result, $resolver, $target, $context);
+                return validate_parameter_resolution_result($result, $resolver, $target, $context);
             }
         }
 
