@@ -7,7 +7,7 @@ namespace Componenta\DI\Attribute;
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
+use Componenta\DI\Resolver\Parameter\Request\RequestParameter;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
@@ -21,7 +21,7 @@ readonly class QueryParam implements ExtractorInterface, CastableInterface
 
     public function extract(ServerRequestInterface $request): mixed
     {
-        $name = $this->name ?? $request->getAttribute(RequestResolver::PARAMETER_NAME_ATTRIBUTE);
+        $name = $this->name ?? $request->getAttribute(RequestParameter::PARAMETER_NAME_ATTRIBUTE);
         if (!is_string($name) || $name === '') {
             throw new \LogicException('Query parameter name must be a non-empty string');
         }
