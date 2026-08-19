@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\ContainerBuilder;
@@ -19,7 +20,6 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
