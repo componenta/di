@@ -22,7 +22,7 @@ final class CompiledFactoryPipelineFingerprint
             $definitions[] = [
                 'attribute' => $definition->attribute,
                 'definition_version' => $definition->version,
-                'handler' => $definition->handler?->class,
+                'handler' => $definition->handler === null ? null : $definition->handler::class,
                 'phase' => $definition->phase->value,
                 'capabilities' => $definition->capabilities,
                 'requires' => $definition->requires,
