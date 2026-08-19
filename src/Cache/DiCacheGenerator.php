@@ -77,9 +77,12 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             static fn(): int|false => file_put_contents($tmp, $contents, LOCK_EX),
         );
 
-        if ($written === false) {
+        if ($written === false || $written !== strlen($contents)) {
             with_suppressed_warnings(static fn(): bool => unlink($tmp));
-            throw new CompilationException(sprintf('Failed to write DI cache temp file: %s', $tmp));
+            throw new CompilationException(sprintf(
+                'Failed to write complete DI cache temp file: %s',
+                $tmp,
+            ));
         }
 
         $committed = with_suppressed_warnings(
