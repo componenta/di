@@ -9,6 +9,7 @@ use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
+use ReflectionClass;
 use Throwable;
 
 /** Resolves explicitly registered zero-argument invokable classes. */
@@ -21,13 +22,12 @@ final class InvokableResolver implements DefinitionAwareResolverInterface
     public function __construct(array $invokables = [])
     {
         foreach ($invokables as $invokable) {
-            if ($invokable instanceof InvokableDefinition) {
-                $this->setDefinition($invokable->value, $invokable);
-            } elseif (is_string($invokable) && $invokable !== '') {
-                $this->invokables[$invokable] = $invokable;
-            } else {
+            $class = $invokable instanceof InvokableDefinition ? $invokable->value : $invokable;
+            if (!is_string($class) || $class === '') {
                 throw new InvalidConfigurationException('Invokable class must be a non-empty class-string.');
             }
+
+            $this->invokables[$class] = self::validatedClass($class);
         }
     }
 
@@ -52,14 +52,47 @@ final class InvokableResolver implements DefinitionAwareResolverInterface
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
-        if (!$definition instanceof InvokableDefinition || $definition->value === '') {
+        if (!$definition instanceof InvokableDefinition) {
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
-        $this->invokables[$id] = $definition->value;
+
+        $this->invokables[$id] = self::validatedClass($definition->value);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
     {
         return $definition instanceof InvokableDefinition;
+    }
+
+    /** @return class-string */
+    private static function validatedClass(string $class): string
+    {
+        if ($class === '' || !class_exists($class)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Invokable class "%s" does not exist.',
+                $class,
+            ));
+        }
+
+        /** @var ReflectionClass<object> $reflection */
+        $reflection = new ReflectionClass($class);
+        if (!$reflection->isInstantiable()) {
+            throw new InvalidConfigurationException(sprintf(
+                'Invokable class "%s" must be concrete and instantiable.',
+                $class,
+            ));
+        }
+
+        $constructor = $reflection->getConstructor();
+        if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+            throw new InvalidConfigurationException(sprintf(
+                'Invokable class "%s" constructor requires arguments; use a factory or autowiring instead.',
+                $class,
+            ));
+        }
+
+        /** @var class-string $resolved */
+        $resolved = $reflection->getName();
+        return $resolved;
     }
 }
