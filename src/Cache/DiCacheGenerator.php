@@ -10,7 +10,6 @@ use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\CompilationException;
-use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
@@ -32,7 +31,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     {
         try {
             $this->generateCache($dependencies, $path);
-        } catch (ExceptionInterface $e) {
+        } catch (InvalidConfigurationException|CompilationException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw CompilationException::forArtifact($path, $e);
@@ -58,7 +57,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                 $config,
                 $this->trustedGeneratedCode($dependencies),
             ))->export($cache);
-        } catch (ExceptionInterface $e) {
+        } catch (InvalidConfigurationException|CompilationException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw new CompilationException(
