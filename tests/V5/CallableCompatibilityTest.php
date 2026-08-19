@@ -29,6 +29,15 @@ test('CallableExecutor keeps the v4 DI-aware call convenience API', function ():
         ))->toBe(7);
 });
 
+test('reflected zero-argument callables ignore unrelated provided parameters', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    expect($container->call(
+        static fn(): string => 'ok',
+        ['unused' => 'value'],
+    ))->toBe('ok');
+});
+
 test('container CallableInvokerInterface remains DI-aware as in v4', function (): void {
     $container = (new ContainerBuilder())->build();
     $invoker = $container->get(CallableInvokerInterface::class);
