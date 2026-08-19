@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\V5;
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
@@ -17,8 +18,9 @@ use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
-use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
 final class ConflictingSourcesDto
@@ -46,20 +48,16 @@ final class ConflictingCreationStrategies {}
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class CustomValue {}
 
-final class CustomValueResolver implements ParameterResolverInterface
+final class CustomValueHandler implements ParameterAttributeHandlerInterface
 {
-    public function supports(ParameterTarget $target): bool
-    {
-        return $target->hasAttribute(CustomValue::class);
-    }
-
     public function resolveParameter(
+        object $attribute,
         ParameterTarget $target,
         ParameterResolutionContext $context,
-    ): ?array {
-        return $target->hasAttribute(CustomValue::class)
-            ? [$target->position, 'custom']
-            : null;
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        return $value->resolved ? $value : ParameterAttributeValue::resolved('custom');
     }
 }
 
@@ -96,14 +94,13 @@ test('creation strategies are exclusive independently of value providers', funct
         ->toThrow(AttributeCompositionException::class);
 });
 
-test('third party parameter sources use composition plus a parameter resolver', function (): void {
+test('third party parameter attributes execute through the shared attribute resolver', function (): void {
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
             CustomValue::class,
-            handler: null,
+            new CustomValueHandler(),
             capabilities: [ValueProvider::class],
         ))
-        ->addParameterResolver(new CustomValueResolver(), 750)
         ->build();
 
     expect($container->make(CustomValueDto::class)->value)->toBe('custom');
