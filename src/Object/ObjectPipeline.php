@@ -12,6 +12,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 
 use function Componenta\DI\is_entry_class_eligible;
@@ -61,6 +62,15 @@ final class ObjectPipeline
             && $metadata->class->isInstantiable()
             && !$metadata->hasAttributeHandlers
             && ($metadata->constructor === null || $metadata->constructorTargets === []);
+    }
+
+    /**
+     * @param class-string|ReflectionClass<object> $class
+     * @return list<ParameterTarget>
+     */
+    public function constructorTargets(string|ReflectionClass $class): array
+    {
+        return $this->metadata($class)->constructorTargets;
     }
 
     /**
