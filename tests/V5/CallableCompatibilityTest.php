@@ -40,8 +40,8 @@ test('container CallableInvokerInterface remains DI-aware as in v4', function ()
         ))->toBeInstanceOf(CallableDependency::class);
 });
 
-test('legacy call request transport is promoted to trusted v5 provenance', function (): void {
-    $request = (new ServerRequest('GET', '/orders/17'))->withHeader('X-Token', 'trusted');
+test('request stays in the ordinary parameter array while request resolvers consume it', function (): void {
+    $request = (new ServerRequest('GET', '/orders/17'))->withHeader('X-Token', 'request-token');
     $container = (new ContainerBuilder())->build();
 
     $result = $container->call(
@@ -53,5 +53,5 @@ test('legacy call request transport is promoted to trusted v5 provenance', funct
         [ServerRequestInterface::class => $request],
     );
 
-    expect($result)->toBe(['trusted', '/orders/17', $request]);
+    expect($result)->toBe(['request-token', '/orders/17', $request]);
 });
