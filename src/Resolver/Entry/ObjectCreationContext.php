@@ -19,15 +19,15 @@ final class ObjectCreationContext
     public private(set) CreationStrategy $strategy = CreationStrategy::Eager;
     public private(set) ?object $entry = null;
 
-    /** @var array<string|int, mixed> */
+    /** @var array<string|int,mixed> */
     public readonly array $parameters;
 
-    /** @var array<string, true> */
+    /** @var array<string,true> */
     private array $claimedProperties = [];
 
     /**
      * @param ReflectionClass<object> $class
-     * @param array<string|int, mixed> $parameters
+     * @param array<string|int,mixed> $parameters
      */
     public function __construct(
         public readonly ReflectionClass $class,
@@ -161,8 +161,8 @@ final class ObjectCreationContext
     {
         return new InvalidConfigurationException(sprintf(
             'Creation strategies "%s" and "%s" cannot be combined for "%s".',
-            $this->strategy->value,
-            $strategy->value,
+            $this->strategy->name,
+            $strategy->name,
             $this->class->getName(),
         ));
     }
