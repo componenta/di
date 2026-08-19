@@ -8,40 +8,47 @@ use Attribute;
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
-use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
-use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
-use Componenta\DI\Resolver\Target\ValueTargetInterface;
-use Componenta\DI\Value\ValueContext;
-use Componenta\DI\Value\ValueFallbackDefinition;
-use Componenta\DI\Value\ValueFallbackInterface;
-use Componenta\DI\Value\ValueResult;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Container\ContainerInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class DeferredValue {}
 
-final readonly class DeferredValueHandler implements ValueProviderHandlerInterface
+final readonly class DeferredValueResolver implements ParameterResolverInterface
 {
-    public ValueProviderPrecedence $precedence { get => ValueProviderPrecedence::ProviderFirst; }
-
-    public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
+    public function supports(ParameterTarget $target): bool
     {
-        return 'from-service-method';
+        return $target->hasAttribute(DeferredValue::class);
+    }
+
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return $this->supports($target)
+            ? [$target->position, 'from-service-method']
+            : null;
     }
 }
 
-final readonly class DeferredFallback implements ValueFallbackInterface
+final readonly class DeferredConventionResolver implements ParameterResolverInterface
 {
-    public function supports(ValueTargetInterface $target): bool
+    public function supports(ParameterTarget $target): bool
     {
         return $target->name === 'fallback';
     }
 
-    public function resolve(ValueTargetInterface $target, ValueContext $context): ?ValueResult
-    {
-        return new ValueResult('from-deferred-fallback');
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return $this->supports($target)
+            ? [$target->position, 'from-deferred-resolver']
+            : null;
     }
 }
 
@@ -51,18 +58,19 @@ final readonly class DeferredExtensionFactoryService
     {
         return new AttributeDefinition(
             DeferredValue::class,
-            new DeferredValueHandler(),
-            [ValueProvider::class],
+            handler: null,
+            capabilities: [ValueProvider::class],
         );
     }
 
-    public function fallback(ContainerInterface $container): ValueFallbackDefinition
+    public function valueResolver(ContainerInterface $container): ParameterResolverInterface
     {
-        return new ValueFallbackDefinition(
-            'deferred-extension-fallback',
-            new DeferredFallback(),
-            before: ['property_initial'],
-        );
+        return new DeferredValueResolver();
+    }
+
+    public function conventionResolver(ContainerInterface $container): ParameterResolverInterface
+    {
+        return new DeferredConventionResolver();
     }
 }
 
@@ -75,20 +83,21 @@ final readonly class DeferredExtensionDto
     ) {}
 }
 
-test('builder materializes deferred extension service methods', function (): void {
+test('builder materializes deferred attribute and parameter resolver service methods', function (): void {
     $container = (new ContainerBuilder())
         ->addService(DeferredExtensionFactoryService::class, new DeferredExtensionFactoryService())
         ->addAttributeDefinition([DeferredExtensionFactoryService::class, 'attribute'])
-        ->addValueFallback([DeferredExtensionFactoryService::class, 'fallback'])
+        ->addParameterResolver([DeferredExtensionFactoryService::class, 'valueResolver'], 750)
+        ->addParameterResolver([DeferredExtensionFactoryService::class, 'conventionResolver'], 350)
         ->build();
 
     $dto = $container->make(DeferredExtensionDto::class);
 
     expect($dto->value)->toBe('from-service-method')
-        ->and($dto->fallback)->toBe('from-deferred-fallback');
+        ->and($dto->fallback)->toBe('from-deferred-resolver');
 });
 
-test('config accepts the same deferred extension service method form', function (): void {
+test('config accepts the same deferred extension service method forms', function (): void {
     $config = new Config([
         ConfigKey::DEPENDENCIES => [
             ConfigKey::SERVICES => [
@@ -97,8 +106,9 @@ test('config accepts the same deferred extension service method form', function 
             ConfigKey::ATTRIBUTE_DEFINITIONS => [
                 [DeferredExtensionFactoryService::class, 'attribute'],
             ],
-            ConfigKey::VALUE_FALLBACKS => [
-                [DeferredExtensionFactoryService::class, 'fallback'],
+            ConfigKey::PARAMETER_RESOLVERS => [
+                750 => [DeferredExtensionFactoryService::class, 'valueResolver'],
+                350 => [DeferredExtensionFactoryService::class, 'conventionResolver'],
             ],
         ],
     ]);
@@ -106,5 +116,5 @@ test('config accepts the same deferred extension service method form', function 
     $dto = ContainerBuilder::configure($config)->build()->make(DeferredExtensionDto::class);
 
     expect($dto->value)->toBe('from-service-method')
-        ->and($dto->fallback)->toBe('from-deferred-fallback');
+        ->and($dto->fallback)->toBe('from-deferred-resolver');
 });
