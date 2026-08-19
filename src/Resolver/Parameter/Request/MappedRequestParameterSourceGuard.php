@@ -17,10 +17,13 @@ use ReflectionParameter;
 /** Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources. @internal */
 final class MappedRequestParameterSourceGuard
 {
-    /** @var array<class-string, list<array{parameter:string,source:class-string,keys:list<string>}>> */
+    /** @var array<class-string,list<array{parameter:string,source:class-string,keys:list<string>}>> */
     private static array $sourceCache = [];
 
-    /** @param class-string $dtoClass @param array<string|int, mixed> $data */
+    /**
+     * @param class-string $dtoClass
+     * @param array<string|int,mixed> $data
+     */
     public static function assertNoConflicts(string $dtoClass, array $data): void
     {
         if ($data === []) {
@@ -35,7 +38,10 @@ final class MappedRequestParameterSourceGuard
         }
     }
 
-    /** @param class-string $class @param array<string|int, mixed> $context */
+    /**
+     * @param class-string $class
+     * @param array<string|int,mixed> $context
+     */
     public static function assertClassContextNoConflicts(string $class, array $context): void
     {
         $provenance = MappedRequestContext::get($context);
@@ -51,7 +57,10 @@ final class MappedRequestParameterSourceGuard
         }
     }
 
-    /** @param iterable<ParameterTarget> $targets @param array<string|int, mixed> $context */
+    /**
+     * @param iterable<ParameterTarget> $targets
+     * @param array<string|int,mixed> $context
+     */
     public static function assertTargetsContextNoConflicts(iterable $targets, array $context): void
     {
         $provenance = MappedRequestContext::get($context);
@@ -91,13 +100,17 @@ final class MappedRequestParameterSourceGuard
             return self::$sourceCache[$class];
         }
 
-        $constructor = (new ReflectionClass($class))->getConstructor();
+        /** @var ReflectionClass<object> $reflection */
+        $reflection = new ReflectionClass($class);
+        $constructor = $reflection->getConstructor();
         if ($constructor === null) {
             return self::$sourceCache[$class] = [];
         }
 
+        /** @var list<array{parameter:string,source:class-string,keys:list<string>}> $bindings */
         $bindings = [];
         foreach ($constructor->getParameters() as $parameter) {
+            /** @var list<class-string> $typeNames */
             $typeNames = TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass());
             $source = self::declaredSource($parameter, $typeNames);
             if ($source !== null) {
@@ -135,17 +148,32 @@ final class MappedRequestParameterSourceGuard
         return $source === null ? null : self::binding($target->name, $source, $target->typeNames);
     }
 
-    /** @param class-string $source @param list<class-string> $typeNames @return array{parameter:string,source:class-string,keys:list<string>} */
+    /**
+     * @param class-string $source
+     * @param list<class-string> $typeNames
+     * @return array{parameter:string,source:class-string,keys:list<string>}
+     */
     private static function binding(string $parameter, string $source, array $typeNames): array
     {
+        /** @var list<string> $keys */
+        $keys = [$parameter];
+        foreach ($typeNames as $typeName) {
+            if (!in_array($typeName, $keys, true)) {
+                $keys[] = $typeName;
+            }
+        }
+
         return [
             'parameter' => $parameter,
             'source' => $source,
-            'keys' => array_values(array_unique([$parameter, ...$typeNames])),
+            'keys' => $keys,
         ];
     }
 
-    /** @param list<class-string> $typeNames @return class-string|null */
+    /**
+     * @param list<class-string> $typeNames
+     * @return class-string|null
+     */
     private static function declaredSource(ReflectionParameter $parameter, array $typeNames): ?string
     {
         foreach ($parameter->getAttributes() as $attribute) {
@@ -169,7 +197,10 @@ final class MappedRequestParameterSourceGuard
         return self::implicitTypeSource($target->typeNames);
     }
 
-    /** @param list<class-string> $typeNames @return class-string|null */
+    /**
+     * @param list<class-string> $typeNames
+     * @return class-string|null
+     */
     private static function implicitTypeSource(array $typeNames): ?string
     {
         foreach ($typeNames as $typeName) {
@@ -180,7 +211,10 @@ final class MappedRequestParameterSourceGuard
         return null;
     }
 
-    /** @param class-string $class @param array{parameter:string,source:class-string,keys:list<string>} $binding */
+    /**
+     * @param class-string $class
+     * @param array{parameter:string,source:class-string,keys:list<string>} $binding
+     */
     private static function throwConflict(string $class, array $binding, string $key): never
     {
         throw new RequestParameterSourceConflictException(
