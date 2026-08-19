@@ -10,9 +10,11 @@ use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\EnvNameNormalizer;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
@@ -25,7 +27,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Env] on parameters and properties. */
-final class EnvHandler implements ParameterAttributeHandlerInterface
+final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
@@ -34,19 +36,23 @@ final class EnvHandler implements ParameterAttributeHandlerInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof Env) {
             throw new LogicException('EnvHandler received an unsupported parameter attribute.');
         }
+        if ($value->resolved) {
+            return $value;
+        }
 
         try {
-            return $this->resolveEnv(
+            return ParameterAttributeValue::resolved($this->resolveEnv(
                 envName: $attribute->name ?? EnvNameNormalizer::toEnvName($target->name),
                 typeName: self::typeName($target->type),
                 hasDefault: $attribute->default !== DefaultValue::None,
                 default: $attribute->default,
                 declaringContext: $target->declaringContext,
-            );
+            ));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
