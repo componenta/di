@@ -9,7 +9,6 @@ use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\ResolutionContext;
 use Throwable;
 
 /** Resolves explicitly registered zero-argument invokable classes. */
@@ -37,14 +36,12 @@ final class InvokableResolver implements DefinitionAwareResolverInterface
         return isset($this->invokables[$id]);
     }
 
-    public function resolve(
-        string $id,
-        ResolutionContext $context = new ResolutionContext(),
-    ): object {
+    /** @param array<string|int, mixed> $params */
+    public function resolve(string $id, array $params = []): object
+    {
         if (!$this->can($id)) {
             throw NotFoundException::forService($id);
         }
-
         $class = $this->invokables[$id];
         try {
             return new $class();
