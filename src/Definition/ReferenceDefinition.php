@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Definition;
 
+use Componenta\DI\Exception\InvalidConfigurationException;
+
 /**
  * Reference to another container entry.
  *
@@ -20,5 +22,11 @@ final readonly class ReferenceDefinition implements DefinitionInterface
      */
     public function __construct(
         public string $value,
-    ) {}
+    ) {
+        if ($value === '') {
+            throw new InvalidConfigurationException(
+                'Reference definition entry id must be non-empty.',
+            );
+        }
+    }
 }
