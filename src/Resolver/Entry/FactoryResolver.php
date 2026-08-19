@@ -17,7 +17,6 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Compile\Factory\CompiledFactoryPathResolver;
-use Componenta\DI\Internal\Compile\Factory\PlainConstructorFastPathPlanner;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\LazyServiceFactoryInterface;
@@ -64,7 +63,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return array_key_exists($id, $this->factories);
     }
 
-    /** @param array<string|int,mixed> $params */
+    /** @param array<string|int, mixed> $params */
     public function resolve(string $id, array $params = []): mixed
     {
         if (!$this->can($id)) {
@@ -105,7 +104,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
     }
 
-    /** @param array<string|int,mixed> $params */
+    /** @param array<string|int, mixed> $params */
     private function classDefinition(ClassDefinition $definition, array $params): object
     {
         $configured = $this->resolveDefinitionValue($definition->constructorParams);
@@ -260,10 +259,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 ));
             }
 
-            $fastPathsConstant = $class . '::FAST_PATHS';
-            $shard = defined($fastPathsConstant)
-                ? new $class($this->objects, $this->container)
-                : new $class($this->objects);
+            $shard = new $class($this->objects);
             $this->compiledShards[$file] = $shard;
         }
 
@@ -276,69 +272,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             ));
         }
 
-        $fastPath = self::fastPathMetadata($class, $definition->method);
-        if ($fastPath !== null) {
-            $plan = (new PlainConstructorFastPathPlanner(
-                $this->objects,
-                $this->parameters,
-            ))->plan($fastPath['class']);
-
-            if ($plan === null
-                || !hash_equals(
-                    $fastPath['fingerprint'],
-                    PlainConstructorFastPathPlanner::fingerprint($plan),
-                )
-            ) {
-                return fn(array $params): object => $this->objects->create(
-                    $fastPath['class'],
-                    $params,
-                );
-            }
-        }
-
         return $factory;
-    }
-
-    /** @return array{class:class-string,fingerprint:string}|null */
-    private static function fastPathMetadata(string $shardClass, string $method): ?array
-    {
-        $constant = $shardClass . '::FAST_PATHS';
-        if (!defined($constant)) {
-            return null;
-        }
-
-        $fastPaths = constant($constant);
-        if (!is_array($fastPaths)) {
-            throw new InvalidConfigurationException(sprintf(
-                'Compiled shard "%s" has invalid fast-path metadata.',
-                $shardClass,
-            ));
-        }
-
-        $metadata = $fastPaths[$method] ?? null;
-        if ($metadata === null) {
-            return null;
-        }
-        if (!is_array($metadata)
-            || !isset($metadata['class'], $metadata['fingerprint'])
-            || !is_string($metadata['class'])
-            || $metadata['class'] === ''
-            || !is_string($metadata['fingerprint'])
-            || preg_match('/^[a-f0-9]{64}$/D', $metadata['fingerprint']) !== 1
-        ) {
-            throw new InvalidConfigurationException(sprintf(
-                'Compiled shard "%s" has invalid fast-path metadata for "%s".',
-                $shardClass,
-                $method,
-            ));
-        }
-
-        /** @var class-string $entryClass */
-        $entryClass = $metadata['class'];
-        return [
-            'class' => $entryClass,
-            'fingerprint' => $metadata['fingerprint'],
-        ];
     }
 
     private static function assertContentAddressedShard(string $file): void
