@@ -12,7 +12,7 @@ use ReflectionType;
 use Reflector;
 
 /** Immutable, precomputed view of one reflected parameter. */
-final class ParameterTarget implements ValueTargetInterface
+final class ParameterTarget
 {
     /** @var list<ReflectionAttribute<object>> */
     private readonly array $attributeReflectors;
