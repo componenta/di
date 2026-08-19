@@ -362,7 +362,7 @@ final class DependencyConfiguration
         if (is_string($delegator) && $delegator !== '') {
             return $delegator;
         }
-        if (self::callablePair($delegator)) {
+        if (self::callablePair($delegator) || self::deferredServiceMethod($delegator)) {
             return $delegator;
         }
         if (is_callable($delegator)) {
@@ -428,17 +428,33 @@ final class DependencyConfiguration
     /** @phpstan-assert-if-true array{object|string,string} $value */
     private static function callablePair(mixed $value): bool
     {
-        return is_array($value)
-            && array_keys($value) === [0, 1]
-            && (is_object($value[0]) || (is_string($value[0]) && $value[0] !== ''))
-            && is_string($value[1])
-            && $value[1] !== '';
+        if (!is_array($value)
+            || array_keys($value) !== [0, 1]
+            || !is_string($value[1])
+            || $value[1] === ''
+        ) {
+            return false;
+        }
+
+        if (is_callable($value)) {
+            return true;
+        }
+
+        return is_string($value[0])
+            && $value[0] !== ''
+            && (class_exists($value[0]) || interface_exists($value[0]))
+            && method_exists($value[0], $value[1]);
     }
 
     /** @phpstan-assert-if-true array{non-empty-string,non-empty-string} $value */
     private static function deferredServiceMethod(mixed $value): bool
     {
-        return self::callablePair($value) && is_string($value[0]) && $value[0] !== '';
+        return is_array($value)
+            && array_keys($value) === [0, 1]
+            && is_string($value[0])
+            && $value[0] !== ''
+            && is_string($value[1])
+            && $value[1] !== '';
     }
 
     /**
