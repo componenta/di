@@ -172,15 +172,14 @@ final class Container implements
         $this->invalidateDeferredDelegators($affected);
     }
 
-    public function make(
-        string $entry,
-        ResolutionContext $context = new ResolutionContext(),
-    ): object {
+    /** @param array<string|int, mixed> $params */
+    public function make(string $entry, array $params = []): object
+    {
         $resolved = $this->aliases->resolve($entry);
         $this->cycleGuard->enter($resolved);
         try {
             try {
-                $instance = $this->resolver->resolve($resolved, $context);
+                $instance = $this->resolver->resolve($resolved, $params);
             } catch (ContainerExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -206,13 +205,6 @@ final class Container implements
     public function resolve(mixed $callable): callable
     {
         return $this->callableExecutor->resolve($callable);
-    }
-
-    public function execute(
-        mixed $callable,
-        ResolutionContext $context = new ResolutionContext(),
-    ): mixed {
-        return $this->callableExecutor->execute($callable, $context);
     }
 
     public function makeLazy(string $class, callable $initializer): object
