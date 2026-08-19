@@ -11,7 +11,6 @@ use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\NullContainer;
-use Componenta\DI\ResolutionContext;
 use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
 use InvalidArgumentException;
@@ -22,12 +21,11 @@ use ReflectionMethod;
 use ReflectionParameter;
 use WeakMap;
 
-/** Validates v5 factory forms and their runtime `(ContainerValue, ResolutionContext)` ABI. */
+/** Validates factory forms and their runtime `(ContainerValue, array)` ABI. */
 final class FactorySpecificationValidator
 {
-    /** @var WeakMap<ReflectionFunctionAbstract, true>|null */
+    /** @var WeakMap<ReflectionFunctionAbstract,true>|null */
     private static ?WeakMap $validatedCallables = null;
-
     private static ?ContainerValue $containerArgument = null;
 
     public static function assertValid(string $id, mixed $factory): void
@@ -44,17 +42,23 @@ final class FactorySpecificationValidator
             if (CompiledFactoryDefinition::decode($factory->encode()) !== null) {
                 return;
             }
-            throw new InvalidConfigurationException(sprintf('Compiled factory definition for "%s" is malformed.', $id));
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled factory definition for "%s" is malformed.',
+                $id,
+            ));
         }
         if (CompiledFactoryDefinition::isEncodedValue($factory)) {
             if (CompiledFactoryDefinition::decode($factory) !== null) {
                 return;
             }
-            throw new InvalidConfigurationException(sprintf('Factory "%s" contains malformed compiled metadata.', $id));
+            throw new InvalidConfigurationException(sprintf(
+                'Factory "%s" contains malformed compiled metadata.',
+                $id,
+            ));
         }
 
-        // String callables are ambiguous with factory service ids. FactoryResolver
-        // gives an existing service id precedence and validates the resolved callable.
+        // String callables are ambiguous with service ids. FactoryResolver gives
+        // an existing service id precedence and validates the resolved callable.
         if (is_string($factory) && $factory !== '') {
             return;
         }
@@ -66,7 +70,11 @@ final class FactorySpecificationValidator
             return;
         }
 
-        throw new InvalidConfigurationException(sprintf('Factory "%s" has unsupported type %s.', $id, get_debug_type($factory)));
+        throw new InvalidConfigurationException(sprintf(
+            'Factory "%s" has unsupported type %s.',
+            $id,
+            get_debug_type($factory),
+        ));
     }
 
     public static function assertResolvedCallable(string $id, callable $factory): void
@@ -78,7 +86,6 @@ final class FactorySpecificationValidator
         try {
             $reflection = Reflection::callable($factory);
         } catch (InvalidArgumentException) {
-            // Magic __call()/__callStatic() dispatch has no concrete signature to validate.
             return;
         }
 
@@ -97,7 +104,7 @@ final class FactorySpecificationValidator
         $parameters = $reflection->getParameters();
         $scope = self::callableScope($reflection);
         self::assertArgument($id, $parameters, 0, self::containerArgument(), $scope);
-        self::assertArgument($id, $parameters, 1, new ResolutionContext(), $scope);
+        self::assertArgument($id, $parameters, 1, [], $scope);
 
         $validated[$reflection] = true;
     }
@@ -114,31 +121,25 @@ final class FactorySpecificationValidator
         $required = $reflection->getNumberOfRequiredParameters();
         if ($required > 2) {
             throw new InvalidConfigurationException(sprintf(
-                'Factory "%s" requires %d arguments, but the v5 factory runtime supplies 2.',
+                'Factory "%s" requires %d arguments, but the factory runtime supplies 2.',
                 $id,
                 $required,
             ));
         }
 
-        // Userland callables deliberately tolerate extra positional arguments,
-        // while internal functions commonly reject them. Fail during composition
-        // instead of waiting for the first resolution.
         if ($reflection->isInternal()
             && !$reflection->isVariadic()
             && $reflection->getNumberOfParameters() < 2
         ) {
             throw new InvalidConfigurationException(sprintf(
-                'Factory "%s" internal callable accepts at most %d arguments, but the v5 factory runtime supplies 2.',
+                'Factory "%s" internal callable accepts at most %d arguments, but the factory runtime supplies 2.',
                 $id,
                 $reflection->getNumberOfParameters(),
             ));
         }
     }
 
-    /**
-     * @param list<ReflectionParameter> $parameters
-     * @param ReflectionClass<object>|null $scope
-     */
+    /** @param list<ReflectionParameter> $parameters @param ReflectionClass<object>|null $scope */
     private static function assertArgument(
         string $id,
         array $parameters,
@@ -152,7 +153,12 @@ final class FactorySpecificationValidator
         }
 
         try {
-            $valid = ReflectionType::match($parameter->getType(), $argument, strict: true, scope: $scope);
+            $valid = ReflectionType::match(
+                $parameter->getType(),
+                $argument,
+                strict: true,
+                scope: $scope,
+            );
         } catch (InvalidArgumentException $e) {
             throw new InvalidConfigurationException(sprintf(
                 'Factory "%s" parameter #%d type cannot be validated: %s',
@@ -200,10 +206,6 @@ final class FactorySpecificationValidator
         return null;
     }
 
-    /**
-     * Reflection exposes magic callables as internal closure trampolines whose
-     * reflected parameters do not describe the arguments accepted by dispatch.
-     */
     private static function isMagicClosureTrampoline(ReflectionFunctionAbstract $reflection): bool
     {
         if (!$reflection instanceof ReflectionFunction || !$reflection->isInternal()) {
@@ -214,7 +216,9 @@ final class FactorySpecificationValidator
         $scope = $reflection->getClosureScopeClass();
         if ($scope !== null && $scope->hasMethod($name)) {
             $method = $scope->getMethod($name);
-            if ($method->isInternal() && $method->getDeclaringClass()->getName() === $scope->getName()) {
+            if ($method->isInternal()
+                && $method->getDeclaringClass()->getName() === $scope->getName()
+            ) {
                 return false;
             }
         }
