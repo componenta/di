@@ -43,6 +43,14 @@ final readonly class CompiledFactoryShardCompiler
         }
         self::assertNamespace($namespace);
 
+        $fastPaths = $this->fastPaths;
+        if ($fastPaths === null && $this->objects !== null) {
+            $fastPaths = new PlainConstructorFastPathPlanner(
+                $this->objects,
+                $this->objects->parameters(),
+            );
+        }
+
         /** @var array<class-string, CompiledFactoryDefinition> $definitions */
         $definitions = [];
         /** @var list<GeneratedFactory> $current */
@@ -62,7 +70,7 @@ final readonly class CompiledFactoryShardCompiler
                 ));
             }
 
-            $plainAutowireTypes = $this->fastPaths?->plan($class);
+            $plainAutowireTypes = $fastPaths?->plan($class);
             $factory = $this->factories->generate(
                 $class,
                 'createEntry' . $index++,
