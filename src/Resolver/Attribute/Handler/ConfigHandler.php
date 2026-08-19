@@ -8,8 +8,10 @@ use Componenta\Config\Config;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
@@ -20,7 +22,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Config] on parameters and properties. */
-final class ConfigHandler implements ParameterAttributeHandlerInterface
+final class ConfigHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
@@ -29,13 +31,17 @@ final class ConfigHandler implements ParameterAttributeHandlerInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof ConfigAttribute) {
             throw new LogicException('ConfigHandler received an unsupported parameter attribute.');
         }
+        if ($value->resolved) {
+            return $value;
+        }
 
         try {
-            return $this->read($attribute, $target->name);
+            return ParameterAttributeValue::resolved($this->read($attribute, $target->name));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
