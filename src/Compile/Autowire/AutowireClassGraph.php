@@ -8,7 +8,6 @@ use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
-use Componenta\DI\Resolver\Entry\EntryClassEligibility;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\TypeHints;
 use InvalidArgumentException;
@@ -16,6 +15,8 @@ use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+
+use function Componenta\DI\is_entry_class_eligible;
 
 /** Expands explicit AOT roots through statically knowable dependencies. */
 final readonly class AutowireClassGraph
@@ -64,7 +65,7 @@ final readonly class AutowireClassGraph
 
             /** @var class-string $class */
             $reflection = new ReflectionClass($class);
-            if (!EntryClassEligibility::allows($reflection)
+            if (!is_entry_class_eligible($reflection)
                 || self::isBootstrapExtension($reflection)
             ) {
                 continue;
@@ -171,7 +172,7 @@ final readonly class AutowireClassGraph
 
         /** @var class-string $dependency */
         $candidate = new ReflectionClass($dependency);
-        if (EntryClassEligibility::allows($candidate)
+        if (is_entry_class_eligible($candidate)
             && !self::isBootstrapExtension($candidate)
         ) {
             $dependencies[$candidate->getName()] = true;
