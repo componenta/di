@@ -15,7 +15,7 @@ use ReflectionProperty;
 /**
  * Executes composed class/property/method attribute handlers.
  * Parameter plans are validated by the same composition model but executed
- * exclusively by ParameterResolverInterface implementations.
+ * exclusively through AttributeParameterResolver.
  */
 final class AttributeProcessor
 {
@@ -50,7 +50,7 @@ final class AttributeProcessor
 
         foreach ($usages as $usage) {
             $handler = $usage->definition->handler;
-            if ($handler !== null) {
+            if ($handler instanceof AttributeHandlerInterface) {
                 $handler->handle($usage->attribute, $usage->target, $context);
             }
         }
@@ -95,7 +95,7 @@ final class AttributeProcessor
     private static function collect(array $usages, array &$before, array &$after): void
     {
         foreach ($usages as $usage) {
-            if ($usage->definition->handler === null) {
+            if (!$usage->definition->handler instanceof AttributeHandlerInterface) {
                 continue;
             }
 
