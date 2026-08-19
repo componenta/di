@@ -10,14 +10,13 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Env;
-use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
-use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Target\ValueTargetInterface;
-use Componenta\DI\Value\ValueContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
 final class InvalidAotComposition
 {
@@ -27,28 +26,27 @@ final class InvalidAotComposition
     ) {}
 }
 
-#[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
+#[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class AotExtensionValue
 {
     public function __construct(public string $value) {}
 }
 
-final readonly class AotExtensionValueProvider implements ValueProviderHandlerInterface
+final readonly class AotExtensionParameterResolver implements ParameterResolverInterface
 {
-    public ValueProviderPrecedence $precedence {
-        get => ValueProviderPrecedence::ProviderFirst;
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->hasAttribute(AotExtensionValue::class);
     }
 
-    public function provide(
-        object $attribute,
-        ValueTargetInterface $target,
-        ValueContext $context,
-    ): mixed {
-        if (!$attribute instanceof AotExtensionValue) {
-            throw new \LogicException('Unexpected attribute.');
-        }
-
-        return $attribute->value;
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        $attribute = $target->firstAttribute(AotExtensionValue::class);
+        return $attribute instanceof AotExtensionValue
+            ? [$target->position, $attribute->value]
+            : null;
     }
 }
 
@@ -79,6 +77,18 @@ function productionBuilderFromCompiled(
     );
 }
 
+function aotExtensionBuilder(int $definitionVersion = 1): ContainerBuilder
+{
+    return (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(
+            AotExtensionValue::class,
+            handler: null,
+            capabilities: [ValueProvider::class],
+            version: $definitionVersion,
+        ))
+        ->addParameterResolver(new AotExtensionParameterResolver(), 750);
+}
+
 test('AOT compilation rejects invalid attribute composition before writing a shard', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-v5-invalid-aot-' . bin2hex(random_bytes(5));
 
@@ -94,14 +104,9 @@ test('AOT compilation rejects invalid attribute composition before writing a sha
     }
 });
 
-test('custom attribute definitions execute identically in development and compiled production', function (): void {
+test('custom parameter resolvers execute identically in development and compiled production', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-v5-extension-aot-' . bin2hex(random_bytes(5));
-    $builder = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
-        AotExtensionValue::class,
-        new AotExtensionValueProvider(),
-        [ValueProvider::class],
-        version: 1,
-    ));
+    $builder = aotExtensionBuilder();
     $development = $builder->build();
 
     try {
@@ -115,23 +120,13 @@ test('custom attribute definitions execute identically in development and compil
     }
 });
 
-test('compiled production rejects stale shards when extension semantics change', function (): void {
+test('compiled production rejects stale shards when attribute semantics change', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-v5-extension-fingerprint-' . bin2hex(random_bytes(5));
-    $compilerBuilder = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
-        AotExtensionValue::class,
-        new AotExtensionValueProvider(),
-        [ValueProvider::class],
-        version: 1,
-    ));
+    $compilerBuilder = aotExtensionBuilder(1);
 
     try {
         $compiled = $compilerBuilder->compileFactories([AotExtensionTarget::class], $directory);
-        $runtimeBuilder = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
-            AotExtensionValue::class,
-            new AotExtensionValueProvider(),
-            [ValueProvider::class],
-            version: 2,
-        ));
+        $runtimeBuilder = aotExtensionBuilder(2);
         $production = productionBuilderFromCompiled($runtimeBuilder, $compiled, $directory)->build();
 
         expect(fn() => $production->make(AotExtensionTarget::class))
