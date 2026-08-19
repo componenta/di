@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
+use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
 
 /** Ordered entry resolver chain with owner caching. */
 final class CompositeResolver implements DefinitionAwareResolverInterface
@@ -44,7 +45,7 @@ final class CompositeResolver implements DefinitionAwareResolverInterface
     {
         $owner = $this->owner($id)
             ?? throw NotFoundException::forService($id);
-        return $owner->resolve($id, $params);
+        return $owner->resolve($id, EntryResolverContext::for($owner, $params));
     }
 
     public function setDefinition(string $id, DefinitionInterface $definition): void
