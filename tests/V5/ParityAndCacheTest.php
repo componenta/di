@@ -12,7 +12,11 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\ResolutionContext;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\CastableResolver;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
+use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 
 final class AotValueDto
@@ -36,7 +40,7 @@ function cleanupDirectory(string $directory): void
     @rmdir($directory);
 }
 
-test('reflection and AOT execute the same semantic value pipeline', function (): void {
+test('reflection and AOT execute the same parameter resolver semantics', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-v5-aot-' . bin2hex(random_bytes(5));
     $builder = (new ContainerBuilder())
         ->addService(CasterProviderInterface::class, new TestCasterProvider());
@@ -59,16 +63,16 @@ test('reflection and AOT execute the same semantic value pipeline', function ():
             $directory,
         )->build();
 
-        $context = ResolutionContext::explicit(['value' => '73']);
-        expect($production->make(AotValueDto::class, $context)->value)
-            ->toBe($development->make(AotValueDto::class, $context)->value)
+        $params = ['value' => '73'];
+        expect($production->make(AotValueDto::class, $params)->value)
+            ->toBe($development->make(AotValueDto::class, $params)->value)
             ->toBe(73);
     } finally {
         cleanupDirectory($directory);
     }
 });
 
-test('persistent ClassDefinition cache routes through the same ObjectPipeline', function (): void {
+test('persistent ClassDefinition cache routes through the same parameter resolver path', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-v5-cache-' . bin2hex(random_bytes(5));
     $file = $directory . '/container.php';
 
@@ -91,21 +95,21 @@ test('persistent ClassDefinition cache routes through the same ObjectPipeline', 
     }
 });
 
-test('cache envelopes are strictly versioned for v5', function (): void {
+test('cache envelopes are strictly versioned for the final v5 format', function (): void {
     expect(fn() => ContainerBuilder::configureFromCache(
         new Config([]),
         ['version' => 11, ConfigKey::DEPENDENCIES => []],
     ))->toThrow(InvalidConfigurationException::class);
 });
 
-test('v4 resolver and provenance contracts are absent from v5', function (): void {
+test('v4 extension contracts that remain part of final v5 are present', function (): void {
     foreach ([
-        'Componenta\\DI\\Resolver\\Parameter\\ParameterResolverInterface',
-        'Componenta\\DI\\Resolver\\Parameter\\ParameterSourceAttributeInterface',
-        'Componenta\\DI\\Resolver\\Parameter\\Request\\RequestResolver',
-        'Componenta\\DI\\Resolver\\CastableResolver',
-        'Componenta\\DI\\Resolver\\Attribute\\AttributeProcessor',
+        ParameterResolverInterface::class,
+        ParameterSourceAttributeInterface::class,
+        RequestResolver::class,
+        CastableResolver::class,
+        AttributeProcessor::class,
     ] as $class) {
-        expect(class_exists($class) || interface_exists($class))->toBeFalse();
+        expect(class_exists($class) || interface_exists($class))->toBeTrue();
     }
 });
