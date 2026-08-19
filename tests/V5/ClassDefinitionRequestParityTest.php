@@ -12,7 +12,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
