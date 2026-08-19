@@ -13,7 +13,6 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
-use Componenta\DI\Resolver\EnvNameNormalizer;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -25,6 +24,8 @@ use ReflectionProperty;
 use ReflectionType;
 use Reflector;
 use Throwable;
+
+use function Componenta\DI\normalize_env_name;
 
 /** Handles #[Env] on parameters and properties. */
 final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
@@ -47,7 +48,7 @@ final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeH
 
         try {
             return ParameterAttributeValue::resolved($this->resolveEnv(
-                envName: $attribute->name ?? EnvNameNormalizer::toEnvName($target->name),
+                envName: $attribute->name ?? normalize_env_name($target->name),
                 typeName: self::typeName($target->type),
                 hasDefault: $attribute->default !== DefaultValue::None,
                 default: $attribute->default,
@@ -78,7 +79,7 @@ final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeH
             $context->writeProperty(
                 $target,
                 $this->resolveEnv(
-                    envName: $attribute->name ?? EnvNameNormalizer::toEnvName($target->getName()),
+                    envName: $attribute->name ?? normalize_env_name($target->getName()),
                     typeName: self::typeName($target->getType()),
                     hasDefault: $attribute->default !== DefaultValue::None,
                     default: $attribute->default,
