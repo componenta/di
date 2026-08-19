@@ -13,53 +13,28 @@ use Throwable;
  * Raised when the container cannot produce a value for a service, a parameter,
  * or a property.
  *
- * Every "failed to build X" path - autowire miss, factory throw, constructor
- * parameter gap, attributed-property injection gap, or missing class - surfaces
- * as a single type with named constructors discriminating the cause.
- *
- * Build instances through the {@see ::forParameter()}, {@see ::forProperty()},
- * {@see ::forService()}, {@see ::forMissingService()} and {@see ::forNonObject()}
- * factories; they produce Symfony-style messages and attach the relevant
- * reflection/service context as readonly fields.
+ * Diagnostic state is detached from live reflection/request/service objects so
+ * an exception may be retained by logging or telemetry without retaining an
+ * otherwise completed resolution graph.
  */
 final class ResolutionException extends RuntimeException implements ExceptionInterface
 {
+    /**
+     * @param array<string|int, string> $providedParameterTypes
+     * @param array<int, string> $resolvedParameterTypes
+     */
     public function __construct(
         string $message,
-
-        /**
-         * Parameter that could not be resolved (parameter failures).
-         */
-        public readonly ?ReflectionParameter $parameter = null,
-
-        /**
-         * Property that could not be resolved (property failures).
-         */
-        public readonly ?ReflectionProperty $property = null,
-
-        /**
-         * Service id that failed to resolve (service failures).
-         */
+        public readonly ?string $parameterName = null,
+        public readonly ?int $parameterPosition = null,
+        public readonly ?string $parameterType = null,
+        public readonly ?string $parameterContext = null,
+        public readonly ?string $propertyName = null,
+        public readonly ?string $propertyClass = null,
+        public readonly ?string $propertyType = null,
         public readonly ?string $serviceId = null,
-
-        /**
-         * Parameters provided by the caller at the moment of failure.
-         *
-         * @var array<string|int, mixed>
-         */
-        public readonly array $providedParameters = [],
-
-        /**
-         * Parameters already resolved when the failure happened.
-         *
-         * @var array<int, mixed>
-         */
-        public readonly array $resolvedParameters = [],
-
-        /**
-         * Actual runtime type returned by a resolver when a non-object was
-         * produced where an object was required.
-         */
+        public readonly array $providedParameterTypes = [],
+        public readonly array $resolvedParameterTypes = [],
         public readonly ?string $actualType = null,
         ?Throwable $previous = null,
     ) {
@@ -70,7 +45,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
      * Parameter could not be resolved.
      *
      * @param array<string|int, mixed> $providedParameters
-     * @param array<int, mixed>        $resolvedParameters
+     * @param array<int, mixed> $resolvedParameters
      */
     public static function forParameter(
         ReflectionParameter $parameter,
@@ -79,48 +54,50 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         array $resolvedParameters = [],
         ?Throwable $previous = null,
     ): self {
-        $suffix = self::buildSuffix($reason, $previous);
+        $context = self::formatFunctionName($parameter);
+        $type = $parameter->getType();
 
         return new self(
             sprintf(
                 'Cannot resolve parameter "$%s" of %s%s',
                 $parameter->getName(),
-                self::formatFunctionName($parameter),
-                $suffix,
+                $context,
+                self::buildSuffix($reason, $previous),
             ),
-            parameter: $parameter,
-            providedParameters: $providedParameters,
-            resolvedParameters: $resolvedParameters,
+            parameterName: $parameter->getName(),
+            parameterPosition: $parameter->getPosition(),
+            parameterType: $type === null ? null : (string) $type,
+            parameterContext: $context,
+            providedParameterTypes: self::valueTypes($providedParameters),
+            resolvedParameterTypes: self::resolvedValueTypes($resolvedParameters),
             previous: $previous,
         );
     }
 
-    /**
-     * Property could not be resolved.
-     */
+    /** Property could not be resolved. */
     public static function forProperty(
         ReflectionProperty $property,
         ?string $reason = null,
         ?Throwable $previous = null,
     ): self {
-        $suffix = self::buildSuffix($reason, $previous);
+        $class = $property->getDeclaringClass()->getName();
+        $type = $property->getType();
 
         return new self(
             sprintf(
                 'Cannot resolve property "%s::$%s"%s',
-                $property->getDeclaringClass()->getName(),
+                $class,
                 $property->getName(),
-                $suffix,
+                self::buildSuffix($reason, $previous),
             ),
-            property: $property,
+            propertyName: $property->getName(),
+            propertyClass: $class,
+            propertyType: $type === null ? null : (string) $type,
             previous: $previous,
         );
     }
 
-    /**
-     * A resolver failed while producing the entry - factory threw, constructor
-     * threw, reflection blew up, etc.
-     */
+    /** A resolver failed while producing an entry. */
     public static function forService(string $id, Throwable $previous): self
     {
         return new self(
@@ -130,9 +107,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    /**
-     * The id refers to a class that does not exist and cannot be autowired.
-     */
+    /** The id refers to a class that does not exist and cannot be autowired. */
     public static function forMissingService(string $id): self
     {
         return new self(
@@ -141,9 +116,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    /**
-     * A resolver produced a non-object where an instance was expected.
-     */
+    /** A resolver produced a non-object where an instance was expected. */
     public static function forNonObject(string $id, string $actualType): self
     {
         return new self(
@@ -157,9 +130,6 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    /**
-     * Builds the trailing "": reason[ (previous: ...)]" fragment of a message.
-     */
     private static function buildSuffix(?string $reason, ?Throwable $previous): string
     {
         if ($reason !== null && $previous !== null) {
@@ -180,7 +150,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
     private static function formatFunctionName(ReflectionParameter $parameter): string
     {
         $function = $parameter->getDeclaringFunction();
-        $class    = $parameter->getDeclaringClass();
+        $class = $parameter->getDeclaringClass();
 
         if ($class !== null) {
             return sprintf('%s::%s()', $class->getName(), $function->getName());
@@ -191,5 +161,32 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         }
 
         return sprintf('%s()', $function->getName());
+    }
+
+    /**
+     * @param array<string|int, mixed> $values
+     * @return array<string|int, string>
+     */
+    private static function valueTypes(array $values): array
+    {
+        $types = [];
+        foreach ($values as $key => $value) {
+            $types[$key] = get_debug_type($value);
+        }
+        return $types;
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     * @return array<int, string>
+     */
+    private static function resolvedValueTypes(array $values): array
+    {
+        /** @var array<int, string> $types */
+        $types = [];
+        foreach ($values as $position => $value) {
+            $types[$position] = get_debug_type($value);
+        }
+        return $types;
     }
 }
