@@ -10,9 +10,6 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
-use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Target\ParameterTarget;
 
 final class AuditTrivialEntry {}
 
@@ -51,18 +48,18 @@ final class AuditVariadicConstructorEntry
     public function __construct(AuditFastDependency ...$dependencies) {}
 }
 
-final class AuditNumberConventionResolver implements ParameterResolverInterface
+function cleanupPreparedDirectory(string $directory): void
 {
-    public function supports(ParameterTarget $target): bool
-    {
-        return $target->name === 'number';
+    if (!is_dir($directory)) {
+        return;
     }
 
-    public function resolveParameter(
-        ParameterTarget $target,
-        ParameterResolutionContext $context,
-    ): ?array {
-        return null;
+    foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
+        @unlink($file);
+    }
+
+    if (is_dir($directory)) {
+        @rmdir($directory);
     }
 }
 
@@ -88,14 +85,11 @@ test('AOT rejects the same inaccessible constructor that runtime cannot resolve'
             $directory,
         ))->toThrow(InvalidConfigurationException::class);
     } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
+        cleanupPreparedDirectory($directory);
     }
 });
 
-test('AOT emits a direct constructor only for a trivial prepared entry', function (): void {
+test('AOT entry methods always delegate execution to ObjectPipeline', function (): void {
     $suffix = bin2hex(random_bytes(5));
     $directory = sys_get_temp_dir() . '/componenta-di-v5-prepared-' . $suffix;
     $namespace = 'Componenta\\DI\\Tests\\Generated\\Prepared' . $suffix;
@@ -107,71 +101,30 @@ test('AOT emits a direct constructor only for a trivial prepared entry', functio
             namespace: $namespace,
         );
 
-        $trivial = $definitions[AuditTrivialEntry::class];
-        $noConstructor = $definitions[AuditNoConstructorEntry::class];
-        $trivialCode = file_get_contents($directory . '/' . $trivial->file);
-        $noConstructorCode = file_get_contents($directory . '/' . $noConstructor->file);
+        foreach ([AuditTrivialEntry::class, AuditNoConstructorEntry::class] as $entry) {
+            $definition = $definitions[$entry];
+            $code = file_get_contents($directory . '/' . $definition->file);
 
-        expect($trivialCode)->toBeString()
-            ->and($trivialCode)->toContain('return new \\' . AuditTrivialEntry::class . '();')
-            ->and($noConstructorCode)->toBeString()
-            ->and($noConstructorCode)->toContain('$this->objects->create(\\' . AuditNoConstructorEntry::class . '::class, $params)');
-    } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
+            expect($code)->toBeString()
+                ->and($code)->toContain('$this->objects->create(\\' . $entry . '::class, $params)')
+                ->and($code)->not->toContain('return new \\' . $entry)
+                ->and($code)->not->toContain('$this->container->has(')
+                ->and($code)->not->toContain('$this->container->get(')
+                ->and($code)->not->toContain('FAST_PATHS');
         }
-        @rmdir($directory);
+    } finally {
+        cleanupPreparedDirectory($directory);
     }
 });
 
-test('AOT specializes plain autowire constructors while runtime overrides keep the generic path', function (): void {
+test('compiled plain autowiring uses the same ObjectPipeline semantics for defaults and overrides', function (): void {
     $suffix = bin2hex(random_bytes(5));
-    $directory = sys_get_temp_dir() . '/componenta-di-v5-fast-constructor-' . $suffix;
-    $namespace = 'Componenta\\DI\\Tests\\Generated\\FastConstructor' . $suffix;
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-constructor-' . $suffix;
+    $namespace = 'Componenta\\DI\\Tests\\Generated\\Constructor' . $suffix;
+    $builder = new ContainerBuilder();
+    $development = $builder->build();
 
     try {
-        $compiler = new ContainerBuilder();
-        $definitions = $compiler->compileFactories(
-            [AuditFastConstructorEntry::class],
-            $directory,
-            namespace: $namespace,
-        );
-        $definition = $definitions[AuditFastConstructorEntry::class];
-        $code = file_get_contents($directory . '/' . $definition->file);
-
-        expect($code)->toBeString()
-            ->and($code)->toContain('$this->container->has(\\' . AuditFastDependency::class . '::class)')
-            ->and($code)->toContain('$this->container->get(\\' . AuditFastDependency::class . '::class)')
-            ->and($code)->toContain('return new \\' . AuditFastConstructorEntry::class . '($dependency0);')
-            ->and($code)->toContain('$this->objects->create(\\' . AuditFastConstructorEntry::class . '::class, $params)')
-            ->and($code)->toContain('FAST_PATHS');
-
-        $production = compiledAuditContainer($definitions, $directory);
-        $default = $production->make(AuditFastConstructorEntry::class);
-        $override = $production->make(AuditFastConstructorEntry::class, ['number' => 42]);
-
-        expect($default->dependency)->toBeInstanceOf(AuditFastDependency::class)
-            ->and($default->number)->toBe(1)
-            ->and($default->name)->toBe('default')
-            ->and($override->dependency)->toBeInstanceOf(AuditFastDependency::class)
-            ->and($override->number)->toBe(42)
-            ->and($override->name)->toBe('default');
-    } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
-    }
-});
-
-test('a custom convention resolver disables the plain constructor AOT fast path', function (): void {
-    $suffix = bin2hex(random_bytes(5));
-    $directory = sys_get_temp_dir() . '/componenta-di-v5-custom-constructor-' . $suffix;
-    $namespace = 'Componenta\\DI\\Tests\\Generated\\CustomConstructor' . $suffix;
-
-    try {
-        $builder = (new ContainerBuilder())
-            ->addParameterResolver(new AuditNumberConventionResolver(), 250);
         $definitions = $builder->compileFactories(
             [AuditFastConstructorEntry::class],
             $directory,
@@ -181,17 +134,30 @@ test('a custom convention resolver disables the plain constructor AOT fast path'
         $code = file_get_contents($directory . '/' . $definition->file);
 
         expect($code)->toBeString()
-            ->and($code)->not->toContain('return new \\' . AuditFastConstructorEntry::class . '($dependency0);')
-            ->and($code)->toContain('$this->objects->create(\\' . AuditFastConstructorEntry::class . '::class, $params)');
+            ->and($code)->toContain('$this->objects->create(\\' . AuditFastConstructorEntry::class . '::class, $params)')
+            ->and($code)->not->toContain('$this->container->has(')
+            ->and($code)->not->toContain('$this->container->get(')
+            ->and($code)->not->toContain('return new \\' . AuditFastConstructorEntry::class)
+            ->and($code)->not->toContain('FAST_PATHS');
+
+        $production = compiledAuditContainer($definitions, $directory);
+        $developmentDefault = $development->make(AuditFastConstructorEntry::class);
+        $productionDefault = $production->make(AuditFastConstructorEntry::class);
+        $developmentOverride = $development->make(AuditFastConstructorEntry::class, ['number' => 42]);
+        $productionOverride = $production->make(AuditFastConstructorEntry::class, ['number' => 42]);
+
+        expect([$productionDefault->number, $productionDefault->name])
+            ->toBe([$developmentDefault->number, $developmentDefault->name])
+            ->and([$productionOverride->number, $productionOverride->name])
+            ->toBe([$developmentOverride->number, $developmentOverride->name])
+            ->and($productionDefault->dependency)->toBeInstanceOf(AuditFastDependency::class)
+            ->and($productionOverride->dependency)->toBeInstanceOf(AuditFastDependency::class);
     } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
+        cleanupPreparedDirectory($directory);
     }
 });
 
-test('unsupported by-reference and variadic constructor shapes never use the AOT fast path', function (): void {
+test('unsupported constructor shapes still compile only through the shared ObjectPipeline', function (): void {
     $suffix = bin2hex(random_bytes(5));
     $directory = sys_get_temp_dir() . '/componenta-di-v5-unsupported-constructor-' . $suffix;
     $namespace = 'Componenta\\DI\\Tests\\Generated\\UnsupportedConstructor' . $suffix;
@@ -208,14 +174,12 @@ test('unsupported by-reference and variadic constructor shapes never use the AOT
             $code = file_get_contents($directory . '/' . $definition->file);
 
             expect($code)->toBeString()
-                ->and($code)->not->toContain('return new \\' . $entry . '($dependency0);')
-                ->and($code)->toContain('$this->objects->create(\\' . $entry . '::class, $params)');
+                ->and($code)->toContain('$this->objects->create(\\' . $entry . '::class, $params)')
+                ->and($code)->not->toContain('return new \\' . $entry)
+                ->and($code)->not->toContain('FAST_PATHS');
         }
     } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
+        cleanupPreparedDirectory($directory);
     }
 });
 
