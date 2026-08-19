@@ -123,7 +123,7 @@ class ContainerBuilder
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int CACHE_VERSION = 16;
+    public const int CACHE_VERSION = 17;
 
     /** @var array<string,non-empty-string> */
     private const array DEFAULT_ALIASES = [
