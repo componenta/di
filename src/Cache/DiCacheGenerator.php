@@ -92,7 +92,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         }
     }
 
-    /** @param array<string, mixed> $dependencies */
+    /** @param array<string,mixed> $dependencies */
     private function assertCompiledFactories(array $dependencies): void
     {
         $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
@@ -101,6 +101,9 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         }
 
         foreach ($factories as $id => $factory) {
+            if (!is_string($id) || $id === '') {
+                throw new InvalidConfigurationException('Factory ids must remain non-empty strings after compilation.');
+            }
             if ($factory instanceof GeneratedDefinitionCode) {
                 continue;
             }
@@ -110,8 +113,8 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     }
 
     /**
-     * @param array<string, mixed> $dependencies
-     * @return array<int, true>
+     * @param array<string,mixed> $dependencies
+     * @return array<int,true>
      */
     private function trustedGeneratedCode(array $dependencies): array
     {
