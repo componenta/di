@@ -37,7 +37,7 @@ final class CallableExecutor implements CallableExecutorInterface
         try {
             $resolved = $this->callableResolver->resolve($callable);
             $targets = $this->targets($resolved);
-            $arguments = $targets === []
+            $arguments = $targets === null
                 ? $params
                 : $this->parameters->resolveTargets($targets, $params);
         } catch (ExceptionInterface $e) {
@@ -62,8 +62,13 @@ final class CallableExecutor implements CallableExecutorInterface
         }
     }
 
-    /** @return list<ParameterTarget> */
-    private function targets(callable $callable): array
+    /**
+     * @return list<ParameterTarget>|null
+     *
+     * null denotes a dynamic/magic method whose real signature is unavailable;
+     * an empty list denotes a reflected callable that genuinely takes no args.
+     */
+    private function targets(callable $callable): ?array
     {
         if ($callable instanceof Closure) {
             $cache = $this->closureTargets ??= new WeakMap();
@@ -85,7 +90,7 @@ final class CallableExecutor implements CallableExecutorInterface
         }
 
         if (self::isDynamicMethodCallable($callable)) {
-            return [];
+            return null;
         }
 
         $key = self::cacheKey($callable);
