@@ -53,6 +53,11 @@ use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerBootstrapState;
+use Componenta\DI\Internal\EntryCache;
+use Componenta\DI\Internal\ProtectedServiceIds;
+use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -74,7 +79,6 @@ use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
-use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
@@ -332,7 +336,6 @@ class ContainerBuilder
         $parameters->seal();
         $attributes->seal();
 
-        // Force bootstrap only after composition is immutable.
         $container->get(Config::class);
 
         foreach ($this->delegators as $id => $items) {
