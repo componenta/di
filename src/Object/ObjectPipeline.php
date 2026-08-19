@@ -11,7 +11,6 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
 use ReflectionClass;
 
 /** Single object-creation runtime shared by reflection and compiled entries. */
@@ -46,10 +45,7 @@ final class ObjectPipeline
     public function create(string $class, array $params = []): object
     {
         $metadata = $this->metadata($class);
-        $creation = new ObjectCreationContext(
-            $metadata->class,
-            MappedRequestContext::strip($params),
-        );
+        $creation = new ObjectCreationContext($metadata->class, $params);
 
         $this->attributes->process(
             $metadata->class,
@@ -58,9 +54,9 @@ final class ObjectPipeline
         );
 
         return match ($creation->strategy) {
-            CreationStrategy::Eager => $this->eager($metadata, $params, $creation),
-            CreationStrategy::Lazy => $this->lazy($metadata, $params, $creation),
-            CreationStrategy::Proxy => $this->proxy($metadata, $params, $creation),
+            CreationStrategy::Eager => $this->eager($metadata, $creation),
+            CreationStrategy::Lazy => $this->lazy($metadata, $creation),
+            CreationStrategy::Proxy => $this->proxy($metadata, $creation),
         };
     }
 
@@ -93,14 +89,12 @@ final class ObjectPipeline
         return $this->metadata[$class] = new ObjectMetadata($reflection, $classPlan);
     }
 
-    /** @param array<string|int,mixed> $params */
     private function eager(
         ObjectMetadata $metadata,
-        array $params,
         ObjectCreationContext $creation,
     ): object {
         $entry = $creation->constructorEnabled
-            ? $this->instances->create($metadata->class, $params)
+            ? $this->instances->create($metadata->class, $creation->resolutionParameters())
             : $metadata->class->newInstanceWithoutConstructor();
 
         $creation->initialize($entry);
@@ -113,20 +107,22 @@ final class ObjectPipeline
         return $entry;
     }
 
-    /** @param array<string|int,mixed> $params */
     private function lazy(
         ObjectMetadata $metadata,
-        array $params,
         ObjectCreationContext $creation,
     ): object {
         return $this->proxies->makeLazy(
             $metadata->class->getName(),
-            function (object $entry) use ($metadata, $params, $creation): void {
-                if ($creation->constructorEnabled) {
-                    $this->instances->initialize($entry, $metadata->class, $params);
+            function (object $entry) use ($metadata, $creation): void {
+                $attempt = $creation->freshAttempt();
+                if ($attempt->constructorEnabled) {
+                    $this->instances->initialize(
+                        $entry,
+                        $metadata->class,
+                        $attempt->resolutionParameters(),
+                    );
                 }
 
-                $attempt = $creation->freshAttempt();
                 $attempt->initialize($entry);
                 $this->attributes->process(
                     $metadata->class,
@@ -137,17 +133,14 @@ final class ObjectPipeline
         );
     }
 
-    /** @param array<string|int,mixed> $params */
     private function proxy(
         ObjectMetadata $metadata,
-        array $params,
         ObjectCreationContext $creation,
     ): object {
         return $this->proxies->makeProxy(
             $metadata->class->getName(),
             fn(object $_proxy): object => $this->eager(
                 $metadata,
-                $params,
                 $creation->freshAttempt(),
             ),
         );
