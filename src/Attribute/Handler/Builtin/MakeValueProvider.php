@@ -8,11 +8,11 @@ use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
 use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\FactoryInterface;
-use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Target\ValueTargetInterface;
 use Componenta\DI\Value\ValueContext;
 use LogicException;
 
+/** @internal Transitional v5 handler; replaced by MakeAttributeResolver. */
 final class MakeValueProvider implements ValueProviderHandlerInterface
 {
     public ValueProviderPrecedence $precedence {
@@ -32,12 +32,6 @@ final class MakeValueProvider implements ValueProviderHandlerInterface
             throw new LogicException('#[Make] cannot infer a non-empty entry id.');
         }
 
-        return $this->factory->make(
-            $entry,
-            new ResolutionContext(
-                explicit: $attribute->params,
-                trusted: $context->resolution->trusted,
-            ),
-        );
+        return $this->factory->make($entry, $attribute->params);
     }
 }
