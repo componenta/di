@@ -6,6 +6,9 @@ namespace Componenta\DI\Resolver\Parameter\Request;
 
 interface MapperInterface
 {
-    /** @param array<string|int, mixed> $data @return array<string|int, mixed> */
+    /**
+     * @param array<string|int,mixed> $data
+     * @return array<string|int,mixed>
+     */
     public function transform(array $data): array;
 }
