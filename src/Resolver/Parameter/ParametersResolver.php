@@ -6,13 +6,11 @@ namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use ReflectionParameter;
 use WeakMap;
-
-use function Componenta\DI\validate_parameter_resolution_result;
 
 /** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
@@ -82,8 +80,6 @@ final class ParametersResolver
     }
 
     /**
-     * Stable semantic registration view used by AOT/cache fingerprinting.
-     *
      * @return list<array{resolver:ParameterResolverInterface,priority:int}>
      */
     public function semanticRegistrations(): array
@@ -157,8 +153,6 @@ final class ParametersResolver
             );
         }
 
-        // Composition validates parameter attributes, but never produces a
-        // parameter value. Execution continues exclusively through resolvers.
         $this->plans->build($target->reflection);
         MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
 
@@ -166,7 +160,7 @@ final class ParametersResolver
             $resolver = $this->resolverList[$slot];
             $result = $resolver->resolveParameter($target, $context);
             if ($result !== null) {
-                return validate_parameter_resolution_result($result, $resolver, $target, $context);
+                return \Componenta\DI\validate_parameter_resolution_result($result, $resolver, $target, $context);
             }
         }
 
