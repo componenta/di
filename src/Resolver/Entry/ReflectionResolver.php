@@ -9,6 +9,8 @@ use Componenta\DI\Object\ObjectPipeline;
 use Componenta\Reflection\Reflection;
 use ReflectionClass;
 
+use function Componenta\DI\is_entry_class_eligible;
+
 /** Reflection fallback for entries without an explicit definition. */
 final class ReflectionResolver implements EntryResolverInterface
 {
@@ -20,14 +22,14 @@ final class ReflectionResolver implements EntryResolverInterface
     public function can(string $id): bool
     {
         $class = $this->reflect($id);
-        return $class !== null && EntryClassEligibility::allows($class);
+        return $class !== null && is_entry_class_eligible($class);
     }
 
     /** @param array<string|int, mixed> $params */
     public function resolve(string $id, array $params = []): object
     {
         $class = $this->reflect($id);
-        if ($class === null || !EntryClassEligibility::allows($class)) {
+        if ($class === null || !is_entry_class_eligible($class)) {
             throw NotFoundException::forService($id);
         }
         return $this->objects->create($class->getName(), $params);
