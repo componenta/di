@@ -23,6 +23,7 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+use ReflectionClass;
 use Throwable;
 
 /** Resolves configured factories, class definitions and compiled entry shards. */
@@ -108,9 +109,10 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             throw new InvalidConfigurationException('ClassDefinition constructor parameters must resolve to an array.');
         }
 
+        /** @var array<string|int,mixed> $configured */
         $entry = $this->objects->create(
             $definition->value,
-            array_replace($configured, $params),
+            $this->constructorParameters($definition, $configured, $params),
         );
 
         foreach ($definition->methodCalls as $call) {
@@ -118,10 +120,67 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             if (!is_array($methodParams)) {
                 throw new InvalidConfigurationException('ClassDefinition method parameters must resolve to an array.');
             }
+            /** @var array<string|int,mixed> $methodParams */
             $this->executor->call([$entry, $call['method']], $methodParams);
         }
 
         return $entry;
+    }
+
+    /**
+     * Projects runtime overrides onto the constructor signature while preserving
+     * all raw runtime keys required by later parameter resolvers (for example a
+     * PSR-7 request typed key or internal mapped-request provenance).
+     *
+     * @param array<string|int,mixed> $configured
+     * @param array<string|int,mixed> $runtime
+     * @return array<string|int,mixed>
+     */
+    private function constructorParameters(
+        ClassDefinition $definition,
+        array $configured,
+        array $runtime,
+    ): array {
+        if ($configured === []) {
+            return $runtime;
+        }
+        if ($runtime === []) {
+            return $configured;
+        }
+
+        $provided = array_replace($configured, $runtime);
+        /** @var ReflectionClass<object> $class */
+        $class = new ReflectionClass($definition->value);
+        $constructor = $class->getConstructor();
+        if ($constructor === null) {
+            return $provided;
+        }
+
+        foreach ($this->parameters->targets($constructor->getParameters()) as $target) {
+            if (array_key_exists($target->name, $runtime)) {
+                $provided[$target->name] = $runtime[$target->name];
+                continue;
+            }
+
+            if (array_key_exists($target->position, $runtime)) {
+                $provided[$target->name] = $runtime[$target->position];
+                continue;
+            }
+
+            foreach ($target->typeNames as $typeName) {
+                if (!array_key_exists($typeName, $runtime)) {
+                    continue;
+                }
+
+                $value = $runtime[$typeName];
+                if (is_object($value) && $target->accepts($value)) {
+                    $provided[$target->name] = $value;
+                    break;
+                }
+            }
+        }
+
+        return $provided;
     }
 
     private function resolveDefinitionValue(mixed $value): mixed
