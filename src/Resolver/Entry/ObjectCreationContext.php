@@ -53,7 +53,7 @@ final class ObjectCreationContext
      * Internal constructor-resolution parameters, including request provenance.
      *
      * @internal
-     * @return array<string|int,mixed>
+     * @return array<string|int, mixed>
      */
     public function resolutionParameters(): array
     {
@@ -145,6 +145,11 @@ final class ObjectCreationContext
         return true;
     }
 
+    public function propertyClaimed(ReflectionProperty $property): bool
+    {
+        return isset($this->claimedProperties[self::propertyKey($property)]);
+    }
+
     public function readProperty(ReflectionProperty $property): mixed
     {
         $entry = $this->entry ?? throw new LogicException(sprintf(
@@ -160,7 +165,7 @@ final class ObjectCreationContext
 
     public function writeProperty(ReflectionProperty $property, mixed $value): void
     {
-        if (!isset($this->claimedProperties[self::propertyKey($property)])) {
+        if (!$this->propertyClaimed($property)) {
             throw new LogicException(sprintf(
                 'Property "%s::$%s" must be claimed before it is written.',
                 $property->getDeclaringClass()->getName(),
