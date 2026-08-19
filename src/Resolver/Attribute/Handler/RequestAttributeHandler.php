@@ -11,7 +11,7 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
-use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
@@ -27,7 +27,6 @@ use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Exception\ValidationExceptionInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use InvalidArgumentException;
-use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use ReflectionIntersectionType;
@@ -35,7 +34,6 @@ use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionType;
 use ReflectionUnionType;
-use Reflector;
 use Throwable;
 
 /** Handles all request-source attributes on parameters. */
@@ -52,7 +50,12 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        if ($value->resolved) {
+            return $value;
+        }
+
         try {
             $request = RequestParameter::get($context->provided);
             if ($request === null) {
@@ -67,7 +70,9 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
                 );
             }
 
-            return $this->extractValue($request, $attribute, $target->reflection);
+            return ParameterAttributeValue::resolved(
+                $this->extractValue($request, $attribute, $target->reflection),
+            );
         } catch (ValidationExceptionInterface|CasterExceptionInterface|ContainerExceptionInterface|InvalidArgumentException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -78,14 +83,6 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
                 resolvedParameters: $context->resolved,
             );
         }
-    }
-
-    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
-    {
-        throw new LogicException(sprintf(
-            '%s is a parameter-only attribute handler.',
-            self::class,
-        ));
     }
 
     private function extractValue(
