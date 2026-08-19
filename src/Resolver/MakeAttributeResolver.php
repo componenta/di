@@ -111,14 +111,14 @@ final class MakeAttributeResolver implements ParameterResolverInterface, Attribu
         ?Make $make,
         ?Proxy $proxy,
     ): array {
-        $entry = $make?->entry ?? $typeName ?? $name;
+        $entry = $make->entry ?? $typeName ?? $name;
         if ($entry === '') {
             throw new LogicException('Make entry must be a non-empty string.');
         }
 
         return [
             'entry' => $entry,
-            'params' => $make?->params ?? [],
+            'params' => $make->params ?? [],
             'proxyClass' => $proxy === null
                 ? null
                 : self::resolveProxyClass($entry, $typeName, $proxy),
