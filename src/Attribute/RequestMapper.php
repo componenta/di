@@ -47,7 +47,10 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
         }
     }
 
-    /** @param array<string,array<string|int,mixed>> $sources @return array<string|int,mixed> */
+    /**
+     * @param array<string,array<string|int,mixed>> $sources
+     * @return array<string|int,mixed>
+     */
     protected function mergeRequestData(array $sources): array
     {
         $data = [];
@@ -74,7 +77,10 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
         return $data;
     }
 
-    /** @param array<string|int,mixed> $data @return array<string|int,mixed> */
+    /**
+     * @param array<string|int,mixed> $data
+     * @return array<string|int,mixed>
+     */
     public function transform(array $data): array
     {
         return (self::$pipeline ??= new RequestMapperPipeline())->run(
