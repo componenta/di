@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
-use InvalidArgumentException;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
 
 use function Componenta\DI\is_entry_class_eligible;
@@ -25,14 +25,20 @@ final readonly class FactoryCodeGenerator
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
         if (!is_entry_class_eligible($reflection)) {
-            throw new InvalidArgumentException(sprintf('Cannot compile ineligible entry "%s".', $class));
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot compile ineligible entry "%s".',
+                $class,
+            ));
         }
 
         /** @var class-string $resolvedClass */
         $resolvedClass = $reflection->getName();
         $method ??= 'create_' . substr(hash('sha256', $resolvedClass), 0, 16);
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $method) !== 1) {
-            throw new InvalidArgumentException(sprintf('Invalid generated factory method "%s".', $method));
+            throw new InvalidConfigurationException(sprintf(
+                'Invalid generated factory method "%s".',
+                $method,
+            ));
         }
 
         if ($plainAutowireTypes !== null) {
