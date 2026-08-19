@@ -34,6 +34,13 @@ final class AttributeProcessor
     }
 
     /** @param ReflectionClass<object> $class */
+    public function hasHandlers(ReflectionClass $class): bool
+    {
+        $plan = $this->executionPlan($class);
+        return $plan['before'] !== [] || $plan['after'] !== [];
+    }
+
+    /** @param ReflectionClass<object> $class */
     public function process(
         ReflectionClass $class,
         AttributePhase $phase,
