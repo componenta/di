@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
-use LogicException;
 
 /** Mutable composition-time registry, sealed before the container becomes usable. */
 final class AttributeDefinitionRegistry
@@ -91,8 +90,6 @@ final class AttributeDefinitionRegistry
             return array_values($matches)[0];
         }
 
-        // Keep only the most-specific registrations. A class/interface that is
-        // an ancestor of another matching registration cannot win.
         foreach (array_keys($matches) as $candidate) {
             foreach (array_keys($matches) as $other) {
                 if ($candidate === $other) {
@@ -137,7 +134,7 @@ final class AttributeDefinitionRegistry
     private function assertMutable(): void
     {
         if ($this->sealed) {
-            throw new LogicException('Attribute definition registry is sealed.');
+            throw new InvalidConfigurationException('Attribute definition registry is sealed.');
         }
     }
 }
