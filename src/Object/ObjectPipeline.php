@@ -17,7 +17,7 @@ use ReflectionClass;
 /** Single object-creation runtime shared by reflection and compiled entries. */
 final class ObjectPipeline
 {
-    /** @var array<class-string, ObjectMetadata> */
+    /** @var array<class-string,ObjectMetadata> */
     private array $metadata = [];
     private int $metadataRevision = -1;
     private readonly AttributeProcessor $attributes;
@@ -27,8 +27,9 @@ final class ObjectPipeline
         private readonly InstanceCreator $instances,
         private readonly ProxyFactoryInterface $proxies,
         private readonly AttributeDefinitionRegistry $registry,
+        ?AttributeProcessor $attributes = null,
     ) {
-        $this->attributes = new AttributeProcessor($registry, $plans);
+        $this->attributes = $attributes ?? new AttributeProcessor($registry, $plans);
     }
 
     /** @param class-string $class */
@@ -40,14 +41,11 @@ final class ObjectPipeline
 
     /**
      * @param class-string $class
-     * @param array<string|int, mixed> $params
+     * @param array<string|int,mixed> $params
      */
     public function create(string $class, array $params = []): object
     {
         $metadata = $this->metadata($class);
-
-        // Request DTO provenance is transport metadata for parameter resolution,
-        // not user-visible object-creation context for attribute extensions.
         $creation = new ObjectCreationContext(
             $metadata->class,
             MappedRequestContext::strip($params),
@@ -83,8 +81,6 @@ final class ObjectPipeline
         $reflection = new ReflectionClass($class);
         $classPlan = $this->plans->build($reflection);
 
-        // Parameter composition is validated before the first object is made;
-        // actual parameter values are still produced only by parameter resolvers.
         $constructor = $reflection->getConstructor();
         if ($constructor !== null) {
             foreach ($constructor->getParameters() as $parameter) {
@@ -94,13 +90,10 @@ final class ObjectPipeline
 
         $this->attributes->prepare($reflection);
 
-        return $this->metadata[$class] = new ObjectMetadata(
-            $reflection,
-            $classPlan,
-        );
+        return $this->metadata[$class] = new ObjectMetadata($reflection, $classPlan);
     }
 
-    /** @param array<string|int, mixed> $params */
+    /** @param array<string|int,mixed> $params */
     private function eager(
         ObjectMetadata $metadata,
         array $params,
@@ -120,7 +113,7 @@ final class ObjectPipeline
         return $entry;
     }
 
-    /** @param array<string|int, mixed> $params */
+    /** @param array<string|int,mixed> $params */
     private function lazy(
         ObjectMetadata $metadata,
         array $params,
@@ -144,7 +137,7 @@ final class ObjectPipeline
         );
     }
 
-    /** @param array<string|int, mixed> $params */
+    /** @param array<string|int,mixed> $params */
     private function proxy(
         ObjectMetadata $metadata,
         array $params,
