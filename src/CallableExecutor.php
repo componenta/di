@@ -77,10 +77,14 @@ final class CallableExecutor implements CallableExecutorInterface
         }
 
         $key = self::cacheKey($callable);
+        if (isset($this->callableTargets[$key])) {
+            return $this->callableTargets[$key];
+        }
+
         /** @var list<ReflectionParameter> $parameters */
         $parameters = array_values(Reflection::callable($callable)->getParameters());
 
-        return $this->callableTargets[$key] ??= $this->parameters->targets($parameters);
+        return $this->callableTargets[$key] = $this->parameters->targets($parameters);
     }
 
     private static function isDynamicMethodCallable(callable $callable): bool
