@@ -16,7 +16,7 @@ final readonly class DefinitionCompiler implements DefinitionCompilerInterface
 
     public static function createDefault(): self
     {
-        return new self(DefaultDefinitionCodeGenerators::create());
+        return new self(new DefinitionCodeGeneratorRegistry());
     }
 
     public function compile(array $dependencies): array
