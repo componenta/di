@@ -18,6 +18,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -76,20 +77,15 @@ final readonly class AotHandledParameterHandler implements ParameterAttributeHan
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof AotHandledParameter) {
             throw new LogicException('Unexpected parameter attribute.');
         }
 
-        return $attribute->value;
-    }
-
-    public function handle(
-        object $attribute,
-        Reflector $target,
-        ObjectCreationContext $context,
-    ): void {
-        throw new LogicException('AotHandledParameterHandler is parameter-only.');
+        return $value->resolved
+            ? $value
+            : ParameterAttributeValue::resolved($attribute->value);
     }
 }
 
