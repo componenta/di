@@ -70,7 +70,8 @@ final class AttributePlanBuilder
             return $this->namedPlans[$key] = $plan;
         }
 
-        ($this->anonymousPlans ??= new WeakMap())[$target] = $plan;
+        $anonymous = $this->anonymousPlans ??= new WeakMap();
+        $anonymous[$target] = $plan;
         return $plan;
     }
 
