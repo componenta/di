@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-/**
- * Mutable state owned by one ParametersResolver invocation.
- *
- * This is deliberately internal to parameter resolution. Public container and
- * callable APIs continue to expose plain parameter arrays rather than a
- * framework-wide resolution context object.
- */
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
+
+/** Mutable state owned by one ParametersResolver invocation. */
 final class ParameterResolutionContext
 {
     /** @var array<string|int, mixed> */
     public readonly array $provided;
+
+    public readonly ?MappedRequestContext $mappedRequest;
 
     /** @var array<int, mixed> */
     public private(set) array $resolved;
@@ -25,7 +23,8 @@ final class ParameterResolutionContext
      */
     public function __construct(array $provided = [], array $resolved = [])
     {
-        $this->provided = $provided;
+        $this->mappedRequest = MappedRequestContext::get($provided);
+        $this->provided = MappedRequestContext::strip($provided);
         $this->resolved = $resolved;
     }
 
