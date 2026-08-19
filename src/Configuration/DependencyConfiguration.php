@@ -362,10 +362,10 @@ final class DependencyConfiguration
         if (is_string($delegator) && $delegator !== '') {
             return $delegator;
         }
-        if (self::callablePair($delegator) || self::deferredServiceMethod($delegator)) {
+        if (self::deferredServiceMethod($delegator)) {
             return $delegator;
         }
-        if (is_callable($delegator)) {
+        if (self::callablePair($delegator) || is_callable($delegator)) {
             return $delegator;
         }
 
