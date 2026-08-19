@@ -7,8 +7,9 @@ namespace Componenta\DI;
 use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\Reflection\Reflection;
 use InvalidArgumentException;
 use LogicException;
@@ -20,11 +21,11 @@ use WeakMap;
 /** DI-aware callable executor. */
 final class CallableExecutor implements CallableExecutorInterface
 {
-    /** @var WeakMap<Closure, list<ParameterTarget>>|null */
-    private ?WeakMap $closureTargets = null;
+    /** @var WeakMap<Closure, PreparedParameterPlan>|null */
+    private ?WeakMap $closurePlans = null;
 
-    /** @var array<string, list<ParameterTarget>|null> */
-    private array $callableTargets = [];
+    /** @var array<string, PreparedParameterPlan|null> */
+    private array $callablePlans = [];
 
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
@@ -36,10 +37,10 @@ final class CallableExecutor implements CallableExecutorInterface
     {
         try {
             $resolved = $this->callableResolver->resolve($callable);
-            $targets = $this->targets($resolved);
-            $arguments = $targets === null
-                ? $params
-                : $this->parameters->resolveTargets($targets, $params);
+            $plan = $this->plan($resolved);
+            $arguments = $plan === null
+                ? ResolutionMetadata::publicParameters($params)
+                : $this->parameters->resolvePrepared($plan, $params);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -63,30 +64,37 @@ final class CallableExecutor implements CallableExecutorInterface
     }
 
     /**
-     * @return list<ParameterTarget>|null
-     *
      * null denotes a native callable whose concrete signature is unavailable
-     * because PHP dispatches it through magic method handling. An empty list
+     * because PHP dispatches it through magic method handling. An empty plan
      * denotes a reflected callable that genuinely takes no arguments.
      */
-    private function targets(callable $callable): ?array
+    private function plan(callable $callable): ?PreparedParameterPlan
     {
         if ($callable instanceof Closure) {
-            $cache = $this->closureTargets ??= new WeakMap();
-            if (isset($cache[$callable])) {
+            $cache = $this->closurePlans ??= new WeakMap();
+            if (isset($cache[$callable]) && $this->parameters->isCurrentPlan($cache[$callable])) {
                 return $cache[$callable];
             }
 
             $reflection = new ReflectionFunction($callable);
             /** @var list<ReflectionParameter> $parameters */
             $parameters = array_values($reflection->getParameters());
+            $plan = $this->parameters->prepare($parameters);
 
-            return $cache[$callable] = $this->parameters->targets($parameters);
+            if ($this->parameters->isSealed) {
+                $cache[$callable] = $plan;
+            }
+
+            return $plan;
         }
 
         $key = self::cacheKey($callable);
-        if (array_key_exists($key, $this->callableTargets)) {
-            return $this->callableTargets[$key];
+        if (array_key_exists($key, $this->callablePlans)) {
+            $cached = $this->callablePlans[$key];
+            if ($cached === null || $this->parameters->isCurrentPlan($cached)) {
+                return $cached;
+            }
+            unset($this->callablePlans[$key]);
         }
 
         try {
@@ -95,13 +103,18 @@ final class CallableExecutor implements CallableExecutorInterface
             // CallableResolver has already established native callability. If
             // reflection cannot expose a concrete method, PHP is dispatching
             // through __call()/__callStatic(); preserve native argument binding.
-            return $this->callableTargets[$key] = null;
+            return $this->callablePlans[$key] = null;
         }
 
         /** @var list<ReflectionParameter> $parameters */
         $parameters = array_values($reflection->getParameters());
+        $plan = $this->parameters->prepare($parameters);
 
-        return $this->callableTargets[$key] = $this->parameters->targets($parameters);
+        if ($this->parameters->isSealed) {
+            $this->callablePlans[$key] = $plan;
+        }
+
+        return $plan;
     }
 
     private static function cacheKey(callable $callable): string
