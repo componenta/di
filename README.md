@@ -380,8 +380,21 @@ Integer `parameter_resolvers` keys are priorities and are preserved. Unknown dep
 
 The package exports `Componenta\DI\ConfigProvider` through `extra.componenta.config-providers` for Componenta package discovery.
 
+## Exception contract
+
+`Componenta\DI\Exception\ExceptionInterface` is the single package-level boundary for failures owned or normalized by DI. It also extends PSR-11 `ContainerExceptionInterface`.
+
+- `get()` and `make()` expose Componenta DI exceptions only; missing entries use `NotFoundException`, which also implements PSR-11 `NotFoundExceptionInterface`.
+- parameter resolver, attribute handler, constructor, factory, delegator, external-container, validation and caster failures are normalized by their owning DI pipeline; foreign throwables are retained as `getPrevious()`.
+- `call()` has two phases: callable/argument preparation is a DI boundary, while throwables raised after control enters the explicitly invoked user callable body propagate unchanged.
+- `AttributeCompositionException` is a specialized `InvalidConfigurationException`.
+- invalid builder/AOT inputs use `InvalidConfigurationException`; generated-artifact serialization, filesystem, lint and activation failures use `CompilationException`.
+- validation/caster exception types are not part of the DI public exception ABI. Request mapping preserves them as the cause of `ResolutionException`.
+
+The exception contract is shared by reflection and compiled/AOT execution, including deferred built-in lazy initialization.
+
 ## CI and parity
 
 CI runs Composer validation, PHP-CS-Fixer, PHPStan at max level and Pest on PHP 8.4 and 8.5.
 
-The v5 parity suite covers public v4 signatures, custom convention resolvers, custom parameter/object handlers, multi-attribute parameter composition, source conflicts, reflection/AOT parity, request provenance, persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators and external containers.
+The v5 parity suite covers public v4 signatures, custom convention resolvers, custom parameter/object handlers, multi-attribute parameter composition, source conflicts, reflection/AOT parity, request provenance, persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers and the strict exception boundary.
