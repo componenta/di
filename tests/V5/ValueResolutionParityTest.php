@@ -6,9 +6,11 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\CurrentUser;
+use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
@@ -58,6 +60,24 @@ final class CurrentUserOverrideParityDto
     public function __construct(
         #[CurrentUser]
         public object $user,
+    ) {}
+}
+
+final class TypedEnvironmentParityDto
+{
+    public function __construct(
+        #[Env('PORT')]
+        public int $port,
+        #[Env('DEBUG')]
+        public bool $debug,
+    ) {}
+}
+
+final class MissingEnvironmentDefaultParityDto
+{
+    public function __construct(
+        #[Env('PORT', default: 8080)]
+        public int $port,
     ) {}
 }
 
@@ -113,4 +133,22 @@ test('CurrentUser remains authoritative over caller-provided parameter values', 
 
     expect($container->make(CurrentUserOverrideParityDto::class, ['user' => $untrusted])->user)
         ->toBe($authenticated);
+});
+
+test('Env keeps v4 target-type conversion', function (): void {
+    $container = ContainerBuilder::configure(new Config(
+        [],
+        new Environment(['PORT' => '3306', 'DEBUG' => 'true']),
+    ))->build();
+
+    $dto = $container->make(TypedEnvironmentParityDto::class);
+
+    expect($dto->port)->toBe(3306)
+        ->and($dto->debug)->toBeTrue();
+});
+
+test('Env keeps its v4 attribute default when Config has no Environment', function (): void {
+    $container = ContainerBuilder::configure(new Config([], null))->build();
+
+    expect($container->make(MissingEnvironmentDefaultParityDto::class)->port)->toBe(8080);
 });
