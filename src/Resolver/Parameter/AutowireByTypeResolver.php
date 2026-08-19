@@ -8,6 +8,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use Throwable;
 
 /** Autowires a parameter by its declared class/interface type. */
@@ -30,11 +31,9 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
         }
 
         try {
-            if (!$this->container->has($typeName)) {
-                return null;
-            }
-
             return [$target->position, $this->container->get($typeName)];
+        } catch (NotFoundExceptionInterface) {
+            return null;
         } catch (Throwable $e) {
             if ($e instanceof ContainerExceptionInterface) {
                 throw $e;
