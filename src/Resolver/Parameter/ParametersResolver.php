@@ -71,7 +71,7 @@ final class ParametersResolver
         $this->sealed = true;
     }
 
-    /** @return list<ParameterResolverInterface> */
+    /** @var list<ParameterResolverInterface> */
     public array $resolverList {
         get => $this->ordered ??= array_map(
             static fn(array $registration): ParameterResolverInterface => $registration['resolver'],
@@ -105,7 +105,10 @@ final class ParametersResolver
         return $this->resolveTargets($this->targets($parameters), $providedParameters);
     }
 
-    /** @param list<ReflectionParameter> $parameters @return list<ParameterTarget> */
+    /**
+     * @param list<ReflectionParameter> $parameters
+     * @return list<ParameterTarget>
+     */
     public function targets(array $parameters): array
     {
         $targets = [];
@@ -180,6 +183,7 @@ final class ParametersResolver
             return $cache[$target];
         }
 
+        /** @var list<int> $slots */
         $slots = [];
         $revision = $this->revision;
         foreach ($this->resolverList as $slot => $resolver) {
