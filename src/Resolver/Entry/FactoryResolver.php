@@ -95,7 +95,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             $factoryParams = MappedRequestContext::strip($params);
 
             return $factory instanceof LazyServiceFactoryInterface
-                ? $factory->lazy($this->container, $this->proxyFactory, $factoryParams)
+                ? $factory->lazy($container, $this->proxyFactory, $factoryParams)
                 : $factory($container, $factoryParams);
         } catch (ContainerExceptionInterface $e) {
             throw $e;
