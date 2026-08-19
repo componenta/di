@@ -77,10 +77,11 @@ final class ObjectCreationContext
             ));
         }
 
-        if (!$entry instanceof ($this->class->getName())) {
+        $className = $this->class->getName();
+        if (!$entry instanceof $className) {
             throw new LogicException(sprintf(
                 'Expected an instance of "%s", got "%s".',
-                $this->class->getName(),
+                $className,
                 $entry::class,
             ));
         }
