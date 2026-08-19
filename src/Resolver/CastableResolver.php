@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver;
 
+use Componenta\Caster\CasterInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Cast;
@@ -103,7 +104,7 @@ final class CastableResolver implements ParameterResolverInterface, AttributeHan
         }
     }
 
-    private function caster(string $name): object
+    private function caster(string $name): CasterInterface
     {
         $provider = $this->container->get(CasterProviderInterface::class);
         if (!$provider instanceof CasterProviderInterface) {
