@@ -52,6 +52,8 @@ use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
+use Componenta\DI\Exception\CompilationException;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\ContainerBootstrapState;
@@ -101,6 +103,7 @@ use Componenta\DI\Resolver\Parameter\Request\LazyValidationProvider;
 use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
+use Throwable;
 
 /**
  * v5 composition root.
@@ -232,6 +235,20 @@ class ContainerBuilder
 
     public function build(): Container
     {
+        try {
+            return $this->buildContainer();
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new InvalidConfigurationException(
+                sprintf('Failed to build DI container: %s', $e->getMessage()),
+                previous: $e,
+            );
+        }
+    }
+
+    private function buildContainer(): Container
+    {
         $this->assertBindings();
 
         $config = $this->config ?? new Config([], new Environment([]));
@@ -358,6 +375,25 @@ class ContainerBuilder
         string $directory,
         int $maxShardBytes = CompiledFactoryShardCompiler::DEFAULT_MAX_BYTES,
         string $namespace = 'Componenta\\DI\\Generated',
+    ): array {
+        try {
+            return $this->compileFactoryArtifacts($entries, $directory, $maxShardBytes, $namespace);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw CompilationException::forArtifact($directory, $e);
+        }
+    }
+
+    /**
+     * @param iterable<AutowireEntry|class-string> $entries
+     * @return array<class-string,CompiledFactoryDefinition>
+     */
+    private function compileFactoryArtifacts(
+        iterable $entries,
+        string $directory,
+        int $maxShardBytes,
+        string $namespace,
     ): array {
         $container = $this->build();
         $objects = $container->get(ObjectPipeline::class);
