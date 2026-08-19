@@ -22,6 +22,13 @@ final readonly class FactoryCodeGenerator
         bool $direct = false,
         ?array $plainAutowireTypes = null,
     ): GeneratedFactory {
+        if (!class_exists($class)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Cannot compile unavailable entry "%s".',
+                $class,
+            ));
+        }
+
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
         if (!is_entry_class_eligible($reflection)) {
