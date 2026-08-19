@@ -27,6 +27,8 @@ final class ParametersResolver
     private ?WeakMap $supportedSlots = null;
     /** @var WeakMap<ParameterTarget,list<ParameterResolverInterface>>|null */
     private ?WeakMap $supportedResolvers = null;
+    /** @var WeakMap<ParameterTarget,true>|null */
+    private ?WeakMap $preparedTargets = null;
 
     private int $revision = 0;
     private int $order = 0;
@@ -65,6 +67,7 @@ final class ParametersResolver
         $this->ordered = null;
         $this->supportedSlots = null;
         $this->supportedResolvers = null;
+        $this->preparedTargets = null;
         ++$this->revision;
     }
 
@@ -188,22 +191,7 @@ final class ParametersResolver
         ParameterResolutionContext $context,
         bool $guardMappedSources,
     ): array {
-        $unsupportedReason = match (true) {
-            $target->variadic => 'Variadic parameters are not supported by the DI resolver contract.',
-            $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
-            default => null,
-        };
-
-        if ($unsupportedReason !== null) {
-            throw ResolutionException::forParameter(
-                $target->reflection,
-                reason: $unsupportedReason,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
-            );
-        }
-
-        $this->plans->build($target->reflection);
+        $this->prepareTarget($target);
         if ($guardMappedSources) {
             MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
         }
@@ -220,6 +208,31 @@ final class ParametersResolver
             providedParameters: $context->provided,
             resolvedParameters: $context->resolved,
         );
+    }
+
+    private function prepareTarget(ParameterTarget $target): void
+    {
+        $cache = $this->preparedTargets ??= new WeakMap();
+        if (isset($cache[$target])) {
+            return;
+        }
+
+        $unsupportedReason = match (true) {
+            $target->variadic => 'Variadic parameters are not supported by the DI resolver contract.',
+            $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
+            default => null,
+        };
+
+        if ($unsupportedReason !== null) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: $unsupportedReason,
+            );
+        }
+
+        $this->plans->build($target->reflection);
+        $this->resolversFor($target);
+        $cache[$target] = true;
     }
 
     /** @return list<ParameterResolverInterface> */
