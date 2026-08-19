@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Attribute\Cast;
-use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -14,11 +12,7 @@ final class ArrayResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        // #[Cast] must transform the supplied value and #[CurrentUser] is an
-        // authoritative source. Both therefore stay owned by the composed
-        // attribute resolver instead of being short-circuited here.
-        return !$target->hasAttribute(Cast::class)
-            && !$target->hasAttribute(CurrentUser::class);
+        return true;
     }
 
     public function resolveParameter(
