@@ -11,8 +11,10 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
@@ -25,7 +27,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Make] and #[Proxy] on classes, parameters and properties. */
-final class MakeHandler implements ParameterAttributeHandlerInterface
+final class MakeHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(
         private readonly FactoryInterface $factory,
@@ -37,9 +39,13 @@ final class MakeHandler implements ParameterAttributeHandlerInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof Make && !$attribute instanceof Proxy) {
             throw new LogicException('MakeHandler received an unsupported parameter attribute.');
+        }
+        if ($value->resolved) {
+            return $value;
         }
 
         $make = self::firstParameterAttribute($target, Make::class);
@@ -52,7 +58,7 @@ final class MakeHandler implements ParameterAttributeHandlerInterface
         );
 
         try {
-            return $this->create($config);
+            return ParameterAttributeValue::resolved($this->create($config));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
