@@ -67,6 +67,14 @@ final readonly class LifecycleIncompatibleProxyConsumer
     ) {}
 }
 
+final readonly class LifecycleWrongBackingProxyConsumer
+{
+    public function __construct(
+        #[Make('lifecycle.wrong.proxy.service'), Proxy(LifecycleProxyService::class)]
+        public LifecycleProxyContract $service,
+    ) {}
+}
+
 final class LifecycleMakeCycleA
 {
     public function __construct(
@@ -115,7 +123,12 @@ abstract class LifecyclePrivateInjectedParent
 final class LifecyclePrivateInjectedChild extends LifecyclePrivateInjectedParent {}
 
 test('Proxy keeps explicit concrete implementation for interface targets', function (): void {
-    $container = (new ContainerBuilder())->build();
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            LifecycleProxyContract::class,
+            static fn(): LifecycleProxyContract => new LifecycleProxyService(),
+        )
+        ->build();
     $consumer = $container->make(LifecycleProxyConsumer::class);
 
     expect($consumer->service)->toBeInstanceOf(LifecycleProxyService::class)
@@ -135,13 +148,33 @@ test('Make service id and Proxy concrete class remain independent', function ():
 });
 
 test('Proxy rejects an interface target without a concrete proxy class', function (): void {
-    expect(fn() => (new ContainerBuilder())->build()->make(LifecycleAmbiguousProxyConsumer::class))
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            LifecycleProxyContract::class,
+            static fn(): LifecycleProxyContract => new LifecycleProxyService(),
+        )
+        ->build();
+
+    expect(fn() => $container->make(LifecycleAmbiguousProxyConsumer::class))
         ->toThrow(ResolutionException::class, 'specify #[Proxy(ConcreteClass::class)]');
 });
 
 test('Proxy rejects a concrete class incompatible with the declared type', function (): void {
     expect(fn() => (new ContainerBuilder())->build()->make(LifecycleIncompatibleProxyConsumer::class))
         ->toThrow(ResolutionException::class, 'is incompatible with declared type');
+});
+
+test('Proxy rejects a backing object incompatible with the proxy class', function (): void {
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            'lifecycle.wrong.proxy.service',
+            static fn(): object => new \stdClass(),
+        )
+        ->build();
+    $consumer = $container->make(LifecycleWrongBackingProxyConsumer::class);
+
+    expect(fn() => $consumer->service->value())
+        ->toThrow(\LogicException::class, 'must be an instance of');
 });
 
 test('Make detects cycles created by Make attributes', function (): void {
