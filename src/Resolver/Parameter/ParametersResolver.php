@@ -8,6 +8,7 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
@@ -135,11 +136,11 @@ final class ParametersResolver
      */
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
-        $state = new ParameterResolutionContext($providedParameters);
-        $guardMappedSources = $state->mappedRequest !== null;
+        $provenance = MappedRequestContext::get($providedParameters);
+        $state = new ParameterResolutionContext(MappedRequestContext::strip($providedParameters));
 
         foreach ($targets as $target) {
-            [$position, $value] = $this->resolveTarget($target, $state, $guardMappedSources);
+            [$position, $value] = $this->resolveTarget($target, $state, $provenance);
             $state->resolve($position, $value);
         }
 
@@ -151,11 +152,7 @@ final class ParametersResolver
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): array {
-        return $this->resolveTarget(
-            $target,
-            $context,
-            $context->mappedRequest !== null,
-        );
+        return $this->resolveTarget($target, $context, null);
     }
 
     /** @return list<int> */
@@ -211,12 +208,15 @@ final class ParametersResolver
     private function resolveTarget(
         ParameterTarget $target,
         ParameterResolutionContext $context,
-        bool $guardMappedSources,
+        ?MappedRequestContext $provenance,
     ): array {
         try {
             $this->prepareTarget($target);
-            if ($guardMappedSources) {
-                MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
+            if ($provenance !== null) {
+                MappedRequestParameterSourceGuard::assertTargetProvenanceNoConflicts(
+                    $target,
+                    $provenance,
+                );
             }
 
             foreach ($this->resolversFor($target) as $resolver) {
