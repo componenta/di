@@ -11,7 +11,6 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
-use Componenta\DI\Compile\Factory\CompiledFactoryPipelineFingerprint;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -19,6 +18,8 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionMethod;
 use Reflector;
+
+use function Componenta\DI\compiled_factory_pipeline_fingerprint;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RuleA {}
@@ -67,7 +68,7 @@ final readonly class AmbiguousFamilyAttribute implements AttributeFamilyOne, Att
 
 function compositionFingerprint(AttributeDefinitionRegistry $registry): string
 {
-    return CompiledFactoryPipelineFingerprint::calculate(
+    return compiled_factory_pipeline_fingerprint(
         $registry,
         new ParametersResolver(new AttributePlanBuilder($registry)),
     );
