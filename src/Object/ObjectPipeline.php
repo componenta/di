@@ -7,6 +7,9 @@ namespace Componenta\DI\Object;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
@@ -31,6 +34,7 @@ final class ObjectPipeline
         private readonly InstanceCreator $instances,
         private readonly ProxyFactoryInterface $proxies,
         private readonly AttributeDefinitionRegistry $registry,
+        private readonly ObjectResolutionParameterStore $resolutionParameters,
         ?AttributeProcessor $attributes = null,
     ) {
         $this->attributes = $attributes ?? new AttributeProcessor($registry, $plans);
@@ -103,7 +107,15 @@ final class ObjectPipeline
             );
         }
 
-        $creation = new ObjectCreationContext($metadata->class, $params);
+        /** @var class-string $className */
+        $className = $metadata->class->getName();
+        MappedRequestParameterSourceGuard::assertClassContextNoConflicts($className, $params);
+
+        $creation = new ObjectCreationContext(
+            $metadata->class,
+            ResolutionMetadata::publicParameters($params),
+        );
+        $this->resolutionParameters->attach($creation, $params);
 
         $this->attributes->process(
             $metadata->class,
@@ -169,7 +181,7 @@ final class ObjectPipeline
                 $metadata->class,
                 $metadata->constructor,
                 $metadata->constructorTargets,
-                $creation->resolutionParameters(),
+                $this->resolutionParameters->get($creation),
             )
             : $metadata->class->newInstanceWithoutConstructor();
 
@@ -190,13 +202,13 @@ final class ObjectPipeline
         return $this->proxies->makeLazy(
             $metadata->class->getName(),
             function (object $entry) use ($metadata, $creation): void {
-                $attempt = $creation->freshAttempt();
+                $attempt = $this->freshAttempt($creation);
                 if ($attempt->constructorEnabled) {
                     $this->instances->initializePrepared(
                         $entry,
                         $metadata->constructor,
                         $metadata->constructorTargets,
-                        $attempt->resolutionParameters(),
+                        $this->resolutionParameters->get($attempt),
                     );
                 }
 
@@ -218,8 +230,15 @@ final class ObjectPipeline
             $metadata->class->getName(),
             fn(object $_proxy): object => $this->eager(
                 $metadata,
-                $creation->freshAttempt(),
+                $this->freshAttempt($creation),
             ),
         );
+    }
+
+    private function freshAttempt(ObjectCreationContext $creation): ObjectCreationContext
+    {
+        $attempt = $creation->freshAttempt();
+        $this->resolutionParameters->copy($creation, $attempt);
+        return $attempt;
     }
 }
