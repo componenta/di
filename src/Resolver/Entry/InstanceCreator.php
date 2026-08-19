@@ -14,6 +14,11 @@ final readonly class InstanceCreator
 {
     public function __construct(private ParametersResolver $parameters) {}
 
+    public function parameters(): ParametersResolver
+    {
+        return $this->parameters;
+    }
+
     /**
      * @template T of object
      * @param ReflectionClass<T> $class
