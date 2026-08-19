@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Attribute;
 use Componenta\DI\Exception\AttributeCompositionException;
 use ReflectionClass;
 use ReflectionFunction;
@@ -15,13 +16,16 @@ use WeakMap;
 /** Builds, validates, orders and memoizes the semantic attribute plan for one target. */
 final class AttributePlanBuilder
 {
-    public const int FORMAT_VERSION = 2;
+    public const int FORMAT_VERSION = 3;
 
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
 
     /** @var WeakMap<object, AttributePlan>|null */
     private ?WeakMap $anonymousPlans = null;
+
+    /** @var array<class-string,int> */
+    private array $attributeTargetFlags = [];
 
     private int $registryRevision = -1;
 
@@ -51,6 +55,18 @@ final class AttributePlanBuilder
             $definition = $this->registry->definition($attributeClass);
             if ($definition === null) {
                 continue;
+            }
+
+            if (!$this->supportsTarget($attributeClass, $target)) {
+                if (self::isPromotedDuplicateTarget($target)) {
+                    continue;
+                }
+
+                throw new AttributeCompositionException(sprintf(
+                    'Attribute "%s" cannot target %s.',
+                    $attributeClass,
+                    self::targetKind($target),
+                ));
             }
 
             $usages[] = new AttributeUsage(
@@ -84,6 +100,69 @@ final class AttributePlanBuilder
         $this->namedPlans = [];
         $this->anonymousPlans = new WeakMap();
         $this->registryRevision = $this->registry->revision;
+    }
+
+    /**
+     * @param class-string $attributeClass
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     */
+    private function supportsTarget(
+        string $attributeClass,
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): bool {
+        return ($this->attributeTargetFlags($attributeClass) & self::targetFlag($target)) !== 0;
+    }
+
+    /** @param class-string $attributeClass */
+    private function attributeTargetFlags(string $attributeClass): int
+    {
+        if (isset($this->attributeTargetFlags[$attributeClass])) {
+            return $this->attributeTargetFlags[$attributeClass];
+        }
+
+        $reflection = new ReflectionClass($attributeClass);
+        $marker = $reflection->getAttributes(Attribute::class)[0] ?? null;
+        if ($marker === null) {
+            throw new AttributeCompositionException(sprintf(
+                'Registered DI attribute "%s" is not declared with #[Attribute].',
+                $attributeClass,
+            ));
+        }
+
+        $metadata = $marker->newInstance();
+        return $this->attributeTargetFlags[$attributeClass] = $metadata->flags;
+    }
+
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function targetFlag(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): int {
+        return match (true) {
+            $target instanceof ReflectionClass => Attribute::TARGET_CLASS,
+            $target instanceof ReflectionProperty => Attribute::TARGET_PROPERTY,
+            $target instanceof ReflectionMethod => Attribute::TARGET_METHOD,
+            default => Attribute::TARGET_PARAMETER,
+        };
+    }
+
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function isPromotedDuplicateTarget(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): bool {
+        return ($target instanceof ReflectionProperty || $target instanceof ReflectionParameter)
+            && $target->isPromoted();
+    }
+
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function targetKind(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): string {
+        return match (true) {
+            $target instanceof ReflectionClass => 'class',
+            $target instanceof ReflectionProperty => 'property',
+            $target instanceof ReflectionMethod => 'method',
+            default => 'parameter',
+        };
     }
 
     /**
