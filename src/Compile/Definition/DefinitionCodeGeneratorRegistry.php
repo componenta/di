@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Compile\Definition;
 
 use Componenta\DI\Definition\DefinitionInterface;
-use InvalidArgumentException;
+use Componenta\DI\Exception\InvalidConfigurationException;
 
 /** Maps definition classes/interfaces to their compile-time code generators. */
 final class DefinitionCodeGeneratorRegistry
@@ -19,7 +19,7 @@ final class DefinitionCodeGeneratorRegistry
         DefinitionCodeGeneratorInterface $generator,
     ): void {
         if (!is_a($definitionClass, DefinitionInterface::class, true)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new InvalidConfigurationException(sprintf(
                 'Definition code-generator key "%s" must implement %s.',
                 $definitionClass,
                 DefinitionInterface::class,
