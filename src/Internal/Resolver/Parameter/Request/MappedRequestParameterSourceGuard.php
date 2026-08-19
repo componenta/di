@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
-use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
@@ -72,12 +71,24 @@ final class MappedRequestParameterSourceGuard
         }
     }
 
-    public static function assertTargetContextNoConflicts(
+    public static function assertTargetProvenanceNoConflicts(
         ParameterTarget $target,
-        ParameterResolutionContext $context,
+        MappedRequestContext $provenance,
     ): void {
-        if ($context->mappedRequest !== null) {
-            self::assertTargetProvenanceNoConflicts($target, $context->mappedRequest);
+        $binding = self::targetBinding($target);
+        if ($binding === null) {
+            return;
+        }
+        $declaringClass = $target->reflection->getDeclaringClass();
+        if ($declaringClass === null) {
+            return;
+        }
+        /** @var class-string $class */
+        $class = $declaringClass->getName();
+        foreach ($binding['keys'] as $key) {
+            if ($provenance->contains($key)) {
+                self::throwConflict($class, $binding, $key);
+            }
         }
     }
 
@@ -117,27 +128,6 @@ final class MappedRequestParameterSourceGuard
             }
         }
         return self::$sourceCache[$class] = $bindings;
-    }
-
-    private static function assertTargetProvenanceNoConflicts(
-        ParameterTarget $target,
-        MappedRequestContext $provenance,
-    ): void {
-        $binding = self::targetBinding($target);
-        if ($binding === null) {
-            return;
-        }
-        $declaringClass = $target->reflection->getDeclaringClass();
-        if ($declaringClass === null) {
-            return;
-        }
-        /** @var class-string $class */
-        $class = $declaringClass->getName();
-        foreach ($binding['keys'] as $key) {
-            if ($provenance->contains($key)) {
-                self::throwConflict($class, $binding, $key);
-            }
-        }
     }
 
     /** @return array{parameter:string,source:class-string,keys:list<string>}|null */
