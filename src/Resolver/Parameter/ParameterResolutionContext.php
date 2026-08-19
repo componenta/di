@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 
 /** Mutable state owned by one ParametersResolver invocation. */
 final class ParameterResolutionContext
