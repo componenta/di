@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\ContainerBuilder;
+use InvalidArgumentException;
 
 final class AuditTrivialEntry {}
 
@@ -34,6 +35,22 @@ test('NoConstructor keeps inaccessible constructors resolvable', function (): vo
 
     expect($container->has(AuditNoConstructorEntry::class))->toBeTrue()
         ->and($container->make(AuditNoConstructorEntry::class))->toBeInstanceOf(AuditNoConstructorEntry::class);
+});
+
+test('AOT rejects the same inaccessible constructor that runtime cannot resolve', function (): void {
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-ineligible-' . bin2hex(random_bytes(5));
+
+    try {
+        expect(fn() => (new ContainerBuilder())->compileFactories(
+            [AuditPrivateConstructorEntry::class],
+            $directory,
+        ))->toThrow(InvalidArgumentException::class);
+    } finally {
+        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($directory);
+    }
 });
 
 test('AOT emits a direct constructor only for a trivial prepared entry', function (): void {
