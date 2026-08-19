@@ -101,7 +101,8 @@ final class FactorySpecificationValidator
 
         self::assertArgumentCount($id, $reflection);
 
-        $parameters = $reflection->getParameters();
+        /** @var list<ReflectionParameter> $parameters */
+        $parameters = array_values($reflection->getParameters());
         $scope = self::callableScope($reflection);
         self::assertArgument($id, $parameters, 0, self::containerArgument(), $scope);
         self::assertArgument($id, $parameters, 1, [], $scope);
@@ -139,7 +140,10 @@ final class FactorySpecificationValidator
         }
     }
 
-    /** @param list<ReflectionParameter> $parameters @param ReflectionClass<object>|null $scope */
+    /**
+     * @param list<ReflectionParameter> $parameters
+     * @param ReflectionClass<object>|null $scope
+     */
     private static function assertArgument(
         string $id,
         array $parameters,
