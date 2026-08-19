@@ -56,5 +56,12 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "provide": {"psr/container-implementation": "2.0"},
-    "extra": {"branch-alias": {"dev-v5": "5.x-dev"}}
+    "extra": {
+        "branch-alias": {"dev-v5": "5.x-dev"},
+        "componenta": {
+            "config-providers": [
+                "Componenta\\DI\\ConfigProvider"
+            ]
+        }
+    }
 }
