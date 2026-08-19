@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
-use Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline;
 use Psr\Http\Message\ServerRequestInterface;
 
 trait ExtractsRequestData
 {
+    private const string WILDCARD = '*';
+
     /** @var list<string> */
     protected array $attributes = [];
     /** @var list<string> */
@@ -32,7 +33,7 @@ trait ExtractsRequestData
     /** @return array<string|int,mixed> */
     private function extractConfiguredRequestAttributes(ServerRequestInterface $request): array
     {
-        if ($this->attributes === [RequestMapperPipeline::WILDCARD]) {
+        if ($this->attributes === [self::WILDCARD]) {
             return $request->getAttributes();
         }
         if ($this->attributes === []) {
@@ -52,7 +53,7 @@ trait ExtractsRequestData
     /** @return array<string|int,mixed> */
     private function extractConfiguredUploadedFiles(ServerRequestInterface $request): array
     {
-        if ($this->files === [RequestMapperPipeline::WILDCARD]) {
+        if ($this->files === [self::WILDCARD]) {
             return $request->getUploadedFiles();
         }
         if ($this->files === []) {
