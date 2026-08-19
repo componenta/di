@@ -16,9 +16,9 @@ use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\ProtectedServiceIds;
+use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
 use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
-use Exception;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Throwable;
@@ -166,7 +166,7 @@ final class Container implements
             } finally {
                 $this->cycleGuard->leave($guardId);
             }
-        } catch (Exception) {
+        } catch (Throwable) {
             return false;
         }
     }
@@ -216,7 +216,10 @@ final class Container implements
         $resolved = $this->aliases->resolve($entry);
         $this->cycleGuard->enter($resolved);
         try {
-            $instance = $this->resolver->resolve($resolved, $params);
+            $instance = $this->resolver->resolve(
+                $resolved,
+                EntryResolverContext::for($this->resolver, $params),
+            );
             if (!is_object($instance)) {
                 throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
             }
