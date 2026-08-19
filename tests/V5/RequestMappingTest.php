@@ -11,6 +11,9 @@ use Componenta\DI\Attribute\RequestDataSource;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
@@ -52,6 +55,21 @@ final class MultiSourceEnvelope
     ) {}
 }
 
+final readonly class HighPriorityTokenResolver implements ParameterResolverInterface
+{
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->name === 'token';
+    }
+
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return [$target->position, 'custom-high-priority'];
+    }
+}
+
 function requestContainer(): \Componenta\DI\Container
 {
     return (new ContainerBuilder())
@@ -85,6 +103,21 @@ test('nested mapped DTO input cannot shadow a declared request source', function
         ->withParsedBody(['token' => 'attacker']);
 
     expect(fn() => requestContainer()->make(
+        HeaderProtectedEnvelope::class,
+        [ServerRequestInterface::class => $request],
+    ))->toThrow(RequestParameterSourceConflictException::class);
+});
+
+test('mapped source guard runs before a higher-priority custom resolver', function (): void {
+    $request = (new ServerRequest('POST', '/'))
+        ->withHeader('X-Token', 'trusted')
+        ->withParsedBody(['token' => 'attacker']);
+    $container = (new ContainerBuilder())
+        ->addService(CasterProviderInterface::class, new TestCasterProvider())
+        ->addParameterResolver(new HighPriorityTokenResolver(), 5000)
+        ->build();
+
+    expect(fn() => $container->make(
         HeaderProtectedEnvelope::class,
         [ServerRequestInterface::class => $request],
     ))->toThrow(RequestParameterSourceConflictException::class);
