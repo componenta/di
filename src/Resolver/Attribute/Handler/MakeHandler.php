@@ -227,12 +227,14 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
                 $backing = $this->factory->make($config['entry'], $config['params']);
                 $proxyClass = $config['proxyClass'];
                 if (!$backing instanceof $proxyClass) {
-                    throw new LogicException(sprintf(
+                    $cause = new LogicException(sprintf(
                         'Virtual proxy backing entry "%s" must be an instance of "%s"; got "%s".',
                         $config['entry'],
                         $proxyClass,
                         $backing::class,
                     ));
+
+                    throw ResolutionException::forService($config['entry'], $cause);
                 }
                 return $backing;
             },
