@@ -13,7 +13,7 @@ use function Componenta\DI\is_entry_class_eligible;
 final readonly class FactoryCodeGenerator
 {
     /** @param class-string $class */
-    public function generate(string $class, ?string $method = null): GeneratedFactory
+    public function generate(string $class, ?string $method = null, bool $direct = false): GeneratedFactory
     {
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
@@ -28,16 +28,19 @@ final readonly class FactoryCodeGenerator
             throw new InvalidArgumentException(sprintf('Invalid generated factory method "%s".', $method));
         }
 
+        $body = $direct
+            ? sprintf('return new \\%s();', $resolvedClass)
+            : sprintf('return $this->objects->create(\\%s::class, $params);', $resolvedClass);
         $code = sprintf(
             <<<'PHP'
 /** @param array<string|int, mixed> $params */
 public function %s(array $params = []): object
 {
-    return $this->objects->create(%s::class, $params);
+    %s
 }
 PHP,
             $method,
-            '\\' . $resolvedClass,
+            $body,
         );
 
         return new GeneratedFactory($resolvedClass, $method, $code);
