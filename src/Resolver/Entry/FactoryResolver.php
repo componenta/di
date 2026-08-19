@@ -24,7 +24,6 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
-use ReflectionClass;
 use Throwable;
 
 use function Componenta\DI\compiled_factory_pipeline_fingerprint;
@@ -153,14 +152,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         $provided = array_replace($configured, $runtime);
-        /** @var ReflectionClass<object> $class */
-        $class = new ReflectionClass($definition->value);
-        $constructor = $class->getConstructor();
-        if ($constructor === null) {
-            return $provided;
-        }
-
-        foreach ($this->parameters->targets($constructor->getParameters()) as $target) {
+        foreach ($this->objects->constructorTargets($definition->value) as $target) {
             if (array_key_exists($target->name, $runtime)) {
                 $provided[$target->name] = $runtime[$target->name];
                 continue;
