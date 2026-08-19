@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionMethod;
@@ -16,7 +18,7 @@ use WeakMap;
 /** Builds, validates, orders and memoizes the semantic attribute plan for one target. */
 final class AttributePlanBuilder
 {
-    public const int FORMAT_VERSION = 3;
+    public const int FORMAT_VERSION = 4;
 
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
@@ -78,6 +80,7 @@ final class AttributePlanBuilder
         }
 
         $this->assertCapabilityCardinality($target, $usages);
+        $this->assertParameterHandlerComposition($target, $usages);
         $this->assertDependencies($target, $usages);
         $this->assertCustomRules($usages);
 
@@ -205,6 +208,58 @@ final class AttributePlanBuilder
                 )),
             ));
         }
+    }
+
+    /**
+     * A parameter may have one source-handler and any number of transformer
+     * handlers. Multiple definitions may intentionally share one source-handler
+     * (for example #[Make] + #[Proxy]).
+     *
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertParameterHandlerComposition(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
+        if (!$target instanceof ReflectionParameter) {
+            return;
+        }
+
+        /** @var array<int,ParameterAttributeHandlerInterface> $sources */
+        $sources = [];
+        foreach ($usages as $usage) {
+            $handler = $usage->definition->handler;
+            if (!$handler instanceof ParameterAttributeHandlerInterface) {
+                continue;
+            }
+
+            $transformer = false;
+            foreach ($usage->definition->capabilities as $capability) {
+                if (is_a($capability, ValueTransformer::class, true)) {
+                    $transformer = true;
+                    break;
+                }
+            }
+            if ($transformer) {
+                continue;
+            }
+
+            $sources[spl_object_id($handler)] = $handler;
+        }
+
+        if (count($sources) <= 1) {
+            return;
+        }
+
+        throw new AttributeCompositionException(sprintf(
+            '%s resolves through multiple parameter source handlers: %s.',
+            self::targetName($target),
+            implode(', ', array_map(
+                static fn(ParameterAttributeHandlerInterface $handler): string => $handler::class,
+                array_values($sources),
+            )),
+        ));
     }
 
     /**
