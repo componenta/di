@@ -8,7 +8,7 @@ use Closure;
 use Componenta\DI\CallableResolverInterface;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\DelegatorException;
-use Psr\Container\ContainerExceptionInterface;
+use Componenta\DI\Exception\ExceptionInterface;
 use Psr\Container\ContainerInterface;
 use ReflectionMethod;
 use Throwable;
@@ -23,23 +23,16 @@ final class DelegatorRegistry
 {
     /** @var array<string, list<mixed>> */
     private array $raw = [];
-
     /** @var array<string, list<callable>> */
     private array $callables = [];
-
     /** @var array<string, array<string, true>> */
     private array $dependents = [];
 
-    public function __construct(
-        private readonly CallableResolverInterface $callableResolver,
-    ) {}
+    public function __construct(private readonly CallableResolverInterface $callableResolver) {}
 
     public function register(string $id, mixed $delegator): void
     {
-        $delegator = DependencyConfiguration::normalizeDelegatorSpecification(
-            $delegator,
-            $id,
-        );
+        $delegator = DependencyConfiguration::normalizeDelegatorSpecification($delegator, $id);
         $this->raw[$id][] = $delegator;
 
         foreach (self::dependencyIds($delegator) as $dependencyId) {
@@ -68,17 +61,14 @@ final class DelegatorRegistry
     {
         /** @var array<string, true> $entries */
         $entries = [];
-
         foreach ($dependencyIds as $dependencyId) {
             foreach ($this->dependents[$dependencyId] ?? [] as $entry => $_) {
                 $entries[$entry] = true;
             }
         }
-
         foreach ($entries as $entry => $_) {
             unset($this->callables[$entry]);
         }
-
         return array_keys($entries);
     }
 
@@ -90,17 +80,15 @@ final class DelegatorRegistry
         }
 
         $callables = $this->callables[$id] ??= $this->resolveChain($id);
-
         foreach ($callables as $callable) {
             try {
                 $entry = $callable($entry, $container);
-            } catch (ContainerExceptionInterface $e) {
+            } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
                 throw DelegatorException::forEntry($id, $e);
             }
         }
-
         return $entry;
     }
 
@@ -108,17 +96,15 @@ final class DelegatorRegistry
     private function resolveChain(string $id): array
     {
         $callables = [];
-
         foreach ($this->raw[$id] as $delegator) {
             try {
                 $callables[] = $this->normalize($delegator);
-            } catch (ContainerExceptionInterface $e) {
+            } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
                 throw DelegatorException::forEntry($id, $e);
             }
         }
-
         return $callables;
     }
 
@@ -127,15 +113,12 @@ final class DelegatorRegistry
         if ($delegator instanceof Closure) {
             return $delegator;
         }
-
         if (is_string($delegator)) {
             return $this->callableResolver->resolve($delegator);
         }
-
         if (is_callable($delegator)) {
             return $delegator;
         }
-
         return $this->callableResolver->resolve($delegator);
     }
 
@@ -148,10 +131,8 @@ final class DelegatorRegistry
             }
 
             $ids = [$delegator => true];
-
             if (str_contains($delegator, '::')) {
                 [$owner, $method] = explode('::', $delegator, 2);
-
                 if ($owner !== ''
                     && $method !== ''
                     && (class_exists($owner) || interface_exists($owner))
@@ -161,7 +142,6 @@ final class DelegatorRegistry
                     $ids[$owner] = true;
                 }
             }
-
             return array_keys($ids);
         }
 
