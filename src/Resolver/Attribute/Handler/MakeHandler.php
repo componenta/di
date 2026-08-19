@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -23,7 +24,7 @@ use ReflectionProperty;
 use Reflector;
 use Throwable;
 
-/** Handles #[Make] and #[Proxy] value creation for parameters and properties. */
+/** Handles #[Make] and #[Proxy] on classes, parameters and properties. */
 final class MakeHandler implements ParameterAttributeHandlerInterface
 {
     public function __construct(
@@ -66,10 +67,29 @@ final class MakeHandler implements ParameterAttributeHandlerInterface
 
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
+        if ($attribute instanceof Proxy && $target instanceof ReflectionClass) {
+            if ($context->entry !== null) {
+                return;
+            }
+            if ($attribute->class !== null) {
+                throw new LogicException(
+                    'Class-level #[Proxy] must not specify a proxy class; the marked class is used.',
+                );
+            }
+            $context->selectStrategy(CreationStrategy::Proxy);
+            return;
+        }
+
         if ((!$attribute instanceof Make && !$attribute instanceof Proxy)
             || !$target instanceof ReflectionProperty
         ) {
             throw new LogicException('MakeHandler received an unsupported attribute target.');
+        }
+
+        // Proxy is a dual-phase definition. Property injection belongs to the
+        // after-instantiation half only.
+        if ($context->entry === null) {
+            return;
         }
 
         if (!$context->claimProperty($target)) {
