@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
-use Componenta\Caster\CasterExceptionInterface;
 use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Composition\AttributePlan;
@@ -24,17 +23,13 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
 use Componenta\Validation\Context;
 use Componenta\Validation\ContextInterface;
-use Componenta\Validation\Exception\ValidationExceptionInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
-use InvalidArgumentException;
-use Psr\Container\ContainerExceptionInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionType;
 use ReflectionUnionType;
-use Throwable;
 
 /** Handles all request-source attributes on parameters. */
 final class RequestAttributeHandler implements ParameterAttributeHandlerInterface
@@ -56,33 +51,22 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
             return $value;
         }
 
-        try {
-            $request = RequestParameter::get($context->provided);
-            if ($request === null) {
-                throw ResolutionException::forParameter(
-                    $target->reflection,
-                    reason: sprintf(
-                        'PSR-7 request is required for #[%s]',
-                        $this->attributeShortName($attribute),
-                    ),
-                    providedParameters: $context->provided,
-                    resolvedParameters: $context->resolved,
-                );
-            }
-
-            return ParameterAttributeValue::resolved(
-                $this->extractValue($request, $attribute, $target->reflection),
-            );
-        } catch (ValidationExceptionInterface|CasterExceptionInterface|ContainerExceptionInterface|InvalidArgumentException $e) {
-            throw $e;
-        } catch (Throwable $e) {
+        $request = RequestParameter::get($context->provided);
+        if ($request === null) {
             throw ResolutionException::forParameter(
                 $target->reflection,
-                previous: $e,
+                reason: sprintf(
+                    'PSR-7 request is required for #[%s]',
+                    $this->attributeShortName($attribute),
+                ),
                 providedParameters: $context->provided,
                 resolvedParameters: $context->resolved,
             );
         }
+
+        return ParameterAttributeValue::resolved(
+            $this->extractValue($request, $attribute, $target->reflection),
+        );
     }
 
     private function extractValue(
