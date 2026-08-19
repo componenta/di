@@ -54,7 +54,6 @@ use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Object\ObjectPipeline;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\InitHandler;
@@ -199,7 +198,10 @@ class ContainerBuilder
         return $builder;
     }
 
-    /** @param array<array-key,mixed> $dependencies @return array<string,mixed> */
+    /**
+     * @param array<array-key,mixed> $dependencies
+     * @return array<string,mixed>
+     */
     public static function normalizeDependencies(array $dependencies): array
     {
         $normalized = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
@@ -421,7 +423,7 @@ class ContainerBuilder
     }
 
     /**
-     * @param array<class-string,ParameterResolverInterface&AttributeHandlerInterface|RequestResolver> $shared
+     * @param array<class-string,ParameterResolverInterface> $shared
      * @return list<array{0:ParameterResolverInterface,1:int}>
      */
     protected function defaultParameterResolvers(ContainerInterface $container, array $shared): array
@@ -442,9 +444,7 @@ class ContainerBuilder
         ];
     }
 
-    /**
-     * @param array<class-string,ParameterResolverInterface&AttributeHandlerInterface|RequestResolver> $shared
-     */
+    /** @param array<class-string,ParameterResolverInterface> $shared */
     private function registerBuiltInAttributes(
         AttributeDefinitionRegistry $registry,
         Container $container,
@@ -551,9 +551,7 @@ class ContainerBuilder
         ));
     }
 
-    /**
-     * @return array<class-string,ParameterResolverInterface&AttributeHandlerInterface|RequestResolver>
-     */
+    /** @return array<class-string,ParameterResolverInterface> */
     private function sharedResolvers(
         Container $container,
         ProxyFactoryInterface $proxyFactory,
@@ -899,7 +897,10 @@ class ContainerBuilder
         }
     }
 
-    /** @param list<array{0:mixed,1:int}> $resolvers @return array<int,mixed> */
+    /**
+     * @param list<array{0:mixed,1:int}> $resolvers
+     * @return array<int,mixed>
+     */
     private function resolversToMap(array $resolvers): array
     {
         $map = [];
@@ -927,7 +928,6 @@ class ContainerBuilder
     /** @return static */
     private static function newBuilder(): static
     {
-        // @phpstan-ignore new.static
         return new static();
     }
 }
