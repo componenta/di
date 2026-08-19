@@ -14,9 +14,9 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
  * Single parameter-resolver bridge from composed attribute metadata to handlers.
  *
  * The resolver seeds caller-provided input when allowed, then executes every
- * parameter-aware handler in the already-composed plan order. Source handlers
- * may resolve an unresolved value; transformer handlers may update a resolved
- * value. Final type validation remains centralized in ParameterResolutionResult.
+ * parameter-aware handler in the already-composed plan order. Runtime handlers
+ * receive isolated attribute instances; composition metadata remains immutable
+ * and reusable across resolutions.
  */
 final readonly class AttributeParameterResolver implements ParameterResolverInterface
 {
@@ -46,7 +46,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             }
 
             $value = $handler->resolveParameter(
-                $usage->attribute,
+                $usage->newInstance(),
                 $target,
                 $context,
                 $plan,
