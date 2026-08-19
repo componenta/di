@@ -7,14 +7,16 @@ namespace Componenta\DI\Compile\Autowire;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\TypeHints;
-use InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Throwable;
 
 use function Componenta\DI\is_entry_class_eligible;
 
@@ -36,7 +38,9 @@ final readonly class AutowireClassGraph
         foreach ($roots as $root) {
             $class = $root instanceof AutowireEntry ? $root->class : $root;
             if (!is_string($class) || $class === '') {
-                throw new InvalidArgumentException('Autowire entry must contain a non-empty class-string.');
+                throw new InvalidConfigurationException(
+                    'Autowire entry must contain a non-empty class-string.',
+                );
             }
 
             $resolved = $this->resolveAlias($class);
@@ -57,7 +61,7 @@ final readonly class AutowireClassGraph
             }
 
             if (!self::isLoadable($class)) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Cannot compile autowire entry "%s": class is not loadable.',
                     $class,
                 ));
@@ -121,7 +125,17 @@ final readonly class AutowireClassGraph
             SetUp::class,
             ReflectionAttribute::IS_INSTANCEOF,
         ) as $attribute) {
-            $setup = $attribute->newInstance();
+            try {
+                $setup = $attribute->newInstance();
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw new InvalidConfigurationException(
+                    sprintf('Cannot instantiate #[SetUp] on "%s".', $class->getName()),
+                    previous: $e,
+                );
+            }
+
             if ($class->hasMethod($setup->method)) {
                 $this->appendMethodDependencies($dependencies, $class->getMethod($setup->method));
             }
@@ -191,7 +205,7 @@ final readonly class AutowireClassGraph
         $seen = [];
         while (isset($this->aliases[$id])) {
             if (isset($seen[$id])) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Cannot compile autowire graph through cyclic alias "%s".',
                     $id,
                 ));
