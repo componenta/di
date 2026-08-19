@@ -7,9 +7,11 @@ namespace Componenta\DI\Resolver\Attribute\Handler;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
@@ -20,7 +22,7 @@ use Reflector;
 use Throwable;
 
 /** Authoritative current-user handler for parameters and properties. */
-final class CurrentUserHandler implements ParameterAttributeHandlerInterface
+final class CurrentUserHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
@@ -29,13 +31,14 @@ final class CurrentUserHandler implements ParameterAttributeHandlerInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof CurrentUser) {
             throw new LogicException('CurrentUserHandler received an unsupported parameter attribute.');
         }
 
         try {
-            return $this->user($attribute, $target->allowsNull);
+            return ParameterAttributeValue::resolved($this->user($attribute, $target->allowsNull));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
