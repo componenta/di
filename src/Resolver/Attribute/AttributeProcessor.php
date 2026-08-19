@@ -13,14 +13,13 @@ use ReflectionMethod;
 use ReflectionProperty;
 
 /**
- * Executes generic class/property/method attribute handlers from composed plans.
- *
- * Parameter plans are intentionally excluded: parameters are executed only by
- * ParameterResolverInterface implementations.
+ * Executes composed class/property/method attribute handlers.
+ * Parameter plans are validated by the same composition model but executed
+ * exclusively by ParameterResolverInterface implementations.
  */
 final class AttributeProcessor
 {
-    /** @var array<class-string, array{revision:int,before:list<AttributeUsage>,after:list<AttributeUsage>}> */
+    /** @var array<class-string,array{revision:int,before:list<AttributeUsage>,after:list<AttributeUsage>}> */
     private array $cache = [];
 
     public function __construct(
@@ -40,6 +39,10 @@ final class AttributeProcessor
         AttributePhase $phase,
         ObjectCreationContext $context,
     ): void {
+        if ($phase === AttributePhase::Both) {
+            throw new \InvalidArgumentException('AttributeProcessor::process() requires a concrete runtime phase.');
+        }
+
         $plan = $this->executionPlan($class);
         $usages = $phase === AttributePhase::BeforeInstantiation
             ? $plan['before']
@@ -47,13 +50,9 @@ final class AttributeProcessor
 
         foreach ($usages as $usage) {
             $handler = $usage->definition->handler;
-            if (!$handler instanceof AttributeHandlerInterface) {
-                // Transitional v5 specialized handlers are still executed by
-                // ObjectPipeline until their built-ins are migrated.
-                continue;
+            if ($handler !== null) {
+                $handler->handle($usage->attribute, $usage->target, $context);
             }
-
-            $handler->handle($usage->attribute, $usage->target, $context);
         }
     }
 
@@ -96,22 +95,21 @@ final class AttributeProcessor
     private static function collect(array $usages, array &$before, array &$after): void
     {
         foreach ($usages as $usage) {
-            if (!$usage->definition->handler instanceof AttributeHandlerInterface) {
+            if ($usage->definition->handler === null) {
                 continue;
             }
 
-            if ($usage->definition->phase === AttributePhase::BeforeInstantiation) {
+            $phase = $usage->definition->phase;
+            if ($phase === AttributePhase::BeforeInstantiation || $phase === AttributePhase::Both) {
                 $before[] = $usage;
-            } else {
+            }
+            if ($phase === AttributePhase::AfterInstantiation || $phase === AttributePhase::Both) {
                 $after[] = $usage;
             }
         }
     }
 
-    /**
-     * @param ReflectionClass<object> $class
-     * @return list<ReflectionProperty>
-     */
+    /** @param ReflectionClass<object> $class @return list<ReflectionProperty> */
     private static function properties(ReflectionClass $class): array
     {
         $properties = $class->getProperties();
@@ -125,10 +123,7 @@ final class AttributeProcessor
         return $properties;
     }
 
-    /**
-     * @param ReflectionClass<object> $class
-     * @return list<ReflectionMethod>
-     */
+    /** @param ReflectionClass<object> $class @return list<ReflectionMethod> */
     private static function methods(ReflectionClass $class): array
     {
         $methods = $class->getMethods();
