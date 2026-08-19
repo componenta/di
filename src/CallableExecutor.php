@@ -20,10 +20,8 @@ final class CallableExecutor implements CallableExecutorInterface
 {
     /** @var WeakMap<Closure, list<ParameterTarget>>|null */
     private ?WeakMap $closureTargets = null;
-
     /** @var array<string, list<ParameterTarget>> */
     private array $closureSignatures = [];
-
     /** @var array<string, list<ParameterTarget>> */
     private array $callableTargets = [];
 
@@ -37,27 +35,16 @@ final class CallableExecutor implements CallableExecutorInterface
     }
 
     /**
-     * v4-compatible convenience API over the provenance-aware v5 executor.
-     * Caller values remain explicit, while the legacy PSR-7 request transport
-     * key is promoted to trusted framework context.
-     *
      * @param array<string|int, mixed> $params
+     * @throws InvalidCallableException|ResolutionException
      */
     public function call(mixed $callable, array $params = []): mixed
     {
-        return $this->execute($callable, ResolutionContext::fromLegacyParameters($params));
-    }
-
-    /** @throws InvalidCallableException|ResolutionException */
-    public function execute(
-        mixed $callable,
-        ResolutionContext $context = new ResolutionContext(),
-    ): mixed {
         $resolved = $this->callableResolver->resolve($callable);
         $targets = $this->targets($resolved);
         $arguments = $targets === []
-            ? array_values($context->explicit)
-            : $this->parameters->resolveTargets($targets, $context);
+            ? $params
+            : $this->parameters->resolveTargets($targets, $params);
 
         return $this->invoker->call($resolved, $arguments);
     }
