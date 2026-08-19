@@ -10,9 +10,6 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
-use Componenta\DI\Attribute\Handler\AttributeHandlerInterface;
-use Componenta\DI\Attribute\Handler\ValueProviderHandlerInterface;
-use Componenta\DI\Attribute\Handler\ValueProviderPrecedence;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
@@ -20,8 +17,9 @@ use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Resolver\Target\ValueTargetInterface;
-use Componenta\DI\Value\ValueContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
 final class ConflictingSourcesDto
 {
@@ -48,13 +46,20 @@ final class ConflictingCreationStrategies {}
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class CustomValue {}
 
-final class CustomValueHandler implements ValueProviderHandlerInterface
+final class CustomValueResolver implements ParameterResolverInterface
 {
-    public ValueProviderPrecedence $precedence { get => ValueProviderPrecedence::ProviderFirst; }
-
-    public function provide(object $attribute, ValueTargetInterface $target, ValueContext $context): mixed
+    public function supports(ParameterTarget $target): bool
     {
-        return 'custom';
+        return $target->hasAttribute(CustomValue::class);
+    }
+
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return $target->hasAttribute(CustomValue::class)
+            ? [$target->position, 'custom']
+            : null;
     }
 }
 
@@ -70,8 +75,6 @@ final readonly class ExclusiveA {}
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class ExclusiveB {}
-
-final readonly class MarkerHandler implements AttributeHandlerInterface {}
 
 #[ExclusiveA, ExclusiveB]
 final class CustomCapabilityConflict {}
@@ -93,24 +96,32 @@ test('creation strategies are exclusive independently of value providers', funct
         ->toThrow(AttributeCompositionException::class);
 });
 
-test('third party value providers use the same composition rules', function (): void {
+test('third party parameter sources use composition plus a parameter resolver', function (): void {
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
             CustomValue::class,
-            new CustomValueHandler(),
-            [ValueProvider::class],
+            handler: null,
+            capabilities: [ValueProvider::class],
         ))
+        ->addParameterResolver(new CustomValueResolver(), 750)
         ->build();
 
     expect($container->make(CustomValueDto::class)->value)->toBe('custom');
 });
 
-test('third party capabilities can define their own cardinality', function (): void {
-    $handler = new MarkerHandler();
+test('third party capabilities can define their own cardinality without runtime behavior', function (): void {
     $container = (new ContainerBuilder())
         ->defineAttributeCapability(new CapabilityPolicy(ExclusiveCapability::class, 1))
-        ->addAttributeDefinition(new AttributeDefinition(ExclusiveA::class, $handler, [ExclusiveCapability::class]))
-        ->addAttributeDefinition(new AttributeDefinition(ExclusiveB::class, $handler, [ExclusiveCapability::class]))
+        ->addAttributeDefinition(new AttributeDefinition(
+            ExclusiveA::class,
+            handler: null,
+            capabilities: [ExclusiveCapability::class],
+        ))
+        ->addAttributeDefinition(new AttributeDefinition(
+            ExclusiveB::class,
+            handler: null,
+            capabilities: [ExclusiveCapability::class],
+        ))
         ->build();
 
     expect(fn() => $container->make(CustomCapabilityConflict::class))
