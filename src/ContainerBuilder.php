@@ -175,7 +175,20 @@ class ContainerBuilder
         $builder->services = $dependencies[ConfigKey::SERVICES] ?? [];
 
         foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
-            $builder->parameterResolvers[] = [$resolver, $priority];
+            $replaced = false;
+            foreach ($builder->parameterResolvers as $index => [, $registeredPriority]) {
+                if ($registeredPriority !== $priority) {
+                    continue;
+                }
+
+                $builder->parameterResolvers[$index] = [$resolver, $priority];
+                $replaced = true;
+                break;
+            }
+
+            if (!$replaced) {
+                $builder->parameterResolvers[] = [$resolver, $priority];
+            }
         }
 
         $builder->replaceParameterResolvers = $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false;
@@ -776,6 +789,14 @@ class ContainerBuilder
     {
         if (!$resolver instanceof ParameterResolverInterface) {
             DependencyConfiguration::assertExtensionSpecification($resolver, 'parameter resolver');
+        }
+        foreach ($this->parameterResolvers as [, $registeredPriority]) {
+            if ($registeredPriority === $priority) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Parameter resolver priority %d is already registered.',
+                    $priority,
+                ));
+            }
         }
         $this->parameterResolvers[] = [$resolver, $priority];
         return $this;
