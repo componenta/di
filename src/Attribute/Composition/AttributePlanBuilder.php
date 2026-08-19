@@ -93,25 +93,32 @@ final class AttributePlanBuilder
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         array $usages,
     ): void {
-        /** @var array<class-string<AttributeCapabilityInterface>, list<AttributeUsage>> $byCapability */
-        $byCapability = [];
-        foreach ($usages as $usage) {
-            foreach ($usage->definition->capabilities as $capability) {
-                $byCapability[$capability][] = $usage;
+        foreach ($this->registry->policies() as $policy) {
+            if ($policy->maxPerTarget === null) {
+                continue;
             }
-        }
 
-        foreach ($byCapability as $capability => $members) {
-            $max = $this->registry->policy($capability)->maxPerTarget;
-            if ($max === null || count($members) <= $max) {
+            $members = [];
+            foreach ($usages as $usage) {
+                foreach ($usage->definition->capabilities as $capability) {
+                    if (!is_a($capability, $policy->capability, true)) {
+                        continue;
+                    }
+
+                    $members[] = $usage;
+                    break;
+                }
+            }
+
+            if (count($members) <= $policy->maxPerTarget) {
                 continue;
             }
 
             throw new AttributeCompositionException(sprintf(
                 '%s accepts at most %d attribute(s) with capability %s; found %s.',
                 self::targetName($target),
-                $max,
-                $capability,
+                $policy->maxPerTarget,
+                $policy->capability,
                 implode(', ', array_map(
                     static fn(AttributeUsage $usage): string => '#[' . $usage->attribute::class . ']',
                     $members,
