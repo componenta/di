@@ -6,49 +6,37 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\ContainerValue;
 use Componenta\DI\ContainerBuilder;
-use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\ResolutionContext;
-use Componenta\DI\Resolver\Target\ValueTargetInterface;
-use Componenta\DI\Value\ValueContext;
-use Componenta\DI\Value\ValueFallbackDefinition;
-use Componenta\DI\Value\ValueFallbackInterface;
-use Componenta\DI\Value\ValueResult;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
 final class CoreService {}
 
 final readonly class FactoryProduct
 {
-    public function __construct(public ResolutionContext $context) {}
+    /** @param array<string|int,mixed> $params */
+    public function __construct(public array $params) {}
 }
 
-final class CustomFallbackDto
+final class CustomResolverDto
 {
     public function __construct(public string $message) {}
 }
 
-final readonly class MessageFallback implements ValueFallbackInterface
+final readonly class MessageParameterResolver implements ParameterResolverInterface
 {
-    public function supports(ValueTargetInterface $target): bool
+    public function supports(ParameterTarget $target): bool
     {
         return $target->name === 'message';
     }
 
-    public function resolve(ValueTargetInterface $target, ValueContext $context): ?ValueResult
-    {
-        return new ValueResult('from-fallback');
-    }
-}
-
-final readonly class NullFallback implements ValueFallbackInterface
-{
-    public function supports(ValueTargetInterface $target): bool
-    {
-        return false;
-    }
-
-    public function resolve(ValueTargetInterface $target, ValueContext $context): ?ValueResult
-    {
-        return null;
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return $target->name === 'message'
+            ? [$target->position, 'from-resolver']
+            : null;
     }
 }
 
@@ -67,37 +55,32 @@ test('aliases preserve normal container resolution', function (): void {
     expect($container->get('core.service'))->toBeInstanceOf(CoreService::class);
 });
 
-test('user factories receive the provenance-aware ResolutionContext ABI', function (): void {
+test('user factories receive the restored array parameter ABI', function (): void {
     $container = (new ContainerBuilder())
         ->addFactory(
             'factory.product',
-            static fn(ContainerValue $_container, ResolutionContext $context): FactoryProduct => new FactoryProduct($context),
+            static fn(ContainerValue $_container, array $params): FactoryProduct => new FactoryProduct($params),
         )
         ->build();
-    $context = ResolutionContext::mapped(['mapped' => 1])->withExplicit(['explicit' => 2]);
 
-    $product = $container->make('factory.product', $context);
+    $product = $container->make('factory.product', ['explicit' => 2]);
 
-    expect($product->context)->toBe($context);
+    expect($product->params)->toBe(['explicit' => 2]);
 });
 
-test('custom fallbacks participate in declarative ordering', function (): void {
+test('custom parameter resolvers participate in the same ordered pipeline', function (): void {
     $container = (new ContainerBuilder())
-        ->addValueFallback(new ValueFallbackDefinition(
-            'message',
-            new MessageFallback(),
-            before: ['property_initial'],
-            after: ['trusted'],
-        ))
+        ->addParameterResolver(new MessageParameterResolver(), 350)
         ->build();
 
-    expect($container->make(CustomFallbackDto::class)->message)->toBe('from-fallback');
+    expect($container->make(CustomResolverDto::class)->message)->toBe('from-resolver');
 });
 
-test('fallback ordering cycles fail while composing the container', function (): void {
-    $builder = (new ContainerBuilder())
-        ->addValueFallback(new ValueFallbackDefinition('cycle.a', new NullFallback(), after: ['cycle.b']))
-        ->addValueFallback(new ValueFallbackDefinition('cycle.b', new NullFallback(), after: ['cycle.a']));
+test('explicit caller parameters keep their v4 precedence over lower-priority custom resolvers', function (): void {
+    $container = (new ContainerBuilder())
+        ->addParameterResolver(new MessageParameterResolver(), 350)
+        ->build();
 
-    expect(fn() => $builder->build())->toThrow(InvalidConfigurationException::class);
+    expect($container->make(CustomResolverDto::class, ['message' => 'explicit'])->message)
+        ->toBe('explicit');
 });
