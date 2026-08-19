@@ -9,7 +9,6 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -184,19 +183,13 @@ final class MakeAttributeResolver implements ParameterResolverInterface, Attribu
     private function create(array $config): object
     {
         if ($config['proxyClass'] === null) {
-            return $this->factory->make(
-                $config['entry'],
-                new ResolutionContext(explicit: $config['params']),
-            );
+            return $this->factory->make($config['entry'], $config['params']);
         }
 
         return $this->proxyFactory->makeProxy(
             $config['proxyClass'],
             function (object $_proxy) use ($config): object {
-                $backing = $this->factory->make(
-                    $config['entry'],
-                    new ResolutionContext(explicit: $config['params']),
-                );
+                $backing = $this->factory->make($config['entry'], $config['params']);
                 $proxyClass = $config['proxyClass'];
                 if (!$backing instanceof $proxyClass) {
                     throw new LogicException(sprintf(
