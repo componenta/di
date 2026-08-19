@@ -6,6 +6,7 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
@@ -31,10 +32,11 @@ final readonly class InstanceCreator
     public function create(ReflectionClass $class, array $params = []): object
     {
         $constructor = $class->getConstructor();
+        $targets = $constructor === null ? [] : $this->targets($constructor);
         return $this->createPrepared(
             $class,
             $constructor,
-            $constructor === null ? [] : $this->targets($constructor),
+            $this->parameters->prepareTargets($targets),
             $params,
         );
     }
@@ -42,14 +44,13 @@ final readonly class InstanceCreator
     /**
      * @template T of object
      * @param ReflectionClass<T> $class
-     * @param list<ParameterTarget> $targets
      * @param array<string|int, mixed> $params
      * @return T
      */
     public function createPrepared(
         ReflectionClass $class,
         ?ReflectionMethod $constructor,
-        array $targets,
+        PreparedParameterPlan $plan,
         array $params = [],
     ): object {
         if ($constructor === null) {
@@ -62,7 +63,7 @@ final readonly class InstanceCreator
             }
         }
 
-        $arguments = $this->parameters->resolveTargets($targets, $params);
+        $arguments = $this->parameters->resolvePrepared($plan, $params);
 
         try {
             return $class->newInstanceArgs($arguments);
@@ -80,29 +81,27 @@ final readonly class InstanceCreator
     public function initialize(object $entry, ReflectionClass $class, array $params = []): void
     {
         $constructor = $class->getConstructor();
+        $targets = $constructor === null ? [] : $this->targets($constructor);
         $this->initializePrepared(
             $entry,
             $constructor,
-            $constructor === null ? [] : $this->targets($constructor),
+            $this->parameters->prepareTargets($targets),
             $params,
         );
     }
 
-    /**
-     * @param list<ParameterTarget> $targets
-     * @param array<string|int, mixed> $params
-     */
+    /** @param array<string|int, mixed> $params */
     public function initializePrepared(
         object $entry,
         ?ReflectionMethod $constructor,
-        array $targets,
+        PreparedParameterPlan $plan,
         array $params = [],
     ): void {
         if ($constructor === null) {
             return;
         }
 
-        $arguments = $this->parameters->resolveTargets($targets, $params);
+        $arguments = $this->parameters->resolvePrepared($plan, $params);
 
         try {
             $constructor->invokeArgs($entry, $arguments);
