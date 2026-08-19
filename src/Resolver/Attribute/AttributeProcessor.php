@@ -109,10 +109,14 @@ final class AttributeProcessor
         }
     }
 
-    /** @param ReflectionClass<object> $class @return list<ReflectionProperty> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionProperty>
+     */
     private static function properties(ReflectionClass $class): array
     {
-        $properties = $class->getProperties();
+        /** @var list<ReflectionProperty> $properties */
+        $properties = array_values($class->getProperties());
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
             foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
                 if ($property->getDeclaringClass()->getName() === $parent->getName()) {
@@ -123,10 +127,14 @@ final class AttributeProcessor
         return $properties;
     }
 
-    /** @param ReflectionClass<object> $class @return list<ReflectionMethod> */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionMethod>
+     */
     private static function methods(ReflectionClass $class): array
     {
-        $methods = $class->getMethods();
+        /** @var list<ReflectionMethod> $methods */
+        $methods = array_values($class->getMethods());
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
             foreach ($parent->getMethods(ReflectionMethod::IS_PRIVATE) as $method) {
                 if ($method->getDeclaringClass()->getName() === $parent->getName()) {
