@@ -48,7 +48,6 @@ use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\Compile\Autowire\AutowireClassGraph;
 use Componenta\DI\Compile\Autowire\AutowireEntry;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
-use Componenta\DI\Compile\Factory\CompiledFactoryPipelineFingerprint;
 use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\Compile\Factory\FactoryCodeGenerator;
 use Componenta\DI\Configuration\DependencyConfiguration;
@@ -383,7 +382,7 @@ class ContainerBuilder
 
         return (new CompiledFactoryShardCompiler(
             new FactoryCodeGenerator(),
-            CompiledFactoryPipelineFingerprint::calculate($attributes, $parameters),
+            compiled_factory_pipeline_fingerprint($attributes, $parameters),
             objects: $objects,
         ))->compile($classes, $directory, $maxShardBytes, $namespace);
     }
