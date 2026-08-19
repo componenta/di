@@ -6,9 +6,9 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Object\CreationStrategy;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestContext;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use LogicException;
 use ReflectionClass;
 use ReflectionProperty;
