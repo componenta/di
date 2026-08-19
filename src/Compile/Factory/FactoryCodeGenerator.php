@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
-use Componenta\DI\Resolver\Entry\EntryClassEligibility;
 use InvalidArgumentException;
 use ReflectionClass;
+
+use function Componenta\DI\is_entry_class_eligible;
 
 /** Generates a thin AOT entry method that delegates semantic work to ObjectPipeline. */
 final readonly class FactoryCodeGenerator
@@ -16,7 +17,7 @@ final readonly class FactoryCodeGenerator
     {
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
-        if (!EntryClassEligibility::allows($reflection)) {
+        if (!is_entry_class_eligible($reflection)) {
             throw new InvalidArgumentException(sprintf('Cannot compile ineligible entry "%s".', $class));
         }
 
