@@ -62,6 +62,7 @@ final readonly class AutowireClassGraph
                 ));
             }
 
+            /** @var class-string $class */
             $reflection = new ReflectionClass($class);
             if (!EntryClassEligibility::allows($reflection)
                 || self::isBootstrapExtension($reflection)
@@ -168,6 +169,7 @@ final readonly class AutowireClassGraph
             return;
         }
 
+        /** @var class-string $dependency */
         $candidate = new ReflectionClass($dependency);
         if (EntryClassEligibility::allows($candidate)
             && !self::isBootstrapExtension($candidate)
