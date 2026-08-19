@@ -52,6 +52,12 @@ final readonly class CompiledFactoryShardCompiler
             // metadata plan used by reflection runtime. Invalid combinations
             // therefore fail now, never only after deploying the shard.
             $this->objects?->prepare($class);
+            if ($this->objects !== null && !$this->objects->canCreate($class)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Cannot compile runtime-ineligible entry "%s".',
+                    $class,
+                ));
+            }
 
             $factory = $this->factories->generate(
                 $class,
