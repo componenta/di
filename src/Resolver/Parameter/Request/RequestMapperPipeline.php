@@ -76,17 +76,23 @@ final readonly class RequestMapperPipeline
         return $data;
     }
 
-    /** @param array<string|int,mixed> $data @param array<string,string> $map @return array<string|int,mixed> */
+    /**
+     * @param array<string|int,mixed> $data
+     * @param array<string,string> $map
+     * @return array<string|int,mixed>
+     */
     private function mapFields(array $data, array $map): array
     {
         /** @var list<array{from:string,to:string,value:mixed}> $moves */
         $moves = [];
+        /** @var array<string,true> $mappedSources */
         $mappedSources = [];
+        /** @var array<string,string> $targetOwners */
         $targetOwners = [];
 
         foreach ($map as $rawFrom => $rawTo) {
             $from = (string) $rawFrom;
-            $to = (string) $rawTo;
+            $to = $rawTo;
             $optional = $from !== '' && $from[0] === self::OPTIONAL_PREFIX;
             if ($optional) {
                 $from = substr($from, 1);
