@@ -6,12 +6,15 @@ namespace Componenta\DI\Object;
 
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
+
+use function Componenta\DI\is_entry_class_eligible;
 
 /** Single object-creation runtime shared by reflection and compiled entries. */
 final class ObjectPipeline
@@ -31,20 +34,51 @@ final class ObjectPipeline
         $this->attributes = $attributes ?? new AttributeProcessor($registry, $plans);
     }
 
-    /** @param class-string $class */
-    public function prepare(string $class): void
+    /** @param class-string|ReflectionClass<object> $class */
+    public function prepare(string|ReflectionClass $class): void
+    {
+        $this->metadata($class);
+    }
+
+    /** @param ReflectionClass<object> $class */
+    public function canCreate(ReflectionClass $class): bool
+    {
+        if (!is_entry_class_eligible($class)) {
+            return false;
+        }
+        if ($class->isInstantiable()) {
+            return true;
+        }
+
+        return $this->metadata($class)->classPlan->has(ConstructorPolicy::class);
+    }
+
+    /** @param class-string|ReflectionClass<object> $class */
+    public function canDirectInstantiate(string|ReflectionClass $class): bool
     {
         $metadata = $this->metadata($class);
-        $this->attributes->prepare($metadata->class);
+        return is_entry_class_eligible($metadata->class)
+            && $metadata->class->isInstantiable()
+            && !$metadata->hasAttributeHandlers
+            && ($metadata->constructor === null || $metadata->constructorTargets === []);
     }
 
     /**
-     * @param class-string $class
+     * @param class-string|ReflectionClass<object> $class
      * @param array<string|int,mixed> $params
      */
-    public function create(string $class, array $params = []): object
+    public function create(string|ReflectionClass $class, array $params = []): object
     {
         $metadata = $this->metadata($class);
+        if (!$metadata->hasAttributeHandlers) {
+            return $this->instances->createPrepared(
+                $metadata->class,
+                $metadata->constructor,
+                $metadata->constructorTargets,
+                $params,
+            );
+        }
+
         $creation = new ObjectCreationContext($metadata->class, $params);
 
         $this->attributes->process(
@@ -60,8 +94,8 @@ final class ObjectPipeline
         };
     }
 
-    /** @param class-string $class */
-    private function metadata(string $class): ObjectMetadata
+    /** @param class-string|ReflectionClass<object> $class */
+    private function metadata(string|ReflectionClass $class): ObjectMetadata
     {
         $revision = $this->registry->revision;
         if ($revision !== $this->metadataRevision) {
@@ -69,24 +103,37 @@ final class ObjectPipeline
             $this->metadataRevision = $revision;
         }
 
-        if (isset($this->metadata[$class])) {
-            return $this->metadata[$class];
+        $name = $class instanceof ReflectionClass
+            ? $class->getName()
+            : ltrim($class, '\\');
+        if (isset($this->metadata[$name])) {
+            return $this->metadata[$name];
         }
 
         /** @var ReflectionClass<object> $reflection */
-        $reflection = new ReflectionClass($class);
+        $reflection = $class instanceof ReflectionClass
+            ? $class
+            : new ReflectionClass($class);
+        $name = $reflection->getName();
         $classPlan = $this->plans->build($reflection);
-
         $constructor = $reflection->getConstructor();
-        if ($constructor !== null) {
-            foreach ($constructor->getParameters() as $parameter) {
-                $this->plans->build($parameter);
-            }
+        $constructorTargets = $constructor === null
+            ? []
+            : $this->instances->targets($constructor);
+
+        foreach ($constructorTargets as $target) {
+            $this->plans->build($target->reflection);
         }
 
-        $this->attributes->prepare($reflection);
+        $hasAttributeHandlers = $this->attributes->hasHandlers($reflection);
 
-        return $this->metadata[$class] = new ObjectMetadata($reflection, $classPlan);
+        return $this->metadata[$name] = new ObjectMetadata(
+            $reflection,
+            $classPlan,
+            $constructor,
+            $constructorTargets,
+            $hasAttributeHandlers,
+        );
     }
 
     private function eager(
@@ -94,7 +141,12 @@ final class ObjectPipeline
         ObjectCreationContext $creation,
     ): object {
         $entry = $creation->constructorEnabled
-            ? $this->instances->create($metadata->class, $creation->resolutionParameters())
+            ? $this->instances->createPrepared(
+                $metadata->class,
+                $metadata->constructor,
+                $metadata->constructorTargets,
+                $creation->resolutionParameters(),
+            )
             : $metadata->class->newInstanceWithoutConstructor();
 
         $creation->initialize($entry);
@@ -116,9 +168,10 @@ final class ObjectPipeline
             function (object $entry) use ($metadata, $creation): void {
                 $attempt = $creation->freshAttempt();
                 if ($attempt->constructorEnabled) {
-                    $this->instances->initialize(
+                    $this->instances->initializePrepared(
                         $entry,
-                        $metadata->class,
+                        $metadata->constructor,
+                        $metadata->constructorTargets,
                         $attempt->resolutionParameters(),
                     );
                 }
