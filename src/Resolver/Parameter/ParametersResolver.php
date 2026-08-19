@@ -6,31 +6,21 @@ namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Componenta\DI\Value\ValuePipeline;
 use ReflectionParameter;
 use WeakMap;
 
-/**
- * Orchestrates the ordered ParameterResolverInterface chain.
- *
- * Parameter values are never produced directly by this class. The current v5
- * value pipeline is temporarily isolated behind AttributeParameterResolver
- * instances until every built-in attribute has its dedicated v5 resolver.
- */
+/** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
 {
     /** @var list<array{resolver: ParameterResolverInterface, priority: int, order: int}> */
     private array $registrations = [];
-
     /** @var list<ParameterResolverInterface>|null */
     private ?array $ordered = null;
-
     /** @var array<int, true> */
     private array $registered = [];
-
     /** @var WeakMap<ParameterTarget, list<int>>|null */
     private ?WeakMap $supportedSlots = null;
 
@@ -46,7 +36,8 @@ final class ParametersResolver
     ) {
         $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
 
-        // Preserve v4 ordering while attribute-aware resolvers are migrated.
+        // Transitional attribute adapters preserve current behavior while each
+        // built-in attribute is migrated to its dedicated parameter resolver.
         $this->add(new AttributeParameterResolver(
             $plans,
             $values,
@@ -122,13 +113,12 @@ final class ParametersResolver
 
     /**
      * @param list<ReflectionParameter> $parameters
+     * @param array<string|int, mixed> $providedParameters
      * @return array<int, mixed>
      */
-    public function resolve(
-        array $parameters,
-        ResolutionContext $context = new ResolutionContext(),
-    ): array {
-        return $this->resolveTargets($this->targets($parameters), $context);
+    public function resolve(array $parameters, array $providedParameters = []): array
+    {
+        return $this->resolveTargets($this->targets($parameters), $providedParameters);
     }
 
     /**
@@ -146,13 +136,12 @@ final class ParametersResolver
 
     /**
      * @param list<ParameterTarget> $targets
+     * @param array<string|int, mixed> $providedParameters
      * @return array<int, mixed>
      */
-    public function resolveTargets(
-        array $targets,
-        ResolutionContext $context = new ResolutionContext(),
-    ): array {
-        $state = new ParameterResolutionContext($context->visible());
+    public function resolveTargets(array $targets, array $providedParameters = []): array
+    {
+        $state = new ParameterResolutionContext($providedParameters);
 
         foreach ($targets as $target) {
             [$position, $value] = $this->resolveParameter($target, $state);
