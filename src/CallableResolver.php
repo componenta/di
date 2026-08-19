@@ -4,36 +4,42 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
 use Psr\Container\ContainerInterface;
+use Throwable;
 
 /**
  * Resolves various formats into PHP callables.
  *
  * String specifications are interpreted as opaque PSR-11 ids before native
- * PHP callable syntax. This matters for ids such as `strlen` or `Foo::bar`:
- * when the container owns such an exact string id, the registered service wins.
- * Already-valid non-string callables keep their native PHP representation.
+ * PHP callable syntax. Already-valid non-string callables retain native PHP
+ * precedence.
  */
 class CallableResolver implements CallableResolverInterface
 {
-    /** @var array<string, bool> Cache: "Class::method" => isStatic */
+    /** @var array<string, bool> */
     private array $staticCache = [];
 
-    public function __construct(
-        protected readonly ContainerInterface $container,
-    ) {}
+    public function __construct(protected readonly ContainerInterface $container) {}
 
     public function resolve(mixed $callable): callable
+    {
+        try {
+            return $this->resolveInternal($callable);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw InvalidCallableException::forValue($callable, $e);
+        }
+    }
+
+    private function resolveInternal(mixed $callable): callable
     {
         if ($callable instanceof \Closure) {
             return $callable;
         }
 
-        // Strings are ambiguous with opaque PSR-11 ids, so exact service-id
-        // lookup must happen before PHP interprets them as functions or static
-        // methods. Native array/invokable callables are already explicit and
-        // retain their normal PHP precedence.
         if (is_string($callable)) {
             return $this->resolveString($callable);
         }
@@ -51,24 +57,18 @@ class CallableResolver implements CallableResolverInterface
 
     protected function resolveString(string $callable): callable
     {
-        // PSR-11 ids are opaque. A registered/resolvable id wins even when it
-        // contains syntax such as "::" or matches a native PHP function.
         if ($this->container->has($callable)) {
             $entry = $this->container->get($callable);
             if (is_callable($entry)) {
                 return $entry;
             }
-
             throw InvalidCallableException::forNonInvokable($callable);
         }
 
         if (str_contains($callable, '::')) {
-            // __callStatic() makes a method callable even though method_exists()
-            // is false. Service-id precedence has already been checked above.
             if (is_callable($callable)) {
                 return $callable;
             }
-
             return $this->resolveClassMethod($callable);
         }
 
@@ -90,16 +90,13 @@ class CallableResolver implements CallableResolverInterface
         if (!class_exists($class) && !interface_exists($class)) {
             throw InvalidCallableException::forValue($callable);
         }
-
         if (!method_exists($class, $method)) {
             throw InvalidCallableException::forMethod($class, $method);
         }
-
         if ($this->isStaticMethod($class, $method)) {
             if (is_callable([$class, $method])) {
                 return [$class, $method];
             }
-
             throw InvalidCallableException::forMethod($class, $method);
         }
 
@@ -108,7 +105,6 @@ class CallableResolver implements CallableResolverInterface
             if (is_object($entry) && is_callable([$entry, $method])) {
                 return [$entry, $method];
             }
-
             throw InvalidCallableException::forMethod($class, $method);
         }
 
@@ -123,7 +119,6 @@ class CallableResolver implements CallableResolverInterface
         }
 
         [$objectOrClass, $method] = $callable;
-
         if (!is_string($method) || $method === '') {
             throw InvalidCallableException::forValue($callable);
         }
@@ -132,7 +127,6 @@ class CallableResolver implements CallableResolverInterface
             if (is_callable([$objectOrClass, $method])) {
                 return [$objectOrClass, $method];
             }
-
             throw InvalidCallableException::forMethod($objectOrClass::class, $method);
         }
 
@@ -140,26 +134,20 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forValue($callable);
         }
 
-        // At this point the tuple was not already a native callable. Its first
-        // element may therefore be a class/interface instance reference or an
-        // opaque service id that owns the requested method.
         if ($this->container->has($objectOrClass)) {
             $entry = $this->container->get($objectOrClass);
             if (is_object($entry) && is_callable([$entry, $method])) {
                 return [$entry, $method];
             }
-
             throw InvalidCallableException::forMethod($objectOrClass, $method);
         }
 
         if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
             throw InvalidCallableException::forValue($callable);
         }
-
         if (!method_exists($objectOrClass, $method)) {
             throw InvalidCallableException::forMethod($objectOrClass, $method);
         }
-
         if ($this->isStaticMethod($objectOrClass, $method)) {
             throw InvalidCallableException::forMethod($objectOrClass, $method);
         }
@@ -167,15 +155,12 @@ class CallableResolver implements CallableResolverInterface
         throw InvalidCallableException::forMissingService($objectOrClass);
     }
 
-    /** @throws \ReflectionException */
     private function isStaticMethod(string $class, string $method): bool
     {
         $key = $class . '::' . $method;
-
         if (!array_key_exists($key, $this->staticCache)) {
             $this->staticCache[$key] = new \ReflectionMethod($class, $method)->isStatic();
         }
-
         return $this->staticCache[$key];
     }
 }
