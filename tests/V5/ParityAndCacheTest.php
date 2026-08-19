@@ -13,10 +13,11 @@ use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
-use Componenta\DI\Resolver\CastableResolver;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
+use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 
 final class AotValueDto
@@ -102,12 +103,13 @@ test('cache envelopes are strictly versioned for the final v5 format', function 
     ))->toThrow(InvalidConfigurationException::class);
 });
 
-test('v4 extension contracts that remain part of final v5 are present', function (): void {
+test('final v5 exposes one bridge for parameter attributes plus convention resolvers', function (): void {
     foreach ([
         ParameterResolverInterface::class,
         ParameterSourceAttributeInterface::class,
-        RequestResolver::class,
-        CastableResolver::class,
+        ParameterAttributeHandlerInterface::class,
+        AttributeParameterResolver::class,
+        RequestContextResolver::class,
         AttributeProcessor::class,
     ] as $class) {
         expect(class_exists($class) || interface_exists($class))->toBeTrue();
