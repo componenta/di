@@ -7,7 +7,7 @@ namespace Componenta\DI\Compile\Definition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\CompilationException;
-use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Throwable;
 
 /** Compiles only declarative builder/config definitions; runtime set() state is not visible here. */
@@ -42,7 +42,7 @@ final readonly class DefinitionCompiler implements DefinitionCompilerInterface
 
             try {
                 $factories[$id] = $generator->generate((string) $id, $definition);
-            } catch (ExceptionInterface $e) {
+            } catch (InvalidConfigurationException|CompilationException $e) {
                 throw $e;
             } catch (Throwable $e) {
                 throw new CompilationException(
