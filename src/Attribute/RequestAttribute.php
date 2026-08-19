@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute;
 
 use Componenta\Config\DefaultValue;
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
-use Componenta\DI\Resolver\Parameter\Request\RequestParameter;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
