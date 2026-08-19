@@ -27,7 +27,7 @@ final readonly class AuditMutableValidationDto
     public function __construct(public string $value) {}
 }
 
-final readonly class AuditOffsetCaster implements CasterInterface
+final class AuditOffsetCaster implements CasterInterface
 {
     public string $name { get => 'audit-offset'; }
 
