@@ -8,7 +8,7 @@ use Componenta\Config\ConfigPath;
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
+use Componenta\DI\Resolver\Parameter\Request\RequestParameter;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
@@ -40,7 +40,7 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
             return $this->default;
         }
 
-        $name = $this->name ?? $request->getAttribute(RequestResolver::PARAMETER_NAME_ATTRIBUTE);
+        $name = $this->name ?? $request->getAttribute(RequestParameter::PARAMETER_NAME_ATTRIBUTE);
         if (!is_string($name) || $name === '') {
             throw new \LogicException('Payload parameter name must be a non-empty string');
         }
