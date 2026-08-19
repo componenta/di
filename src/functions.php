@@ -148,7 +148,7 @@ function compiled_factory_pipeline_fingerprint(
     }
 
     return hash('sha256', serialize([
-        'compiler_format' => 8,
+        'compiler_format' => 9,
         'composition_format' => AttributePlanBuilder::FORMAT_VERSION,
         'definitions' => $definitions,
         'capability_policies' => $policies,
