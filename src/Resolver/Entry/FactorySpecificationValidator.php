@@ -10,7 +10,6 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
-use Componenta\DI\NullContainer;
 use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
 use InvalidArgumentException;
@@ -253,7 +252,14 @@ final class FactorySpecificationValidator
 
     private static function containerArgument(): ContainerValue
     {
-        return self::$containerArgument ??= new ContainerValue(new NullContainer());
+        if (self::$containerArgument !== null) {
+            return self::$containerArgument;
+        }
+
+        /** @var ReflectionClass<ContainerValue> $class */
+        $class = new ReflectionClass(ContainerValue::class);
+
+        return self::$containerArgument = $class->newInstanceWithoutConstructor();
     }
 
     private static function assertClassDefinition(string $id, ClassDefinition $definition): void
