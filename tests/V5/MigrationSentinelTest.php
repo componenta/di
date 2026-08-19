@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Componenta\DI\FactoryInterface;
 use Componenta\DI\CallableExecutorInterface;
+use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
