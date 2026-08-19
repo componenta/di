@@ -8,8 +8,9 @@ use Componenta\Config\Config;
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\EnvNameNormalizer;
 use Psr\Container\ContainerInterface;
+
+use function Componenta\DI\normalize_env_name;
 
 /** Resolves #[Env] descriptors used as #[SetUp] parameter values. */
 final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
@@ -29,7 +30,7 @@ final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
             return $this->defaultOrFail($value, $key, 'environment is unavailable');
         }
 
-        $name = $value->name ?? EnvNameNormalizer::toEnvName($key);
+        $name = $value->name ?? normalize_env_name($key);
         if (!$config->environment->has($name)) {
             return $this->defaultOrFail(
                 $value,
