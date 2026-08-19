@@ -6,7 +6,9 @@ namespace Componenta\DI;
 
 use Componenta\Config\Config;
 use Componenta\DI\Definition\DefinitionInterface;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\CycleGuard;
@@ -16,8 +18,9 @@ use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
-use Psr\Container\ContainerExceptionInterface;
+use Exception;
 use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use Throwable;
 
 /** PSR-11 container and fresh-resolution façade. */
@@ -91,6 +94,19 @@ final class Container implements
 
     public function get(string $id): mixed
     {
+        try {
+            return $this->getInternal($id);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (NotFoundExceptionInterface $e) {
+            throw NotFoundException::forService($id, $e);
+        } catch (Throwable $e) {
+            throw ResolutionException::forService($id, $e);
+        }
+    }
+
+    private function getInternal(string $id): mixed
+    {
         if ($this->externalContainers !== null) {
             $externalGuard = "\0external:" . $id;
             $this->cycleGuard->enter($externalGuard);
@@ -150,7 +166,7 @@ final class Container implements
             } finally {
                 $this->cycleGuard->leave($guardId);
             }
-        } catch (ContainerExceptionInterface) {
+        } catch (Exception) {
             return false;
         }
     }
@@ -183,21 +199,27 @@ final class Container implements
     /** @param array<string|int, mixed> $params */
     public function make(string $entry, array $params = []): object
     {
+        try {
+            return $this->makeInternal($entry, $params);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (NotFoundExceptionInterface $e) {
+            throw NotFoundException::forService($entry, $e);
+        } catch (Throwable $e) {
+            throw ResolutionException::forService($entry, $e);
+        }
+    }
+
+    /** @param array<string|int, mixed> $params */
+    private function makeInternal(string $entry, array $params): object
+    {
         $resolved = $this->aliases->resolve($entry);
         $this->cycleGuard->enter($resolved);
         try {
-            try {
-                $instance = $this->resolver->resolve($resolved, $params);
-            } catch (ContainerExceptionInterface $e) {
-                throw $e;
-            } catch (Throwable $e) {
-                throw ResolutionException::forService($entry, $e);
-            }
-
+            $instance = $this->resolver->resolve($resolved, $params);
             if (!is_object($instance)) {
                 throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
             }
-
             return $instance;
         } finally {
             $this->cycleGuard->leave($resolved);
@@ -234,7 +256,17 @@ final class Container implements
             return;
         }
 
-        $affected = $this->deferredDependenciesTakenOverBy($container);
+        try {
+            $affected = $this->deferredDependenciesTakenOverBy($container);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new InvalidConfigurationException(
+                'Failed to inspect an external container while registering it.',
+                previous: $e,
+            );
+        }
+
         ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
         $this->invalidateDeferredDelegators($affected);
     }
