@@ -25,6 +25,8 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
      */
     public function __construct(
         string $message,
+        public readonly ?ParameterDiagnostic $parameter = null,
+        public readonly ?PropertyDiagnostic $property = null,
         public readonly ?string $parameterName = null,
         public readonly ?int $parameterPosition = null,
         public readonly ?string $parameterType = null,
@@ -56,6 +58,13 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
     ): self {
         $context = self::formatFunctionName($parameter);
         $type = $parameter->getType();
+        $typeName = $type === null ? null : (string) $type;
+        $diagnostic = new ParameterDiagnostic(
+            $parameter->getName(),
+            $parameter->getPosition(),
+            $typeName,
+            $context,
+        );
 
         return new self(
             sprintf(
@@ -64,10 +73,11 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
                 $context,
                 self::buildSuffix($reason, $previous),
             ),
-            parameterName: $parameter->getName(),
-            parameterPosition: $parameter->getPosition(),
-            parameterType: $type === null ? null : (string) $type,
-            parameterContext: $context,
+            parameter: $diagnostic,
+            parameterName: $diagnostic->name,
+            parameterPosition: $diagnostic->position,
+            parameterType: $diagnostic->type,
+            parameterContext: $diagnostic->context,
             providedParameterTypes: self::valueTypes($providedParameters),
             resolvedParameterTypes: self::resolvedValueTypes($resolvedParameters),
             previous: $previous,
@@ -82,6 +92,11 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
     ): self {
         $class = $property->getDeclaringClass()->getName();
         $type = $property->getType();
+        $diagnostic = new PropertyDiagnostic(
+            $property->getName(),
+            $class,
+            $type === null ? null : (string) $type,
+        );
 
         return new self(
             sprintf(
@@ -90,9 +105,10 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
                 $property->getName(),
                 self::buildSuffix($reason, $previous),
             ),
-            propertyName: $property->getName(),
-            propertyClass: $class,
-            propertyType: $type === null ? null : (string) $type,
+            property: $diagnostic,
+            propertyName: $diagnostic->name,
+            propertyClass: $diagnostic->class,
+            propertyType: $diagnostic->type,
             previous: $previous,
         );
     }
