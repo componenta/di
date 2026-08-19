@@ -257,7 +257,9 @@ class ContainerBuilder
         foreach ($this->services as $id => $service) {
             $cache->putBase($aliases->resolve($id), $service);
         }
-        if (!$this->hasBinding(CurrentUserProviderInterface::class)) {
+        if (!$this->hasBinding(CurrentUserProviderInterface::class)
+            && !$cache->tryGetBase(CurrentUserProviderInterface::class, $registeredCurrentUserProvider)
+        ) {
             $cache->putBase(CurrentUserProviderInterface::class, new CurrentUserProvider());
         }
 
