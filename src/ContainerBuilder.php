@@ -166,7 +166,7 @@ class ContainerBuilder
     public static function configureWithDependencies(Config $config, array $dependencies): static
     {
         $dependencies = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
-        $builder = self::newBuilder();
+        $builder = new static;
 
         $builder->factories = $dependencies[ConfigKey::FACTORIES] ?? [];
         $builder->invokables = $dependencies[ConfigKey::INVOKABLES] ?? [];
@@ -940,11 +940,5 @@ class ContainerBuilder
         $data = $config->toArray();
         $data[ConfigKey::DEPENDENCIES] = $dependencies;
         return new Config($data, $config->environment);
-    }
-
-    /** @return static */
-    private static function newBuilder(): static
-    {
-        return new static();
     }
 }
