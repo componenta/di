@@ -59,6 +59,7 @@ use Componenta\DI\Internal\ContainerBootstrapState;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -257,11 +258,13 @@ class ContainerBuilder
         $parameters = new ParametersResolver($plans);
         $attributeProcessor = new AttributeProcessor($attributes, $plans);
         $proxyFactory = $this->createProxyFactory();
+        $resolutionParameters = new ObjectResolutionParameterStore();
         $objects = new ObjectPipeline(
             $plans,
             new InstanceCreator($parameters),
             $proxyFactory,
             $attributes,
+            $resolutionParameters,
             $attributeProcessor,
         );
 
@@ -330,7 +333,12 @@ class ContainerBuilder
         $handlers = $this->sharedAttributeHandlers($container, $proxyFactory);
 
         if (!$this->replaceAttributeDefinitions) {
-            $this->registerBuiltInAttributes($attributes, $container, $handlers);
+            $this->registerBuiltInAttributes(
+                $attributes,
+                $container,
+                $handlers,
+                $resolutionParameters,
+            );
         }
 
         foreach ($this->attributeCapabilities as $policy) {
@@ -492,6 +500,7 @@ class ContainerBuilder
         AttributeDefinitionRegistry $registry,
         Container $container,
         array $handlers,
+        ObjectResolutionParameterStore $resolutionParameters,
     ): void {
         foreach ([
             new CapabilityPolicy(ValueProvider::class, 1),
@@ -586,6 +595,7 @@ class ContainerBuilder
             SetUp::class,
             new SetUpRunner(
                 $container,
+                $resolutionParameters,
                 new ContainerValueUnwrapper(new ContainerValue($container, $this->config)),
                 new EntryIdUnwrapper($container),
                 new ConfigUnwrapper($container),
