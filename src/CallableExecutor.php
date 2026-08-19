@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace Componenta\DI;
 
 use Closure;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
-use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\Reflection\Reflection;
 use LogicException;
 use ReflectionFunction;
 use ReflectionParameter;
+use Throwable;
 use WeakMap;
 
 /** DI-aware callable executor. */
@@ -30,24 +31,35 @@ final class CallableExecutor implements CallableExecutorInterface
         private readonly ParametersResolver $parameters,
     ) {}
 
-    /**
-     * @param array<string|int, mixed> $params
-     * @throws InvalidCallableException|ResolutionException
-     */
+    /** @param array<string|int, mixed> $params */
     public function call(mixed $callable, array $params = []): mixed
     {
-        $resolved = $this->callableResolver->resolve($callable);
-        $targets = $this->targets($resolved);
-        $arguments = $targets === []
-            ? $params
-            : $this->parameters->resolveTargets($targets, $params);
+        try {
+            $resolved = $this->callableResolver->resolve($callable);
+            $targets = $this->targets($resolved);
+            $arguments = $targets === []
+                ? $params
+                : $this->parameters->resolveTargets($targets, $params);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw InvalidCallableException::forValue($callable, $e);
+        }
 
+        // Deliberately outside the normalization boundary: once control enters
+        // the explicit user callable, its throwables belong to application code.
         return call_user_func_array($resolved, $arguments);
     }
 
     public function resolve(mixed $callable): callable
     {
-        return $this->callableResolver->resolve($callable);
+        try {
+            return $this->callableResolver->resolve($callable);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw InvalidCallableException::forValue($callable, $e);
+        }
     }
 
     /** @return list<ParameterTarget> */
