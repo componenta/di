@@ -6,34 +6,34 @@ namespace Componenta\DI\Compile\Factory;
 
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
-use Componenta\DI\Attribute\Handler\VersionedAttributeHandlerInterface;
-use Componenta\DI\Value\ValueFallbackRegistry;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 
 /** Stable digest of the semantic runtime consumed by generated entry shards. */
 final class CompiledFactoryPipelineFingerprint
 {
-    public const int FORMAT_VERSION = 6;
+    public const int FORMAT_VERSION = 7;
 
     public static function calculate(
         AttributeDefinitionRegistry $attributes,
-        ValueFallbackRegistry $fallbacks,
+        ParametersResolver $parameters,
     ): string {
         $definitions = [];
         foreach ($attributes->definitions() as $definition) {
             $definitions[] = [
                 'attribute' => $definition->attribute,
                 'definition_version' => $definition->version,
-                'handler' => $definition->handler::class,
-                'handler_version' => $definition->handler instanceof VersionedAttributeHandlerInterface
-                    ? $definition->handler->semanticVersion()
-                    : 1,
+                'handler' => $definition->handler?->class,
+                'phase' => $definition->phase->value,
                 'capabilities' => $definition->capabilities,
                 'requires' => $definition->requires,
                 'forbids' => $definition->forbids,
                 'before' => $definition->before,
                 'after' => $definition->after,
                 'rules' => array_map(
-                    static fn(object $rule): string => $rule::class,
+                    static fn(object $rule): array => [
+                        'class' => $rule::class,
+                        'version' => self::semanticVersion($rule),
+                    ],
                     $definition->rules,
                 ),
             ];
@@ -44,13 +44,13 @@ final class CompiledFactoryPipelineFingerprint
             $policies[] = [$policy->capability, $policy->maxPerTarget];
         }
 
-        $fallbackDefinitions = [];
-        foreach ($fallbacks->definitions() as $definition) {
-            $fallbackDefinitions[] = [
-                $definition->id,
-                $definition->fallback::class,
-                $definition->before,
-                $definition->after,
+        $resolvers = [];
+        foreach ($parameters->semanticRegistrations() as $registration) {
+            $resolver = $registration['resolver'];
+            $resolvers[] = [
+                'class' => $resolver::class,
+                'priority' => $registration['priority'],
+                'version' => self::semanticVersion($resolver),
             ];
         }
 
@@ -59,8 +59,16 @@ final class CompiledFactoryPipelineFingerprint
             'composition_format' => AttributePlanBuilder::FORMAT_VERSION,
             'definitions' => $definitions,
             'capability_policies' => $policies,
-            'fallbacks' => $fallbackDefinitions,
+            'parameter_resolvers' => $resolvers,
         ]));
+    }
+
+    private static function semanticVersion(object $extension): int|string
+    {
+        $constant = $extension::class . '::SEMANTIC_VERSION';
+        $version = defined($constant) ? constant($constant) : 1;
+
+        return is_int($version) || is_string($version) ? $version : 1;
     }
 
     private function __construct() {}
