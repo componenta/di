@@ -104,8 +104,6 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             $context->writeProperty($target, $this->caster($attribute->name)->cast($propertyValue));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
-        } catch (ResolutionException $e) {
-            throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($target, previous: $e);
         }
