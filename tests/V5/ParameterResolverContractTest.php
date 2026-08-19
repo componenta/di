@@ -22,7 +22,7 @@ it('allows a custom resolver to classify an immutable parameter target', functio
     $parameter = (new ReflectionFunction($callable))->getParameters()[0];
     $target = new ParameterTarget($parameter);
 
-    $resolver = new class implements ParameterResolverInterface {
+    $resolver = new class () implements ParameterResolverInterface {
         public function supports(ParameterTarget $target): bool
         {
             return $target->name === 'value';
