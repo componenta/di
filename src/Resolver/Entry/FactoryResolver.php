@@ -12,6 +12,7 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
@@ -23,7 +24,6 @@ use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
@@ -98,7 +98,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             return $factory instanceof LazyServiceFactoryInterface
                 ? $factory->lazy($container, $this->proxyFactory, $factoryParams)
                 : $factory($container, $factoryParams);
-        } catch (ContainerExceptionInterface $e) {
+        } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forService($id, $e);
@@ -132,10 +132,6 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     }
 
     /**
-     * Projects runtime overrides onto the constructor signature while preserving
-     * all raw runtime keys required by later parameter resolvers (for example a
-     * PSR-7 request typed key or internal mapped-request provenance).
-     *
      * @param array<string|int,mixed> $configured
      * @param array<string|int,mixed> $runtime
      * @return array<string|int,mixed>
