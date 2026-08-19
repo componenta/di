@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Closure;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
@@ -22,25 +23,19 @@ use Componenta\DI\Attribute\Cookie;
 use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
-use Componenta\DI\Attribute\Handler\Builtin\CastValueTransformer;
-use Componenta\DI\Attribute\Handler\Builtin\ConfigValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\CurrentUserValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\EntryIdValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\EnvValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\InitValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\InjectValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\LazyCreationHandler;
-use Componenta\DI\Attribute\Handler\Builtin\MakeValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\NoConstructorPolicyHandler;
-use Componenta\DI\Attribute\Handler\Builtin\ProxyCreationHandler;
-use Componenta\DI\Attribute\Handler\Builtin\RequestValueProvider;
-use Componenta\DI\Attribute\Handler\Builtin\SetUpLifecycleHandler;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Make;
+use Componenta\DI\Attribute\MapCookies;
+use Componenta\DI\Attribute\MapHeaders;
+use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\MapRequest;
+use Componenta\DI\Attribute\MapRequestAttributes;
+use Componenta\DI\Attribute\MapRequestPayload;
+use Componenta\DI\Attribute\MapServerParams;
+use Componenta\DI\Attribute\MapUploadedFiles;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\PayloadParam;
 use Componenta\DI\Attribute\Proxy;
@@ -59,8 +54,19 @@ use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Object\ObjectPipeline;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\Handler\InitHandler;
+use Componenta\DI\Resolver\Attribute\Handler\InjectHandler;
+use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
+use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
+use Componenta\DI\Resolver\Attribute\Handler\ProxyHandler;
+use Componenta\DI\Resolver\CastableResolver;
+use Componenta\DI\Resolver\ConfigAttributeResolver;
 use Componenta\DI\Resolver\CurrentUserProvider;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
+use Componenta\DI\Resolver\CurrentUserResolver;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
@@ -72,32 +78,52 @@ use Componenta\DI\Resolver\Entry\SetUp\ConfigUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\EntryIdUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\EnvUnwrapper;
+use Componenta\DI\Resolver\Entry\SetUpRunner;
+use Componenta\DI\Resolver\EntryIdResolver;
+use Componenta\DI\Resolver\EnvResolver;
+use Componenta\DI\Resolver\MakeAttributeResolver;
+use Componenta\DI\Resolver\Parameter\ArrayResolver as ParameterArrayResolver;
+use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
+use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
+use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
+use Componenta\DI\Resolver\Parameter\NullableResolver;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Value\Fallback\AutowireValueFallback;
-use Componenta\DI\Value\Fallback\DefaultValueFallback;
-use Componenta\DI\Value\Fallback\ExplicitValueFallback;
-use Componenta\DI\Value\Fallback\MappedValueFallback;
-use Componenta\DI\Value\Fallback\NullableValueFallback;
-use Componenta\DI\Value\Fallback\PropertyInitialValueFallback;
-use Componenta\DI\Value\Fallback\TrustedValueFallback;
-use Componenta\DI\Value\ValueFallbackDefinition;
-use Componenta\DI\Value\ValueFallbackRegistry;
-use Componenta\DI\Value\ValuePipeline;
+use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
+use Componenta\DI\Resolver\Parameter\Request\RequestResolverFactory;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
 /**
- * v5 composition root: entries + attribute definitions + value fallbacks.
+ * v5 composition root.
+ *
+ * Parameter values are produced only by ParameterResolverInterface. Class,
+ * property and method attributes are executed only by AttributeHandlerInterface.
+ * Attribute composition is shared metadata/validation for both paths.
  *
  * @phpstan-consistent-constructor
  */
 class ContainerBuilder
 {
-    public const int CACHE_VERSION = 13;
+    public const int PRIORITY_PARAM_CASTABLE = 1200;
+    public const int PRIORITY_PARAM_ARRAY = 1100;
+    public const int PRIORITY_PARAM_ARRAY_TYPED = 1000;
+    public const int PRIORITY_PARAM_CURRENT_USER = 900;
+    public const int PRIORITY_PARAM_REQUEST = 800;
+    public const int PRIORITY_PARAM_MAKE = 700;
+    public const int PRIORITY_PARAM_ENV = 600;
+    public const int PRIORITY_PARAM_ENTRY_ID = 500;
+    public const int PRIORITY_PARAM_CONFIG = 400;
+    public const int PRIORITY_PARAM_AUTOWIRE = 300;
+    public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
+    public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    /** @var array<string, non-empty-string> */
+    public const int CACHE_VERSION = 14;
+
+    /** @var array<string,non-empty-string> */
     private const array DEFAULT_ALIASES = [
-        \Componenta\DI\Cache\DiCacheGeneratorInterface::class => \Componenta\DI\Cache\DiCacheGenerator::class,
+        \Componenta\DI\Cache\DiCacheGeneratorInterface::class
+            => \Componenta\DI\Cache\DiCacheGenerator::class,
     ];
 
     /** @var array<string,mixed> */
@@ -106,43 +132,59 @@ class ContainerBuilder
     public private(set) array $invokables = [];
     /** @var array<string,non-empty-string> */
     public private(set) array $aliases = self::DEFAULT_ALIASES;
-    /** @var array<string, list<callable|string|array{object|string, string}>> */
+    /** @var array<string,list<callable|string|array{object|string,string}>> */
     public private(set) array $delegators = [];
     /** @var array<string,mixed> */
     public private(set) array $services = [];
+    /** @var list<array{0:mixed,1:int}> */
+    public private(set) array $parameterResolvers = [];
     /** @var list<mixed> */
     public private(set) array $attributeDefinitions = [];
     /** @var list<CapabilityPolicy> */
     public private(set) array $attributeCapabilities = [];
-    /** @var list<mixed> */
-    public private(set) array $valueFallbacks = [];
+    public private(set) bool $replaceParameterResolvers = false;
+    public private(set) bool $replaceAttributeDefinitions = false;
     public private(set) ?Config $config = null;
 
     private ?string $compiledFactoryBaseDir = null;
 
+    public function __construct() {}
+
     public static function configure(Config $config): static
     {
-        $dependencies = $config->has(ConfigKey::DEPENDENCIES) ? $config->get(ConfigKey::DEPENDENCIES) : [];
+        $dependencies = $config->has(ConfigKey::DEPENDENCIES)
+            ? $config->get(ConfigKey::DEPENDENCIES)
+            : [];
         if (!is_array($dependencies)) {
             throw new InvalidConfigurationException('Container dependencies section must be an array.');
         }
+
+        /** @var array<array-key,mixed> $dependencies */
         return static::configureWithDependencies($config, $dependencies);
     }
 
-    /** @param array<array-key, mixed> $dependencies */
+    /** @param array<array-key,mixed> $dependencies */
     public static function configureWithDependencies(Config $config, array $dependencies): static
     {
         $dependencies = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
-        $builder = new static();
+        $builder = self::newBuilder();
+
         $builder->factories = $dependencies[ConfigKey::FACTORIES] ?? [];
         $builder->invokables = $dependencies[ConfigKey::INVOKABLES] ?? [];
         $builder->aliases = $dependencies[ConfigKey::ALIASES] ?? self::DEFAULT_ALIASES;
         $builder->delegators = $dependencies[ConfigKey::DELEGATORS] ?? [];
         $builder->services = $dependencies[ConfigKey::SERVICES] ?? [];
+
+        foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
+            $builder->parameterResolvers[] = [$resolver, $priority];
+        }
+
+        $builder->replaceParameterResolvers = $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false;
         $builder->attributeDefinitions = array_values($dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS] ?? []);
+        $builder->replaceAttributeDefinitions = $dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE] ?? false;
         $builder->attributeCapabilities = array_values($dependencies[ConfigKey::ATTRIBUTE_CAPABILITIES] ?? []);
-        $builder->valueFallbacks = array_values($dependencies[ConfigKey::VALUE_FALLBACKS] ?? []);
         $builder->config = self::configWithDependencies($config, $dependencies);
+
         return $builder;
     }
 
@@ -157,10 +199,7 @@ class ContainerBuilder
         return $builder;
     }
 
-    /**
-     * @param array<array-key, mixed> $dependencies
-     * @return array<string, mixed>
-     */
+    /** @param array<array-key,mixed> $dependencies @return array<string,mixed> */
     public static function normalizeDependencies(array $dependencies): array
     {
         $normalized = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
@@ -180,19 +219,21 @@ class ContainerBuilder
         $environment = $config->environment ?? new Environment([]);
         $attributes = new AttributeDefinitionRegistry();
         $plans = new AttributePlanBuilder($attributes);
-        $fallbacks = new ValueFallbackRegistry();
-        $values = new ValuePipeline($fallbacks);
-        $parameters = new ParametersResolver($plans, $values);
+        $parameters = new ParametersResolver($plans);
+        $attributeProcessor = new AttributeProcessor($attributes, $plans);
         $proxyFactory = $this->createProxyFactory();
         $objects = new ObjectPipeline(
             $plans,
             new InstanceCreator($parameters),
-            $values,
             $proxyFactory,
             $attributes,
+            $attributeProcessor,
         );
 
-        $aliases = new AliasResolver([...$this->aliases, ConfigAttribute::KEY => Config::class]);
+        $aliases = new AliasResolver([
+            ...$this->aliases,
+            ConfigAttribute::KEY => Config::class,
+        ]);
         $cache = new EntryCache();
         foreach ($this->services as $id => $service) {
             $cache->putBase($aliases->resolve($id), $service);
@@ -214,9 +255,8 @@ class ContainerBuilder
                 $environment,
                 $attributes,
                 $plans,
-                $fallbacks,
-                $values,
                 $parameters,
+                $attributeProcessor,
                 $objects,
             ): void {
                 $container->__construct(
@@ -231,8 +271,7 @@ class ContainerBuilder
                         ContainerValue::class => new ContainerValue($container, $config),
                         AttributeDefinitionRegistry::class => $attributes,
                         AttributePlanBuilder::class => $plans,
-                        ValueFallbackRegistry::class => $fallbacks,
-                        ValuePipeline::class => $values,
+                        AttributeProcessor::class => $attributeProcessor,
                         ParametersResolver::class => $parameters,
                         ObjectPipeline::class => $objects,
                     ],
@@ -247,25 +286,42 @@ class ContainerBuilder
             $objects,
             $executor,
             $attributes,
-            $fallbacks,
+            $parameters,
         );
         $bootstrap->initialize($entryResolver, $executor);
 
-        $this->registerBuiltInAttributes($attributes, $container, $executor);
-        $this->registerBuiltInFallbacks($fallbacks, $container);
+        $shared = $this->sharedResolvers($container, $proxyFactory);
+
+        if (!$this->replaceParameterResolvers) {
+            foreach ($this->defaultParameterResolvers($container, $shared) as [$resolver, $priority]) {
+                $parameters->add($resolver, $priority);
+            }
+        }
+
+        if (!$this->replaceAttributeDefinitions) {
+            $this->registerBuiltInAttributes(
+                $attributes,
+                $container,
+                $shared,
+            );
+        }
 
         foreach ($this->attributeCapabilities as $policy) {
             $attributes->defineCapability($policy);
         }
+
+        foreach ($this->parameterResolvers as [$spec, $priority]) {
+            $parameters->add($this->materializeResolver($spec, $container), $priority);
+        }
+
         foreach ($this->attributeDefinitions as $spec) {
             $attributes->register($this->materializeAttributeDefinition($spec, $container));
         }
-        foreach ($this->valueFallbacks as $spec) {
-            $fallbacks->add($this->materializeValueFallback($spec, $container));
-        }
 
+        $parameters->seal();
         $attributes->seal();
-        $fallbacks->seal();
+
+        // Force bootstrap only after composition is immutable.
         $container->get(Config::class);
 
         foreach ($this->delegators as $id => $items) {
@@ -290,17 +346,21 @@ class ContainerBuilder
         $container = $this->build();
         $objects = $container->get(ObjectPipeline::class);
         $attributes = $container->get(AttributeDefinitionRegistry::class);
-        $fallbacks = $container->get(ValueFallbackRegistry::class);
+        $parameters = $container->get(ParametersResolver::class);
         if (!$objects instanceof ObjectPipeline
             || !$attributes instanceof AttributeDefinitionRegistry
-            || !$fallbacks instanceof ValueFallbackRegistry
+            || !$parameters instanceof ParametersResolver
         ) {
             throw new InvalidConfigurationException('Runtime compiler services are unavailable.');
         }
 
         $aliasResolver = new AliasResolver($this->aliases);
         $excluded = array_fill_keys(ProtectedServiceIds::ids(), true);
-        foreach ([...array_keys($this->factories), ...array_keys($this->services), ...$this->invokables] as $id) {
+        foreach ([
+            ...array_keys($this->factories),
+            ...array_keys($this->services),
+            ...$this->invokables,
+        ] as $id) {
             $excluded[$aliasResolver->resolve($id)] = true;
         }
 
@@ -311,7 +371,7 @@ class ContainerBuilder
 
         return (new CompiledFactoryShardCompiler(
             new FactoryCodeGenerator(),
-            CompiledFactoryPipelineFingerprint::calculate($attributes, $fallbacks),
+            CompiledFactoryPipelineFingerprint::calculate($attributes, $parameters),
             objects: $objects,
         ))->compile($classes, $directory, $maxShardBytes, $namespace);
     }
@@ -319,18 +379,20 @@ class ContainerBuilder
     /** @return array<string,mixed> */
     public function toArray(): array
     {
-        /** @var array<string, mixed> $data */
+        /** @var array<string,mixed> $data */
         $data = $this->config?->toArray() ?? [];
-        $data[ConfigKey::DEPENDENCIES] = array_filter([
+        $data[ConfigKey::DEPENDENCIES] = [
             ConfigKey::FACTORIES => $this->factories,
             ConfigKey::INVOKABLES => $this->invokables,
             ConfigKey::ALIASES => $this->aliases,
             ConfigKey::DELEGATORS => $this->delegators,
             ConfigKey::SERVICES => $this->services,
+            ConfigKey::PARAMETER_RESOLVERS => $this->resolversToMap($this->parameterResolvers),
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE => $this->replaceParameterResolvers,
             ConfigKey::ATTRIBUTE_DEFINITIONS => $this->attributeDefinitions,
+            ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE => $this->replaceAttributeDefinitions,
             ConfigKey::ATTRIBUTE_CAPABILITIES => $this->attributeCapabilities,
-            ConfigKey::VALUE_FALLBACKS => $this->valueFallbacks,
-        ], static fn(array $section): bool => $section !== []);
+        ];
         return $data;
     }
 
@@ -340,7 +402,7 @@ class ContainerBuilder
         ObjectPipeline $objects,
         CallableExecutorInterface $executor,
         AttributeDefinitionRegistry $attributes,
-        ValueFallbackRegistry $fallbacks,
+        ParametersResolver $parameters,
     ): EntryResolverInterface {
         return new CompositeResolver(
             new EntryFactoryResolver(
@@ -350,7 +412,7 @@ class ContainerBuilder
                 $objects,
                 $executor,
                 $attributes,
-                $fallbacks,
+                $parameters,
                 $this->compiledFactoryBaseDir,
             ),
             new InvokableResolver($this->invokables),
@@ -358,10 +420,35 @@ class ContainerBuilder
         );
     }
 
+    /**
+     * @param array<class-string,ParameterResolverInterface&AttributeHandlerInterface|RequestResolver> $shared
+     * @return list<array{0:ParameterResolverInterface,1:int}>
+     */
+    protected function defaultParameterResolvers(ContainerInterface $container, array $shared): array
+    {
+        return [
+            [$shared[CastableResolver::class], self::PRIORITY_PARAM_CASTABLE],
+            [new ParameterArrayResolver(), self::PRIORITY_PARAM_ARRAY],
+            [new ArrayTypedResolver(), self::PRIORITY_PARAM_ARRAY_TYPED],
+            [$shared[CurrentUserResolver::class], self::PRIORITY_PARAM_CURRENT_USER],
+            [$shared[RequestResolver::class], self::PRIORITY_PARAM_REQUEST],
+            [$shared[MakeAttributeResolver::class], self::PRIORITY_PARAM_MAKE],
+            [$shared[EnvResolver::class], self::PRIORITY_PARAM_ENV],
+            [$shared[EntryIdResolver::class], self::PRIORITY_PARAM_ENTRY_ID],
+            [$shared[ConfigAttributeResolver::class], self::PRIORITY_PARAM_CONFIG],
+            [new AutowireByTypeResolver($container), self::PRIORITY_PARAM_AUTOWIRE],
+            [new DefaultValueResolver(), self::PRIORITY_PARAM_DEFAULT_VALUE],
+            [new NullableResolver(), self::PRIORITY_PARAM_NULLABLE],
+        ];
+    }
+
+    /**
+     * @param array<class-string,ParameterResolverInterface&AttributeHandlerInterface|RequestResolver> $shared
+     */
     private function registerBuiltInAttributes(
         AttributeDefinitionRegistry $registry,
         Container $container,
-        CallableExecutorInterface $executor,
+        array $shared,
     ): void {
         foreach ([
             new CapabilityPolicy(ValueProvider::class, 1),
@@ -373,83 +460,160 @@ class ContainerBuilder
             $registry->defineCapability($policy);
         }
 
-        $request = new RequestValueProvider($container, $container);
-        $providers = [
-            ConfigAttribute::class => new ConfigValueProvider($container),
-            Env::class => new EnvValueProvider($container),
-            EntryId::class => new EntryIdValueProvider($container),
-            Inject::class => new InjectValueProvider($container),
-            CurrentUser::class => new CurrentUserValueProvider($container),
-            Init::class => new InitValueProvider($executor),
-            Make::class => new MakeValueProvider($container),
-            Header::class => $request,
-            Cookie::class => $request,
-            QueryParam::class => $request,
-            PayloadParam::class => $request,
-            RequestAttribute::class => $request,
-            ServerParam::class => $request,
-            UploadedFile::class => $request,
-            MapRequest::class => $request,
+        /** @var CastableResolver $cast */
+        $cast = $shared[CastableResolver::class];
+        /** @var ConfigAttributeResolver $config */
+        $config = $shared[ConfigAttributeResolver::class];
+        /** @var CurrentUserResolver $currentUser */
+        $currentUser = $shared[CurrentUserResolver::class];
+        /** @var EntryIdResolver $entryId */
+        $entryId = $shared[EntryIdResolver::class];
+        /** @var EnvResolver $env */
+        $env = $shared[EnvResolver::class];
+        /** @var MakeAttributeResolver $make */
+        $make = $shared[MakeAttributeResolver::class];
+
+        $providerDefinitions = [
+            [ConfigAttribute::class, $config],
+            [Env::class, $env],
+            [EntryId::class, $entryId],
+            [CurrentUser::class, $currentUser],
+            [Make::class, $make],
+            [Inject::class, new InjectHandler($container)],
+            [Init::class, new InitHandler($container)],
         ];
-        foreach ($providers as $attribute => $handler) {
-            $registry->register(new AttributeDefinition($attribute, $handler, [ValueProvider::class]));
+        foreach ($providerDefinitions as [$attribute, $handler]) {
+            $registry->register(new AttributeDefinition(
+                $attribute,
+                $handler,
+                [ValueProvider::class],
+            ));
         }
 
-        $registry->register(new AttributeDefinition(Cast::class, new CastValueTransformer($container), [ValueTransformer::class]));
-        $registry->register(new AttributeDefinition(Lazy::class, new LazyCreationHandler(), [CreationStrategy::class]));
-        $registry->register(new AttributeDefinition(Proxy::class, new ProxyCreationHandler(), [CreationStrategy::class]));
-        $registry->register(new AttributeDefinition(NoConstructor::class, new NoConstructorPolicyHandler(), [ConstructorPolicy::class]));
+        foreach ([
+            Header::class,
+            Cookie::class,
+            QueryParam::class,
+            PayloadParam::class,
+            RequestAttribute::class,
+            ServerParam::class,
+            UploadedFile::class,
+            MapRequest::class,
+            MapQueryString::class,
+            MapRequestPayload::class,
+            MapHeaders::class,
+            MapCookies::class,
+            MapRequestAttributes::class,
+            MapServerParams::class,
+            MapUploadedFiles::class,
+        ] as $attribute) {
+            $registry->register(new AttributeDefinition(
+                $attribute,
+                handler: null,
+                capabilities: [ValueProvider::class],
+            ));
+        }
+
+        $registry->register(new AttributeDefinition(
+            Cast::class,
+            $cast,
+            [ValueTransformer::class],
+        ));
+        $registry->register(new AttributeDefinition(
+            Lazy::class,
+            new LazyHandler(),
+            [CreationStrategy::class],
+            phase: AttributePhase::BeforeInstantiation,
+        ));
+        $registry->register(new AttributeDefinition(
+            Proxy::class,
+            new ProxyHandler($make),
+            [CreationStrategy::class],
+            phase: AttributePhase::Both,
+        ));
+        $registry->register(new AttributeDefinition(
+            NoConstructor::class,
+            new NoConstructorHandler(),
+            [ConstructorPolicy::class],
+            phase: AttributePhase::BeforeInstantiation,
+        ));
         $registry->register(new AttributeDefinition(
             SetUp::class,
-            new SetUpLifecycleHandler(
-                $executor,
-                new ContainerValueUnwrapper($this->containerValue($container)),
+            new SetUpRunner(
+                $container,
+                new ContainerValueUnwrapper(new ContainerValue($container, $this->config)),
                 new EntryIdUnwrapper($container),
                 new ConfigUnwrapper($container),
                 new EnvUnwrapper($container),
             ),
             [LifecycleHook::class],
+            phase: AttributePhase::AfterInstantiation,
         ));
     }
 
-    private function registerBuiltInFallbacks(ValueFallbackRegistry $registry, ContainerInterface $container): void
-    {
-        $registry->add(new ValueFallbackDefinition('explicit', new ExplicitValueFallback(), before: ['mapped']));
-        $registry->add(new ValueFallbackDefinition('mapped', new MappedValueFallback(), after: ['explicit'], before: ['trusted']));
-        $registry->add(new ValueFallbackDefinition('trusted', new TrustedValueFallback(), after: ['mapped'], before: ['property_initial']));
-        $registry->add(new ValueFallbackDefinition('property_initial', new PropertyInitialValueFallback(), after: ['trusted'], before: ['autowire']));
-        $registry->add(new ValueFallbackDefinition('autowire', new AutowireValueFallback($container), after: ['property_initial'], before: ['default']));
-        $registry->add(new ValueFallbackDefinition('default', new DefaultValueFallback(), after: ['autowire'], before: ['nullable']));
-        $registry->add(new ValueFallbackDefinition('nullable', new NullableValueFallback(), after: ['default']));
+    /**
+     * @return array<class-string,ParameterResolverInterface&AttributeHandlerInterface|RequestResolver>
+     */
+    private function sharedResolvers(
+        Container $container,
+        ProxyFactoryInterface $proxyFactory,
+    ): array {
+        return [
+            CastableResolver::class => new CastableResolver($container),
+            ConfigAttributeResolver::class => new ConfigAttributeResolver($container),
+            CurrentUserResolver::class => new CurrentUserResolver($container),
+            EntryIdResolver::class => new EntryIdResolver($container),
+            EnvResolver::class => new EnvResolver($container),
+            MakeAttributeResolver::class => new MakeAttributeResolver($container, $proxyFactory),
+            RequestResolver::class => (new RequestResolverFactory())($container),
+        ];
     }
 
-    private function materializeAttributeDefinition(mixed $spec, ContainerInterface $container): AttributeDefinition
-    {
-        $value = $this->materializeExtension($spec, $container);
-        if (!$value instanceof AttributeDefinition) {
-            throw new InvalidConfigurationException(sprintf('Attribute definition factory returned %s.', get_debug_type($value)));
+    protected function materializeResolver(
+        mixed $spec,
+        ContainerInterface $container,
+    ): ParameterResolverInterface {
+        $resolver = $this->materializeExtension($spec, $container);
+        if (!$resolver instanceof ParameterResolverInterface) {
+            throw new InvalidConfigurationException(sprintf(
+                'Expected %s, got %s.',
+                ParameterResolverInterface::class,
+                get_debug_type($resolver),
+            ));
         }
-        return $value;
+        return $resolver;
     }
 
-    private function materializeValueFallback(mixed $spec, ContainerInterface $container): ValueFallbackDefinition
-    {
-        $value = $this->materializeExtension($spec, $container);
-        if (!$value instanceof ValueFallbackDefinition) {
-            throw new InvalidConfigurationException(sprintf('Value fallback factory returned %s.', get_debug_type($value)));
-        }
-        return $value;
-    }
-
-    private function materializeExtension(mixed $spec, ContainerInterface $container): mixed
-    {
-        if ($spec instanceof AttributeDefinition || $spec instanceof ValueFallbackDefinition) {
+    private function materializeAttributeDefinition(
+        mixed $spec,
+        ContainerInterface $container,
+    ): AttributeDefinition {
+        if ($spec instanceof AttributeDefinition) {
             return $spec;
         }
-        if (is_string($spec)) {
-            return $container->get($spec);
+        $value = $this->materializeExtension($spec, $container);
+        if (!$value instanceof AttributeDefinition) {
+            throw new InvalidConfigurationException(sprintf(
+                'Attribute definition factory returned %s.',
+                get_debug_type($value),
+            ));
         }
-        if (is_array($spec)
+        return $value;
+    }
+
+    private function materializeExtension(mixed $spec, ContainerInterface $container): object
+    {
+        if ($spec instanceof ParameterResolverInterface || $spec instanceof AttributeDefinition) {
+            return $spec;
+        }
+
+        if ($spec instanceof Closure) {
+            $extension = $spec($container);
+        } elseif (is_string($spec)) {
+            $extension = $container->has($spec)
+                ? $container->get($spec)
+                : (is_callable($spec) ? $spec($container) : $container->get($spec));
+        } elseif (is_array($spec)
             && !is_callable($spec)
             && array_keys($spec) === [0, 1]
             && is_string($spec[0])
@@ -466,12 +630,24 @@ class ContainerBuilder
                     $spec[1],
                 ));
             }
-            return $factory($container);
+            $extension = $factory($container);
+        } elseif (is_callable($spec)) {
+            $extension = $spec($container);
+        } else {
+            throw new InvalidConfigurationException(sprintf(
+                'Unsupported extension specification %s.',
+                get_debug_type($spec),
+            ));
         }
-        if (is_callable($spec)) {
-            return $spec($container);
+
+        if (!is_object($extension)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Extension factory returned %s instead of an object.',
+                get_debug_type($extension),
+            ));
         }
-        throw new InvalidConfigurationException(sprintf('Unsupported extension specification %s.', get_debug_type($spec)));
+
+        return $extension;
     }
 
     protected function createProxyFactory(): ProxyFactoryInterface
@@ -479,20 +655,7 @@ class ContainerBuilder
         return new ProxyFactory();
     }
 
-    private function containerValue(ContainerInterface $container): ContainerValue
-    {
-        $value = $container->get(ContainerValue::class);
-        if (!$value instanceof ContainerValue) {
-            throw new InvalidConfigurationException(sprintf(
-                'Internal service "%s" must be an instance of %s.',
-                ContainerValue::class,
-                ContainerValue::class,
-                get_debug_type($value),
-            ));
-        }
-        return $value;
-    }
-
+    /** @param callable(ContainerValue,array<string|int,mixed>):mixed $factory */
     public function addFactory(string $id, callable $factory): static
     {
         self::assertId($id, 'factory');
@@ -521,7 +684,10 @@ class ContainerBuilder
             } elseif (is_callable($factory)) {
                 $this->addFactory($id, $factory);
             } else {
-                throw new InvalidConfigurationException(sprintf('Factory "%s" must be callable or DefinitionInterface.', $id));
+                throw new InvalidConfigurationException(sprintf(
+                    'Factory "%s" must be callable or DefinitionInterface.',
+                    $id,
+                ));
             }
         }
         return $this;
@@ -532,7 +698,10 @@ class ContainerBuilder
         $target = $class ?? $classOrAlias;
         self::assertId($target, 'invokable');
         if (!class_exists($target)) {
-            throw new InvalidConfigurationException(sprintf('Invokable class "%s" does not exist.', $target));
+            throw new InvalidConfigurationException(sprintf(
+                'Invokable class "%s" does not exist.',
+                $target,
+            ));
         }
         if (!in_array($target, $this->invokables, true)) {
             $this->invokables[] = $target;
@@ -605,9 +774,33 @@ class ContainerBuilder
         return $this;
     }
 
+    public function addParameterResolver(mixed $resolver, int $priority = 0): static
+    {
+        if (!$resolver instanceof ParameterResolverInterface) {
+            DependencyConfiguration::assertExtensionSpecification($resolver, 'parameter resolver');
+        }
+        $this->parameterResolvers[] = [$resolver, $priority];
+        return $this;
+    }
+
+    public function replaceParameterResolvers(bool $replace = true): static
+    {
+        $this->replaceParameterResolvers = $replace;
+        return $this;
+    }
+
     public function addAttributeDefinition(mixed $definition): static
     {
+        if (!$definition instanceof AttributeDefinition) {
+            DependencyConfiguration::assertExtensionSpecification($definition, 'attribute definition');
+        }
         $this->attributeDefinitions[] = $definition;
+        return $this;
+    }
+
+    public function replaceAttributeDefinitions(bool $replace = true): static
+    {
+        $this->replaceAttributeDefinitions = $replace;
         return $this;
     }
 
@@ -617,16 +810,10 @@ class ContainerBuilder
         return $this;
     }
 
-    public function addValueFallback(mixed $fallback): static
-    {
-        $this->valueFallbacks[] = $fallback;
-        return $this;
-    }
-
     private function assertBindings(): void
     {
         $aliases = new AliasResolver($this->aliases);
-        /** @var array<string, array{kind: string, id: string}> $owners */
+        /** @var array<string,array{kind:string,id:string}> $owners */
         $owners = [];
 
         foreach ([
@@ -698,7 +885,10 @@ class ContainerBuilder
     private static function assertId(string $id, string $kind): void
     {
         if ($id === '') {
-            throw new InvalidConfigurationException(sprintf('%s id must be non-empty.', ucfirst($kind)));
+            throw new InvalidConfigurationException(sprintf(
+                '%s id must be non-empty.',
+                ucfirst($kind),
+            ));
         }
         if (ProtectedServiceIds::contains($id)) {
             throw new InvalidConfigurationException(sprintf(
@@ -709,11 +899,35 @@ class ContainerBuilder
         }
     }
 
+    /** @param list<array{0:mixed,1:int}> $resolvers @return array<int,mixed> */
+    private function resolversToMap(array $resolvers): array
+    {
+        $map = [];
+        foreach ($resolvers as [$resolver, $priority]) {
+            if (array_key_exists($priority, $map)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Parameter resolver priority %d is registered more than once.',
+                    $priority,
+                ));
+            }
+            $map[$priority] = $resolver;
+        }
+        return $map;
+    }
+
     /** @param array<string,mixed> $dependencies */
     private static function configWithDependencies(Config $config, array $dependencies): Config
     {
+        /** @var array<string,mixed> $data */
         $data = $config->toArray();
         $data[ConfigKey::DEPENDENCIES] = $dependencies;
         return new Config($data, $config->environment);
+    }
+
+    /** @return static */
+    private static function newBuilder(): static
+    {
+        // @phpstan-ignore new.static
+        return new static();
     }
 }
