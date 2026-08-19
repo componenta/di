@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Caster\CasterProviderInterface;
+use Componenta\Config\Config;
 use Componenta\DI\Attribute\Cast;
+use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\ContainerBuilder;
@@ -48,6 +50,12 @@ final class ConflictingRequestSourcesDto
 final class ExplicitCastCompositionDto
 {
     public function __construct(#[Cast('int')] public int $value) {}
+}
+
+final class ConfigThenCastPropertyDto
+{
+    #[Cast('trim'), ConfigAttribute('raw')]
+    public string $value;
 }
 
 function composedParameterContainer(): \Componenta\DI\Container
@@ -104,6 +112,14 @@ test('attribute resolution can transform raw explicit input without ArrayResolve
         ->getParameters()[0];
 
     expect((new ArrayResolver())->supports(new ParameterTarget($parameter)))->toBeTrue();
+});
+
+test('property value providers compose with transformers in semantic order', function (): void {
+    $container = ContainerBuilder::configure(new Config(['raw' => '  composed  ']))
+        ->addService(CasterProviderInterface::class, new TestCasterProvider())
+        ->build();
+
+    expect($container->make(ConfigThenCastPropertyDto::class)->value)->toBe('composed');
 });
 
 test('parameter-only attribute handlers do not inherit object attribute execution', function (): void {
