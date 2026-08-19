@@ -10,7 +10,7 @@ use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
 
 use function Componenta\DI\with_suppressed_warnings;
