@@ -75,7 +75,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
         ParameterResolutionContext $context,
         AttributePlan $plan,
     ): ParameterAttributeValue {
-        if ($this->hasAuthoritativeProvider($plan)) {
+        if ($plan->has(AuthoritativeValueProvider::class)) {
             return ParameterAttributeValue::unresolved();
         }
 
@@ -99,18 +99,5 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
         }
 
         return ParameterAttributeValue::unresolved();
-    }
-
-    private function hasAuthoritativeProvider(AttributePlan $plan): bool
-    {
-        foreach ($plan->usages as $usage) {
-            foreach ($usage->definition->capabilities as $capability) {
-                if (is_a($capability, AuthoritativeValueProvider::class, true)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 }
