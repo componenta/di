@@ -76,11 +76,7 @@ final class AttributeProcessor
                     throw ResolutionException::forProperty($usage->target, previous: $e);
                 }
 
-                $serviceId = $usage->target instanceof ReflectionClass
-                    ? $usage->target->getName()
-                    : $usage->target->getDeclaringClass()->getName();
-
-                throw ResolutionException::forService($serviceId, $e);
+                throw ResolutionException::forService($class->getName(), $e);
             }
         }
     }
