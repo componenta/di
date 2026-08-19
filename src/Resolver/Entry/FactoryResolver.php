@@ -8,6 +8,7 @@ use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
+use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
@@ -253,6 +254,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 ));
             }
 
+            self::assertShardFormat($class);
+
             $expected = compiled_factory_pipeline_fingerprint(
                 $this->attributes,
                 $this->parameters,
@@ -270,6 +273,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             $this->compiledShards[$file] = $shard;
         }
 
+        $this->assertCompiledEntry($class, $definition);
+
         $factory = [$shard, $definition->method];
         if (!is_callable($factory)) {
             throw new InvalidConfigurationException(sprintf(
@@ -280,6 +285,61 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         return $factory;
+    }
+
+    /** @param class-string $class */
+    private static function assertShardFormat(string $class): void
+    {
+        $constant = $class . '::FORMAT_VERSION';
+        $version = defined($constant) ? constant($constant) : null;
+        if ($version !== CompiledFactoryShardCompiler::FORMAT_VERSION) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" uses unsupported format; rebuild the DI cache.',
+                $class,
+            ));
+        }
+    }
+
+    /** @param class-string $class */
+    private function assertCompiledEntry(string $class, CompiledFactoryDefinition $definition): void
+    {
+        $constant = $class . '::ENTRIES';
+        $entries = defined($constant) ? constant($constant) : null;
+        if (!is_array($entries)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" has no valid entry metadata; rebuild the DI cache.',
+                $class,
+            ));
+        }
+
+        $entry = $entries[$definition->method] ?? null;
+        if (!is_string($entry) || $entry === '' || !class_exists($entry)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" is stale for method "%s"; rebuild the DI cache.',
+                $class,
+                $definition->method,
+            ));
+        }
+
+        try {
+            $creatable = $this->objects->canCreate($entry);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" cannot validate entry "%s"; rebuild the DI cache.',
+                $class,
+                $entry,
+            ), previous: $e);
+        }
+
+        if (!$creatable) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" targets runtime-ineligible entry "%s"; rebuild the DI cache.',
+                $class,
+                $entry,
+            ));
+        }
     }
 
     private static function assertContentAddressedShard(string $file): void
