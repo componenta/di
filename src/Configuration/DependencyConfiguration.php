@@ -49,41 +49,64 @@ final class DependencyConfiguration
     {
         self::assertShape($dependencies);
 
-        $aliases = array_merge($defaultAliases, $dependencies[ConfigKey::ALIASES] ?? []);
+        /** @var array<string,non-empty-string> $configuredAliases */
+        $configuredAliases = self::section($dependencies, ConfigKey::ALIASES);
+        $aliases = array_merge($defaultAliases, $configuredAliases);
+
+        /** @var list<class-string> $configuredInvokables */
+        $configuredInvokables = self::section($dependencies, ConfigKey::INVOKABLES);
         $invokables = [];
-        foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $key => $value) {
+        foreach ($configuredInvokables as $value) {
             if (!in_array($value, $invokables, true)) {
                 $invokables[] = $value;
             }
-            if (is_string($key)) {
-                self::assertInvokableAliasCompatible($aliases, $key, $value);
-                $aliases[$key] ??= $value;
-            }
         }
 
+        /** @var array<string,list<callable|string|array{object|string,string}>> $configuredDelegators */
+        $configuredDelegators = self::section($dependencies, ConfigKey::DELEGATORS);
         $delegators = [];
-        foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $value) {
+        foreach ($configuredDelegators as $id => $value) {
             $delegators[$id] = self::normalizeDelegatorList($value, $id);
         }
 
+        /** @var array<string,mixed> $factories */
+        $factories = self::section($dependencies, ConfigKey::FACTORIES);
+        /** @var array<string,mixed> $services */
+        $services = self::section($dependencies, ConfigKey::SERVICES);
+        /** @var array<int,mixed> $parameterResolvers */
+        $parameterResolvers = self::section($dependencies, ConfigKey::PARAMETER_RESOLVERS);
+        /** @var list<mixed> $attributeDefinitions */
+        $attributeDefinitions = self::section($dependencies, ConfigKey::ATTRIBUTE_DEFINITIONS);
+        /** @var list<CapabilityPolicy> $attributeCapabilities */
+        $attributeCapabilities = self::section($dependencies, ConfigKey::ATTRIBUTE_CAPABILITIES);
+
         /** @var DependencyShape $normalized */
         $normalized = array_filter([
-            ConfigKey::FACTORIES => $dependencies[ConfigKey::FACTORIES] ?? [],
+            ConfigKey::FACTORIES => $factories,
             ConfigKey::INVOKABLES => $invokables,
             ConfigKey::ALIASES => $aliases,
             ConfigKey::DELEGATORS => $delegators,
-            ConfigKey::SERVICES => $dependencies[ConfigKey::SERVICES] ?? [],
-            ConfigKey::PARAMETER_RESOLVERS => $dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [],
-            ConfigKey::PARAMETER_RESOLVERS_REPLACE => $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false,
-            ConfigKey::ATTRIBUTE_DEFINITIONS => $dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS] ?? [],
-            ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE => $dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE] ?? false,
-            ConfigKey::ATTRIBUTE_CAPABILITIES => $dependencies[ConfigKey::ATTRIBUTE_CAPABILITIES] ?? [],
+            ConfigKey::SERVICES => $services,
+            ConfigKey::PARAMETER_RESOLVERS => $parameterResolvers,
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE => self::replaceFlag(
+                $dependencies,
+                ConfigKey::PARAMETER_RESOLVERS_REPLACE,
+            ),
+            ConfigKey::ATTRIBUTE_DEFINITIONS => $attributeDefinitions,
+            ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE => self::replaceFlag(
+                $dependencies,
+                ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE,
+            ),
+            ConfigKey::ATTRIBUTE_CAPABILITIES => $attributeCapabilities,
         ], static fn(mixed $value): bool => $value !== [] && $value !== false);
 
         return $normalized;
     }
 
-    /** @param array<string,mixed> $cache @return DependencyShape */
+    /**
+     * @param array<string,mixed> $cache
+     * @return DependencyShape
+     */
     public static function dependenciesFromCache(array $cache, int $expectedVersion): array
     {
         $allowed = ['version' => true, ConfigKey::DEPENDENCIES => true];
@@ -108,7 +131,7 @@ final class DependencyConfiguration
             throw new InvalidConfigurationException('Container cache dependencies must be an array.');
         }
 
-        /** @var array<string,mixed> $dependencies */
+        /** @var array<array-key,mixed> $dependencies */
         $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
         if (is_array($factories)) {
             foreach ($factories as $id => $factory) {
@@ -124,7 +147,10 @@ final class DependencyConfiguration
         return $dependencies;
     }
 
-    /** @param array<array-key,mixed> $dependencies @phpstan-assert DependencyShape $dependencies */
+    /**
+     * @param array<array-key,mixed> $dependencies
+     * @phpstan-assert DependencyShape $dependencies
+     */
     public static function assertShape(array &$dependencies): void
     {
         $allowed = array_fill_keys(ConfigKey::dependencyKeys(), true);
@@ -178,7 +204,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function normalizeInvokablesAndAliases(array &$dependencies): void
     {
-        $invokableInput = $dependencies[ConfigKey::INVOKABLES] ?? [];
+        $invokableInput = self::section($dependencies, ConfigKey::INVOKABLES);
         $invokables = [];
         $invokableAliases = [];
         foreach ($invokableInput as $key => $value) {
@@ -195,7 +221,7 @@ final class DependencyConfiguration
             $dependencies[ConfigKey::INVOKABLES] = $invokables;
         }
 
-        $aliasInput = $dependencies[ConfigKey::ALIASES] ?? [];
+        $aliasInput = self::section($dependencies, ConfigKey::ALIASES);
         $aliases = [];
         foreach ($aliasInput as $alias => $target) {
             if (!is_string($alias) || $alias === '' || !is_string($target) || $target === '') {
@@ -218,7 +244,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateFactories(array &$dependencies): void
     {
-        $input = $dependencies[ConfigKey::FACTORIES] ?? [];
+        $input = self::section($dependencies, ConfigKey::FACTORIES);
         $factories = [];
         foreach ($input as $id => $factory) {
             if (!is_string($id) || $id === '') {
@@ -243,7 +269,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateDelegators(array &$dependencies): void
     {
-        $input = $dependencies[ConfigKey::DELEGATORS] ?? [];
+        $input = self::section($dependencies, ConfigKey::DELEGATORS);
         $delegators = [];
         foreach ($input as $id => $value) {
             if (!is_string($id) || $id === '') {
@@ -259,7 +285,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateServices(array $dependencies): void
     {
-        foreach ($dependencies[ConfigKey::SERVICES] ?? [] as $id => $_service) {
+        foreach (self::section($dependencies, ConfigKey::SERVICES) as $id => $_service) {
             if (!is_string($id) || $id === '') {
                 throw new InvalidConfigurationException('Service ids must be non-empty strings.');
             }
@@ -269,7 +295,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateParameterResolvers(array $dependencies): void
     {
-        foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
+        foreach (self::section($dependencies, ConfigKey::PARAMETER_RESOLVERS) as $priority => $resolver) {
             if (!is_int($priority)) {
                 throw new InvalidConfigurationException(sprintf(
                     'Parameter resolver priority must be int; got %s.',
@@ -286,7 +312,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateAttributeDefinitions(array $dependencies): void
     {
-        $input = $dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS] ?? [];
+        $input = self::section($dependencies, ConfigKey::ATTRIBUTE_DEFINITIONS);
         if ($input !== [] && !array_is_list($input)) {
             throw new InvalidConfigurationException('Attribute definitions must be configured as a list.');
         }
@@ -301,7 +327,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateCapabilities(array $dependencies): void
     {
-        $input = $dependencies[ConfigKey::ATTRIBUTE_CAPABILITIES] ?? [];
+        $input = self::section($dependencies, ConfigKey::ATTRIBUTE_CAPABILITIES);
         if ($input !== [] && !array_is_list($input)) {
             throw new InvalidConfigurationException('Attribute capabilities must be configured as a list.');
         }
@@ -386,7 +412,10 @@ final class DependencyConfiguration
         }
     }
 
-    /** @param array<string,non-empty-string> $aliases @return array<string,non-empty-string> */
+    /**
+     * @param array<string,non-empty-string> $aliases
+     * @return array<string,non-empty-string>
+     */
     public static function assertAliasesAcyclic(array $aliases): array
     {
         $resolver = new AliasResolver($aliases);
@@ -396,6 +425,7 @@ final class DependencyConfiguration
         return $aliases;
     }
 
+    /** @phpstan-assert-if-true array{object|string,string} $value */
     private static function callablePair(mixed $value): bool
     {
         return is_array($value)
@@ -405,8 +435,26 @@ final class DependencyConfiguration
             && $value[1] !== '';
     }
 
+    /** @phpstan-assert-if-true array{non-empty-string,non-empty-string} $value */
     private static function deferredServiceMethod(mixed $value): bool
     {
-        return self::callablePair($value) && is_string($value[0]);
+        return self::callablePair($value) && is_string($value[0]) && $value[0] !== '';
+    }
+
+    /**
+     * @param array<array-key,mixed> $dependencies
+     * @return array<array-key,mixed>
+     */
+    private static function section(array $dependencies, string $key): array
+    {
+        $value = $dependencies[$key] ?? [];
+        return is_array($value) ? $value : [];
+    }
+
+    /** @param array<array-key,mixed> $dependencies */
+    private static function replaceFlag(array $dependencies, string $key): bool
+    {
+        $value = $dependencies[$key] ?? false;
+        return is_bool($value) ? $value : false;
     }
 }
