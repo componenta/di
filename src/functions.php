@@ -15,9 +15,7 @@ use ReflectionClass;
 
 function normalize_env_name(string $name): string
 {
-    $snakeCase = preg_replace('/([a-z])([A-Z])/', '$1_$2', $name);
-
-    return strtoupper($snakeCase ?? $name);
+    return strtoupper(preg_replace('/([a-z])([A-Z])/', '$1_$2', $name) ?? $name);
 }
 
 /** @param ReflectionClass<object> $class */
