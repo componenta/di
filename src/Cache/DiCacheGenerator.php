@@ -9,9 +9,12 @@ use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Exception\CompilationException;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
+use Throwable;
 
 use function Componenta\DI\with_suppressed_warnings;
 
@@ -26,6 +29,18 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     }
 
     public function generate(array $dependencies, string $path): void
+    {
+        try {
+            $this->generateCache($dependencies, $path);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw CompilationException::forArtifact($path, $e);
+        }
+    }
+
+    /** @param array<string,mixed> $dependencies */
+    private function generateCache(array $dependencies, string $path): void
     {
         $this->ensureDirectory(dirname($path));
 
@@ -43,8 +58,10 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                 $config,
                 $this->trustedGeneratedCode($dependencies),
             ))->export($cache);
-        } catch (\Throwable $e) {
-            throw new InvalidConfigurationException(
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new CompilationException(
                 sprintf('Failed to serialise DI cache for "%s": %s', $path, $e->getMessage()),
                 previous: $e,
             );
@@ -63,9 +80,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         if ($written === false) {
             with_suppressed_warnings(static fn(): bool => unlink($tmp));
-            throw new InvalidConfigurationException(
-                sprintf('Failed to write DI cache temp file: %s', $tmp),
-            );
+            throw new CompilationException(sprintf('Failed to write DI cache temp file: %s', $tmp));
         }
 
         $committed = with_suppressed_warnings(
@@ -74,9 +89,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         if (!$committed) {
             with_suppressed_warnings(static fn(): bool => unlink($tmp));
-            throw new InvalidConfigurationException(
-                sprintf('Failed to commit DI cache file: %s', $path),
-            );
+            throw new CompilationException(sprintf('Failed to commit DI cache file: %s', $path));
         }
 
         if (function_exists('opcache_invalidate')) {
@@ -85,7 +98,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             );
 
             if ($wasOpcodeCached && !$invalidated) {
-                throw new InvalidConfigurationException(sprintf(
+                throw new CompilationException(sprintf(
                     'DI cache "%s" was replaced, but its previous OPcache entry could not be invalidated.',
                     $path,
                 ));
@@ -108,7 +121,6 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             if ($factory instanceof GeneratedDefinitionCode) {
                 continue;
             }
-
             FactorySpecificationValidator::assertValid($id, $factory);
         }
     }
@@ -121,7 +133,6 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     {
         $trusted = [];
         $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
-
         if (!is_array($factories)) {
             return $trusted;
         }
@@ -131,7 +142,6 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                 $trusted[spl_object_id($factory)] = true;
             }
         }
-
         return $trusted;
     }
 
@@ -146,9 +156,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         );
 
         if (!$created && !is_dir($dir)) {
-            throw new InvalidConfigurationException(
-                sprintf('Failed to create DI cache directory: %s', $dir),
-            );
+            throw new CompilationException(sprintf('Failed to create DI cache directory: %s', $dir));
         }
     }
 }
