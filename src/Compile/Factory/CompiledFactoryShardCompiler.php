@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\Compile\Factory\PlainConstructorFastPathPlanner;
 use Componenta\DI\Object\ObjectPipeline;
-use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 
 /** Packs generated entry methods into immutable content-addressed shards. */
@@ -24,7 +24,9 @@ final readonly class CompiledFactoryShardCompiler
         private ?PlainConstructorFastPathPlanner $fastPaths = null,
     ) {
         if (preg_match('/^[a-f0-9]{64}$/D', $pipelineFingerprint) !== 1) {
-            throw new InvalidArgumentException('Compiled factory fingerprint must be a lowercase SHA-256 digest.');
+            throw new InvalidConfigurationException(
+                'Compiled factory fingerprint must be a lowercase SHA-256 digest.',
+            );
         }
     }
 
@@ -39,7 +41,9 @@ final readonly class CompiledFactoryShardCompiler
         string $namespace = 'Componenta\\DI\\Generated',
     ): array {
         if ($directory === '' || $maxBytes < 1) {
-            throw new InvalidArgumentException('Factory shard directory must be non-empty and maxBytes positive.');
+            throw new InvalidConfigurationException(
+                'Factory shard directory must be non-empty and maxBytes positive.',
+            );
         }
         self::assertNamespace($namespace);
 
@@ -59,12 +63,9 @@ final readonly class CompiledFactoryShardCompiler
         $index = 0;
 
         foreach ($classes as $class) {
-            // Production compilation is a consumer of the same validated
-            // metadata plan used by reflection runtime. Invalid combinations
-            // therefore fail now, never only after deploying the shard.
             $this->objects?->prepare($class);
             if ($this->objects !== null && !$this->objects->canCreate($class)) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Cannot compile runtime-ineligible entry "%s".',
                     $class,
                 ));
@@ -186,7 +187,10 @@ PHP,
         if ($namespace === ''
             || preg_match('/^(?:' . $identifier . ')(?:\\\\' . $identifier . ')*$/D', $namespace) !== 1
         ) {
-            throw new InvalidArgumentException(sprintf('Invalid generated namespace "%s".', $namespace));
+            throw new InvalidConfigurationException(sprintf(
+                'Invalid generated namespace "%s".',
+                $namespace,
+            ));
         }
     }
 
