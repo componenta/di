@@ -6,6 +6,8 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\CallableInvokerInterface;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use ReflectionClass;
@@ -20,6 +22,7 @@ final class SetUpRunner implements AttributeHandlerInterface
 
     public function __construct(
         private readonly CallableInvokerInterface $callableInvoker,
+        private readonly ObjectResolutionParameterStore $resolutionParameters,
         SetUpValueUnwrapperInterface ...$valueUnwrappers,
     ) {
         $this->valueUnwrappers = array_values($valueUnwrappers);
@@ -36,24 +39,31 @@ final class SetUpRunner implements AttributeHandlerInterface
             'SetUp cannot run before object instantiation.',
         );
 
-        // Keep the internal mapped-request provenance marker until the method
-        // parameters have passed through the standard parameter resolver. The
-        // public context remains stripped; only DI resolution sees the marker.
+        // Raw provenance stays in the private resolution store so mapped-request
+        // security checks reach SetUp parameters without exposing metadata to
+        // custom object handlers through ObjectCreationContext.
         $this->callableInvoker->call(
             [$entry, $method->getName()],
-            $this->providedParameters($attribute, $context->resolutionParameters()),
+            $this->providedParameters(
+                $attribute,
+                $this->resolutionParameters->get($context),
+            ),
         );
     }
 
     /**
-     * Attribute values override the surrounding object-creation parameters.
+     * Attribute values override public surrounding object-creation parameters.
+     * DI-owned metadata is always preserved and cannot be overwritten by SetUp.
      *
      * @param array<string|int,mixed> $context
      * @return array<string|int,mixed>
      */
     public function providedParameters(SetUp $attribute, array $context = []): array
     {
-        return array_replace($context, $this->unwrapParams($attribute->params));
+        return ResolutionMetadata::mergePublicPreservingInternal(
+            $context,
+            $this->unwrapParams($attribute->params),
+        );
     }
 
     /** @param ReflectionClass<object> $class */
