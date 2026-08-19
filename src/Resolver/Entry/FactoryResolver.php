@@ -20,7 +20,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Value\ValueFallbackRegistry;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Throwable;
@@ -28,13 +28,12 @@ use Throwable;
 /** Resolves configured factories, class definitions and compiled entry shards. */
 final class FactoryResolver implements DefinitionAwareResolverInterface
 {
-    /** @var array<string, object> */
+    /** @var array<string,object> */
     private array $compiledShards = [];
-
-    /** @var array<string, callable(array<string|int, mixed>): mixed> */
+    /** @var array<string,callable(array<string|int,mixed>):mixed> */
     private array $compiledFactories = [];
 
-    /** @param array<string, mixed> $factories */
+    /** @param array<string,mixed> $factories */
     public function __construct(
         private array $factories,
         private readonly ContainerInterface $container,
@@ -42,7 +41,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         private readonly ObjectPipeline $objects,
         private readonly CallableExecutorInterface $executor,
         private readonly AttributeDefinitionRegistry $attributes,
-        private readonly ValueFallbackRegistry $fallbacks,
+        private readonly ParametersResolver $parameters,
         private readonly ?string $compiledFactoryBaseDir = null,
     ) {
         foreach ($this->factories as $id => $factory) {
@@ -61,7 +60,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return array_key_exists($id, $this->factories);
     }
 
-    /** @param array<string|int, mixed> $params */
+    /** @param array<string|int,mixed> $params */
     public function resolve(string $id, array $params = []): mixed
     {
         if (!$this->can($id)) {
@@ -101,7 +100,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
     }
 
-    /** @param array<string|int, mixed> $params */
+    /** @param array<string|int,mixed> $params */
     private function classDefinition(ClassDefinition $definition, array $params): object
     {
         $configured = $this->resolveDefinitionValue($definition->constructorParams);
@@ -170,7 +169,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return $factory;
     }
 
-    /** @return callable(array<string|int, mixed>): mixed */
+    /** @return callable(array<string|int,mixed>):mixed */
     private function compiledFactory(
         CompiledFactoryDefinition $definition,
         bool $explicitDefinition,
@@ -196,7 +195,10 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 }
             }
 
-            $expected = CompiledFactoryPipelineFingerprint::calculate($this->attributes, $this->fallbacks);
+            $expected = CompiledFactoryPipelineFingerprint::calculate(
+                $this->attributes,
+                $this->parameters,
+            );
             $constant = $class . '::PIPELINE_FINGERPRINT';
             $actual = defined($constant) ? constant($constant) : null;
             if (!is_string($actual) || !hash_equals($expected, $actual)) {
