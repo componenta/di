@@ -9,20 +9,21 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
-use Componenta\DI\Value\ValuePipeline;
 use ReflectionParameter;
 use WeakMap;
 
 /** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
 {
-    /** @var list<array{resolver: ParameterResolverInterface, priority: int, order: int}> */
+    /** @var list<array{resolver:ParameterResolverInterface,priority:int,order:int}> */
     private array $registrations = [];
+    /** @var list<array{resolver:ParameterResolverInterface,priority:int,order:int}>|null */
+    private ?array $orderedRegistrations = null;
     /** @var list<ParameterResolverInterface>|null */
     private ?array $ordered = null;
-    /** @var array<int, true> */
+    /** @var array<int,true> */
     private array $registered = [];
-    /** @var WeakMap<ParameterTarget, list<int>>|null */
+    /** @var WeakMap<ParameterTarget,list<int>>|null */
     private ?WeakMap $supportedSlots = null;
 
     private int $revision = 0;
@@ -31,17 +32,10 @@ final class ParametersResolver
     private ParameterTargetFactory $targetFactory;
 
     public function __construct(
-        AttributePlanBuilder $plans,
-        ValuePipeline $values,
+        private readonly AttributePlanBuilder $plans,
         ?ParameterTargetFactory $targetFactory = null,
     ) {
         $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
-
-        $this->add(new AttributeParameterResolver($plans, $values, AttributeParameterResolver::TRANSFORMER), 1200);
-        $this->add(new ArrayResolver(), 1100);
-        $this->add(new ArrayTypedResolver(), 1000);
-        $this->add(new AttributeParameterResolver($plans, $values, AttributeParameterResolver::PROVIDER), 900);
-        $this->add(new AttributeParameterResolver($plans, $values, AttributeParameterResolver::LEGACY_FALLBACK), -1000);
     }
 
     /** Higher priorities run first; equal priorities preserve insertion order. */
@@ -50,6 +44,7 @@ final class ParametersResolver
         if ($this->sealed) {
             throw new \LogicException('Parameter resolver pipeline is sealed and cannot be changed.');
         }
+
         $objectId = spl_object_id($resolver);
         if (isset($this->registered[$objectId])) {
             throw new \InvalidArgumentException(sprintf(
@@ -57,12 +52,14 @@ final class ParametersResolver
                 $resolver::class,
             ));
         }
+
         $this->registrations[] = [
             'resolver' => $resolver,
             'priority' => $priority,
             'order' => $this->order++,
         ];
         $this->registered[$objectId] = true;
+        $this->orderedRegistrations = null;
         $this->ordered = null;
         $this->supportedSlots = null;
         ++$this->revision;
@@ -76,25 +73,33 @@ final class ParametersResolver
 
     /** @return list<ParameterResolverInterface> */
     public array $resolverList {
-        get {
-            if ($this->ordered !== null) {
-                return $this->ordered;
-            }
-            $registrations = $this->registrations;
-            usort(
-                $registrations,
-                static fn(array $left, array $right): int =>
-                    $right['priority'] <=> $left['priority']
-                    ?: $left['order'] <=> $right['order'],
-            );
-            return $this->ordered = array_map(
-                static fn(array $registration): ParameterResolverInterface => $registration['resolver'],
-                $registrations,
-            );
-        }
+        get => $this->ordered ??= array_map(
+            static fn(array $registration): ParameterResolverInterface => $registration['resolver'],
+            $this->registrationsInOrder(),
+        );
     }
 
-    /** @param list<ReflectionParameter> $parameters @param array<string|int,mixed> $providedParameters @return array<int,mixed> */
+    /**
+     * Stable semantic registration view used by AOT/cache fingerprinting.
+     *
+     * @return list<array{resolver:ParameterResolverInterface,priority:int}>
+     */
+    public function semanticRegistrations(): array
+    {
+        return array_map(
+            static fn(array $registration): array => [
+                'resolver' => $registration['resolver'],
+                'priority' => $registration['priority'],
+            ],
+            $this->registrationsInOrder(),
+        );
+    }
+
+    /**
+     * @param list<ReflectionParameter> $parameters
+     * @param array<string|int,mixed> $providedParameters
+     * @return array<int,mixed>
+     */
     public function resolve(array $parameters, array $providedParameters = []): array
     {
         return $this->resolveTargets($this->targets($parameters), $providedParameters);
@@ -110,14 +115,20 @@ final class ParametersResolver
         return $targets;
     }
 
-    /** @param list<ParameterTarget> $targets @param array<string|int,mixed> $providedParameters @return array<int,mixed> */
+    /**
+     * @param list<ParameterTarget> $targets
+     * @param array<string|int,mixed> $providedParameters
+     * @return array<int,mixed>
+     */
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
         $state = new ParameterResolutionContext($providedParameters);
+
         foreach ($targets as $target) {
             [$position, $value] = $this->resolveParameter($target, $state);
             $state->resolve($position, $value);
         }
+
         return $state->resolved;
     }
 
@@ -131,6 +142,7 @@ final class ParametersResolver
             $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
             default => null,
         };
+
         if ($unsupportedReason !== null) {
             throw ResolutionException::forParameter(
                 $target->reflection,
@@ -140,6 +152,9 @@ final class ParametersResolver
             );
         }
 
+        // Composition validates parameter attributes, but never produces a
+        // parameter value. Execution continues exclusively through resolvers.
+        $this->plans->build($target->reflection);
         MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
 
         foreach ($this->resolverSlotsFor($target) as $slot) {
@@ -164,6 +179,7 @@ final class ParametersResolver
         if (isset($cache[$target])) {
             return $cache[$target];
         }
+
         $slots = [];
         $revision = $this->revision;
         foreach ($this->resolverList as $slot => $resolver) {
@@ -171,14 +187,34 @@ final class ParametersResolver
                 $slots[] = $slot;
             }
         }
+
         if ($revision !== $this->revision) {
             throw new \LogicException('Parameter resolver supports() must not mutate the resolver chain.');
         }
+
         return $cache[$target] = $slots;
     }
 
     public function target(ReflectionParameter $parameter): ParameterTarget
     {
         return $this->targetFactory->create($parameter);
+    }
+
+    /** @return list<array{resolver:ParameterResolverInterface,priority:int,order:int}> */
+    private function registrationsInOrder(): array
+    {
+        if ($this->orderedRegistrations !== null) {
+            return $this->orderedRegistrations;
+        }
+
+        $registrations = $this->registrations;
+        usort(
+            $registrations,
+            static fn(array $left, array $right): int =>
+                $right['priority'] <=> $left['priority']
+                ?: $left['order'] <=> $right['order'],
+        );
+
+        return $this->orderedRegistrations = $registrations;
     }
 }
