@@ -41,6 +41,16 @@ final readonly class AuditFastConstructorEntry
     ) {}
 }
 
+final class AuditByReferenceConstructorEntry
+{
+    public function __construct(AuditFastDependency &$dependency) {}
+}
+
+final class AuditVariadicConstructorEntry
+{
+    public function __construct(AuditFastDependency ...$dependencies) {}
+}
+
 final class AuditNumberConventionResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
@@ -173,6 +183,34 @@ test('a custom convention resolver disables the plain constructor AOT fast path'
         expect($code)->toBeString()
             ->and($code)->not->toContain('return new \\' . AuditFastConstructorEntry::class . '($dependency0);')
             ->and($code)->toContain('$this->objects->create(\\' . AuditFastConstructorEntry::class . '::class, $params)');
+    } finally {
+        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($directory);
+    }
+});
+
+test('unsupported by-reference and variadic constructor shapes never use the AOT fast path', function (): void {
+    $suffix = bin2hex(random_bytes(5));
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-unsupported-constructor-' . $suffix;
+    $namespace = 'Componenta\\DI\\Tests\\Generated\\UnsupportedConstructor' . $suffix;
+
+    try {
+        $definitions = (new ContainerBuilder())->compileFactories(
+            [AuditByReferenceConstructorEntry::class, AuditVariadicConstructorEntry::class],
+            $directory,
+            namespace: $namespace,
+        );
+
+        foreach ([AuditByReferenceConstructorEntry::class, AuditVariadicConstructorEntry::class] as $entry) {
+            $definition = $definitions[$entry];
+            $code = file_get_contents($directory . '/' . $definition->file);
+
+            expect($code)->toBeString()
+                ->and($code)->not->toContain('return new \\' . $entry . '($dependency0);')
+                ->and($code)->toContain('$this->objects->create(\\' . $entry . '::class, $params)');
+        }
     } finally {
         foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
             @unlink($file);
