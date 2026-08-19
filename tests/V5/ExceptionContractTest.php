@@ -315,6 +315,21 @@ test('builder extension factory failures are configuration failures with the ori
         ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
 
+test('build reclassifies runtime DI exceptions from extension factories as configuration failures', function (): void {
+    $cause = new ResolutionException('extension resolution failure');
+    $builder = (new ContainerBuilder())->addParameterResolver(
+        static function (ContainerInterface $_container) use ($cause): object {
+            throw $cause;
+        },
+        2200,
+    );
+
+    $error = exceptionFrom(fn() => $builder->build());
+
+    expect($error)->toBeInstanceOf(InvalidConfigurationException::class)
+        ->and($error->getPrevious())->toBe($cause);
+});
+
 test('attribute composition failures are a specialized configuration failure', function (): void {
     expect(is_subclass_of(AttributeCompositionException::class, InvalidConfigurationException::class))->toBeTrue();
 });
