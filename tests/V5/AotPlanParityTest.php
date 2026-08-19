@@ -14,9 +14,15 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionProperty;
+use Reflector;
 
 final class InvalidAotComposition
 {
@@ -55,6 +61,65 @@ final class AotExtensionTarget
     public function __construct(#[AotExtensionValue('extension-ok')] public string $value) {}
 }
 
+#[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_PROPERTY | Attribute::TARGET_METHOD)]
+final readonly class AotObjectExtension
+{
+    public function __construct(public string $label) {}
+}
+
+#[AotObjectExtension('class')]
+final class AotObjectExtensionTarget
+{
+    /** @var list<string> */
+    public array $events = [];
+
+    #[AotObjectExtension('property')]
+    public string $value = '';
+
+    #[AotObjectExtension('method')]
+    public function markMethod(): void
+    {
+        $this->events[] = 'method';
+    }
+}
+
+final readonly class AotObjectExtensionHandler implements AttributeHandlerInterface
+{
+    public function handle(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+    ): void {
+        if (!$attribute instanceof AotObjectExtension) {
+            throw new \LogicException('Unexpected AOT object extension attribute.');
+        }
+
+        $entry = $context->entry ?? throw new \LogicException('Object must be initialized.');
+        if (!$entry instanceof AotObjectExtensionTarget) {
+            throw new \LogicException('Unexpected AOT object extension target.');
+        }
+
+        if ($target instanceof ReflectionClass) {
+            $entry->events[] = $attribute->label;
+            return;
+        }
+
+        if ($target instanceof ReflectionProperty) {
+            if ($context->claimProperty($target, allowPromoted: true)) {
+                $context->writeProperty($target, $attribute->label);
+            }
+            return;
+        }
+
+        if ($target instanceof ReflectionMethod) {
+            $target->invoke($entry);
+            return;
+        }
+
+        throw new \LogicException('Unsupported AOT object extension reflector.');
+    }
+}
+
 function productionBuilderFromCompiled(
     ContainerBuilder $builder,
     array $compiled,
@@ -89,6 +154,15 @@ function aotExtensionBuilder(int $definitionVersion = 1): ContainerBuilder
         ->addParameterResolver(new AotExtensionParameterResolver(), 750);
 }
 
+function aotObjectExtensionBuilder(): ContainerBuilder
+{
+    return (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
+        AotObjectExtension::class,
+        new AotObjectExtensionHandler(),
+        version: 1,
+    ));
+}
+
 test('AOT compilation rejects invalid attribute composition before writing a shard', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-v5-invalid-aot-' . bin2hex(random_bytes(5));
 
@@ -115,6 +189,27 @@ test('custom parameter resolvers execute identically in development and compiled
 
         expect($development->make(AotExtensionTarget::class)->value)->toBe('extension-ok')
             ->and($production->make(AotExtensionTarget::class)->value)->toBe('extension-ok');
+    } finally {
+        cleanupDirectory($directory);
+    }
+});
+
+test('custom class property and method handlers execute identically in development and compiled production', function (): void {
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-object-extension-aot-' . bin2hex(random_bytes(5));
+    $builder = aotObjectExtensionBuilder();
+    $development = $builder->build();
+
+    try {
+        $compiled = $builder->compileFactories([AotObjectExtensionTarget::class], $directory);
+        $production = productionBuilderFromCompiled($builder, $compiled, $directory)->build();
+
+        $developmentEntry = $development->make(AotObjectExtensionTarget::class);
+        $productionEntry = $production->make(AotObjectExtensionTarget::class);
+
+        expect([$developmentEntry->events, $developmentEntry->value])
+            ->toBe([['class', 'method'], 'property'])
+            ->and([$productionEntry->events, $productionEntry->value])
+            ->toBe([$developmentEntry->events, $developmentEntry->value]);
     } finally {
         cleanupDirectory($directory);
     }
