@@ -6,6 +6,7 @@ namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use InvalidArgumentException;
 
 /** Immutable semantic definition of one DI attribute class. */
@@ -15,8 +16,8 @@ final readonly class AttributeDefinition
      * Selectors in requires/forbids/before/after may reference either another
      * attribute class or an AttributeCapabilityInterface class.
      *
-     * A null handler is valid for parameter-only attributes: their composition
-     * is described here, while execution belongs to ParameterResolverInterface.
+     * A handler may support object targets, parameter targets, or both by
+     * implementing the corresponding execution contract(s).
      *
      * @param class-string $attribute
      * @param list<class-string<AttributeCapabilityInterface>> $capabilities
@@ -28,7 +29,7 @@ final readonly class AttributeDefinition
      */
     public function __construct(
         public string $attribute,
-        public ?AttributeHandlerInterface $handler = null,
+        public AttributeHandlerInterface|ParameterAttributeHandlerInterface|null $handler = null,
         public array $capabilities = [],
         public array $requires = [],
         public array $forbids = [],
