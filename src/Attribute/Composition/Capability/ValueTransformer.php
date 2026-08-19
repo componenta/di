@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition\Capability;
 
-use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
-
-interface ValueTransformer extends AttributeCapabilityInterface {}
+/**
+ * Value-transforming attributes still own the target's single value-resolution
+ * slot. This preserves v4 resolver semantics while allowing composition rules
+ * to reason about the more specific transformer role.
+ */
+interface ValueTransformer extends ValueProvider {}
