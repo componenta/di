@@ -264,7 +264,10 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 ));
             }
 
-            $shard = new $class($this->objects, $this->container);
+            $fastPathsConstant = $class . '::FAST_PATHS';
+            $shard = defined($fastPathsConstant)
+                ? new $class($this->objects, $this->container)
+                : new $class($this->objects);
             $this->compiledShards[$file] = $shard;
         }
 
