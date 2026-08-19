@@ -4,20 +4,31 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use LogicException;
 use ReflectionAttribute;
-use Reflector;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionProperty;
 
 /** One composed DI attribute usage together with its semantic definition. */
 final readonly class AttributeUsage
 {
-    /** @param ReflectionAttribute<object> $reflection */
+    /** @var ReflectionAttribute<object> */
+    public ReflectionAttribute $reflection;
+
     public function __construct(
-        public ReflectionAttribute $reflection,
         public object $attribute,
         public AttributeDefinition $definition,
-        public Reflector $target,
+        public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         public int $declarationOrder,
-    ) {}
+    ) {
+        $reflection = $target->getAttributes()[$declarationOrder] ?? null;
+        if ($reflection === null) {
+            throw new LogicException('Attribute usage reflection metadata is unavailable.');
+        }
+        $this->reflection = $reflection;
+    }
 
     /** Creates an isolated runtime attribute instance for one handler invocation. */
     public function newInstance(): object
