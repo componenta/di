@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Configuration;
 
-use Componenta\DI\AliasResolver;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
@@ -14,7 +13,8 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
 /**
