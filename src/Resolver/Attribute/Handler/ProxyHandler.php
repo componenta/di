@@ -25,12 +25,21 @@ final class ProxyHandler implements AttributeHandlerInterface
         }
 
         if ($target instanceof ReflectionProperty) {
-            $this->makeResolver->handle($attribute, $target, $context);
+            // Property injection belongs to the after-instantiation half of a
+            // dual-phase Proxy definition.
+            if ($context->entry !== null) {
+                $this->makeResolver->handle($attribute, $target, $context);
+            }
             return;
         }
 
         if (!$target instanceof ReflectionClass) {
             throw new \LogicException('ProxyHandler received an unsupported attribute target.');
+        }
+
+        // Class creation strategy belongs to the before-instantiation half.
+        if ($context->entry !== null) {
+            return;
         }
         if ($attribute->class !== null) {
             throw new \LogicException('Class-level #[Proxy] must not specify a proxy class; the marked class is used.');
