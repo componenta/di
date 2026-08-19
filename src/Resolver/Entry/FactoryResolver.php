@@ -9,7 +9,6 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Compile\Factory\CompiledFactoryPathResolver;
-use Componenta\DI\Compile\Factory\CompiledFactoryPipelineFingerprint;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
@@ -25,6 +24,8 @@ use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use Throwable;
+
+use function Componenta\DI\compiled_factory_pipeline_fingerprint;
 
 /** Resolves configured factories, class definitions and compiled entry shards. */
 final class FactoryResolver implements DefinitionAwareResolverInterface
@@ -254,7 +255,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 }
             }
 
-            $expected = CompiledFactoryPipelineFingerprint::calculate(
+            $expected = compiled_factory_pipeline_fingerprint(
                 $this->attributes,
                 $this->parameters,
             );
