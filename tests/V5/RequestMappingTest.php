@@ -5,21 +5,20 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Caster\CasterProviderInterface;
-use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\MapRequest;
 use Componenta\DI\Attribute\RequestDataSource;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\RequestDataConflictException;
-use Componenta\DI\Exception\ValueProviderConflictException;
-use Componenta\DI\ResolutionContext;
+use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Nyholm\Psr7\ServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
 
 final class HeaderCastDto
 {
     public function __construct(
-        #[Header('X-Count'), Cast('int')]
+        #[Header('X-Count', cast: 'int')]
         public int $count,
     ) {}
 }
@@ -60,35 +59,35 @@ function requestContainer(): \Componenta\DI\Container
         ->build();
 }
 
-test('request providers feed the same transformer pipeline', function (): void {
+test('request attributes resolve and cast through RequestResolver', function (): void {
     $request = (new ServerRequest('GET', '/'))->withHeader('X-Count', '41');
     $dto = requestContainer()->make(
         HeaderCastDto::class,
-        ResolutionContext::mapped([], $request),
+        [ServerRequestInterface::class => $request],
     );
 
     expect($dto->count)->toBe(41);
 });
 
-test('MapRequest creates nested DTOs through mapped provenance', function (): void {
+test('MapRequest creates nested DTOs through request-only mapped provenance', function (): void {
     $request = (new ServerRequest('POST', '/'))->withParsedBody(['name' => 'Ada']);
     $entry = requestContainer()->make(
         MappedPayloadEnvelope::class,
-        ResolutionContext::mapped([], $request),
+        [ServerRequestInterface::class => $request],
     );
 
     expect($entry->dto->name)->toBe('Ada');
 });
 
-test('nested mapped DTO input cannot shadow its declared providers', function (): void {
+test('nested mapped DTO input cannot shadow a declared request source', function (): void {
     $request = (new ServerRequest('POST', '/'))
         ->withHeader('X-Token', 'trusted')
         ->withParsedBody(['token' => 'attacker']);
 
     expect(fn() => requestContainer()->make(
         HeaderProtectedEnvelope::class,
-        ResolutionContext::mapped([], $request),
-    ))->toThrow(ValueProviderConflictException::class);
+        [ServerRequestInterface::class => $request],
+    ))->toThrow(RequestParameterSourceConflictException::class);
 });
 
 test('MapRequest rejects conflicting values from multiple sources by default', function (): void {
@@ -98,6 +97,6 @@ test('MapRequest rejects conflicting values from multiple sources by default', f
 
     expect(fn() => requestContainer()->make(
         MultiSourceEnvelope::class,
-        ResolutionContext::mapped([], $request),
+        [ServerRequestInterface::class => $request],
     ))->toThrow(RequestDataConflictException::class);
 });
