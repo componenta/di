@@ -21,7 +21,8 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
  * The fast path is intentionally conservative: required parameters must be
  * plain single-class autowires and every remaining parameter must be a native
  * trailing default. Any attribute, request source, custom resolver, nullable
- * autowire, or other semantic extension keeps the normal ObjectPipeline path.
+ * autowire, unsupported parameter shape, or other semantic extension keeps the
+ * normal ObjectPipeline path.
  *
  * @internal
  */
@@ -51,6 +52,10 @@ final readonly class PlainConstructorFastPathPlanner
         $defaultsStarted = false;
 
         foreach ($targets as $target) {
+            if ($target->variadic || $target->byReference) {
+                return null;
+            }
+
             $resolvers = $this->resolverClasses($target);
 
             if ($target->hasDefault) {
