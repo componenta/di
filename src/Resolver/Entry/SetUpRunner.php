@@ -36,9 +36,12 @@ final class SetUpRunner implements AttributeHandlerInterface
             'SetUp cannot run before object instantiation.',
         );
 
+        // Keep the internal mapped-request provenance marker until the method
+        // parameters have passed through the standard parameter resolver. The
+        // public context remains stripped; only DI resolution sees the marker.
         $this->callableInvoker->call(
             [$entry, $method->getName()],
-            $this->providedParameters($attribute, $context->parameters),
+            $this->providedParameters($attribute, $context->resolutionParameters()),
         );
     }
 
