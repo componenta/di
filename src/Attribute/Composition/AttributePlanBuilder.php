@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -21,7 +21,7 @@ use WeakMap;
 /** Builds, validates, orders and memoizes the semantic attribute plan for one target. */
 final class AttributePlanBuilder
 {
-    public const int FORMAT_VERSION = 4;
+    public const int FORMAT_VERSION = 5;
 
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
@@ -83,6 +83,7 @@ final class AttributePlanBuilder
         }
 
         $this->assertCapabilityCardinality($target, $usages);
+        $this->assertReadonlyPropertyComposition($target, $usages);
         $this->assertParameterHandlerComposition($target, $usages);
         $this->assertDependencies($target, $usages);
         $this->assertCustomRules($usages);
@@ -145,7 +146,7 @@ final class AttributePlanBuilder
             }
 
             return $this->attributeTargetFlags[$attributeClass] = $metadata->flags;
-        } catch (ExceptionInterface $e) {
+        } catch (AttributeCompositionException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw new AttributeCompositionException(
@@ -164,7 +165,7 @@ final class AttributePlanBuilder
     {
         try {
             return $attribute->newInstance();
-        } catch (ExceptionInterface $e) {
+        } catch (AttributeCompositionException $e) {
             throw $e;
         } catch (Throwable $e) {
             throw new AttributeCompositionException(
@@ -244,6 +245,39 @@ final class AttributePlanBuilder
                     static fn(AttributeUsage $usage): string => '#[' . $usage->attribute::class . ']',
                     $members,
                 )),
+            ));
+        }
+    }
+
+    /**
+     * Readonly properties can be written only once by the DI object pipeline.
+     * A value source followed by a transformer requires two writes and therefore
+     * cannot be represented safely by the property-handler contract.
+     *
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertReadonlyPropertyComposition(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
+        if (!$target instanceof ReflectionProperty || !$target->isReadOnly()) {
+            return;
+        }
+
+        $provider = false;
+        $transformer = false;
+        foreach ($usages as $usage) {
+            foreach ($usage->definition->capabilities as $capability) {
+                $provider = $provider || is_a($capability, ValueProvider::class, true);
+                $transformer = $transformer || is_a($capability, ValueTransformer::class, true);
+            }
+        }
+
+        if ($provider && $transformer) {
+            throw new AttributeCompositionException(sprintf(
+                '%s cannot combine a value source with a transformer because readonly properties can be written only once.',
+                self::targetName($target),
             ));
         }
     }
@@ -347,7 +381,7 @@ final class AttributePlanBuilder
             foreach ($usage->definition->rules as $rule) {
                 try {
                     $rule->validate($usage, $set);
-                } catch (ExceptionInterface $e) {
+                } catch (AttributeCompositionException $e) {
                     throw $e;
                 } catch (Throwable $e) {
                     throw new AttributeCompositionException(
