@@ -89,9 +89,8 @@ test('request validation provider added after an initial miss is observed withou
         [ServerRequestInterface::class => $request],
     );
 
-    $validations = 0;
-    $validator = new class ($validations) implements ValidatorInterface {
-        public function __construct(private int &$validations) {}
+    $validator = new class () implements ValidatorInterface {
+        public int $validations = 0;
 
         public function validate(
             iterable $data,
@@ -119,7 +118,7 @@ test('request validation provider added after an initial miss is observed withou
 
     expect($first)->toBe('first')
         ->and($second)->toBe('second')
-        ->and($validations)->toBe(1);
+        ->and($validator->validations)->toBe(1);
 });
 
 test('request caster provider replacement is observed without rebuilding the container', function (): void {
