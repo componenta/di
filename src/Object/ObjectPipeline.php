@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -26,6 +27,8 @@ final class ObjectPipeline
 {
     /** @var array<class-string,ObjectMetadata> */
     private array $metadata = [];
+    /** @var array<class-string,PreparedParameterPlan> */
+    private array $constructorPlans = [];
     private int $metadataRevision = -1;
     private readonly AttributeProcessor $attributes;
 
@@ -98,11 +101,12 @@ final class ObjectPipeline
     public function create(string|ReflectionClass $class, array $params = []): object
     {
         $metadata = $this->metadata($class);
+        $constructorPlan = $this->constructorPlan($metadata);
         if (!$metadata->hasAttributeHandlers) {
             return $this->instances->createPrepared(
                 $metadata->class,
                 $metadata->constructor,
-                $metadata->constructorTargets,
+                $constructorPlan,
                 $params,
             );
         }
@@ -124,9 +128,9 @@ final class ObjectPipeline
         );
 
         return match ($creation->strategy) {
-            CreationStrategy::Eager => $this->eager($metadata, $creation),
-            CreationStrategy::Lazy => $this->lazy($metadata, $creation),
-            CreationStrategy::Proxy => $this->proxy($metadata, $creation),
+            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $creation),
+            CreationStrategy::Lazy => $this->lazy($metadata, $constructorPlan, $creation),
+            CreationStrategy::Proxy => $this->proxy($metadata, $constructorPlan, $creation),
         };
     }
 
@@ -136,6 +140,7 @@ final class ObjectPipeline
         $revision = $this->registry->revision;
         if ($revision !== $this->metadataRevision) {
             $this->metadata = [];
+            $this->constructorPlans = [];
             $this->metadataRevision = $revision;
         }
 
@@ -172,15 +177,34 @@ final class ObjectPipeline
         );
     }
 
+    private function constructorPlan(ObjectMetadata $metadata): PreparedParameterPlan
+    {
+        $name = $metadata->class->getName();
+        $cached = $this->constructorPlans[$name] ?? null;
+        $parameters = $this->parameters();
+
+        if ($cached !== null && $parameters->isCurrentPlan($cached)) {
+            return $cached;
+        }
+
+        $plan = $parameters->prepareTargets($metadata->constructorTargets);
+        if ($parameters->isSealed) {
+            $this->constructorPlans[$name] = $plan;
+        }
+
+        return $plan;
+    }
+
     private function eager(
         ObjectMetadata $metadata,
+        PreparedParameterPlan $constructorPlan,
         ObjectCreationContext $creation,
     ): object {
         $entry = $creation->constructorEnabled
             ? $this->instances->createPrepared(
                 $metadata->class,
                 $metadata->constructor,
-                $metadata->constructorTargets,
+                $constructorPlan,
                 $this->resolutionParameters->get($creation),
             )
             : $metadata->class->newInstanceWithoutConstructor();
@@ -197,17 +221,18 @@ final class ObjectPipeline
 
     private function lazy(
         ObjectMetadata $metadata,
+        PreparedParameterPlan $constructorPlan,
         ObjectCreationContext $creation,
     ): object {
         return $this->proxies->makeLazy(
             $metadata->class->getName(),
-            function (object $entry) use ($metadata, $creation): void {
+            function (object $entry) use ($metadata, $constructorPlan, $creation): void {
                 $attempt = $this->freshAttempt($creation);
                 if ($attempt->constructorEnabled) {
                     $this->instances->initializePrepared(
                         $entry,
                         $metadata->constructor,
-                        $metadata->constructorTargets,
+                        $constructorPlan,
                         $this->resolutionParameters->get($attempt),
                     );
                 }
@@ -224,12 +249,14 @@ final class ObjectPipeline
 
     private function proxy(
         ObjectMetadata $metadata,
+        PreparedParameterPlan $constructorPlan,
         ObjectCreationContext $creation,
     ): object {
         return $this->proxies->makeProxy(
             $metadata->class->getName(),
             fn(object $_proxy): object => $this->eager(
                 $metadata,
+                $constructorPlan,
                 $this->freshAttempt($creation),
             ),
         );
