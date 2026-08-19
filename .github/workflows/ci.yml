@@ -104,20 +104,33 @@ jobs:
       - name: Install v5 dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
+      - name: Install v4 dependencies
+        working-directory: .benchmark/v4
+        run: composer install --no-interaction --no-progress --prefer-dist
+
       - name: Compare runtime and generated paths
         env:
-          COMPONENTA_DI_BENCH_AUTOLOAD: ${{ github.workspace }}/vendor/autoload.php
           DI_BENCH_ITERATIONS: '100000'
           DI_BUILD_ITERATIONS: '5000'
         run: |
           echo '=== v4 runtime ==='
-          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" php benchmarks/RuntimeBench.php | tee /tmp/runtime-v4.txt
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/.benchmark/v4/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" \
+          php .benchmark/v4/benchmarks/RuntimeBench.php | tee /tmp/runtime-v4.txt
+
           echo '=== v5 runtime ==='
-          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" php benchmarks/RuntimeBench.php | tee /tmp/runtime-v5.txt
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" \
+          php benchmarks/RuntimeBench.php | tee /tmp/runtime-v5.txt
+
           echo '=== v4 generated vs reflection ==='
-          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v4.txt
+          DI_BENCH_ITERATIONS="$DI_BENCH_ITERATIONS" \
+          php .benchmark/v4/benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v4.txt
+
           echo '=== v5 generated vs reflection ==='
-          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v5.txt
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" \
+          php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v5.txt
 
           {
             echo '## v4 vs v5 benchmark'
