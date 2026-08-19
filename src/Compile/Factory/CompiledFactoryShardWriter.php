@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
-use Componenta\DI\Internal\WarningGuard;
 use RuntimeException;
+
+use function Componenta\DI\with_suppressed_warnings;
 
 /** Atomically writes and syntax-checks immutable generated factory shards. */
 final readonly class CompiledFactoryShardWriter
@@ -15,7 +16,7 @@ final readonly class CompiledFactoryShardWriter
         $directory = dirname($file);
 
         if (!is_dir($directory)) {
-            $created = WarningGuard::run(
+            $created = with_suppressed_warnings(
                 static fn(): bool => mkdir($directory, 0775, true),
             );
 
@@ -36,9 +37,9 @@ final readonly class CompiledFactoryShardWriter
 
         try {
             $this->lint($temporary);
-            WarningGuard::run(static fn(): bool => chmod($temporary, 0644));
+            with_suppressed_warnings(static fn(): bool => chmod($temporary, 0644));
 
-            $committed = WarningGuard::run(
+            $committed = with_suppressed_warnings(
                 static fn(): bool => rename($temporary, $file),
             );
 
@@ -57,14 +58,14 @@ final readonly class CompiledFactoryShardWriter
             }
         } finally {
             if (is_file($temporary)) {
-                WarningGuard::run(static fn(): bool => unlink($temporary));
+                with_suppressed_warnings(static fn(): bool => unlink($temporary));
             }
         }
     }
 
     private function assertExistingContents(string $file, string $code): void
     {
-        $existing = WarningGuard::run(
+        $existing = with_suppressed_warnings(
             static fn(): string|false => file_get_contents($file),
         );
 
@@ -92,7 +93,7 @@ final readonly class CompiledFactoryShardWriter
         }
 
         $pipes = [];
-        $process = WarningGuard::run(static function () use (&$pipes, $file) {
+        $process = with_suppressed_warnings(static function () use (&$pipes, $file) {
             return proc_open(
                 [PHP_BINARY, '-n', '-d', 'memory_limit=-1', '-l', $file],
                 [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
@@ -112,12 +113,12 @@ final readonly class CompiledFactoryShardWriter
             throw new RuntimeException('Cannot start PHP syntax validation for a generated factory shard.');
         }
 
-        WarningGuard::run(static fn(): bool => fclose($stdin));
-        $stdout = WarningGuard::run(static fn(): string|false => stream_get_contents($stdoutPipe));
-        $stderr = WarningGuard::run(static fn(): string|false => stream_get_contents($stderrPipe));
-        WarningGuard::run(static fn(): bool => fclose($stdoutPipe));
-        WarningGuard::run(static fn(): bool => fclose($stderrPipe));
-        $status = WarningGuard::run(static fn(): int => proc_close($process));
+        with_suppressed_warnings(static fn(): bool => fclose($stdin));
+        $stdout = with_suppressed_warnings(static fn(): string|false => stream_get_contents($stdoutPipe));
+        $stderr = with_suppressed_warnings(static fn(): string|false => stream_get_contents($stderrPipe));
+        with_suppressed_warnings(static fn(): bool => fclose($stdoutPipe));
+        with_suppressed_warnings(static fn(): bool => fclose($stderrPipe));
+        $status = with_suppressed_warnings(static fn(): int => proc_close($process));
 
         if ($status !== 0) {
             $output = trim((is_string($stdout) ? $stdout : '') . "\n" . (is_string($stderr) ? $stderr : ''));
@@ -133,7 +134,7 @@ final readonly class CompiledFactoryShardWriter
                 . $baseName
                 . '.tmp.'
                 . bin2hex(random_bytes(8));
-            $handle = WarningGuard::run(
+            $handle = with_suppressed_warnings(
                 static fn() => fopen($temporary, 'xb'),
             );
 
@@ -146,7 +147,7 @@ final readonly class CompiledFactoryShardWriter
                 $offset = 0;
 
                 while ($offset < $length) {
-                    $written = WarningGuard::run(
+                    $written = with_suppressed_warnings(
                         static fn(): int|false => fwrite($handle, substr($code, $offset)),
                     );
 
@@ -160,20 +161,20 @@ final readonly class CompiledFactoryShardWriter
                     $offset += $written;
                 }
 
-                if (!WarningGuard::run(static fn(): bool => fflush($handle))) {
+                if (!with_suppressed_warnings(static fn(): bool => fflush($handle))) {
                     throw new RuntimeException(sprintf(
                         'Cannot flush generated factory shard "%s".',
                         $temporary,
                     ));
                 }
             } catch (\Throwable $e) {
-                WarningGuard::run(static fn(): bool => fclose($handle));
-                WarningGuard::run(static fn(): bool => unlink($temporary));
+                with_suppressed_warnings(static fn(): bool => fclose($handle));
+                with_suppressed_warnings(static fn(): bool => unlink($temporary));
 
                 throw $e;
             }
 
-            WarningGuard::run(static fn(): bool => fclose($handle));
+            with_suppressed_warnings(static fn(): bool => fclose($handle));
 
             return $temporary;
         }
