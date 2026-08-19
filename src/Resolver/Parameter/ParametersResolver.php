@@ -6,6 +6,7 @@ namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Componenta\DI\Value\ValuePipeline;
@@ -36,25 +37,11 @@ final class ParametersResolver
     ) {
         $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
 
-        // Transitional attribute adapters preserve current behavior while each
-        // built-in attribute is migrated to its dedicated parameter resolver.
-        $this->add(new AttributeParameterResolver(
-            $plans,
-            $values,
-            AttributeParameterResolver::TRANSFORMER,
-        ), 1200);
+        $this->add(new AttributeParameterResolver($plans, $values, AttributeParameterResolver::TRANSFORMER), 1200);
         $this->add(new ArrayResolver(), 1100);
         $this->add(new ArrayTypedResolver(), 1000);
-        $this->add(new AttributeParameterResolver(
-            $plans,
-            $values,
-            AttributeParameterResolver::PROVIDER,
-        ), 900);
-        $this->add(new AttributeParameterResolver(
-            $plans,
-            $values,
-            AttributeParameterResolver::LEGACY_FALLBACK,
-        ), -1000);
+        $this->add(new AttributeParameterResolver($plans, $values, AttributeParameterResolver::PROVIDER), 900);
+        $this->add(new AttributeParameterResolver($plans, $values, AttributeParameterResolver::LEGACY_FALLBACK), -1000);
     }
 
     /** Higher priorities run first; equal priorities preserve insertion order. */
@@ -63,7 +50,6 @@ final class ParametersResolver
         if ($this->sealed) {
             throw new \LogicException('Parameter resolver pipeline is sealed and cannot be changed.');
         }
-
         $objectId = spl_object_id($resolver);
         if (isset($this->registered[$objectId])) {
             throw new \InvalidArgumentException(sprintf(
@@ -71,7 +57,6 @@ final class ParametersResolver
                 $resolver::class,
             ));
         }
-
         $this->registrations[] = [
             'resolver' => $resolver,
             'priority' => $priority,
@@ -95,7 +80,6 @@ final class ParametersResolver
             if ($this->ordered !== null) {
                 return $this->ordered;
             }
-
             $registrations = $this->registrations;
             usort(
                 $registrations,
@@ -103,7 +87,6 @@ final class ParametersResolver
                     $right['priority'] <=> $left['priority']
                     ?: $left['order'] <=> $right['order'],
             );
-
             return $this->ordered = array_map(
                 static fn(array $registration): ParameterResolverInterface => $registration['resolver'],
                 $registrations,
@@ -111,20 +94,13 @@ final class ParametersResolver
         }
     }
 
-    /**
-     * @param list<ReflectionParameter> $parameters
-     * @param array<string|int, mixed> $providedParameters
-     * @return array<int, mixed>
-     */
+    /** @param list<ReflectionParameter> $parameters @param array<string|int,mixed> $providedParameters @return array<int,mixed> */
     public function resolve(array $parameters, array $providedParameters = []): array
     {
         return $this->resolveTargets($this->targets($parameters), $providedParameters);
     }
 
-    /**
-     * @param list<ReflectionParameter> $parameters
-     * @return list<ParameterTarget>
-     */
+    /** @param list<ReflectionParameter> $parameters @return list<ParameterTarget> */
     public function targets(array $parameters): array
     {
         $targets = [];
@@ -134,24 +110,18 @@ final class ParametersResolver
         return $targets;
     }
 
-    /**
-     * @param list<ParameterTarget> $targets
-     * @param array<string|int, mixed> $providedParameters
-     * @return array<int, mixed>
-     */
+    /** @param list<ParameterTarget> $targets @param array<string|int,mixed> $providedParameters @return array<int,mixed> */
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
         $state = new ParameterResolutionContext($providedParameters);
-
         foreach ($targets as $target) {
             [$position, $value] = $this->resolveParameter($target, $state);
             $state->resolve($position, $value);
         }
-
         return $state->resolved;
     }
 
-    /** @return array{0: int, 1: mixed} */
+    /** @return array{0:int,1:mixed} */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
@@ -161,7 +131,6 @@ final class ParametersResolver
             $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
             default => null,
         };
-
         if ($unsupportedReason !== null) {
             throw ResolutionException::forParameter(
                 $target->reflection,
@@ -170,6 +139,8 @@ final class ParametersResolver
                 resolvedParameters: $context->resolved,
             );
         }
+
+        MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
 
         foreach ($this->resolverSlotsFor($target) as $slot) {
             $resolver = $this->resolverList[$slot];
@@ -193,7 +164,6 @@ final class ParametersResolver
         if (isset($cache[$target])) {
             return $cache[$target];
         }
-
         $slots = [];
         $revision = $this->revision;
         foreach ($this->resolverList as $slot => $resolver) {
@@ -201,11 +171,9 @@ final class ParametersResolver
                 $slots[] = $slot;
             }
         }
-
         if ($revision !== $this->revision) {
             throw new \LogicException('Parameter resolver supports() must not mutate the resolver chain.');
         }
-
         return $cache[$target] = $slots;
     }
 
