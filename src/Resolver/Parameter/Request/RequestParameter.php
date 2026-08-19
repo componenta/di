@@ -6,10 +6,11 @@ namespace Componenta\DI\Resolver\Parameter\Request;
 
 use Psr\Http\Message\ServerRequestInterface;
 
-/** Helper for accessing a PSR-7 request from provided parameters. */
+/** Helper for accessing PSR-7 request transport state from provided parameters. */
 final class RequestParameter
 {
     public const string KEY = ServerRequestInterface::class;
+    public const string PARAMETER_NAME_ATTRIBUTE = '__parameter_name';
 
     /** @param array<string|int, mixed> $providedParameters */
     public static function has(array $providedParameters): bool
