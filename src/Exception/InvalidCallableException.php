@@ -8,7 +8,7 @@ use RuntimeException;
 use Throwable;
 
 /** Raised when a value cannot be normalized or resolved into a callable. */
-final class InvalidCallableException extends RuntimeException implements CallableExceptionInterface
+final class InvalidCallableException extends RuntimeException implements ExceptionInterface
 {
     public function __construct(
         public readonly mixed $callable,
@@ -18,7 +18,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         parent::__construct($message, 0, $previous);
     }
 
-    /** Value is not a valid callable and cannot be resolved into one. */
     public static function forValue(mixed $callable, ?Throwable $previous = null): self
     {
         return new self(
@@ -31,7 +30,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         );
     }
 
-    /** Method does not exist on the given class. */
     public static function forMethod(string $class, string $method): self
     {
         return new self(
@@ -40,7 +38,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         );
     }
 
-    /** Class is not invokable (no __invoke method). */
     public static function forNonInvokable(string $class): self
     {
         return new self(
@@ -49,7 +46,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         );
     }
 
-    /** Service required to build the callable is not in the container. */
     public static function forMissingService(string $id, ?Throwable $previous = null): self
     {
         return new self(
