@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\Parameter\Request\RequestParameter;
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Http\Message\UriInterface;
 
