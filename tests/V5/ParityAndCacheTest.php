@@ -17,6 +17,7 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 
@@ -114,4 +115,18 @@ test('final v5 exposes one bridge for parameter attributes plus convention resol
     ] as $class) {
         expect(class_exists($class) || interface_exists($class))->toBeTrue();
     }
+});
+
+test('the default parameter chain contains exactly one attribute resolver', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $parameters = $container->get(ParametersResolver::class);
+    expect($parameters)->toBeInstanceOf(ParametersResolver::class);
+
+    $classes = array_map(
+        static fn(ParameterResolverInterface $resolver): string => $resolver::class,
+        $parameters->resolverList,
+    );
+
+    expect(array_count_values($classes)[AttributeParameterResolver::class] ?? 0)->toBe(1)
+        ->and($classes)->toContain(RequestContextResolver::class);
 });
