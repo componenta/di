@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
-use InvalidArgumentException;
 
 /** Immutable semantic definition of one DI attribute class. */
 final readonly class AttributeDefinition
@@ -40,18 +40,18 @@ final readonly class AttributeDefinition
         public AttributePhase $phase = AttributePhase::AfterInstantiation,
     ) {
         if (!class_exists($attribute) && !interface_exists($attribute)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new InvalidConfigurationException(sprintf(
                 'Attribute definition target "%s" is not available.',
                 $attribute,
             ));
         }
         if ($version < 1) {
-            throw new InvalidArgumentException('Attribute definition version must be at least 1.');
+            throw new InvalidConfigurationException('Attribute definition version must be at least 1.');
         }
 
         foreach ($capabilities as $capability) {
             if (!is_a($capability, AttributeCapabilityInterface::class, true)) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Capability "%s" for attribute "%s" must implement %s.',
                     $capability,
                     $attribute,
@@ -62,7 +62,7 @@ final readonly class AttributeDefinition
 
         foreach ($rules as $rule) {
             if (!$rule instanceof AttributeCompositionRuleInterface) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Composition rule for attribute "%s" must implement %s; got %s.',
                     $attribute,
                     AttributeCompositionRuleInterface::class,
@@ -82,7 +82,7 @@ final readonly class AttributeDefinition
     {
         foreach ($selectors as $selector) {
             if (!class_exists($selector) && !interface_exists($selector)) {
-                throw new InvalidArgumentException(sprintf(
+                throw new InvalidConfigurationException(sprintf(
                     'Attribute composition selector "%s" in %s is not available.',
                     $selector,
                     $kind,
