@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\QueryParam;
+use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -63,6 +64,17 @@ function composedParameterContainer(): \Componenta\DI\Container
     return (new ContainerBuilder())
         ->addService(CasterProviderInterface::class, new TestCasterProvider())
         ->build();
+}
+
+function cleanupParameterCompositionDirectory(string $directory): void
+{
+    if (!is_dir($directory)) {
+        return;
+    }
+    foreach (glob($directory . '/*') ?: [] as $file) {
+        is_dir($file) ? cleanupParameterCompositionDirectory($file) : @unlink($file);
+    }
+    @rmdir($directory);
 }
 
 test('a request value source composes with Cast on one parameter', function (): void {
@@ -127,4 +139,38 @@ test('parameter-only attribute handlers do not inherit object attribute executio
         ->toBeFalse()
         ->and((new ReflectionClass(RequestAttributeHandler::class))->hasMethod('handle'))
         ->toBeFalse();
+});
+
+test('composed parameter attributes execute identically in development and AOT', function (): void {
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-parameter-composition-' . bin2hex(random_bytes(5));
+    $builder = (new ContainerBuilder())
+        ->addService(CasterProviderInterface::class, new TestCasterProvider());
+    $development = $builder->build();
+
+    try {
+        $compiled = $builder->compileFactories([QueryThenCastDto::class], $directory);
+        $data = $builder->toArray();
+        $dependencies = $data[ConfigKey::DEPENDENCIES];
+        $dependencies[ConfigKey::FACTORIES] = array_replace(
+            $dependencies[ConfigKey::FACTORIES] ?? [],
+            $compiled,
+        );
+        $production = ContainerBuilder::configureFromCache(
+            new Config([]),
+            [
+                'version' => ContainerBuilder::CACHE_VERSION,
+                ConfigKey::DEPENDENCIES => $dependencies,
+            ],
+            $directory,
+        )->build();
+
+        $request = (new ServerRequest('GET', '/?count=44'))
+            ->withQueryParams(['count' => '44']);
+        $params = [ServerRequestInterface::class => $request];
+
+        expect($development->make(QueryThenCastDto::class, $params)->count)->toBe(44)
+            ->and($production->make(QueryThenCastDto::class, $params)->count)->toBe(44);
+    } finally {
+        cleanupParameterCompositionDirectory($directory);
+    }
 });
