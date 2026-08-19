@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
+use Componenta\Config\Config;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Cache\DiCacheGenerator;
+use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\CompilationException;
@@ -157,6 +159,50 @@ test('foreign parameter resolver failures normalize identically for make and cal
         ->and($call)->toBeInstanceOf(ResolutionException::class)
         ->and($call)->toBeInstanceOf(ExceptionInterface::class)
         ->and($call->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
+});
+
+test('foreign resolver failures have the same contract in reflection and compiled mode', function (): void {
+    $suffix = bin2hex(random_bytes(5));
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-exception-aot-' . $suffix;
+    $namespace = 'Componenta\\DI\\Tests\\Generated\\ExceptionContract' . $suffix;
+    $builder = (new ContainerBuilder())
+        ->addParameterResolver(new ThrowingParameterResolver(), 2000);
+
+    try {
+        $reflection = exceptionFrom(fn() => $builder->build()->make(ExceptionResolutionTarget::class));
+        $compiled = $builder->compileFactories(
+            [ExceptionResolutionTarget::class],
+            $directory,
+            namespace: $namespace,
+        );
+
+        $data = $builder->toArray();
+        $dependencies = $data[ConfigKey::DEPENDENCIES] ?? [];
+        $dependencies[ConfigKey::FACTORIES] = array_replace(
+            $dependencies[ConfigKey::FACTORIES] ?? [],
+            $compiled,
+        );
+        $production = ContainerBuilder::configureFromCache(
+            new Config([]),
+            [
+                'version' => ContainerBuilder::CACHE_VERSION,
+                ConfigKey::DEPENDENCIES => $dependencies,
+            ],
+            $directory,
+        )->build();
+        $aot = exceptionFrom(fn() => $production->make(ExceptionResolutionTarget::class));
+
+        expect($reflection)->toBeInstanceOf(ResolutionException::class)
+            ->and($aot)->toBeInstanceOf(ResolutionException::class)
+            ->and($aot::class)->toBe($reflection::class)
+            ->and($reflection->getPrevious())->toBeInstanceOf(ForeignDiFailure::class)
+            ->and($aot->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
+    } finally {
+        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($directory);
+    }
 });
 
 test('exceptions thrown by the explicit user callable body propagate unchanged', function (): void {
