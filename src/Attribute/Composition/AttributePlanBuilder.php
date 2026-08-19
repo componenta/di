@@ -7,12 +7,15 @@ namespace Componenta\DI\Attribute\Composition;
 use Attribute;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
+use Throwable;
 use WeakMap;
 
 /** Builds, validates, orders and memoizes the semantic attribute plan for one target. */
@@ -22,13 +25,10 @@ final class AttributePlanBuilder
 
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
-
     /** @var WeakMap<object, AttributePlan>|null */
     private ?WeakMap $anonymousPlans = null;
-
     /** @var array<class-string,int> */
     private array $attributeTargetFlags = [];
-
     private int $registryRevision = -1;
 
     public function __construct(private readonly AttributeDefinitionRegistry $registry) {}
@@ -72,7 +72,10 @@ final class AttributePlanBuilder
             }
 
             $usages[] = new AttributeUsage(
-                $reflectionAttribute->newInstance(),
+                $this->instantiate(
+                    $reflectionAttribute,
+                    sprintf('attribute "%s" on %s', $attributeClass, self::targetName($target)),
+                ),
                 $definition,
                 $target,
                 $index,
@@ -123,17 +126,52 @@ final class AttributePlanBuilder
             return $this->attributeTargetFlags[$attributeClass];
         }
 
-        $reflection = new ReflectionClass($attributeClass);
-        $marker = $reflection->getAttributes(Attribute::class)[0] ?? null;
-        if ($marker === null) {
-            throw new AttributeCompositionException(sprintf(
-                'Registered DI attribute "%s" is not declared with #[Attribute].',
-                $attributeClass,
-            ));
-        }
+        try {
+            $reflection = new ReflectionClass($attributeClass);
+            $marker = $reflection->getAttributes(Attribute::class)[0] ?? null;
+            if ($marker === null) {
+                throw new AttributeCompositionException(sprintf(
+                    'Registered DI attribute "%s" is not declared with #[Attribute].',
+                    $attributeClass,
+                ));
+            }
 
-        $metadata = $marker->newInstance();
-        return $this->attributeTargetFlags[$attributeClass] = $metadata->flags;
+            $metadata = $this->instantiate($marker, sprintf('#[Attribute] metadata for "%s"', $attributeClass));
+            if (!$metadata instanceof Attribute) {
+                throw new AttributeCompositionException(sprintf(
+                    'Registered DI attribute "%s" has invalid #[Attribute] metadata.',
+                    $attributeClass,
+                ));
+            }
+
+            return $this->attributeTargetFlags[$attributeClass] = $metadata->flags;
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new AttributeCompositionException(
+                sprintf('Cannot inspect registered DI attribute "%s": %s', $attributeClass, $e->getMessage()),
+                previous: $e,
+            );
+        }
+    }
+
+    /**
+     * @template T of object
+     * @param ReflectionAttribute<T> $attribute
+     * @return T
+     */
+    private function instantiate(ReflectionAttribute $attribute, string $context): object
+    {
+        try {
+            return $attribute->newInstance();
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new AttributeCompositionException(
+                sprintf('Cannot instantiate %s: %s', $context, $e->getMessage()),
+                previous: $e,
+            );
+        }
     }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
@@ -307,7 +345,21 @@ final class AttributePlanBuilder
         $set = new AttributeSet($usages);
         foreach ($usages as $usage) {
             foreach ($usage->definition->rules as $rule) {
-                $rule->validate($usage, $set);
+                try {
+                    $rule->validate($usage, $set);
+                } catch (ExceptionInterface $e) {
+                    throw $e;
+                } catch (Throwable $e) {
+                    throw new AttributeCompositionException(
+                        sprintf(
+                            'Attribute composition rule "%s" failed for #[%s]: %s',
+                            $rule::class,
+                            $usage->attribute::class,
+                            $e->getMessage(),
+                        ),
+                        previous: $e,
+                    );
+                }
             }
         }
     }
