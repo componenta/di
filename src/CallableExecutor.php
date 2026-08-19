@@ -25,13 +25,10 @@ final class CallableExecutor implements CallableExecutorInterface
     /** @var array<string, list<ParameterTarget>> */
     private array $callableTargets = [];
 
-    private readonly CallableInvoker $invoker;
-
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
         private readonly ParametersResolver $parameters,
     ) {
-        $this->invoker = new CallableInvoker();
     }
 
     /**
@@ -46,7 +43,11 @@ final class CallableExecutor implements CallableExecutorInterface
             ? $params
             : $this->parameters->resolveTargets($targets, $params);
 
-        return $this->invoker->call($resolved, $arguments);
+        if (!is_callable($callable)) {
+            throw InvalidCallableException::forValue($callable);
+        }
+
+        return call_user_func_array($callable, $params);
     }
 
     public function resolve(mixed $callable): callable
