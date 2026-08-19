@@ -27,9 +27,9 @@ $fresh = $container->make(UserService::class, ['userId' => 7]);
 $result = $container->call([$service, 'handle'], ['id' => 42]);
 ```
 
-`get()` performs shared PSR-11 resolution. `make()` creates a fresh local object and accepts ordinary `array $params`. `call()` is DI-aware and resolves callable parameters through the same parameter-resolver pipeline used by constructors.
+`get()` performs shared PSR-11 resolution. `make()` creates a fresh local object and accepts ordinary `array $params`. `call()` is DI-aware and resolves callable parameters through the same parameter pipeline used by constructors.
 
-There is no public resolution-context object. Framework-specific state such as a PSR-7 request is passed like any other typed parameter:
+There is no public resolution-context object. Framework state is passed through the ordinary parameter array:
 
 ```php
 $controller = $container->make(Controller::class, [
@@ -54,26 +54,27 @@ interface ParameterResolverInterface
 }
 ```
 
-`ParametersResolver` owns an ordered resolver chain. Higher numeric priorities run first; equal priorities preserve registration order. The built-in v5 order preserves the v4 behavior:
+`ParametersResolver` owns one ordered resolver chain. Higher numeric priorities run first. Equal priorities preserve insertion order.
+
+The default v5 chain is deliberately small:
 
 ```text
-Cast              1200
-provided by name  1100
-provided by type  1000
-CurrentUser        900
-request            800
-Make               700
-Env                600
-EntryId            500
-Config              400
-autowire            300
-PHP default         200
-nullable            100
+provided by name/position     1100
+provided by declared type     1000
+parameter attributes           900
+implicit request context       800
+autowire by class/interface    300
+PHP default                    200
+nullable                       100
 ```
 
-Some resolvers intentionally decline values that belong to a stronger declared source. For example, caller input cannot replace `#[CurrentUser]`, while an ordinary named value may override `#[Config]` before the Config resolver runs.
+The `parameter attributes` slot is one `AttributeParameterResolver`. `#[Cast]`, `#[Config]`, `#[Env]`, `#[EntryId]`, `#[CurrentUser]`, `#[Make]`, `#[Proxy]` and all request-source attributes do **not** register independent parameter resolvers.
 
-### Custom parameter resolvers
+`#[Cast]` and `#[CurrentUser]` preserve their v4 precedence semantics: generic caller-value resolvers deliberately leave those parameters to the composed attribute handler. Ordinary caller values may still override lower-level sources such as `#[Config]`, `#[Env]` or `#[Make]`.
+
+### Custom convention resolver
+
+Use a custom `ParameterResolverInterface` when the rule does not require an attribute:
 
 ```php
 final readonly class TenantParameterResolver implements ParameterResolverInterface
@@ -94,13 +95,13 @@ final readonly class TenantParameterResolver implements ParameterResolverInterfa
 $builder->addParameterResolver(new TenantParameterResolver($tenant), 750);
 ```
 
-A resolver specification may be an instance, a container service id, a callable factory, or `[serviceId, method]`. `replaceParameterResolvers()` disables the built-in chain. User-defined priorities must be unique; configuration applied to a preconfigured builder replaces an existing user resolver at the same priority, matching v4 semantics.
+A resolver specification may be an instance, a container service id, a callable factory, or `[serviceId, method]`. `replaceParameterResolvers()` disables the built-in chain. User priorities must be unique; dependency configuration applied to a preconfigured builder replaces an existing user resolver at the same priority, matching the v4 contract.
 
-## Attribute model
+## Attribute architecture
 
-Attribute composition and attribute execution are separate responsibilities.
+Attribute composition and execution are separate responsibilities.
 
-`AttributeDefinition` describes semantic composition:
+`AttributeDefinition` binds an attribute class to semantic metadata and, when applicable, a handler:
 
 ```php
 new AttributeDefinition(
@@ -116,9 +117,21 @@ new AttributeDefinition(
 );
 ```
 
-`AttributePlanBuilder` validates cardinality, dependencies, custom rules and `before`/`after` ordering. Capabilities support inheritance: a cardinality rule defined for a parent capability also covers its sub-capabilities.
+`AttributePlanBuilder`:
 
-Class, property and method attributes are executed through one generic contract:
+- instantiates registered attributes;
+- validates target masks;
+- validates capability cardinality;
+- evaluates `requires` / `forbids`;
+- evaluates custom composition rules;
+- orders attributes through `before` / `after` constraints;
+- memoizes the resulting immutable `AttributePlan`.
+
+Capability policies honor inheritance, so a policy registered for a parent capability applies to its sub-capabilities.
+
+### Class, property and method attributes
+
+Object attributes execute through one generic contract:
 
 ```php
 interface AttributeHandlerInterface
@@ -131,43 +144,95 @@ interface AttributeHandlerInterface
 }
 ```
 
-There is no property-resolver subsystem. Parameter attributes are present in the same composition model, but they never bypass `ParameterResolverInterface`: a parameter-only `AttributeDefinition` may have `handler: null`, while the matching parameter resolver supplies its value.
+`AttributeProcessor` executes the validated plans for classes, properties and methods. There is no property-resolver subsystem.
 
-### Custom parameter attribute
+### Parameter attributes
+
+Parameters still resolve only through `ParameterResolverInterface`. The bridge from the common attribute model into that pipeline is exactly one built-in `AttributeParameterResolver`.
+
+A handler that can provide a parameter value implements:
+
+```php
+interface ParameterAttributeHandlerInterface extends AttributeHandlerInterface
+{
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+    ): mixed;
+}
+```
+
+`AttributeParameterResolver` reads the already validated `AttributePlan`, selects its parameter-aware handler and delegates value production to that handler. Thus there is no second parameter-resolution pipeline.
+
+A custom parameter attribute does not need its own resolver:
 
 ```php
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class CurrentTenant {}
 
-$builder
-    ->addAttributeDefinition(new AttributeDefinition(
-        CurrentTenant::class,
-        handler: null,
-        capabilities: [ValueProvider::class],
-    ))
-    ->addParameterResolver(new CurrentTenantResolver($tenant), 750);
-```
+final readonly class CurrentTenantHandler
+    implements ParameterAttributeHandlerInterface
+{
+    public function __construct(private Tenant $tenant) {}
 
-### Custom class/property/method attribute
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+    ): mixed {
+        return $this->tenant;
+    }
 
-```php
-#[Attribute(Attribute::TARGET_PROPERTY)]
-final readonly class InjectClock {}
+    public function handle(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+    ): void {
+        throw new LogicException('CurrentTenant is parameter-only.');
+    }
+}
 
 $builder->addAttributeDefinition(new AttributeDefinition(
-    InjectClock::class,
-    new InjectClockHandler($clock),
+    CurrentTenant::class,
+    new CurrentTenantHandler($tenant),
     capabilities: [ValueProvider::class],
 ));
 ```
 
-## Built-in value attributes
+A package may still register a custom `ParameterResolverInterface` when it intentionally implements convention-based or non-attribute parameter resolution.
 
-The v4 public attribute surface is preserved, including named constructor arguments.
+## Built-in attribute handlers
 
-`#[Config]` reads Componenta configuration. `#[Env]` preserves v4 target-type conversion for `string`, `int`, `float`, `bool` and `array`, and uses its attribute default even when `Config` has no `Environment`. `#[EntryId]`, `#[Make]`, `#[CurrentUser]`, request attributes and ordinary autowiring are resolved by parameter resolvers.
+The built-in value semantics are implemented as attribute handlers rather than independent parameter resolvers:
 
-`#[Cast]` preserves its v4 `name, default` constructor and resolver semantics. It owns the target's value-resolution slot, reads caller input or its own/default PHP value and applies the selected caster. Request attributes use their own `cast:` argument when request extraction itself needs casting:
+```text
+CastHandler
+ConfigHandler
+EnvHandler
+EntryIdHandler
+CurrentUserHandler
+MakeHandler          // Make + Proxy
+RequestAttributeHandler
+```
+
+The same handler object can support parameter and property targets. `MakeHandler` also handles class-level `#[Proxy]`, allowing `#[Make] + #[Proxy]` to remain one semantic value handler.
+
+The v4 public attribute surface and named constructor arguments are preserved.
+
+### Configuration and environment
+
+`#[Config]` reads `Componenta\Config\Config`. String keys are literal; `ConfigPath` keeps nested-path semantics.
+
+`#[Env]` preserves target-type conversion for `string`, `int`, `float`, `bool` and `array`, and preserves its attribute default when `Config` has no `Environment` or the variable is missing.
+
+### Casting
+
+`#[Cast]` preserves the v4 `name, default` constructor contract. It reads caller input by parameter/property name or position, falls back to its own/PHP default where applicable, then uses `CasterProviderInterface`.
+
+Request-source attributes perform transport casting through their own `cast:` argument:
 
 ```php
 public function __construct(
@@ -176,24 +241,13 @@ public function __construct(
 ) {}
 ```
 
+### Object injection and lifecycle
+
 `#[Inject]` and `#[Init]` are property handlers. `#[Init]` may overwrite a mutable promoted property after construction, but does not overwrite an already initialized readonly promoted property.
 
-## Object lifecycle
+`#[NoConstructor]` disables constructor invocation. `#[Lazy]` selects native lazy-object creation. `#[Proxy]` selects a virtual proxy and remains supported on classes, parameters and properties.
 
-Object creation uses one runtime pipeline for reflection and compiled entries:
-
-```text
-build/validate AttributePlan
-        -> before-instantiation attribute handlers
-        -> constructor parameters via ParameterResolverInterface[]
-        -> instantiate / lazy / proxy
-        -> after-instantiation class/property/method handlers
-        -> return object
-```
-
-`#[NoConstructor]` disables constructor invocation. `#[Lazy]` selects native lazy-object creation. `#[Proxy]` selects a virtual proxy and is supported on classes, parameters and properties as in v4.
-
-For interface-typed proxy injection, specify the concrete proxy class when it cannot be inferred:
+For interface-typed proxy injection, specify a concrete proxy class when it cannot be inferred:
 
 ```php
 public function __construct(
@@ -204,11 +258,27 @@ public function __construct(
 
 `#[Make('service.id'), Proxy(ConcreteService::class)]` keeps the service id and proxy class independent.
 
-`#[SetUp]` remains repeatable and runs after object creation. Its method is invoked through the same DI-aware `call()` path, so setup-method parameters use the normal parameter-resolver chain. `Config`, `Env`, `EntryId` and `ContainerValue` descriptors inside `SetUp::params` retain their v4 behavior.
+`#[SetUp]` remains repeatable and runs after creation. Setup methods are invoked through DI-aware `call()`, so their method parameters use the same `ParametersResolver` chain. `Config`, `Env`, `EntryId` and `ContainerValue` descriptors in `SetUp::params` preserve their v4 behavior.
+
+## Object pipeline
+
+Reflection and compiled entries share one execution runtime:
+
+```text
+ObjectPipeline
+    -> build/validate AttributePlan metadata
+    -> before-instantiation AttributeProcessor
+    -> constructor arguments through ParametersResolver
+    -> instantiate / lazy / proxy
+    -> after-instantiation AttributeProcessor
+    -> object
+```
+
+AOT never substitutes a generated implementation of a parameter resolver or an attribute handler.
 
 ## PSR-7 request resolution
 
-HTTP behavior is isolated under `Resolver/Parameter/Request`; generic DI core does not know about `ServerRequestInterface`.
+HTTP behavior is isolated from generic DI semantics.
 
 A request is supplied as an ordinary typed parameter:
 
@@ -223,7 +293,7 @@ $result = $container->call(
 );
 ```
 
-The scalar request attributes are:
+Request-source parameter attributes are all handled by one `RequestAttributeHandler`:
 
 ```text
 #[QueryParam]
@@ -233,11 +303,6 @@ The scalar request attributes are:
 #[RequestAttribute]
 #[ServerParam]
 #[UploadedFile]
-```
-
-The specialized v4 mapper attributes are also preserved:
-
-```text
 #[MapQueryString]
 #[MapRequestPayload]
 #[MapHeaders]
@@ -245,15 +310,23 @@ The specialized v4 mapper attributes are also preserved:
 #[MapRequestAttributes]
 #[MapServerParams]
 #[MapUploadedFiles]
+#[MapRequest]
 ```
 
-They share the same `RequestMapper` transformation pipeline:
+The specialized v4 mapping attributes and generic v5 `#[MapRequest]` share the same mapping semantics:
 
 ```text
-map -> cast -> defaults -> sortMap -> exclude
+extract sources
+-> validate raw transport data
+-> map
+-> cast
+-> defaults
+-> sortMap
+-> exclude
+-> construct DTO
 ```
 
-V5 additionally provides generic `#[MapRequest]` for explicit multi-source mapping:
+Example multi-source mapping:
 
 ```php
 public function __construct(
@@ -265,11 +338,15 @@ public function __construct(
 ) {}
 ```
 
-Different values for one key from multiple sources raise `RequestDataConflictException` by default. `RequestDataConflictPolicy::FirstWins` is available when ordered precedence is intentional.
+Conflicting values from multiple sources raise `RequestDataConflictException` by default. `RequestDataConflictPolicy::FirstWins` is available when ordered precedence is intentional.
 
-Nested DTO construction carries request-mapping provenance through an internal request-only marker. That marker is stripped from normal resolver input. Before any resolver priority is evaluated, `MappedRequestParameterSourceGuard` rejects mapped keys that would shadow an explicitly declared parameter source such as `#[Header]`, a request object or URI. A high-priority custom resolver therefore cannot bypass the guard.
+Nested DTO mapping carries provenance through an internal request-only marker. `MappedRequestParameterSourceGuard` executes before resolver priority and before lazy/proxy creation, preventing mapped input from shadowing source-bound parameters such as `#[Header]`, `ServerRequestInterface` or `UriInterface` even through aliases, `ClassDefinition`, lazy objects and compiled entries.
 
-If a `ValidationProviderInterface` service is available, class-typed request mapping retains request-validation support.
+The internal marker is stripped from ordinary object/property parameters and never becomes a public DI context.
+
+`RequestContextResolver` is intentionally separate from the attribute handler: it only supplies implicit non-attribute request context such as `UriInterface`.
+
+If `ValidationProviderInterface` is registered, class-typed request mapping performs validation before transformations, preserving the v4 request contract.
 
 ## Factories and definitions
 
@@ -283,15 +360,15 @@ $builder->addFactory(
 );
 ```
 
-Factories may accept fewer compatible arguments; `FactorySpecificationValidator` rejects incompatible required signatures before first resolution.
+Factories may accept fewer compatible arguments. `FactorySpecificationValidator` rejects incompatible required signatures before first resolution.
 
-`ClassDefinition` remains immutable declarative data. Runtime and persistent-cache resolution route through the same `ObjectPipeline`; attributed constructor/property semantics are not reimplemented in a generated special case.
+`ClassDefinition` remains immutable declarative data. Runtime overrides are normalized against the constructor signature by name, position and declared object type before entering the same parameter resolver chain. Persistent-cache `ClassDefinition` objects use the same runtime path.
 
 `Container::set($id, $definition)` changes the supporting resolver definition for an already built container. `Container::set($id, $value)` replaces the local shared base value.
 
 ## ContainerBuilder
 
-Main builder extensions include:
+Main builder extensions:
 
 ```text
 addFactory() / addFactories()
@@ -310,7 +387,7 @@ toArray()
 build()
 ```
 
-The v5 dependency keys are:
+Dependency keys:
 
 ```text
 factories
@@ -325,9 +402,9 @@ attribute_definitions_replace
 attribute_capabilities
 ```
 
-Unknown dependency keys fail configuration. Integer `parameter_resolvers` keys are priorities and are preserved rather than reindexed.
+Unknown dependency keys fail validation. Integer `parameter_resolvers` keys are priorities and are preserved rather than reindexed.
 
-The package still exposes `Componenta\DI\ConfigProvider` through `extra.componenta.config-providers` for Componenta composer-plugin/app discovery. Built-in v5 resolvers and attribute definitions are assembled by `ContainerBuilder`, so the package provider intentionally does not duplicate those runtime registrations.
+The package exposes `Componenta\DI\ConfigProvider` through `extra.componenta.config-providers` for Componenta composer-plugin/app discovery. Built-in v5 resolvers and attribute definitions are assembled by `ContainerBuilder`, so the package provider intentionally does not duplicate runtime registrations.
 
 ## Shared resolution, aliases and delegators
 
@@ -339,7 +416,7 @@ Alias changes, replacement of deferred delegator services and changes in externa
 
 ## AOT compiled entries
 
-`compileFactories()` accepts known autowiring roots and emits content-addressed entry shards:
+`compileFactories()` emits content-addressed entry shards:
 
 ```php
 $compiled = $builder->compileFactories(
@@ -348,18 +425,27 @@ $compiled = $builder->compileFactories(
 );
 ```
 
-Generated factory methods are intentionally thin:
+Generated methods are deliberately thin:
 
 ```text
-reflection resolution -> ObjectPipeline
-compiled AOT shard    -> ObjectPipeline
+reflection entry -> ObjectPipeline
+compiled shard   -> ObjectPipeline
 ```
 
-A custom `ParameterResolverInterface` or `AttributeHandlerInterface` therefore does not need a second production code generator. Build-time metadata may remove reflection/classification work, but runtime semantics are shared.
+Both modes invoke the same `ParameterResolverInterface` objects, the same `AttributeParameterResolver` and the same attribute handlers. Custom convention resolvers and custom parameter/object attribute handlers therefore require no production-specific code generator.
 
-The semantic fingerprint includes the attribute-plan format, registered attribute definitions/capability policies and the actual ordered parameter-resolver chain. A mismatch rejects a stale shard. Content-addressed shard files are integrity checked before use.
+The semantic fingerprint includes:
 
-`AutowireClassGraph` retains v4 eligibility behavior and excludes DI bootstrap extensions such as parameter resolvers and attribute handlers from compiled entry roots.
+- attribute-plan format;
+- attribute definitions and their versions;
+- handler classes and phases;
+- capabilities, dependency constraints and custom rule versions;
+- capability policies;
+- the actual ordered parameter-resolver chain.
+
+A stale semantic fingerprint rejects the shard. Content-addressed shard files are also checked against their content hash.
+
+`AutowireClassGraph` excludes ineligible roots and DI bootstrap extensions such as parameter resolvers and attribute handlers.
 
 ## Persistent cache
 
@@ -372,13 +458,11 @@ Persistent cache uses a strict versioned envelope:
 ]
 ```
 
-V5 currently uses cache format version `14`. Older envelopes are rejected.
-
-`DiCacheGenerator` exports supported immutable definitions/configuration. Cached `ClassDefinition` objects are interpreted through the same runtime resolver and parameter pipeline as normal reflection resolution.
+V5 currently uses cache format version `15`. Older envelopes are rejected.
 
 ## Exceptions
 
-All package exceptions implement `Componenta\DI\Exception\ExceptionInterface`. The main failures are:
+All package exceptions implement `Componenta\DI\Exception\ExceptionInterface`. Important failures include:
 
 ```text
 AttributeCompositionException
@@ -393,4 +477,19 @@ ResolutionException
 
 ## Development and production parity
 
-The package's CI runs `composer validate`, PHPStan at max level, coding-style checks and Pest on PHP 8.4 and 8.5. The v5 parity suite covers public named-argument signatures, custom resolver/attribute extensions, reflection vs AOT execution, persistent cache, request provenance, proxy/make behavior, promoted/private property handling, Fiber ownership and alias/delegator invalidation.
+CI runs Composer validation, PHP-CS-Fixer checks, PHPStan at max level and Pest on PHP 8.4 and 8.5.
+
+The v5 parity suite covers:
+
+- public v4 named-argument signatures;
+- custom convention parameter resolvers;
+- custom parameter attributes through `ParameterAttributeHandlerInterface`;
+- custom class/property/method handlers;
+- reflection vs AOT execution;
+- semantic fingerprint invalidation;
+- persistent cache and `ClassDefinition` override normalization;
+- request provenance through aliases, lazy objects and cache;
+- proxy/make behavior;
+- promoted/private/static property behavior;
+- Fiber ownership;
+- alias/delegator/external-container invalidation.
