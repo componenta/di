@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -12,9 +13,8 @@ final class ArrayTypedResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        // #[CurrentUser] is authoritative and must not be replaced by an
-        // object supplied under its declared class/interface key.
         return $target->typeNames !== []
+            && !$target->hasAttribute(Cast::class)
             && !$target->hasAttribute(CurrentUser::class);
     }
 
