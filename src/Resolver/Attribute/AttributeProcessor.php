@@ -7,10 +7,14 @@ namespace Componenta\DI\Resolver\Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Throwable;
 
 /**
  * Executes composed class/property/method attribute handlers.
@@ -47,7 +51,9 @@ final class AttributeProcessor
         ObjectCreationContext $context,
     ): void {
         if ($phase === AttributePhase::Both) {
-            throw new \InvalidArgumentException('AttributeProcessor::process() requires a concrete runtime phase.');
+            throw new InvalidConfigurationException(
+                'AttributeProcessor::process() requires a concrete runtime phase.',
+            );
         }
 
         $plan = $this->executionPlan($class);
@@ -57,8 +63,24 @@ final class AttributeProcessor
 
         foreach ($usages as $usage) {
             $handler = $usage->definition->handler;
-            if ($handler instanceof AttributeHandlerInterface) {
+            if (!$handler instanceof AttributeHandlerInterface) {
+                continue;
+            }
+
+            try {
                 $handler->handle($usage->attribute, $usage->target, $context);
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                if ($usage->target instanceof ReflectionProperty) {
+                    throw ResolutionException::forProperty($usage->target, previous: $e);
+                }
+
+                $serviceId = $usage->target instanceof ReflectionClass
+                    ? $usage->target->getName()
+                    : $usage->target->getDeclaringClass()->getName();
+
+                throw ResolutionException::forService($serviceId, $e);
             }
         }
     }
