@@ -80,7 +80,7 @@ jobs:
 
   benchmark:
     name: v4 vs v5 benchmark
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: ubuntu-latest
 
