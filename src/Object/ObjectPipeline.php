@@ -41,24 +41,25 @@ final class ObjectPipeline
         $this->metadata($class);
     }
 
-    /** @param ReflectionClass<object> $class */
-    public function canCreate(ReflectionClass $class): bool
+    /** @param class-string|ReflectionClass<object> $class */
+    public function canCreate(string|ReflectionClass $class): bool
     {
-        if (!is_entry_class_eligible($class)) {
+        $metadata = $this->metadata($class);
+        if (!is_entry_class_eligible($metadata->class)) {
             return false;
         }
-        if ($class->isInstantiable()) {
+        if ($metadata->class->isInstantiable()) {
             return true;
         }
 
-        return $this->metadata($class)->classPlan->has(ConstructorPolicy::class);
+        return $metadata->classPlan->has(ConstructorPolicy::class);
     }
 
     /** @param class-string|ReflectionClass<object> $class */
     public function canDirectInstantiate(string|ReflectionClass $class): bool
     {
         $metadata = $this->metadata($class);
-        return is_entry_class_eligible($metadata->class)
+        return $this->canCreate($metadata->class)
             && $metadata->class->isInstantiable()
             && !$metadata->hasAttributeHandlers
             && ($metadata->constructor === null || $metadata->constructorTargets === []);
