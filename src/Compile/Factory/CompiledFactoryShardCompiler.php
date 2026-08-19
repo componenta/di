@@ -53,7 +53,11 @@ final readonly class CompiledFactoryShardCompiler
             // therefore fail now, never only after deploying the shard.
             $this->objects?->prepare($class);
 
-            $factory = $this->factories->generate($class, 'createEntry' . $index++);
+            $factory = $this->factories->generate(
+                $class,
+                'createEntry' . $index++,
+                $this->objects?->canDirectInstantiate($class) ?? false,
+            );
             $bytes = strlen($factory->code);
             if ($current !== [] && $size + $bytes > $maxBytes) {
                 $this->writeShard($current, $directory, $namespace, $definitions);
