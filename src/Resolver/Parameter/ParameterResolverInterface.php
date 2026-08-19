@@ -10,9 +10,9 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 /**
  * Resolves one constructor/callable parameter.
  *
- * This is the only extension contract allowed to produce parameter values.
- * Attribute composition may classify and validate a parameter, but the value
- * itself must still be returned by a ParameterResolverInterface.
+ * Implementations should throw {@see ResolutionException} for expected
+ * resolver failures. Any foreign throwable is normalized by
+ * {@see ParametersResolver} before it can leave the DI parameter pipeline.
  */
 interface ParameterResolverInterface
 {
