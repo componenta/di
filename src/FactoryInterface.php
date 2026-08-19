@@ -13,12 +13,10 @@ interface FactoryInterface
 {
     /**
      * @param class-string|non-empty-string $entry
+     * @param array<string|int, mixed> $params
      * @throws NotFoundException
      * @throws CircularDependencyException
      * @throws ResolutionException
      */
-    public function make(
-        string $entry,
-        ResolutionContext $context = new ResolutionContext(),
-    ): object;
+    public function make(string $entry, array $params = []): object;
 }
