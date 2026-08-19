@@ -79,6 +79,9 @@ final class ParametersResolver
     public function seal(): void
     {
         $this->registered = [];
+        $this->supportedSlots = null;
+        $this->supportedResolvers = null;
+        $this->preparedTargets = null;
         $this->sealed = true;
     }
 
@@ -158,9 +161,11 @@ final class ParametersResolver
     /** @return list<int> */
     public function resolverSlotsFor(ParameterTarget $target): array
     {
-        $cache = $this->supportedSlots ??= new WeakMap();
-        if (isset($cache[$target])) {
-            return $cache[$target];
+        if ($this->sealed) {
+            $cache = $this->supportedSlots ??= new WeakMap();
+            if (isset($cache[$target])) {
+                return $cache[$target];
+            }
         }
 
         /** @var list<int> $slots */
@@ -189,6 +194,11 @@ final class ParametersResolver
             );
         }
 
+        if (!$this->sealed) {
+            return $slots;
+        }
+
+        $cache = $this->supportedSlots ??= new WeakMap();
         return $cache[$target] = $slots;
     }
 
@@ -240,9 +250,11 @@ final class ParametersResolver
 
     private function prepareTarget(ParameterTarget $target): void
     {
-        $cache = $this->preparedTargets ??= new WeakMap();
-        if (isset($cache[$target])) {
-            return;
+        if ($this->sealed) {
+            $cache = $this->preparedTargets ??= new WeakMap();
+            if (isset($cache[$target])) {
+                return;
+            }
         }
 
         $unsupportedReason = match (true) {
@@ -260,15 +272,21 @@ final class ParametersResolver
 
         $this->plans->build($target->reflection);
         $this->resolversFor($target);
-        $cache[$target] = true;
+
+        if ($this->sealed) {
+            $cache = $this->preparedTargets ??= new WeakMap();
+            $cache[$target] = true;
+        }
     }
 
     /** @return list<ParameterResolverInterface> */
     private function resolversFor(ParameterTarget $target): array
     {
-        $cache = $this->supportedResolvers ??= new WeakMap();
-        if (isset($cache[$target])) {
-            return $cache[$target];
+        if ($this->sealed) {
+            $cache = $this->supportedResolvers ??= new WeakMap();
+            if (isset($cache[$target])) {
+                return $cache[$target];
+            }
         }
 
         $resolvers = [];
@@ -276,6 +294,11 @@ final class ParametersResolver
             $resolvers[] = $this->resolverList[$slot];
         }
 
+        if (!$this->sealed) {
+            return $resolvers;
+        }
+
+        $cache = $this->supportedResolvers ??= new WeakMap();
         return $cache[$target] = $resolvers;
     }
 
