@@ -9,10 +9,10 @@ use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use InvalidArgumentException;
 
 final class AuditTrivialEntry {}
 
@@ -86,7 +86,7 @@ test('AOT rejects the same inaccessible constructor that runtime cannot resolve'
         expect(fn() => (new ContainerBuilder())->compileFactories(
             [AuditPrivateConstructorEntry::class],
             $directory,
-        ))->toThrow(InvalidArgumentException::class);
+        ))->toThrow(InvalidConfigurationException::class);
     } finally {
         foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
             @unlink($file);
