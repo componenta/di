@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Factory;
 
-use RuntimeException;
+use Componenta\DI\Exception\CompilationException;
+use Componenta\DI\Exception\ExceptionInterface;
+use Throwable;
 
 use function Componenta\DI\with_suppressed_warnings;
 
@@ -12,6 +14,17 @@ use function Componenta\DI\with_suppressed_warnings;
 final readonly class CompiledFactoryShardWriter
 {
     public function write(string $file, string $code): void
+    {
+        try {
+            $this->writeShard($file, $code);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw CompilationException::forArtifact($file, $e);
+        }
+    }
+
+    private function writeShard(string $file, string $code): void
     {
         $directory = dirname($file);
 
@@ -21,7 +34,7 @@ final readonly class CompiledFactoryShardWriter
             );
 
             if (!$created && !is_dir($directory)) {
-                throw new RuntimeException(sprintf(
+                throw new CompilationException(sprintf(
                     'Cannot create factory shard directory "%s".',
                     $directory,
                 ));
@@ -45,15 +58,11 @@ final readonly class CompiledFactoryShardWriter
 
             if (!$committed) {
                 if (!is_file($file)) {
-                    throw new RuntimeException(sprintf(
+                    throw new CompilationException(sprintf(
                         'Cannot activate generated factory shard "%s".',
                         $file,
                     ));
                 }
-
-                // Another writer may have published the same content-addressed
-                // shard first. Reuse it only when its bytes are exactly the
-                // artifact we intended to publish.
                 $this->assertExistingContents($file, $code);
             }
         } finally {
@@ -70,14 +79,14 @@ final readonly class CompiledFactoryShardWriter
         );
 
         if ($existing === false) {
-            throw new RuntimeException(sprintf(
+            throw new CompilationException(sprintf(
                 'Cannot read existing generated factory shard "%s".',
                 $file,
             ));
         }
 
         if ($existing !== $code) {
-            throw new RuntimeException(sprintf(
+            throw new CompilationException(sprintf(
                 'Generated factory shard "%s" already exists with unexpected contents.',
                 $file,
             ));
@@ -89,7 +98,9 @@ final readonly class CompiledFactoryShardWriter
     private function lint(string $file): void
     {
         if (!function_exists('proc_open')) {
-            throw new RuntimeException('Generated factory shard cannot be validated because proc_open() is unavailable.');
+            throw new CompilationException(
+                'Generated factory shard cannot be validated because proc_open() is unavailable.',
+            );
         }
 
         $pipes = [];
@@ -110,7 +121,9 @@ final readonly class CompiledFactoryShardWriter
             || !is_resource($stdoutPipe)
             || !is_resource($stderrPipe)
         ) {
-            throw new RuntimeException('Cannot start PHP syntax validation for a generated factory shard.');
+            throw new CompilationException(
+                'Cannot start PHP syntax validation for a generated factory shard.',
+            );
         }
 
         with_suppressed_warnings(static fn(): bool => fclose($stdin));
@@ -122,7 +135,9 @@ final readonly class CompiledFactoryShardWriter
 
         if ($status !== 0) {
             $output = trim((is_string($stdout) ? $stdout : '') . "\n" . (is_string($stderr) ? $stderr : ''));
-            throw new RuntimeException("Generated factory shard failed PHP compile validation:\n" . $output);
+            throw new CompilationException(
+                "Generated factory shard failed PHP compile validation:\n" . $output,
+            );
         }
     }
 
@@ -152,7 +167,7 @@ final readonly class CompiledFactoryShardWriter
                     );
 
                     if ($written === false || $written === 0) {
-                        throw new RuntimeException(sprintf(
+                        throw new CompilationException(sprintf(
                             'Cannot write generated factory shard "%s".',
                             $temporary,
                         ));
@@ -162,24 +177,22 @@ final readonly class CompiledFactoryShardWriter
                 }
 
                 if (!with_suppressed_warnings(static fn(): bool => fflush($handle))) {
-                    throw new RuntimeException(sprintf(
+                    throw new CompilationException(sprintf(
                         'Cannot flush generated factory shard "%s".',
                         $temporary,
                     ));
                 }
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 with_suppressed_warnings(static fn(): bool => fclose($handle));
                 with_suppressed_warnings(static fn(): bool => unlink($temporary));
-
                 throw $e;
             }
 
             with_suppressed_warnings(static fn(): bool => fclose($handle));
-
             return $temporary;
         }
 
-        throw new RuntimeException(sprintf(
+        throw new CompilationException(sprintf(
             'Cannot allocate a temporary file in "%s".',
             $directory,
         ));
