@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\ConcurrentResolutionException;
 use Fiber;
 use Psr\Container\ContainerInterface;
@@ -13,6 +14,11 @@ use RuntimeException;
 function v5DeferredDelegatorNative(string $entry, ContainerInterface $container): string
 {
     return $entry . ':native';
+}
+
+final readonly class RuntimeDefinitionOwnershipValue
+{
+    public function __construct(public string $source) {}
 }
 
 test('shared resolution distinguishes concurrent Fiber ownership from dependency cycles', function (): void {
@@ -85,4 +91,35 @@ test('adding an external container invalidates deferred callable ownership', fun
     $container->addContainer($external);
 
     expect($container->get('service'))->toBe('base:external');
+});
+
+test('external containers own shared get while fresh make keeps the local runtime definition', function (): void {
+    $external = new class () implements ContainerInterface {
+        public int $hasCalls = 0;
+
+        public function get(string $id): mixed
+        {
+            return new RuntimeDefinitionOwnershipValue('external');
+        }
+
+        public function has(string $id): bool
+        {
+            ++$this->hasCalls;
+            return $id === 'runtime.owned';
+        }
+    };
+    $container = (new ContainerBuilder())->build();
+    $container->addContainer($external);
+    $container->set(
+        'runtime.owned',
+        Definition::factory(static fn(): RuntimeDefinitionOwnershipValue =>
+            new RuntimeDefinitionOwnershipValue('local')),
+    );
+
+    $external->hasCalls = 0;
+
+    expect($container->has('runtime.owned'))->toBeTrue()
+        ->and($external->hasCalls)->toBe(1)
+        ->and($container->get('runtime.owned')->source)->toBe('external')
+        ->and($container->make('runtime.owned')->source)->toBe('local');
 });
