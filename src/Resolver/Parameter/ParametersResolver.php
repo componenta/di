@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use ReflectionParameter;
+use Throwable;
 use WeakMap;
 
 /** Orchestrates the ordered ParameterResolverInterface chain. */
@@ -46,12 +49,14 @@ final class ParametersResolver
     public function add(ParameterResolverInterface $resolver, int $priority = 0): void
     {
         if ($this->sealed) {
-            throw new \LogicException('Parameter resolver pipeline is sealed and cannot be changed.');
+            throw new InvalidConfigurationException(
+                'Parameter resolver pipeline is sealed and cannot be changed.',
+            );
         }
 
         $objectId = spl_object_id($resolver);
         if (isset($this->registered[$objectId])) {
-            throw new \InvalidArgumentException(sprintf(
+            throw new InvalidConfigurationException(sprintf(
                 'Parameter resolver %s is already registered.',
                 $resolver::class,
             ));
@@ -85,9 +90,7 @@ final class ParametersResolver
         );
     }
 
-    /**
-     * @return list<array{resolver:ParameterResolverInterface,priority:int}>
-     */
+    /** @return list<array{resolver:ParameterResolverInterface,priority:int}> */
     public function semanticRegistrations(): array
     {
         return array_map(
@@ -133,11 +136,7 @@ final class ParametersResolver
         $guardMappedSources = $state->mappedRequest !== null;
 
         foreach ($targets as $target) {
-            [$position, $value] = $this->resolveTarget(
-                $target,
-                $state,
-                $guardMappedSources,
-            );
+            [$position, $value] = $this->resolveTarget($target, $state, $guardMappedSources);
             $state->resolve($position, $value);
         }
 
@@ -167,14 +166,27 @@ final class ParametersResolver
         /** @var list<int> $slots */
         $slots = [];
         $revision = $this->revision;
-        foreach ($this->resolverList as $slot => $resolver) {
-            if ($resolver->supports($target)) {
-                $slots[] = $slot;
+
+        try {
+            foreach ($this->resolverList as $slot => $resolver) {
+                if ($resolver->supports($target)) {
+                    $slots[] = $slot;
+                }
             }
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: 'parameter resolver classification failed',
+                previous: $e,
+            );
         }
 
         if ($revision !== $this->revision) {
-            throw new \LogicException('Parameter resolver supports() must not mutate the resolver chain.');
+            throw new InvalidConfigurationException(
+                'Parameter resolver supports() must not mutate the resolver chain.',
+            );
         }
 
         return $cache[$target] = $slots;
@@ -191,16 +203,32 @@ final class ParametersResolver
         ParameterResolutionContext $context,
         bool $guardMappedSources,
     ): array {
-        $this->prepareTarget($target);
-        if ($guardMappedSources) {
-            MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
-        }
-
-        foreach ($this->resolversFor($target) as $resolver) {
-            $result = $resolver->resolveParameter($target, $context);
-            if ($result !== null) {
-                return \Componenta\DI\validate_parameter_resolution_result($result, $resolver, $target, $context);
+        try {
+            $this->prepareTarget($target);
+            if ($guardMappedSources) {
+                MappedRequestParameterSourceGuard::assertTargetContextNoConflicts($target, $context);
             }
+
+            foreach ($this->resolversFor($target) as $resolver) {
+                $result = $resolver->resolveParameter($target, $context);
+                if ($result !== null) {
+                    return \Componenta\DI\validate_parameter_resolution_result(
+                        $result,
+                        $resolver,
+                        $target,
+                        $context,
+                    );
+                }
+            }
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                previous: $e,
+                providedParameters: $context->provided,
+                resolvedParameters: $context->resolved,
+            );
         }
 
         throw ResolutionException::forParameter(
