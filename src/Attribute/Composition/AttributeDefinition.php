@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use InvalidArgumentException;
 
@@ -14,9 +15,8 @@ final readonly class AttributeDefinition
      * Selectors in requires/forbids/before/after may reference either another
      * attribute class or an AttributeCapabilityInterface class.
      *
-     * Handler is temporarily typed as object during the v5 migration: legacy
-     * specialized v5 handlers and the final generic AttributeHandlerInterface
-     * coexist until all built-ins have moved to the generic execution path.
+     * A null handler is valid for parameter-only attributes: their composition
+     * is described here, while execution belongs to ParameterResolverInterface.
      *
      * @param class-string $attribute
      * @param list<class-string<AttributeCapabilityInterface>> $capabilities
@@ -28,7 +28,7 @@ final readonly class AttributeDefinition
      */
     public function __construct(
         public string $attribute,
-        public object $handler,
+        public ?AttributeHandlerInterface $handler = null,
         public array $capabilities = [],
         public array $requires = [],
         public array $forbids = [],
