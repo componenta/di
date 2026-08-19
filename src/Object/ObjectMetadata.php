@@ -10,13 +10,9 @@ use ReflectionClass;
 /** Fully discovered immutable runtime metadata for one object class. */
 final readonly class ObjectMetadata
 {
-    /**
-     * @param ReflectionClass<object> $class
-     * @param list<PropertyValuePlan> $properties
-     */
+    /** @param ReflectionClass<object> $class */
     public function __construct(
         public ReflectionClass $class,
         public AttributePlan $classPlan,
-        public array $properties,
     ) {}
 }
