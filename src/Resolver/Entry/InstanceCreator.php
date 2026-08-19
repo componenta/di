@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
-use Componenta\DI\ResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionClass;
 
-/** Creates or initializes an object through the common parameter value pipeline. */
+/** Creates or initializes an object through the parameter resolver chain. */
 final readonly class InstanceCreator
 {
     public function __construct(private ParametersResolver $parameters) {}
@@ -16,28 +15,27 @@ final readonly class InstanceCreator
     /**
      * @template T of object
      * @param ReflectionClass<T> $class
+     * @param array<string|int, mixed> $params
      * @return T
      */
-    public function create(
-        ReflectionClass $class,
-        ResolutionContext $context = new ResolutionContext(),
-    ): object {
+    public function create(ReflectionClass $class, array $params = []): object
+    {
         $constructor = $class->getConstructor();
         if ($constructor === null) {
             return $class->newInstance();
         }
 
         return $class->newInstanceArgs(
-            $this->parameters->resolve($constructor->getParameters(), $context),
+            $this->parameters->resolve($constructor->getParameters(), $params),
         );
     }
 
-    /** @param ReflectionClass<object> $class */
-    public function initialize(
-        object $entry,
-        ReflectionClass $class,
-        ResolutionContext $context = new ResolutionContext(),
-    ): void {
+    /**
+     * @param ReflectionClass<object> $class
+     * @param array<string|int, mixed> $params
+     */
+    public function initialize(object $entry, ReflectionClass $class, array $params = []): void
+    {
         $constructor = $class->getConstructor();
         if ($constructor === null) {
             return;
@@ -45,7 +43,7 @@ final readonly class InstanceCreator
 
         $constructor->invokeArgs(
             $entry,
-            $this->parameters->resolve($constructor->getParameters(), $context),
+            $this->parameters->resolve($constructor->getParameters(), $params),
         );
     }
 }
