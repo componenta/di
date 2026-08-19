@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 use ReflectionMethod;
+use Throwable;
 
 /** Creates or initializes an object through the parameter resolver chain. */
 final readonly class InstanceCreator
@@ -50,12 +53,24 @@ final readonly class InstanceCreator
         array $params = [],
     ): object {
         if ($constructor === null) {
-            return $class->newInstance();
+            try {
+                return $class->newInstance();
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw ResolutionException::forService($class->getName(), $e);
+            }
         }
 
-        return $class->newInstanceArgs(
-            $this->parameters->resolveTargets($targets, $params),
-        );
+        $arguments = $this->parameters->resolveTargets($targets, $params);
+
+        try {
+            return $class->newInstanceArgs($arguments);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forService($class->getName(), $e);
+        }
     }
 
     /**
@@ -87,10 +102,18 @@ final readonly class InstanceCreator
             return;
         }
 
-        $constructor->invokeArgs(
-            $entry,
-            $this->parameters->resolveTargets($targets, $params),
-        );
+        $arguments = $this->parameters->resolveTargets($targets, $params);
+
+        try {
+            $constructor->invokeArgs($entry, $arguments);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forService(
+                $constructor->getDeclaringClass()->getName(),
+                $e,
+            );
+        }
     }
 
     /** @return list<ParameterTarget> */
