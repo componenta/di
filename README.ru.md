@@ -380,8 +380,21 @@ Integer keys `parameter_resolvers` являются priorities и не пере�
 
 Пакет экспортирует `Componenta\DI\ConfigProvider` через `extra.componenta.config-providers` для Componenta package discovery.
 
+## Контракт исключений
+
+`Componenta\DI\Exception\ExceptionInterface` — единая package-level граница для ошибок, принадлежащих DI или нормализованных DI. Интерфейс также наследует PSR-11 `ContainerExceptionInterface`.
+
+- `get()` и `make()` выпускают только Componenta DI exceptions; отсутствующий entry представлен `NotFoundException`, который также реализует PSR-11 `NotFoundExceptionInterface`.
+- ошибки parameter resolvers, attribute handlers, конструктора, factory, delegator, external container, validation и caster нормализуются владельцем соответствующего DI pipeline; исходный foreign throwable сохраняется в `getPrevious()`.
+- `call()` разделён на две фазы: подготовка callable и аргументов относится к DI boundary, а после входа в явно вызванное пользовательское callable его исключения проходят без изменения.
+- `AttributeCompositionException` является специализированным `InvalidConfigurationException`.
+- неверный builder/AOT input даёт `InvalidConfigurationException`; ошибки сериализации, filesystem, lint и activation сгенерированных артефактов дают `CompilationException`.
+- типы validation/caster exceptions не входят в публичный exception ABI DI. Request mapping сохраняет их как cause внутри `ResolutionException`.
+
+Один и тот же exception contract действует в reflection и compiled/AOT режимах, включая deferred initialization встроенных lazy objects.
+
 ## CI и parity
 
 CI выполняет Composer validation, PHP-CS-Fixer, PHPStan на максимальном уровне и Pest на PHP 8.4/8.5.
 
-Parity suite покрывает публичные сигнатуры v4, custom convention resolvers, custom parameter/object handlers, композицию нескольких атрибутов параметра, конфликты sources, reflection/AOT parity, request provenance, persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators и external containers.
+Parity suite покрывает публичные сигнатуры v4, custom convention resolvers, custom parameter/object handlers, композицию нескольких атрибутов параметра, конфликты sources, reflection/AOT parity, request provenance, persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers и строгий exception contract.
