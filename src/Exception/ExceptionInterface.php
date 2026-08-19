@@ -8,17 +8,18 @@ use Psr\Container\ContainerExceptionInterface;
 use Throwable;
 
 /**
- * Root marker interface for all exceptions thrown by the DI container.
+ * Root marker for failures owned or normalized by Componenta DI.
  *
- * Extends {@see ContainerExceptionInterface} so that any DI-container failure
- * is also a PSR-11 container failure - a single catch of either interface
- * captures every value the container can raise.
+ * Every failure produced while Componenta DI resolves, creates, configures,
+ * compiles or decorates an entry is surfaced through this interface. Foreign
+ * throwables are retained as the previous exception of an appropriate DI
+ * exception.
  *
- * @see NotFoundException               Entry lookup failed (PSR-11 NotFound).
- * @see CircularDependencyException     Cycle detected in a service or alias graph.
- * @see InvalidConfigurationException   Configuration or definition invalid.
- * @see ResolutionException             Autowire / factory / property failure.
- * @see DelegatorException              Delegator (decorator) misbehaved.
- * @see CallableExceptionInterface      Anything in the callable pipeline.
+ * The one deliberate boundary is an explicitly invoked user callable: once
+ * DI has resolved the callable and all of its arguments and control enters the
+ * callable body, throwables raised by that body propagate unchanged.
+ *
+ * Extending PSR-11 ContainerExceptionInterface gives consumers both a
+ * Componenta-specific catch boundary and normal PSR-11 interoperability.
  */
 interface ExceptionInterface extends Throwable, ContainerExceptionInterface {}
