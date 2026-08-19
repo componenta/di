@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\Attribute\Composition\Capability\CreationStrategy;
 use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
@@ -54,18 +55,22 @@ use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Object\ObjectPipeline;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
+use Componenta\DI\Resolver\Attribute\Handler\ConfigHandler;
+use Componenta\DI\Resolver\Attribute\Handler\CurrentUserHandler;
+use Componenta\DI\Resolver\Attribute\Handler\EntryIdHandler;
+use Componenta\DI\Resolver\Attribute\Handler\EnvHandler;
 use Componenta\DI\Resolver\Attribute\Handler\InitHandler;
 use Componenta\DI\Resolver\Attribute\Handler\InjectHandler;
 use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
+use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
-use Componenta\DI\Resolver\Attribute\Handler\ProxyHandler;
-use Componenta\DI\Resolver\CastableResolver;
-use Componenta\DI\Resolver\ConfigAttributeResolver;
+use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\CurrentUserProvider;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
-use Componenta\DI\Resolver\CurrentUserResolver;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
@@ -78,46 +83,41 @@ use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\EntryIdUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\EnvUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUpRunner;
-use Componenta\DI\Resolver\EntryIdResolver;
-use Componenta\DI\Resolver\EnvResolver;
-use Componenta\DI\Resolver\MakeAttributeResolver;
 use Componenta\DI\Resolver\Parameter\ArrayResolver as ParameterArrayResolver;
 use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
+use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
 use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolverFactory;
+use Componenta\DI\Resolver\Parameter\Request\LazyCasterProvider;
+use Componenta\DI\Resolver\Parameter\Request\LazyFactory;
+use Componenta\DI\Resolver\Parameter\Request\LazyValidationProvider;
+use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
 /**
  * v5 composition root.
  *
- * Parameter values are produced only by ParameterResolverInterface. Class,
- * property and method attributes are executed only by AttributeHandlerInterface.
- * Attribute composition is shared metadata/validation for both paths.
+ * Parameter values are produced only by ParameterResolverInterface. Parameter
+ * attributes enter that pipeline through one AttributeParameterResolver; class,
+ * property and method attributes execute through AttributeHandlerInterface.
  *
  * @phpstan-consistent-constructor
  */
 class ContainerBuilder
 {
-    public const int PRIORITY_PARAM_CASTABLE = 1200;
     public const int PRIORITY_PARAM_ARRAY = 1100;
     public const int PRIORITY_PARAM_ARRAY_TYPED = 1000;
-    public const int PRIORITY_PARAM_CURRENT_USER = 900;
-    public const int PRIORITY_PARAM_REQUEST = 800;
-    public const int PRIORITY_PARAM_MAKE = 700;
-    public const int PRIORITY_PARAM_ENV = 600;
-    public const int PRIORITY_PARAM_ENTRY_ID = 500;
-    public const int PRIORITY_PARAM_CONFIG = 400;
+    public const int PRIORITY_PARAM_ATTRIBUTE = 900;
+    public const int PRIORITY_PARAM_REQUEST_CONTEXT = 800;
     public const int PRIORITY_PARAM_AUTOWIRE = 300;
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int CACHE_VERSION = 14;
+    public const int CACHE_VERSION = 15;
 
     /** @var array<string,non-empty-string> */
     private const array DEFAULT_ALIASES = [
@@ -305,32 +305,28 @@ class ContainerBuilder
         );
         $bootstrap->initialize($entryResolver, $executor);
 
-        $shared = $this->sharedResolvers($container, $proxyFactory);
-
-        if (!$this->replaceParameterResolvers) {
-            foreach ($this->defaultParameterResolvers($container, $shared) as [$resolver, $priority]) {
-                $parameters->add($resolver, $priority);
-            }
-        }
+        $handlers = $this->sharedAttributeHandlers($container, $proxyFactory);
 
         if (!$this->replaceAttributeDefinitions) {
-            $this->registerBuiltInAttributes(
-                $attributes,
-                $container,
-                $shared,
-            );
+            $this->registerBuiltInAttributes($attributes, $container, $handlers);
         }
 
         foreach ($this->attributeCapabilities as $policy) {
             $attributes->defineCapability($policy);
         }
 
-        foreach ($this->parameterResolvers as [$spec, $priority]) {
-            $parameters->add($this->materializeResolver($spec, $container), $priority);
-        }
-
         foreach ($this->attributeDefinitions as $spec) {
             $attributes->register($this->materializeAttributeDefinition($spec, $container));
+        }
+
+        if (!$this->replaceParameterResolvers) {
+            foreach ($this->defaultParameterResolvers($container, $plans) as [$resolver, $priority]) {
+                $parameters->add($resolver, $priority);
+            }
+        }
+
+        foreach ($this->parameterResolvers as [$spec, $priority]) {
+            $parameters->add($this->materializeResolver($spec, $container), $priority);
         }
 
         $parameters->seal();
@@ -435,33 +431,27 @@ class ContainerBuilder
         );
     }
 
-    /**
-     * @param array<class-string,ParameterResolverInterface> $shared
-     * @return list<array{0:ParameterResolverInterface,1:int}>
-     */
-    protected function defaultParameterResolvers(ContainerInterface $container, array $shared): array
-    {
+    /** @return list<array{0:ParameterResolverInterface,1:int}> */
+    protected function defaultParameterResolvers(
+        ContainerInterface $container,
+        AttributePlanBuilder $plans,
+    ): array {
         return [
-            [$shared[CastableResolver::class], self::PRIORITY_PARAM_CASTABLE],
             [new ParameterArrayResolver(), self::PRIORITY_PARAM_ARRAY],
             [new ArrayTypedResolver(), self::PRIORITY_PARAM_ARRAY_TYPED],
-            [$shared[CurrentUserResolver::class], self::PRIORITY_PARAM_CURRENT_USER],
-            [$shared[RequestResolver::class], self::PRIORITY_PARAM_REQUEST],
-            [$shared[MakeAttributeResolver::class], self::PRIORITY_PARAM_MAKE],
-            [$shared[EnvResolver::class], self::PRIORITY_PARAM_ENV],
-            [$shared[EntryIdResolver::class], self::PRIORITY_PARAM_ENTRY_ID],
-            [$shared[ConfigAttributeResolver::class], self::PRIORITY_PARAM_CONFIG],
+            [new AttributeParameterResolver($plans), self::PRIORITY_PARAM_ATTRIBUTE],
+            [new RequestContextResolver(), self::PRIORITY_PARAM_REQUEST_CONTEXT],
             [new AutowireByTypeResolver($container), self::PRIORITY_PARAM_AUTOWIRE],
             [new DefaultValueResolver(), self::PRIORITY_PARAM_DEFAULT_VALUE],
             [new NullableResolver(), self::PRIORITY_PARAM_NULLABLE],
         ];
     }
 
-    /** @param array<class-string,ParameterResolverInterface> $shared */
+    /** @param array<class-string,AttributeHandlerInterface> $handlers */
     private function registerBuiltInAttributes(
         AttributeDefinitionRegistry $registry,
         Container $container,
-        array $shared,
+        array $handlers,
     ): void {
         foreach ([
             new CapabilityPolicy(ValueProvider::class, 1),
@@ -473,33 +463,34 @@ class ContainerBuilder
             $registry->defineCapability($policy);
         }
 
-        /** @var CastableResolver $cast */
-        $cast = $shared[CastableResolver::class];
-        /** @var ConfigAttributeResolver $config */
-        $config = $shared[ConfigAttributeResolver::class];
-        /** @var CurrentUserResolver $currentUser */
-        $currentUser = $shared[CurrentUserResolver::class];
-        /** @var EntryIdResolver $entryId */
-        $entryId = $shared[EntryIdResolver::class];
-        /** @var EnvResolver $env */
-        $env = $shared[EnvResolver::class];
-        /** @var MakeAttributeResolver $make */
-        $make = $shared[MakeAttributeResolver::class];
+        /** @var CastHandler $cast */
+        $cast = $handlers[CastHandler::class];
+        /** @var ConfigHandler $config */
+        $config = $handlers[ConfigHandler::class];
+        /** @var CurrentUserHandler $currentUser */
+        $currentUser = $handlers[CurrentUserHandler::class];
+        /** @var EntryIdHandler $entryId */
+        $entryId = $handlers[EntryIdHandler::class];
+        /** @var EnvHandler $env */
+        $env = $handlers[EnvHandler::class];
+        /** @var MakeHandler $make */
+        $make = $handlers[MakeHandler::class];
+        /** @var RequestAttributeHandler $request */
+        $request = $handlers[RequestAttributeHandler::class];
 
-        $providerDefinitions = [
-            [ConfigAttribute::class, $config],
-            [Env::class, $env],
-            [EntryId::class, $entryId],
-            [CurrentUser::class, $currentUser],
-            [Make::class, $make],
-            [Inject::class, new InjectHandler($container)],
-            [Init::class, new InitHandler($container)],
-        ];
-        foreach ($providerDefinitions as [$attribute, $handler]) {
+        foreach ([
+            [ConfigAttribute::class, $config, [ValueProvider::class]],
+            [Env::class, $env, [ValueProvider::class]],
+            [EntryId::class, $entryId, [ValueProvider::class]],
+            [CurrentUser::class, $currentUser, [AuthoritativeValueProvider::class]],
+            [Make::class, $make, [ValueProvider::class]],
+            [Inject::class, new InjectHandler($container), [ValueProvider::class]],
+            [Init::class, new InitHandler($container), [ValueProvider::class]],
+        ] as [$attribute, $handler, $capabilities]) {
             $registry->register(new AttributeDefinition(
                 $attribute,
                 $handler,
-                [ValueProvider::class],
+                $capabilities,
             ));
         }
 
@@ -522,7 +513,7 @@ class ContainerBuilder
         ] as $attribute) {
             $registry->register(new AttributeDefinition(
                 $attribute,
-                handler: null,
+                handler: $request,
                 capabilities: [ValueProvider::class],
             ));
         }
@@ -540,7 +531,7 @@ class ContainerBuilder
         ));
         $registry->register(new AttributeDefinition(
             Proxy::class,
-            new ProxyHandler($make),
+            $make,
             [CreationStrategy::class],
             phase: AttributePhase::Both,
         ));
@@ -564,19 +555,23 @@ class ContainerBuilder
         ));
     }
 
-    /** @return array<class-string,ParameterResolverInterface> */
-    private function sharedResolvers(
+    /** @return array<class-string,AttributeHandlerInterface> */
+    private function sharedAttributeHandlers(
         Container $container,
         ProxyFactoryInterface $proxyFactory,
     ): array {
         return [
-            CastableResolver::class => new CastableResolver($container),
-            ConfigAttributeResolver::class => new ConfigAttributeResolver($container),
-            CurrentUserResolver::class => new CurrentUserResolver($container),
-            EntryIdResolver::class => new EntryIdResolver($container),
-            EnvResolver::class => new EnvResolver($container),
-            MakeAttributeResolver::class => new MakeAttributeResolver($container, $proxyFactory),
-            RequestResolver::class => (new RequestResolverFactory())($container),
+            CastHandler::class => new CastHandler($container),
+            ConfigHandler::class => new ConfigHandler($container),
+            CurrentUserHandler::class => new CurrentUserHandler($container),
+            EntryIdHandler::class => new EntryIdHandler($container),
+            EnvHandler::class => new EnvHandler($container),
+            MakeHandler::class => new MakeHandler($container, $proxyFactory),
+            RequestAttributeHandler::class => new RequestAttributeHandler(
+                new LazyFactory($container),
+                new LazyCasterProvider($container),
+                new LazyValidationProvider($container),
+            ),
         ];
     }
 
