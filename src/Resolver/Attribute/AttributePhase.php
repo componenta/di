@@ -9,4 +9,5 @@ enum AttributePhase: int
 {
     case BeforeInstantiation = 100;
     case AfterInstantiation = 200;
+    case Both = 300;
 }
