@@ -69,6 +69,7 @@ use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\CurrentUserProvider;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
@@ -109,15 +110,15 @@ use ReflectionClass;
  */
 class ContainerBuilder
 {
+    public const int PRIORITY_PARAM_ATTRIBUTE = 1200;
     public const int PRIORITY_PARAM_ARRAY = 1100;
     public const int PRIORITY_PARAM_ARRAY_TYPED = 1000;
-    public const int PRIORITY_PARAM_ATTRIBUTE = 900;
     public const int PRIORITY_PARAM_REQUEST_CONTEXT = 800;
     public const int PRIORITY_PARAM_AUTOWIRE = 300;
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
 
-    public const int CACHE_VERSION = 15;
+    public const int CACHE_VERSION = 16;
 
     /** @var array<string,non-empty-string> */
     private const array DEFAULT_ALIASES = [
@@ -437,9 +438,9 @@ class ContainerBuilder
         AttributePlanBuilder $plans,
     ): array {
         return [
+            [new AttributeParameterResolver($plans), self::PRIORITY_PARAM_ATTRIBUTE],
             [new ParameterArrayResolver(), self::PRIORITY_PARAM_ARRAY],
             [new ArrayTypedResolver(), self::PRIORITY_PARAM_ARRAY_TYPED],
-            [new AttributeParameterResolver($plans), self::PRIORITY_PARAM_ATTRIBUTE],
             [new RequestContextResolver(), self::PRIORITY_PARAM_REQUEST_CONTEXT],
             [new AutowireByTypeResolver($container), self::PRIORITY_PARAM_AUTOWIRE],
             [new DefaultValueResolver(), self::PRIORITY_PARAM_DEFAULT_VALUE],
@@ -447,7 +448,7 @@ class ContainerBuilder
         ];
     }
 
-    /** @param array<class-string,AttributeHandlerInterface> $handlers */
+    /** @param array<class-string,AttributeHandlerInterface|ParameterAttributeHandlerInterface> $handlers */
     private function registerBuiltInAttributes(
         AttributeDefinitionRegistry $registry,
         Container $container,
@@ -522,6 +523,7 @@ class ContainerBuilder
             Cast::class,
             $cast,
             [ValueTransformer::class],
+            after: [ValueProvider::class],
         ));
         $registry->register(new AttributeDefinition(
             Lazy::class,
@@ -555,7 +557,7 @@ class ContainerBuilder
         ));
     }
 
-    /** @return array<class-string,AttributeHandlerInterface> */
+    /** @return array<class-string,AttributeHandlerInterface|ParameterAttributeHandlerInterface> */
     private function sharedAttributeHandlers(
         Container $container,
         ProxyFactoryInterface $proxyFactory,
