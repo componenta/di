@@ -11,9 +11,8 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Object\ObjectPipeline;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Value\ValueFallbackRegistry;
-use Componenta\DI\Value\ValuePipeline;
 use Psr\Container\ContainerInterface;
 
 /** Internal ids owned by the v5 composition root. */
@@ -36,8 +35,7 @@ final class ProtectedServiceIds
         VirtualProxyFactoryInterface::class => false,
         AttributeDefinitionRegistry::class => AttributeDefinitionRegistry::class,
         AttributePlanBuilder::class => AttributePlanBuilder::class,
-        ValueFallbackRegistry::class => ValueFallbackRegistry::class,
-        ValuePipeline::class => ValuePipeline::class,
+        AttributeProcessor::class => AttributeProcessor::class,
         ParametersResolver::class => ParametersResolver::class,
         ObjectPipeline::class => ObjectPipeline::class,
     ];
