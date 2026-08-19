@@ -246,6 +246,13 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 }
             }
 
+            if (defined($class . '::FAST_PATHS')) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Compiled shard "%s" uses the obsolete semantic fast-path format; rebuild the DI cache.',
+                    $class,
+                ));
+            }
+
             $expected = compiled_factory_pipeline_fingerprint(
                 $this->attributes,
                 $this->parameters,
