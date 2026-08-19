@@ -17,6 +17,7 @@ use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Compile\Factory\CompiledFactoryPathResolver;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
@@ -92,10 +93,11 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
 
             $factory = $this->resolveFactory($id);
             $container = new ContainerValue($this->container);
+            $factoryParams = MappedRequestContext::strip($params);
 
             return $factory instanceof LazyServiceFactoryInterface
-                ? $factory->lazy($this->container, $this->proxyFactory, $params)
-                : $factory($container, $params);
+                ? $factory->lazy($this->container, $this->proxyFactory, $factoryParams)
+                : $factory($container, $factoryParams);
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
