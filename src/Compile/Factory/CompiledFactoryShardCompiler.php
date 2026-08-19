@@ -10,7 +10,7 @@ use Componenta\DI\Object\ObjectPipeline;
 /** Packs generated entry methods into immutable content-addressed shards. */
 final readonly class CompiledFactoryShardCompiler
 {
-    public const int FORMAT_VERSION = 7;
+    public const int FORMAT_VERSION = 8;
     public const int DEFAULT_MAX_BYTES = 131072;
     public const string FILE_PREFIX = 'container.factories.';
 
@@ -95,10 +95,18 @@ final readonly class CompiledFactoryShardCompiler
             static fn(GeneratedFactory $factory): string => $factory->code,
             $shard,
         ));
+        /** @var array<string,class-string> $entries */
+        $entries = [];
+        foreach ($shard as $factory) {
+            $entries[$factory->method] = $factory->class;
+        }
 
-        $id = substr(hash('sha256', self::FORMAT_VERSION . "\0" . $namespace . "\0" . $payload), 0, 32);
+        $id = substr(hash(
+            'sha256',
+            self::FORMAT_VERSION . "\0" . $namespace . "\0" . serialize($entries) . "\0" . $payload,
+        ), 0, 32);
         $class = 'CompiledFactoryShard_' . $id;
-        $code = $this->code($namespace, $class, $payload);
+        $code = $this->code($namespace, $class, $payload, $entries);
         $file = self::FILE_PREFIX . substr(hash('sha256', $code), 0, 32) . '.php';
         $this->writer->write(rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $file, $code);
 
@@ -113,7 +121,8 @@ final readonly class CompiledFactoryShardCompiler
         }
     }
 
-    private function code(string $namespace, string $class, string $methods): string
+    /** @param array<string,class-string> $entries */
+    private function code(string $namespace, string $class, string $methods, array $entries): string
     {
         return sprintf(
             <<<'PHP'
@@ -125,6 +134,8 @@ namespace %s;
 
 final class %s
 {
+    public const int FORMAT_VERSION = %d;
+    public const array ENTRIES = %s;
     public const string PIPELINE_FINGERPRINT = %s;
 
     public function __construct(
@@ -138,6 +149,8 @@ return %s::class;
 PHP,
             $namespace,
             $class,
+            self::FORMAT_VERSION,
+            var_export($entries, true),
             var_export($this->pipelineFingerprint, true),
             ObjectPipeline::class,
             self::indent($methods, 4),
