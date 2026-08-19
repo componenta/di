@@ -25,7 +25,9 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
         $body = $this->parsedBody($request);
 
         if ($this->name instanceof ConfigPath) {
-            $result = self::path($body, array_values($this->name->toArray()));
+            /** @var list<string> $segments */
+            $segments = array_values($this->name->toArray());
+            $result = self::path($body, $segments);
             if ($result['found']) {
                 return $result['value'];
             }
@@ -62,7 +64,11 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
         return is_array($body) ? $body : get_object_vars($body);
     }
 
-    /** @param array<string|int,mixed> $data @param list<string> $segments @return array{found:bool,value:mixed} */
+    /**
+     * @param array<string|int,mixed> $data
+     * @param list<string> $segments
+     * @return array{found:bool,value:mixed}
+     */
     private static function path(array $data, array $segments): array
     {
         $current = $data;
@@ -77,6 +83,7 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
             if (!is_array($value)) {
                 return ['found' => false, 'value' => null];
             }
+            /** @var array<string|int,mixed> $value */
             $current = $value;
         }
         return ['found' => true, 'value' => $data];
