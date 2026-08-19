@@ -11,6 +11,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\CompilationException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\Cache\DiCacheGraphExporter;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
 use Throwable;
