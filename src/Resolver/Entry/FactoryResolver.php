@@ -20,7 +20,6 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\ResolutionContext;
 use Componenta\DI\Value\ValueFallbackRegistry;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
@@ -32,7 +31,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     /** @var array<string, object> */
     private array $compiledShards = [];
 
-    /** @var array<string, callable(ResolutionContext): mixed> */
+    /** @var array<string, callable(array<string|int, mixed>): mixed> */
     private array $compiledFactories = [];
 
     /** @param array<string, mixed> $factories */
@@ -62,7 +61,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return array_key_exists($id, $this->factories);
     }
 
-    public function resolve(string $id, ResolutionContext $context = new ResolutionContext()): mixed
+    /** @param array<string|int, mixed> $params */
+    public function resolve(string $id, array $params = []): mixed
     {
         if (!$this->can($id)) {
             throw NotFoundException::forService($id);
@@ -70,27 +70,30 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
 
         try {
             if (isset($this->compiledFactories[$id])) {
-                return ($this->compiledFactories[$id])($context);
+                return ($this->compiledFactories[$id])($params);
             }
 
             $definition = $this->factories[$id];
             $compiled = CompiledFactoryDefinition::decode($definition);
             if ($compiled !== null) {
-                $factory = $this->compiledFactory($compiled, $definition instanceof CompiledFactoryDefinition);
+                $factory = $this->compiledFactory(
+                    $compiled,
+                    $definition instanceof CompiledFactoryDefinition,
+                );
                 $this->compiledFactories[$id] = $factory;
-                return $factory($context);
+                return $factory($params);
             }
 
             if ($definition instanceof ClassDefinition) {
-                return $this->classDefinition($definition, $context);
+                return $this->classDefinition($definition, $params);
             }
 
             $factory = $this->resolveFactory($id);
             $container = new ContainerValue($this->container);
 
             return $factory instanceof LazyServiceFactoryInterface
-                ? $factory->lazy($this->container, $this->proxyFactory, $context)
-                : $factory($container, $context);
+                ? $factory->lazy($this->container, $this->proxyFactory, $params)
+                : $factory($container, $params);
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -98,7 +101,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
     }
 
-    private function classDefinition(ClassDefinition $definition, ResolutionContext $context): object
+    /** @param array<string|int, mixed> $params */
+    private function classDefinition(ClassDefinition $definition, array $params): object
     {
         $configured = $this->resolveDefinitionValue($definition->constructorParams);
         if (!is_array($configured)) {
@@ -107,22 +111,15 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
 
         $entry = $this->objects->create(
             $definition->value,
-            new ResolutionContext(
-                explicit: array_replace($configured, $context->explicit),
-                mapped: $context->mapped,
-                trusted: $context->trusted,
-            ),
+            array_replace($configured, $params),
         );
 
         foreach ($definition->methodCalls as $call) {
-            $params = $this->resolveDefinitionValue($call['params']);
-            if (!is_array($params)) {
+            $methodParams = $this->resolveDefinitionValue($call['params']);
+            if (!is_array($methodParams)) {
                 throw new InvalidConfigurationException('ClassDefinition method parameters must resolve to an array.');
             }
-            $this->executor->execute(
-                [$entry, $call['method']],
-                new ResolutionContext(explicit: $params, mapped: $context->mapped, trusted: $context->trusted),
-            );
+            $this->executor->call([$entry, $call['method']], $methodParams);
         }
 
         return $entry;
@@ -136,6 +133,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         if (!is_array($value)) {
             return $value;
         }
+
         $resolved = [];
         foreach ($value as $key => $item) {
             $resolved[$key] = $this->resolveDefinitionValue($item);
@@ -160,7 +158,11 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         if (!is_callable($factory)) {
-            throw new InvalidConfigurationException(sprintf('Factory service for "%s" resolved to non-callable %s.', $id, get_debug_type($factory)));
+            throw new InvalidConfigurationException(sprintf(
+                'Factory service for "%s" resolved to non-callable %s.',
+                $id,
+                get_debug_type($factory),
+            ));
         }
         if ($validate) {
             FactorySpecificationValidator::assertResolvedCallable($id, $factory);
@@ -168,10 +170,15 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return $factory;
     }
 
-    /** @return callable(ResolutionContext): mixed */
-    private function compiledFactory(CompiledFactoryDefinition $definition, bool $explicitDefinition): callable
-    {
-        $file = (new CompiledFactoryPathResolver($this->compiledFactoryBaseDir, $explicitDefinition))->resolve($definition->file);
+    /** @return callable(array<string|int, mixed>): mixed */
+    private function compiledFactory(
+        CompiledFactoryDefinition $definition,
+        bool $explicitDefinition,
+    ): callable {
+        $file = (new CompiledFactoryPathResolver(
+            $this->compiledFactoryBaseDir,
+            $explicitDefinition,
+        ))->resolve($definition->file);
         if (!$explicitDefinition) {
             self::assertContentAddressedShard($file);
         }
@@ -182,7 +189,10 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             if (!class_exists($class, false)) {
                 $loaded = require $file;
                 if (!is_string($loaded) || $loaded !== $class || !class_exists($class, false)) {
-                    throw new InvalidConfigurationException(sprintf('Compiled shard "%s" returned an unexpected class.', $file));
+                    throw new InvalidConfigurationException(sprintf(
+                        'Compiled shard "%s" returned an unexpected class.',
+                        $file,
+                    ));
                 }
             }
 
@@ -190,7 +200,10 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             $constant = $class . '::PIPELINE_FINGERPRINT';
             $actual = defined($constant) ? constant($constant) : null;
             if (!is_string($actual) || !hash_equals($expected, $actual)) {
-                throw new InvalidConfigurationException(sprintf('Compiled shard "%s" semantic fingerprint does not match runtime.', $class));
+                throw new InvalidConfigurationException(sprintf(
+                    'Compiled shard "%s" semantic fingerprint does not match runtime.',
+                    $class,
+                ));
             }
 
             $shard = new $class($this->objects);
@@ -199,7 +212,11 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
 
         $factory = [$shard, $definition->method];
         if (!is_callable($factory)) {
-            throw new InvalidConfigurationException(sprintf('Compiled factory %s::%s is not callable.', $definition->class, $definition->method));
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled factory %s::%s is not callable.',
+                $definition->class,
+                $definition->method,
+            ));
         }
         return $factory;
     }
@@ -207,11 +224,17 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     private static function assertContentAddressedShard(string $file): void
     {
         if (preg_match('/^container\\.factories\\.([a-f0-9]{32})\\.php$/D', basename($file), $matches) !== 1) {
-            throw new InvalidConfigurationException(sprintf('Compiled shard "%s" is not content-addressed.', $file));
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" is not content-addressed.',
+                $file,
+            ));
         }
         $hash = hash_file('sha256', $file);
         if (!is_string($hash) || !hash_equals($matches[1], substr($hash, 0, 32))) {
-            throw new InvalidConfigurationException(sprintf('Compiled shard "%s" failed its content hash check.', $file));
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard "%s" failed its content hash check.',
+                $file,
+            ));
         }
     }
 
@@ -221,7 +244,9 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
         FactorySpecificationValidator::assertValid($id, $definition);
-        $this->factories[$id] = $definition instanceof FactoryDefinition ? $definition->value : $definition;
+        $this->factories[$id] = $definition instanceof FactoryDefinition
+            ? $definition->value
+            : $definition;
         unset($this->compiledFactories[$id]);
     }
 
