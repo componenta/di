@@ -6,6 +6,9 @@ namespace Componenta\DI\Compile\Definition;
 
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Definition\DefinitionInterface;
+use Componenta\DI\Exception\CompilationException;
+use Componenta\DI\Exception\ExceptionInterface;
+use Throwable;
 
 /** Compiles only declarative builder/config definitions; runtime set() state is not visible here. */
 final readonly class DefinitionCompiler implements DefinitionCompilerInterface
@@ -37,7 +40,21 @@ final readonly class DefinitionCompiler implements DefinitionCompilerInterface
                 continue;
             }
 
-            $factories[$id] = $generator->generate($id, $definition);
+            try {
+                $factories[$id] = $generator->generate((string) $id, $definition);
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw new CompilationException(
+                    sprintf(
+                        'Definition code generator "%s" failed for "%s": %s',
+                        $generator::class,
+                        (string) $id,
+                        $e->getMessage(),
+                    ),
+                    previous: $e,
+                );
+            }
         }
 
         $dependencies[ConfigKey::FACTORIES] = $factories;
