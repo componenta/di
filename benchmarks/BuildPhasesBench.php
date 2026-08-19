@@ -25,10 +25,12 @@ namespace {
 }
 
 namespace Componenta\DI\Benchmarks\Build {
+    use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+    use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+    use Componenta\DI\CallableExecutorInterface;
     use Componenta\DI\ContainerBuilder;
+    use Componenta\DI\Object\ObjectPipeline;
     use Componenta\DI\ProxyFactoryInterface;
-    use Componenta\DI\Resolver\Attribute\AttributeHandlerRegistry;
-    use Componenta\DI\Resolver\Attribute\AttributeProcessor;
     use Componenta\DI\Resolver\Entry\EntryResolverInterface;
     use Componenta\DI\Resolver\Parameter\ParametersResolver;
     use Psr\Container\ContainerInterface;
@@ -59,59 +61,39 @@ namespace Componenta\DI\Benchmarks\Build {
         }
 
         protected function createEntryResolver(
-            ParametersResolver $parametersResolver,
-            AttributeProcessor $attributeProcessor,
             ContainerInterface $container,
             ProxyFactoryInterface $proxyFactory,
+            ObjectPipeline $objects,
+            CallableExecutorInterface $executor,
+            AttributeDefinitionRegistry $attributes,
+            ParametersResolver $parameters,
         ): EntryResolverInterface {
             $started = hrtime(true);
 
             try {
                 return parent::createEntryResolver(
-                    $parametersResolver,
-                    $attributeProcessor,
                     $container,
                     $proxyFactory,
+                    $objects,
+                    $executor,
+                    $attributes,
+                    $parameters,
                 );
             } finally {
                 self::record('entry resolver graph', $started);
             }
         }
 
-        protected function buildDefaultParameterResolvers(
+        protected function defaultParameterResolvers(
             ContainerInterface $container,
+            AttributePlanBuilder $plans,
         ): array {
             $started = hrtime(true);
 
             try {
-                return parent::buildDefaultParameterResolvers($container);
+                return parent::defaultParameterResolvers($container, $plans);
             } finally {
-                self::record('  create parameter set', $started);
-            }
-        }
-
-        protected function buildDefaultAttributeHandlers(
-            ContainerInterface $container,
-        ): array {
-            $started = hrtime(true);
-
-            try {
-                return parent::buildDefaultAttributeHandlers($container);
-            } finally {
-                self::record('  create handler set', $started);
-            }
-        }
-        protected function fillPipelines(
-            ParametersResolver $parameters,
-            AttributeHandlerRegistry $handlers,
-            ContainerInterface $container,
-        ): void {
-            $started = hrtime(true);
-
-            try {
-                parent::fillPipelines($parameters, $handlers, $container);
-            } finally {
-                self::record('extension pipelines', $started);
+                self::record('default parameter set', $started);
             }
         }
 
@@ -125,7 +107,7 @@ namespace Componenta\DI\Benchmarks\Build {
 
     $iterations = max(1_000, (int) ($_SERVER['DI_BUILD_ITERATIONS'] ?? 20_000));
 
-    for ($index = 0; $index < 1_000; ++$index) {
+    for ($index = 0; $index < min(1_000, $iterations); ++$index) {
         (new ProfilingBuilder())->build();
     }
 
@@ -144,9 +126,7 @@ namespace Componenta\DI\Benchmarks\Build {
 
     foreach (ProfilingBuilder::$nanoseconds as $phase => $nanoseconds) {
         $average = $nanoseconds / ProfilingBuilder::$calls[$phase];
-        if (!str_starts_with($phase, '  ')) {
-            $accounted += $average;
-        }
+        $accounted += $average;
         printf("%-24s %10.1f ns %6.1f%%\n", $phase, $average, $average / $total * 100);
     }
 
