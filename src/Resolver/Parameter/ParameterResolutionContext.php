@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
-
 /** Mutable state owned by one ParametersResolver invocation. */
 final class ParameterResolutionContext
 {
     /** @var array<string|int, mixed> */
     public readonly array $provided;
-
-    public readonly ?MappedRequestContext $mappedRequest;
 
     /** @var array<int, mixed> */
     public private(set) array $resolved;
@@ -23,8 +19,7 @@ final class ParameterResolutionContext
      */
     public function __construct(array $provided = [], array $resolved = [])
     {
-        $this->mappedRequest = MappedRequestContext::get($provided);
-        $this->provided = MappedRequestContext::strip($provided);
+        $this->provided = $provided;
         $this->resolved = $resolved;
     }
 
