@@ -10,9 +10,10 @@ use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Internal\WarningGuard;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
+
+use function Componenta\DI\with_suppressed_warnings;
 
 /** Default persistent-container cache writer. */
 final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
@@ -51,35 +52,35 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         $wasOpcodeCached = is_file($path)
             && function_exists('opcache_is_script_cached')
-            && WarningGuard::run(
+            && with_suppressed_warnings(
                 static fn(): bool => opcache_is_script_cached($path),
             );
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
         $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
-        $written = WarningGuard::run(
+        $written = with_suppressed_warnings(
             static fn(): int|false => file_put_contents($tmp, $contents, LOCK_EX),
         );
 
         if ($written === false) {
-            WarningGuard::run(static fn(): bool => unlink($tmp));
+            with_suppressed_warnings(static fn(): bool => unlink($tmp));
             throw new InvalidConfigurationException(
                 sprintf('Failed to write DI cache temp file: %s', $tmp),
             );
         }
 
-        $committed = WarningGuard::run(
+        $committed = with_suppressed_warnings(
             static fn(): bool => rename($tmp, $path),
         );
 
         if (!$committed) {
-            WarningGuard::run(static fn(): bool => unlink($tmp));
+            with_suppressed_warnings(static fn(): bool => unlink($tmp));
             throw new InvalidConfigurationException(
                 sprintf('Failed to commit DI cache file: %s', $path),
             );
         }
 
         if (function_exists('opcache_invalidate')) {
-            $invalidated = WarningGuard::run(
+            $invalidated = with_suppressed_warnings(
                 static fn(): bool => opcache_invalidate($path, true),
             );
 
@@ -140,7 +141,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             return;
         }
 
-        $created = WarningGuard::run(
+        $created = with_suppressed_warnings(
             static fn(): bool => mkdir($dir, 0o755, recursive: true),
         );
 
