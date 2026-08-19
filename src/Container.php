@@ -91,15 +91,17 @@ final class Container implements
 
     public function get(string $id): mixed
     {
-        $externalGuard = "\0external:" . $id;
-        $this->cycleGuard->enter($externalGuard);
-        try {
-            $external = $this->externalContainers?->findOwning($id);
-            if ($external !== null) {
-                return $external->get($id);
+        if ($this->externalContainers !== null) {
+            $externalGuard = "\0external:" . $id;
+            $this->cycleGuard->enter($externalGuard);
+            try {
+                $external = $this->externalContainers->findOwning($id);
+                if ($external !== null) {
+                    return $external->get($id);
+                }
+            } finally {
+                $this->cycleGuard->leave($externalGuard);
             }
-        } finally {
-            $this->cycleGuard->leave($externalGuard);
         }
 
         if ($this->cache->tryGetResolved($id, $entry)) {
