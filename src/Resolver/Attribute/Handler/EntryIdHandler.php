@@ -7,8 +7,10 @@ namespace Componenta\DI\Resolver\Attribute\Handler;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
@@ -19,7 +21,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[EntryId] on parameters and properties. */
-final class EntryIdHandler implements ParameterAttributeHandlerInterface
+final class EntryIdHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
@@ -28,13 +30,17 @@ final class EntryIdHandler implements ParameterAttributeHandlerInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
-    ): mixed {
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof EntryId) {
             throw new LogicException('EntryIdHandler received an unsupported parameter attribute.');
         }
+        if ($value->resolved) {
+            return $value;
+        }
 
         try {
-            return $this->container->get($attribute->value);
+            return ParameterAttributeValue::resolved($this->container->get($attribute->value));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
