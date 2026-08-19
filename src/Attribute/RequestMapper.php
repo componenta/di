@@ -10,13 +10,12 @@ use Componenta\Caster\NullCasterProvider;
 use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
-use Componenta\DI\Resolver\Parameter\Request\RequestMapperPipeline;
+
+use function Componenta\DI\transform_request_mapper_data;
 
 /** Base declarative transformation contract for all Map* request attributes. */
 abstract class RequestMapper implements MapperInterface, CasterProviderAwareInterface
 {
-    private static ?RequestMapperPipeline $pipeline = null;
-
     public CasterProviderInterface $provider {
         get => $this->provider ??= new NullCasterProvider();
         set(CasterProviderInterface $value) {
@@ -83,7 +82,7 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
      */
     public function transform(array $data): array
     {
-        return (self::$pipeline ??= new RequestMapperPipeline())->run(
+        return transform_request_mapper_data(
             $data,
             $this->map,
             $this->defaults,
