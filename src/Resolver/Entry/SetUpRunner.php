@@ -45,8 +45,8 @@ final class SetUpRunner implements AttributeHandlerInterface
     /**
      * Attribute values override the surrounding object-creation parameters.
      *
-     * @param array<string|int, mixed> $context
-     * @return array<string|int, mixed>
+     * @param array<string|int,mixed> $context
+     * @return array<string|int,mixed>
      */
     public function providedParameters(SetUp $attribute, array $context = []): array
     {
@@ -76,7 +76,10 @@ final class SetUpRunner implements AttributeHandlerInterface
         return $method;
     }
 
-    /** @param array<string, mixed> $params @return array<string, mixed> */
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
     private function unwrapParams(array $params): array
     {
         if ($this->valueUnwrappers === []) {
