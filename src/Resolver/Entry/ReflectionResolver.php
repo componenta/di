@@ -6,7 +6,6 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Object\ObjectPipeline;
-use Componenta\DI\ResolutionContext;
 use Componenta\Reflection\Reflection;
 use ReflectionClass;
 
@@ -21,20 +20,17 @@ final class ReflectionResolver implements EntryResolverInterface
     public function can(string $id): bool
     {
         $class = $this->reflect($id);
-
         return $class !== null && EntryClassEligibility::allows($class);
     }
 
-    public function resolve(
-        string $id,
-        ResolutionContext $context = new ResolutionContext(),
-    ): object {
+    /** @param array<string|int, mixed> $params */
+    public function resolve(string $id, array $params = []): object
+    {
         $class = $this->reflect($id);
         if ($class === null || !EntryClassEligibility::allows($class)) {
             throw NotFoundException::forService($id);
         }
-
-        return $this->objects->create($class->getName(), $context);
+        return $this->objects->create($class->getName(), $params);
     }
 
     /** @return ReflectionClass<object>|null */
@@ -44,12 +40,10 @@ final class ReflectionResolver implements EntryResolverInterface
         if (isset($this->missing[$key])) {
             return null;
         }
-
         $class = Reflection::class($id);
         if ($class === null) {
             $this->missing[$key] = true;
         }
-
         return $class;
     }
 }
