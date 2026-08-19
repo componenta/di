@@ -2,9 +2,6 @@
 
 declare(strict_types=1);
 
-use ReflectionClass;
-use stdClass;
-
 use function Componenta\DI\is_entry_class_eligible;
 use function Componenta\DI\normalize_env_name;
 
@@ -22,7 +19,7 @@ it('autoloads package helper functions instead of one-method helper classes', fu
         ->and(function_exists('Componenta\\DI\\validate_parameter_resolution_result'))->toBeTrue()
         ->and(function_exists('Componenta\\DI\\compiled_factory_pipeline_fingerprint'))->toBeTrue()
         ->and(normalize_env_name('someValue'))->toBe('SOME_VALUE')
-        ->and(is_entry_class_eligible(new ReflectionClass(stdClass::class)))->toBeTrue();
+        ->and(is_entry_class_eligible(new \ReflectionClass(\stdClass::class)))->toBeTrue();
 });
 
 it('does not expose obsolete helper classes or NullContainer', function (): void {
