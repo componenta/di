@@ -149,16 +149,25 @@ final class DiCacheGraphExporter
         $arguments = [];
         foreach ($constructor->getParameters() as $parameter) {
             $name = $parameter->getName();
-            if (!$reflection->hasProperty($name) || !$reflection->getProperty($name)->isPublic()) {
+            if (!$reflection->hasProperty($name)) {
                 throw new ExportException(sprintf(
-                    'Cannot export object of type "%s": constructor parameter "$%s" has no corresponding public property.',
+                    'Cannot export object of type "%s": constructor parameter "$%s" has no corresponding public promoted property.',
+                    $object::class,
+                    $name,
+                ));
+            }
+
+            $property = $reflection->getProperty($name);
+            if (!$property->isPublic() || !$property->isPromoted()) {
+                throw new ExportException(sprintf(
+                    'Cannot export object of type "%s": constructor parameter "$%s" must be a public promoted property to guarantee an exact cache round trip.',
                     $object::class,
                     $name,
                 ));
             }
 
             $arguments[] = $this->value(
-                $reflection->getProperty($name)->getValue($object),
+                $property->getValue($object),
                 $depth + 1,
             );
         }
