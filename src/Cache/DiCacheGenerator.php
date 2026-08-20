@@ -68,12 +68,21 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         $wasOpcodeCached = is_file($path)
             && function_exists('opcache_is_script_cached')
-            && @opcache_is_script_cached($path);
+            && @\opcache_is_script_cached($path);
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
         $temporary = $this->writeTemporary($directory, basename($path), $contents);
 
         try {
             $this->lint($temporary);
+
+            if ($wasOpcodeCached
+                && (!function_exists('opcache_invalidate') || !@\opcache_invalidate($path, true))
+            ) {
+                throw new CompilationException(sprintf(
+                    'DI cache "%s" cannot be replaced because its previous OPcache entry could not be invalidated.',
+                    $path,
+                ));
+            }
 
             $committed = @rename($temporary, $path);
 
@@ -86,15 +95,11 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             }
         }
 
+        // The old cached opcode, when present, was invalidated before commit so
+        // activation cannot fail after mutating the live artifact. Refreshing
+        // the new path is best-effort because it may not be cached yet.
         if (function_exists('opcache_invalidate')) {
-            $invalidated = @opcache_invalidate($path, true);
-
-            if ($wasOpcodeCached && !$invalidated) {
-                throw new CompilationException(sprintf(
-                    'DI cache "%s" was replaced, but its previous OPcache entry could not be invalidated.',
-                    $path,
-                ));
-            }
+            @\opcache_invalidate($path, true);
         }
     }
 
