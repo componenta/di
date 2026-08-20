@@ -13,6 +13,7 @@ use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
+use ReflectionFunction;
 use ReflectionParameter;
 use Throwable;
 use WeakMap;
@@ -276,7 +277,8 @@ final class ParametersResolver
 
     private function prepareTarget(ParameterTarget $target): PreparedParameter
     {
-        if ($this->sealed) {
+        $cacheable = $this->sealed && self::isStableTarget($target);
+        if ($cacheable) {
             $cache = $this->preparedParameters ??= new WeakMap();
             if (isset($cache[$target])) {
                 return $cache[$target];
@@ -302,12 +304,23 @@ final class ParametersResolver
             $this->classifyResolverSlots($target),
         );
 
-        if (!$this->sealed) {
+        if (!$cacheable) {
             return $prepared;
         }
 
         $cache = $this->preparedParameters ??= new WeakMap();
         return $cache[$target] = $prepared;
+    }
+
+    private static function isStableTarget(ParameterTarget $target): bool
+    {
+        $function = $target->reflection->getDeclaringFunction();
+
+        // PreparedParameter retains its ParameterTarget. A WeakMap value that
+        // retains its closure-owned key would therefore keep the target,
+        // ReflectionParameter, declaring Closure and captured request state
+        // alive. Stable named functions/methods remain safely cacheable.
+        return !$function instanceof ReflectionFunction || !$function->isClosure();
     }
 
     /** @return list<int> */
