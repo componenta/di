@@ -19,9 +19,9 @@ final class LazyFactory implements FactoryInterface
         if ($this->factory !== null) {
             return $this->factory->make($entry, $params);
         }
-        
+
         $factory = $this->container->get(FactoryInterface::class);
-        
+
         if (!$factory instanceof FactoryInterface) {
             throw new InvalidConfigurationException(sprintf(
                 'Service "%s" must implement %s; got %s.',
@@ -30,7 +30,7 @@ final class LazyFactory implements FactoryInterface
                 get_debug_type($factory),
             ));
         }
-        
+
         $this->factory = $factory;
         return $this->factory->make($entry, $params);
     }
