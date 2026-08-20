@@ -19,7 +19,7 @@ final class ArrayTypedResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         foreach ($target->typeNames as $typeName) {
-            if (!array_key_exists($typeName, $context->provided)) {
+            if (!isset($context->provided[$typeName]) || !array_key_exists($typeName, $context->provided)) {
                 continue;
             }
 
