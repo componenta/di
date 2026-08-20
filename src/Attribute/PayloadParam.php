@@ -6,13 +6,12 @@ namespace Componenta\DI\Attribute;
 
 use Componenta\Config\ConfigPath;
 use Componenta\Config\DefaultValue;
-use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
-use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
+use Componenta\DI\Resolver\Parameter\Request\ParameterNameAwareExtractorInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
-readonly class PayloadParam implements ExtractorInterface, CastableInterface
+readonly class PayloadParam implements ParameterNameAwareExtractorInterface, CastableInterface
 {
     public function __construct(
         public string|ConfigPath|null $name = null,
@@ -22,6 +21,20 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
 
     public function extract(ServerRequestInterface $request): mixed
     {
+        return $this->extractNamed($request, null);
+    }
+
+    public function extractForParameter(
+        ServerRequestInterface $request,
+        string $parameterName,
+    ): mixed {
+        return $this->extractNamed($request, $parameterName);
+    }
+
+    private function extractNamed(
+        ServerRequestInterface $request,
+        ?string $parameterName,
+    ): mixed {
         $body = $this->parsedBody($request);
 
         if ($this->name instanceof ConfigPath) {
@@ -40,7 +53,7 @@ readonly class PayloadParam implements ExtractorInterface, CastableInterface
             return $this->default;
         }
 
-        $name = $this->name ?? $request->getAttribute(RequestParameter::PARAMETER_NAME_ATTRIBUTE);
+        $name = $this->name ?? $parameterName;
         if (!is_string($name) || $name === '') {
             throw new \LogicException('Payload parameter name must be a non-empty string');
         }
