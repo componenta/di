@@ -79,16 +79,16 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             return ParameterAttributeValue::unresolved();
         }
 
-        if (array_key_exists($target->name, $context->provided)) {
+        if (isset($context->provided[$target->name]) || array_key_exists($target->name, $context->provided)) {
             return ParameterAttributeValue::resolved($context->provided[$target->name]);
         }
 
-        if (array_key_exists($target->position, $context->provided)) {
+        if (isset($context->provided[$target->position]) || array_key_exists($target->position, $context->provided)) {
             return ParameterAttributeValue::resolved($context->provided[$target->position]);
         }
 
         foreach ($target->typeNames as $typeName) {
-            if (!array_key_exists($typeName, $context->provided)) {
+            if (!isset($context->provided[$typeName]) || !array_key_exists($typeName, $context->provided)) {
                 continue;
             }
 
