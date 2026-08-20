@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\Config\ContainerValue;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
@@ -23,7 +22,6 @@ use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
@@ -42,12 +40,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         private readonly ProxyFactoryInterface $proxyFactory,
         private readonly ObjectPipeline $objects,
         private readonly CallableExecutorInterface $executor,
-        AttributeDefinitionRegistry $_attributes,
-        ParametersResolver $_parameters,
         private readonly ?string $compiledFactoryBaseDir = null,
     ) {
-        unset($_attributes, $_parameters);
-
         foreach ($this->factories as $id => $factory) {
             if (!is_string($id) || $id === '') {
                 throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
