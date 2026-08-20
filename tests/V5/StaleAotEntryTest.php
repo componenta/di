@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Compile\Factory\CompiledFactoryShardCompiler;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Object\ObjectPipeline;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
-
-use function Componenta\DI\compiled_factory_pipeline_fingerprint;
 
 final class AuditStaleAotEntry {}
 
@@ -22,15 +18,6 @@ final class AuditStaleAotEntry {}
  */
 function writeAuditStaleShard(int $format, array $entries): array
 {
-    $container = (new ContainerBuilder())->build();
-    $attributes = $container->get(AttributeDefinitionRegistry::class);
-    $parameters = $container->get(ParametersResolver::class);
-    expect($attributes)->toBeInstanceOf(AttributeDefinitionRegistry::class)
-        ->and($parameters)->toBeInstanceOf(ParametersResolver::class);
-
-    /** @var AttributeDefinitionRegistry $attributes */
-    /** @var ParametersResolver $parameters */
-    $fingerprint = compiled_factory_pipeline_fingerprint($attributes, $parameters);
     $suffix = bin2hex(random_bytes(5));
     $namespace = 'Componenta\\DI\\Tests\\Generated\\Stale' . $suffix;
     $class = $namespace . '\\Shard';
@@ -47,7 +34,6 @@ final class Shard
 {
     public const int FORMAT_VERSION = %d;
     public const array ENTRIES = %s;
-    public const string PIPELINE_FINGERPRINT = %s;
 
     public function __construct(
         private readonly \%s $objects,
@@ -64,7 +50,6 @@ PHP,
         $namespace,
         $format,
         var_export($entries, true),
-        var_export($fingerprint, true),
         ObjectPipeline::class,
         AuditStaleAotEntry::class,
     );
