@@ -38,12 +38,39 @@ final class DefinitionCodeGeneratorRegistry
             return $this->generators[$class];
         }
 
+        /** @var array<class-string,DefinitionCodeGeneratorInterface> $matches */
+        $matches = [];
         foreach ($this->generators as $supportedClass => $generator) {
             if (is_a($definition, $supportedClass)) {
-                return $generator;
+                $matches[$supportedClass] = $generator;
             }
         }
 
-        return null;
+        if ($matches === []) {
+            return null;
+        }
+
+        foreach (array_keys($matches) as $candidate) {
+            foreach (array_keys($matches) as $other) {
+                if ($candidate === $other) {
+                    continue;
+                }
+
+                if (is_a($other, $candidate, true)) {
+                    unset($matches[$candidate]);
+                    break;
+                }
+            }
+        }
+
+        if (count($matches) === 1) {
+            return reset($matches);
+        }
+
+        throw new InvalidConfigurationException(sprintf(
+            'Definition "%s" matches multiple equally specific code generators: %s.',
+            $class,
+            implode(', ', array_keys($matches)),
+        ));
     }
 }
