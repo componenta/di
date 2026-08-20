@@ -8,7 +8,7 @@ use Attribute;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 
 /** Provides the current authenticated user. */
-#[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
+#[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class CurrentUser implements ParameterSourceAttributeInterface
 {
     /** @param class-string|null $type */

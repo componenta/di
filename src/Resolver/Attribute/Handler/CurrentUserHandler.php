@@ -7,22 +7,18 @@ namespace Componenta\DI\Resolver\Attribute\Handler;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\CurrentUserProviderInterface;
-use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
-use ReflectionProperty;
-use Reflector;
 use Throwable;
 
-/** Authoritative current-user handler for parameters and properties. */
-final class CurrentUserHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+/** Authoritative current-user handler for parameters. */
+final class CurrentUserHandler implements ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
@@ -48,27 +44,6 @@ final class CurrentUserHandler implements AttributeHandlerInterface, ParameterAt
                 providedParameters: $context->provided,
                 resolvedParameters: $context->resolved,
             );
-        }
-    }
-
-    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
-    {
-        if (!$attribute instanceof CurrentUser || !$target instanceof ReflectionProperty) {
-            throw new LogicException('CurrentUserHandler received an unsupported attribute target.');
-        }
-        if (!$context->claimProperty($target)) {
-            return;
-        }
-
-        try {
-            $context->writeProperty(
-                $target,
-                $this->user($attribute, $target->getType()?->allowsNull() ?? true),
-            );
-        } catch (ContainerExceptionInterface $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw ResolutionException::forProperty($target, previous: $e);
         }
     }
 
