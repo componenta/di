@@ -42,7 +42,8 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     /** @param array<string,mixed> $dependencies */
     private function generateCache(array $dependencies, string $path): void
     {
-        $this->ensureDirectory(dirname($path));
+        $directory = dirname($path);
+        $this->ensureDirectory($directory);
 
         $dependencies = ContainerBuilder::normalizeDependencies($dependencies);
         $dependencies = $this->definitionCompiler->compile($dependencies);
@@ -73,26 +74,22 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                 static fn(): bool => opcache_is_script_cached($path),
             );
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
-        $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
-        $written = with_suppressed_warnings(
-            static fn(): int|false => file_put_contents($tmp, $contents, LOCK_EX),
-        );
+        $temporary = $this->writeTemporary($directory, basename($path), $contents);
 
-        if ($written === false || $written !== strlen($contents)) {
-            with_suppressed_warnings(static fn(): bool => unlink($tmp));
-            throw new CompilationException(sprintf(
-                'Failed to write complete DI cache temp file: %s',
-                $tmp,
-            ));
-        }
+        try {
+            $this->lint($temporary);
 
-        $committed = with_suppressed_warnings(
-            static fn(): bool => rename($tmp, $path),
-        );
+            $committed = with_suppressed_warnings(
+                static fn(): bool => rename($temporary, $path),
+            );
 
-        if (!$committed) {
-            with_suppressed_warnings(static fn(): bool => unlink($tmp));
-            throw new CompilationException(sprintf('Failed to commit DI cache file: %s', $path));
+            if (!$committed) {
+                throw new CompilationException(sprintf('Failed to commit DI cache file: %s', $path));
+            }
+        } finally {
+            if (is_file($temporary)) {
+                with_suppressed_warnings(static fn(): bool => unlink($temporary));
+            }
         }
 
         if (function_exists('opcache_invalidate')) {
@@ -160,6 +157,107 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         if (!$created && !is_dir($dir)) {
             throw new CompilationException(sprintf('Failed to create DI cache directory: %s', $dir));
+        }
+    }
+
+    private function writeTemporary(string $directory, string $baseName, string $contents): string
+    {
+        for ($attempt = 0; $attempt < 8; ++$attempt) {
+            $temporary = $directory
+                . DIRECTORY_SEPARATOR
+                . $baseName
+                . '.tmp.'
+                . bin2hex(random_bytes(8));
+            $handle = with_suppressed_warnings(
+                static fn() => fopen($temporary, 'xb'),
+            );
+
+            if (!is_resource($handle)) {
+                continue;
+            }
+
+            try {
+                $length = strlen($contents);
+                $offset = 0;
+
+                while ($offset < $length) {
+                    $written = with_suppressed_warnings(
+                        static fn(): int|false => fwrite($handle, substr($contents, $offset)),
+                    );
+
+                    if ($written === false || $written === 0) {
+                        throw new CompilationException(sprintf(
+                            'Failed to write complete DI cache temp file: %s',
+                            $temporary,
+                        ));
+                    }
+
+                    $offset += $written;
+                }
+
+                if (!with_suppressed_warnings(static fn(): bool => fflush($handle))) {
+                    throw new CompilationException(sprintf(
+                        'Failed to flush DI cache temp file: %s',
+                        $temporary,
+                    ));
+                }
+            } catch (Throwable $e) {
+                with_suppressed_warnings(static fn(): bool => fclose($handle));
+                with_suppressed_warnings(static fn(): bool => unlink($temporary));
+                throw $e;
+            }
+
+            with_suppressed_warnings(static fn(): bool => fclose($handle));
+            return $temporary;
+        }
+
+        throw new CompilationException(sprintf(
+            'Failed to allocate a DI cache temp file in: %s',
+            $directory,
+        ));
+    }
+
+    private function lint(string $file): void
+    {
+        if (!function_exists('proc_open')) {
+            throw new CompilationException(
+                'DI cache cannot be validated because proc_open() is unavailable.',
+            );
+        }
+
+        $pipes = [];
+        $process = with_suppressed_warnings(static function () use (&$pipes, $file) {
+            return proc_open(
+                [PHP_BINARY, '-n', '-d', 'memory_limit=-1', '-l', $file],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                options: ['bypass_shell' => true],
+            );
+        });
+        $stdin = $pipes[0] ?? null;
+        $stdoutPipe = $pipes[1] ?? null;
+        $stderrPipe = $pipes[2] ?? null;
+
+        if (!is_resource($process)
+            || !is_resource($stdin)
+            || !is_resource($stdoutPipe)
+            || !is_resource($stderrPipe)
+        ) {
+            throw new CompilationException('Cannot start PHP syntax validation for a DI cache artifact.');
+        }
+
+        with_suppressed_warnings(static fn(): bool => fclose($stdin));
+        $stdout = with_suppressed_warnings(static fn(): string|false => stream_get_contents($stdoutPipe));
+        $stderr = with_suppressed_warnings(static fn(): string|false => stream_get_contents($stderrPipe));
+        with_suppressed_warnings(static fn(): bool => fclose($stdoutPipe));
+        with_suppressed_warnings(static fn(): bool => fclose($stderrPipe));
+        $status = with_suppressed_warnings(static fn(): int => proc_close($process));
+
+        if ($status !== 0) {
+            $output = trim((is_string($stdout) ? $stdout : '') . "\n" . (is_string($stderr) ? $stderr : ''));
+            throw new CompilationException(
+                "DI cache failed PHP compile validation:\n" . $output,
+            );
         }
     }
 }
