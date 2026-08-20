@@ -6,7 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\CallableResolver;
-use Componenta\DI\Resolver\Parameter\Request\LazyValidationProvider;
+use Componenta\DI\Internal\Resolver\Parameter\Request\LazyValidationProvider;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use Nyholm\Psr7\ServerRequest;
