@@ -12,6 +12,7 @@ use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
@@ -65,7 +66,19 @@ final class ObjectPipeline
             return true;
         }
 
-        return $metadata->classPlan->has(ConstructorPolicy::class);
+        foreach ($metadata->classPlan->all(ConstructorPolicy::class) as $usage) {
+            $definition = $usage->definition;
+            if (!$definition->handler instanceof AttributeHandlerInterface) {
+                continue;
+            }
+            if ($definition->phase === AttributePhase::BeforeInstantiation
+                || $definition->phase === AttributePhase::Both
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
