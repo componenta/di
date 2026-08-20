@@ -27,8 +27,6 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
-use function Componenta\DI\compiled_factory_pipeline_fingerprint;
-
 /** Resolves configured factories, class definitions and compiled entry shards. */
 final class FactoryResolver implements DefinitionAwareResolverInterface
 {
@@ -44,8 +42,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         private readonly ProxyFactoryInterface $proxyFactory,
         private readonly ObjectPipeline $objects,
         private readonly CallableExecutorInterface $executor,
-        private readonly AttributeDefinitionRegistry $attributes,
-        private readonly ParametersResolver $parameters,
+        AttributeDefinitionRegistry $_attributes,
+        ParametersResolver $_parameters,
         private readonly ?string $compiledFactoryBaseDir = null,
     ) {
         foreach ($this->factories as $id => $factory) {
@@ -255,20 +253,6 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             }
 
             self::assertShardFormat($class);
-
-            $expected = compiled_factory_pipeline_fingerprint(
-                $this->attributes,
-                $this->parameters,
-            );
-            $constant = $class . '::PIPELINE_FINGERPRINT';
-            $actual = defined($constant) ? constant($constant) : null;
-            if (!is_string($actual) || !hash_equals($expected, $actual)) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Compiled shard "%s" semantic fingerprint does not match runtime.',
-                    $class,
-                ));
-            }
-
             $shard = new $class($this->objects);
             $this->compiledShards[$file] = $shard;
         }
