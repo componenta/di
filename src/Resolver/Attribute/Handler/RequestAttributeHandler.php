@@ -18,6 +18,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
+use Componenta\DI\Resolver\Parameter\Request\ParameterNameAwareExtractorInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
@@ -82,12 +83,10 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
         }
 
         if ($attribute instanceof ExtractorInterface) {
-            $value = $attribute->extract(
-                $request->withAttribute(
-                    RequestParameter::PARAMETER_NAME_ATTRIBUTE,
-                    $parameter->getName(),
-                ),
-            );
+            $value = $attribute instanceof ParameterNameAwareExtractorInterface
+                ? $attribute->extractForParameter($request, $parameter->getName())
+                : $attribute->extract($request);
+
             if ($attribute instanceof CastableInterface && $attribute->cast !== null) {
                 $caster = $this->casterProvider->provide($attribute->cast);
                 if ($caster === null) {
