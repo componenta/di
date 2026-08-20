@@ -10,7 +10,6 @@ use Psr\Http\Message\ServerRequestInterface;
 final class RequestParameter
 {
     public const string KEY = ServerRequestInterface::class;
-    public const string PARAMETER_NAME_ATTRIBUTE = "\0componenta.di.parameter-name";
 
     /** @param array<string|int, mixed> $providedParameters */
     public static function has(array $providedParameters): bool
