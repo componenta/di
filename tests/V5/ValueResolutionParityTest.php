@@ -55,6 +55,22 @@ final class ConfigOverrideParityDto
     ) {}
 }
 
+interface AttributedTypedOverrideA {}
+
+interface AttributedTypedOverrideB {}
+
+final class AttributedTypedOverrideAValue implements AttributedTypedOverrideA {}
+
+final class AttributedTypedOverrideBValue implements AttributedTypedOverrideB {}
+
+final class AttributedTypedOverrideDto
+{
+    public function __construct(
+        #[ConfigAttribute('dependency')]
+        public AttributedTypedOverrideA|AttributedTypedOverrideB $dependency,
+    ) {}
+}
+
 final class CurrentUserOverrideParityDto
 {
     public function __construct(
@@ -122,6 +138,22 @@ test('explicit named parameters keep v4 precedence over Config parameter resolut
 
     expect($container->make(ConfigOverrideParityDto::class, ['value' => 'explicit'])->value)
         ->toBe('explicit');
+});
+
+test('attributed typed overrides must satisfy the type named by their key', function (): void {
+    $configured = new AttributedTypedOverrideAValue();
+    $validOverride = new AttributedTypedOverrideAValue();
+    $wrongKeyValue = new AttributedTypedOverrideBValue();
+    $container = ContainerBuilder::configure(new Config([
+        'dependency' => $configured,
+    ]))->build();
+
+    expect($container->make(AttributedTypedOverrideDto::class, [
+        AttributedTypedOverrideA::class => $validOverride,
+    ])->dependency)->toBe($validOverride)
+        ->and($container->make(AttributedTypedOverrideDto::class, [
+            AttributedTypedOverrideA::class => $wrongKeyValue,
+        ])->dependency)->toBe($configured);
 });
 
 test('CurrentUser remains authoritative over caller-provided parameter values', function (): void {
