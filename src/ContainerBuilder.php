@@ -21,6 +21,8 @@ use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Cookie;
+use Componenta\DI\Attribute\CurrentRequest;
+use Componenta\DI\Attribute\CurrentUri;
 use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
@@ -100,7 +102,6 @@ use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use Throwable;
@@ -119,7 +120,6 @@ class ContainerBuilder
     public const int PRIORITY_PARAM_ATTRIBUTE = 1200;
     public const int PRIORITY_PARAM_ARRAY = 1100;
     public const int PRIORITY_PARAM_ARRAY_TYPED = 1000;
-    public const int PRIORITY_PARAM_REQUEST_CONTEXT = 800;
     public const int PRIORITY_PARAM_AUTOWIRE = 300;
     public const int PRIORITY_PARAM_DEFAULT_VALUE = 200;
     public const int PRIORITY_PARAM_NULLABLE = 100;
@@ -217,7 +217,6 @@ class ContainerBuilder
         $builder->compiledFactoryBaseDir = $baseDir;
         return $builder;
     }
-
     /**
      * @param array<array-key,mixed> $dependencies
      * @return array<string,mixed>
@@ -477,7 +476,6 @@ class ContainerBuilder
             [new AttributeParameterResolver($plans), self::PRIORITY_PARAM_ATTRIBUTE],
             [new ParameterArrayResolver(), self::PRIORITY_PARAM_ARRAY],
             [new ArrayTypedResolver(), self::PRIORITY_PARAM_ARRAY_TYPED],
-            [new RequestContextResolver(), self::PRIORITY_PARAM_REQUEST_CONTEXT],
             [new AutowireByTypeResolver($container), self::PRIORITY_PARAM_AUTOWIRE],
             [new DefaultValueResolver(), self::PRIORITY_PARAM_DEFAULT_VALUE],
             [new NullableResolver(), self::PRIORITY_PARAM_NULLABLE],
@@ -520,6 +518,8 @@ class ContainerBuilder
             [ConfigAttribute::class, $config, [ValueProvider::class]],
             [Env::class, $env, [ValueProvider::class]],
             [EntryId::class, $entryId, [ValueProvider::class]],
+            [CurrentRequest::class, $request, [AuthoritativeValueProvider::class]],
+            [CurrentUri::class, $request, [AuthoritativeValueProvider::class]],
             [CurrentUser::class, $currentUser, [AuthoritativeValueProvider::class]],
             [Make::class, $make, [ValueProvider::class]],
             [Inject::class, new InjectHandler($container), [ValueProvider::class]],
