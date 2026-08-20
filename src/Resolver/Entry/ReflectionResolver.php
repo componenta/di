@@ -16,23 +16,17 @@ final class ReflectionResolver implements EntryResolverInterface
 
     public function can(string $id): bool
     {
-        $class = $this->reflect($id);
+        $class = Reflection::class($id);
         return $class !== null && $this->objects->canCreate($class);
     }
 
     /** @param array<string|int, mixed> $params */
     public function resolve(string $id, array $params = []): object
     {
-        $class = $this->reflect($id);
+        $class = Reflection::class($id);
         if ($class === null || !$this->objects->canCreate($class)) {
             throw NotFoundException::forService($id);
         }
         return $this->objects->create($class, $params);
-    }
-
-    /** @return ReflectionClass<object>|null */
-    private function reflect(string $id): ?ReflectionClass
-    {
-        return Reflection::class($id);
     }
 }
