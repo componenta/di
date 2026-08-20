@@ -27,6 +27,13 @@ final readonly class CompiledFactoryShardWriter
         $directory = dirname($file);
 
         if (!is_dir($directory)) {
+            if (file_exists($directory)) {
+                throw new CompilationException(sprintf(
+                    'Factory shard parent path is not a directory: %s',
+                    $directory,
+                ));
+            }
+
             $created = @mkdir($directory, 0775, true);
 
             if (!$created && !is_dir($directory)) {
