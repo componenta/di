@@ -46,6 +46,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         ParametersResolver $_parameters,
         private readonly ?string $compiledFactoryBaseDir = null,
     ) {
+        unset($_attributes, $_parameters);
+
         foreach ($this->factories as $id => $factory) {
             if (!is_string($id) || $id === '') {
                 throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
