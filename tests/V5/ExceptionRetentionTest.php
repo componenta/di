@@ -27,6 +27,7 @@ final class AuditFailedParameterRetentionProbe implements ParameterResolverInter
     public ?WeakReference $target = null;
     /** @var WeakReference<\ReflectionParameter>|null */
     public ?WeakReference $reflection = null;
+    public ?string $declaringContext = null;
 
     public function supports(ParameterTarget $target): bool
     {
@@ -39,6 +40,7 @@ final class AuditFailedParameterRetentionProbe implements ParameterResolverInter
     ): ?array {
         $this->target = WeakReference::create($target);
         $this->reflection = WeakReference::create($target->reflection);
+        $this->declaringContext = $target->declaringContext;
         return null;
     }
 }
@@ -74,7 +76,8 @@ test('failed parameter resolution does not persist closure or request state in t
     unset($error, $closure, $request, $captured);
     gc_collect_cycles();
 
-    expect($probe->target?->get())->toBeNull()
+    expect($probe->declaringContext)->toBe('Closure')
+        ->and($probe->target?->get())->toBeNull()
         ->and($probe->reflection?->get())->toBeNull()
         ->and($closureReference->get())->toBeNull()
         ->and($capturedReference->get())->toBeNull()
