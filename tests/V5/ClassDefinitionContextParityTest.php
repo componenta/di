@@ -20,6 +20,19 @@ final class ClassDefinitionParityTarget
 
 final class ClassDefinitionParityNoConstructorTarget {}
 
+interface ClassDefinitionUnionLeft {}
+interface ClassDefinitionUnionRight {}
+
+final readonly class ClassDefinitionUnionLeftValue implements ClassDefinitionUnionLeft {}
+final readonly class ClassDefinitionUnionRightValue implements ClassDefinitionUnionRight {}
+
+final readonly class ClassDefinitionUnionTarget
+{
+    public function __construct(
+        public ClassDefinitionUnionLeft|ClassDefinitionUnionRight $dependency,
+    ) {}
+}
+
 test('ClassDefinition runtime overrides normalize by constructor signature', function (): void {
     $configuredDependency = new ClassDefinitionParityDependency();
     $runtimeDependency = new ClassDefinitionParityDependency();
@@ -74,4 +87,23 @@ test('ClassDefinition target without constructor ignores unrelated make context'
         'class.definition.no-constructor',
         ['unrelated' => 'ignored'],
     ))->toBeInstanceOf(ClassDefinitionParityNoConstructorTarget::class);
+});
+
+test('ClassDefinition typed union overrides match the concrete type key exactly', function (): void {
+    $configured = new ClassDefinitionUnionLeftValue();
+    $runtime = new ClassDefinitionUnionRightValue();
+    $container = (new ContainerBuilder())->build();
+
+    $container->set(
+        'class.definition.union',
+        ClassDefinition::create(ClassDefinitionUnionTarget::class)
+            ->constructor(['dependency' => $configured]),
+    );
+
+    expect($container->make('class.definition.union', [
+        ClassDefinitionUnionLeft::class => $runtime,
+    ])->dependency)->toBe($configured)
+        ->and($container->make('class.definition.union', [
+            ClassDefinitionUnionRight::class => $runtime,
+        ])->dependency)->toBe($runtime);
 });
