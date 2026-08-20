@@ -43,7 +43,7 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             if ($attribute->default !== DefaultValue::None) {
                 $value = ParameterAttributeValue::resolved($attribute->default);
             } elseif ($target->hasDefault) {
-                $value = ParameterAttributeValue::resolved($target->default);
+                $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
