@@ -8,6 +8,7 @@ use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\ConcurrentResolutionException;
 use Fiber;
 use WeakMap;
+use WeakReference;
 
 /**
  * Tracks the in-flight resolution stack so the container can detect and
@@ -26,12 +27,16 @@ final class CycleGuard
     /** @var WeakMap<object, array<string, true>> Fiber-keyed execution stacks. */
     private WeakMap $fiberStacks;
 
-    /** @var array<string, object|null> Shared-entry owner by id (Fiber or main context). */
+    /** @var array<string, object|WeakReference> Shared-entry owner token by id. */
     private array $sharedOwners = [];
+
+    /** Main execution-context owner token. */
+    private readonly object $mainOwner;
 
     public function __construct()
     {
         $this->fiberStacks = new WeakMap();
+        $this->mainOwner = new \stdClass();
     }
 
     /**
@@ -61,7 +66,6 @@ final class CycleGuard
         $this->replaceStack($stack);
     }
 
-    /** Enters shared-entry construction without conflating another Fiber with recursion. */
     public function enterShared(string $id): void
     {
         $execution = Fiber::getCurrent();
@@ -74,27 +78,42 @@ final class CycleGuard
             ]);
         }
 
-        if (array_key_exists($id, $this->sharedOwners)
-            && $this->sharedOwners[$id] !== $execution
-        ) {
+        $owner = $this->sharedOwners[$id] ?? null;
+        if ($owner instanceof WeakReference && $owner->get() === null) {
+            unset($this->sharedOwners[$id]);
+            $owner = null;
+        }
+
+        if ($owner !== null && !$this->ownedBy($owner, $execution)) {
             throw ConcurrentResolutionException::forService($id);
         }
 
         $this->enter($id);
-        $this->sharedOwners[$id] = $execution;
+        $this->sharedOwners[$id] = $execution === null
+            ? $this->mainOwner
+            : WeakReference::create($execution);
     }
 
     public function leaveShared(string $id): void
     {
         $execution = Fiber::getCurrent();
+        $owner = $this->sharedOwners[$id] ?? null;
 
-        if (array_key_exists($id, $this->sharedOwners)
-            && $this->sharedOwners[$id] === $execution
-        ) {
+        if ($owner !== null && $this->ownedBy($owner, $execution)) {
             unset($this->sharedOwners[$id]);
         }
 
         $this->leave($id);
+    }
+
+    private function ownedBy(object $owner, ?Fiber $execution): bool
+    {
+        if ($execution === null) {
+            return $owner === $this->mainOwner;
+        }
+
+        return $owner instanceof WeakReference
+            && $owner->get() === $execution;
     }
 
     /** @return array<string, true> */
