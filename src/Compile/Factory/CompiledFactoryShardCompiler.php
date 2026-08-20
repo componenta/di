@@ -10,13 +10,13 @@ use Componenta\DI\Object\ObjectPipeline;
 /** Packs generated entry methods into immutable content-addressed shards. */
 final readonly class CompiledFactoryShardCompiler
 {
-    public const int FORMAT_VERSION = 8;
+    public const int FORMAT_VERSION = 9;
     public const int DEFAULT_MAX_BYTES = 131072;
     public const string FILE_PREFIX = 'container.factories.';
 
     public function __construct(
         private FactoryCodeGenerator $factories,
-        private string $pipelineFingerprint,
+        string $pipelineFingerprint,
         private CompiledFactoryShardWriter $writer = new CompiledFactoryShardWriter(),
         private ?ObjectPipeline $objects = null,
     ) {
@@ -136,7 +136,6 @@ final class %s
 {
     public const int FORMAT_VERSION = %d;
     public const array ENTRIES = %s;
-    public const string PIPELINE_FINGERPRINT = %s;
 
     public function __construct(
         private readonly \%s $objects,
@@ -151,7 +150,6 @@ PHP,
             $class,
             self::FORMAT_VERSION,
             var_export($entries, true),
-            var_export($this->pipelineFingerprint, true),
             ObjectPipeline::class,
             self::indent($methods, 4),
             $class,
