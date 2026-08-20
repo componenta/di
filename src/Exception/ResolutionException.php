@@ -13,9 +13,11 @@ use Throwable;
  * Raised when the container cannot produce a value for a service, a parameter,
  * or a property.
  *
- * Diagnostic state is detached from live reflection/request/service objects so
- * an exception may be retained by logging or telemetry without retaining an
- * otherwise completed resolution graph.
+ * DI diagnostics are copied to scalar metadata rather than storing live
+ * reflection/request/service objects. The ordinary Throwable stack trace is
+ * still owned by PHP and follows the runtime's exception-trace configuration;
+ * callers that retain an exception therefore retain whatever PHP itself keeps
+ * in that trace until the exception is released.
  */
 final class ResolutionException extends RuntimeException implements ExceptionInterface
 {
