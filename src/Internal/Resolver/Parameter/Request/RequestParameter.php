@@ -11,6 +11,11 @@ final class RequestParameter
 {
     public const string KEY = ServerRequestInterface::class;
 
+    public static function isTransportType(string $type): bool
+    {
+        return $type === self::KEY;
+    }
+
     /** @param array<string|int, mixed> $providedParameters */
     public static function has(array $providedParameters): bool
     {
