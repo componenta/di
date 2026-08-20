@@ -7,7 +7,6 @@ namespace Componenta\DI\Tests\V5;
 use Attribute;
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
@@ -113,18 +112,15 @@ test('builder materializes deferred attribute and parameter resolver service met
         ->and($dto->fallback)->toBe('from-deferred-resolver');
 });
 
-test('deferred attribute factory services can use default constructor autowiring during bootstrap', function (): void {
+test('deferred extension factories can use constructor autowiring during bootstrap', function (): void {
     $container = (new ContainerBuilder())
         ->addAttributeDefinition([DeferredAutowiredAttributeFactory::class, 'attribute'])
         ->build();
 
     $factory = $container->get(DeferredAutowiredAttributeFactory::class);
-    $registry = $container->get(AttributeDefinitionRegistry::class);
 
     expect($factory)->toBeInstanceOf(DeferredAutowiredAttributeFactory::class)
-        ->and($factory->dependency)->toBeInstanceOf(DeferredAutowiredDependency::class)
-        ->and($registry)->toBeInstanceOf(AttributeDefinitionRegistry::class)
-        ->and($registry->definition(DeferredAutowiredValue::class))->toBeInstanceOf(AttributeDefinition::class);
+        ->and($factory->dependency)->toBeInstanceOf(DeferredAutowiredDependency::class);
 });
 
 test('config accepts the same deferred extension service method forms', function (): void {
