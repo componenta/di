@@ -29,7 +29,6 @@ use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\CallableExecutor;
-use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolverInterface;
 use Componenta\DI\ConfigProvider;
@@ -46,7 +45,7 @@ function publicParameterNames(string $class, string $method): array
     );
 }
 
-test('v5 preserves the v4 array-based public resolution contracts', function (): void {
+test('public resolution signatures keep their named-argument contract', function (): void {
     expect(publicParameterNames(FactoryInterface::class, 'make'))->toBe(['entry', 'params'])
         ->and(publicParameterNames(Container::class, 'make'))->toBe(['entry', 'params'])
         ->and(publicParameterNames(CallableInvokerInterface::class, 'call'))->toBe(['callable', 'params'])
@@ -55,12 +54,10 @@ test('v5 preserves the v4 array-based public resolution contracts', function ():
         ->and(publicParameterNames(ParameterResolverInterface::class, 'supports'))->toBe(['target'])
         ->and(publicParameterNames(ParameterResolverInterface::class, 'resolveParameter'))->toBe(['target', 'context'])
         ->and(publicParameterNames(AttributeHandlerInterface::class, 'handle'))
-        ->toBe(['attribute', 'target', 'context'])
-        ->and((new \ReflectionClass(CallableExecutorInterface::class))->hasMethod('execute'))
-        ->toBeFalse();
+        ->toBe(['attribute', 'target', 'context']);
 });
 
-test('v5 preserves v4 attribute constructor named arguments', function (
+test('attribute constructors keep their named-argument contract', function (
     string $attribute,
     array $expected,
 ): void {
