@@ -11,7 +11,6 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
-use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
@@ -538,7 +537,7 @@ final class AttributePlanBuilder
     private static function parameterCacheKey(ReflectionParameter $parameter): ?string
     {
         $function = $parameter->getDeclaringFunction();
-        if ($function instanceof ReflectionFunction && $function->isClosure()) {
+        if ($function->isClosure()) {
             return null;
         }
 
