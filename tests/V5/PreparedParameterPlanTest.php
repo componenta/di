@@ -39,9 +39,15 @@ final readonly class AuditPreparedTarget
     public function __construct(public string $value) {}
 }
 
+interface AuditPreparedDefaultObjectInterface {}
+
+final class AuditPreparedDefaultObject implements AuditPreparedDefaultObjectInterface {}
+
 final readonly class AuditPreparedDefaultObjectTarget
 {
-    public function __construct(public \stdClass $value = new \stdClass()) {}
+    public function __construct(
+        public AuditPreparedDefaultObjectInterface $value = new AuditPreparedDefaultObject(),
+    ) {}
 }
 
 test('has does not classify constructor parameter resolvers', function (): void {
@@ -96,5 +102,7 @@ test('prepared default resolver does not cache object default values', function 
     $first = $container->make(AuditPreparedDefaultObjectTarget::class);
     $second = $container->make(AuditPreparedDefaultObjectTarget::class);
 
-    expect($first->value)->not->toBe($second->value);
+    expect($first->value)->toBeInstanceOf(AuditPreparedDefaultObject::class)
+        ->and($second->value)->toBeInstanceOf(AuditPreparedDefaultObject::class)
+        ->and($first->value)->not->toBe($second->value);
 });
