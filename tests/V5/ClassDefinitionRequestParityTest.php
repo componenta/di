@@ -12,7 +12,6 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
-use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -76,7 +75,7 @@ test('ordinary programmatic ClassDefinition overrides are not treated as mapped 
         ->and($command->token)->toBe('programmatic-token');
 });
 
-test('persistent ClassDefinition cache keeps mapped request source guards in the shared runtime path', function (): void {
+test('persistent ClassDefinition cache keeps mapped request source guards in the public request flow', function (): void {
     $root = sys_get_temp_dir() . '/componenta-di-v5-mapped-class-definition-' . bin2hex(random_bytes(5));
     $cacheFile = $root . '/container.php';
 
@@ -93,15 +92,16 @@ test('persistent ClassDefinition cache keeps mapped request source guards in the
             $cache,
             $root,
         )->build();
+        $request = (new ServerRequest('POST', '/'))
+            ->withHeader('X-Token', 'trusted-token')
+            ->withParsedBody([
+                'value' => 'payload-value',
+                'token' => 'attacker-token',
+            ]);
 
-        $mapped = [
-            'value' => 'payload-value',
-            'token' => 'attacker-token',
-        ];
-        $context = MappedRequestContext::with($mapped, $mapped);
-
-        expect(fn() => $container->make(MappedClassDefinitionContract::class, $context))
-            ->toThrow(RequestParameterSourceConflictException::class);
+        expect(fn() => $container->make(MappedClassDefinitionEnvelope::class, [
+            ServerRequestInterface::class => $request,
+        ]))->toThrow(RequestParameterSourceConflictException::class);
 
         $programmatic = $container->make(MappedClassDefinitionContract::class, [
             'value' => 'programmatic-value',
