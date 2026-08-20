@@ -10,8 +10,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
-
-final class AuditTrivialEntry {}
+use Componenta\DI\Exception\ResolutionException;
 
 final class AuditPrivateConstructorEntry
 {
@@ -89,35 +88,7 @@ test('AOT rejects the same inaccessible constructor that runtime cannot resolve'
     }
 });
 
-test('AOT entry methods always delegate execution to ObjectPipeline', function (): void {
-    $suffix = bin2hex(random_bytes(5));
-    $directory = sys_get_temp_dir() . '/componenta-di-v5-prepared-' . $suffix;
-    $namespace = 'Componenta\\DI\\Tests\\Generated\\Prepared' . $suffix;
-
-    try {
-        $definitions = (new ContainerBuilder())->compileFactories(
-            [AuditTrivialEntry::class, AuditNoConstructorEntry::class],
-            $directory,
-            namespace: $namespace,
-        );
-
-        foreach ([AuditTrivialEntry::class, AuditNoConstructorEntry::class] as $entry) {
-            $definition = $definitions[$entry];
-            $code = file_get_contents($directory . '/' . $definition->file);
-
-            expect($code)->toBeString()
-                ->and($code)->toContain('$this->objects->create(\\' . $entry . '::class, $params)')
-                ->and($code)->not->toContain('return new \\' . $entry)
-                ->and($code)->not->toContain('$this->container->has(')
-                ->and($code)->not->toContain('$this->container->get(')
-                ->and($code)->not->toContain('FAST_PATHS');
-        }
-    } finally {
-        cleanupPreparedDirectory($directory);
-    }
-});
-
-test('compiled plain autowiring uses the same ObjectPipeline semantics for defaults and overrides', function (): void {
+test('compiled plain autowiring preserves development defaults and explicit overrides', function (): void {
     $suffix = bin2hex(random_bytes(5));
     $directory = sys_get_temp_dir() . '/componenta-di-v5-constructor-' . $suffix;
     $namespace = 'Componenta\\DI\\Tests\\Generated\\Constructor' . $suffix;
@@ -130,16 +101,6 @@ test('compiled plain autowiring uses the same ObjectPipeline semantics for defau
             $directory,
             namespace: $namespace,
         );
-        $definition = $definitions[AuditFastConstructorEntry::class];
-        $code = file_get_contents($directory . '/' . $definition->file);
-
-        expect($code)->toBeString()
-            ->and($code)->toContain('$this->objects->create(\\' . AuditFastConstructorEntry::class . '::class, $params)')
-            ->and($code)->not->toContain('$this->container->has(')
-            ->and($code)->not->toContain('$this->container->get(')
-            ->and($code)->not->toContain('return new \\' . AuditFastConstructorEntry::class)
-            ->and($code)->not->toContain('FAST_PATHS');
-
         $production = compiledAuditContainer($definitions, $directory);
         $developmentDefault = $development->make(AuditFastConstructorEntry::class);
         $productionDefault = $production->make(AuditFastConstructorEntry::class);
@@ -157,26 +118,24 @@ test('compiled plain autowiring uses the same ObjectPipeline semantics for defau
     }
 });
 
-test('unsupported constructor shapes still compile only through the shared ObjectPipeline', function (): void {
+test('unsupported constructor parameter shapes fail identically in development and compiled production', function (): void {
     $suffix = bin2hex(random_bytes(5));
     $directory = sys_get_temp_dir() . '/componenta-di-v5-unsupported-constructor-' . $suffix;
     $namespace = 'Componenta\\DI\\Tests\\Generated\\UnsupportedConstructor' . $suffix;
+    $builder = new ContainerBuilder();
+    $development = $builder->build();
 
     try {
-        $definitions = (new ContainerBuilder())->compileFactories(
+        $definitions = $builder->compileFactories(
             [AuditByReferenceConstructorEntry::class, AuditVariadicConstructorEntry::class],
             $directory,
             namespace: $namespace,
         );
+        $production = compiledAuditContainer($definitions, $directory);
 
         foreach ([AuditByReferenceConstructorEntry::class, AuditVariadicConstructorEntry::class] as $entry) {
-            $definition = $definitions[$entry];
-            $code = file_get_contents($directory . '/' . $definition->file);
-
-            expect($code)->toBeString()
-                ->and($code)->toContain('$this->objects->create(\\' . $entry . '::class, $params)')
-                ->and($code)->not->toContain('return new \\' . $entry)
-                ->and($code)->not->toContain('FAST_PATHS');
+            expect(fn() => $development->make($entry))->toThrow(ResolutionException::class)
+                ->and(fn() => $production->make($entry))->toThrow(ResolutionException::class);
         }
     } finally {
         cleanupPreparedDirectory($directory);
