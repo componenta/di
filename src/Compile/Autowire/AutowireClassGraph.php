@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Compile\Autowire;
 
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\SetUp;
@@ -15,16 +17,20 @@ use Componenta\DI\Resolver\TypeHints;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
 
 use function Componenta\DI\is_entry_class_eligible;
 
-/** Expands explicit AOT roots through statically knowable dependencies. */
+/** Expands explicit AOT roots through statically knowable autowire dependencies. */
 final readonly class AutowireClassGraph
 {
     /** @param array<string,non-empty-string> $aliases */
-    public function __construct(private array $aliases = []) {}
+    public function __construct(
+        private array $aliases = [],
+        private ?AttributePlanBuilder $plans = null,
+    ) {}
 
     /**
      * @param iterable<AutowireEntry|class-string> $roots
@@ -165,11 +171,21 @@ final readonly class AutowireClassGraph
     private function appendMethodDependencies(array &$dependencies, ReflectionMethod $method): void
     {
         foreach ($method->getParameters() as $parameter) {
+            if ($this->isProvidedByAttribute($parameter)) {
+                continue;
+            }
+
             $this->appendDependency(
                 $dependencies,
                 TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass()),
             );
         }
+    }
+
+    private function isProvidedByAttribute(ReflectionParameter $parameter): bool
+    {
+        return $this->plans !== null
+            && $this->plans->build($parameter)->has(ValueProvider::class);
     }
 
     /** @param array<class-string,true> $dependencies */
