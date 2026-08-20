@@ -10,6 +10,7 @@ use Componenta\VarExport\Config\ExportConfig;
 use Componenta\VarExport\Exception\ExportException;
 use Componenta\VarExport\VarExporter;
 use ReflectionClass;
+use ReflectionProperty;
 use UnitEnum;
 
 /** Exports one cache graph while preserving repeated object and Closure identity. @internal */
@@ -143,10 +144,12 @@ final class DiCacheGraphExporter
 
         $constructor = $reflection->getConstructor();
         if ($constructor === null) {
+            $this->assertNoUnrepresentedProperties($reflection, []);
             return 'new \\' . $object::class . '()';
         }
 
         $arguments = [];
+        $represented = [];
         foreach ($constructor->getParameters() as $parameter) {
             $name = $parameter->getName();
             if (!$reflection->hasProperty($name)) {
@@ -166,13 +169,70 @@ final class DiCacheGraphExporter
                 ));
             }
 
+            $represented[self::propertyKey($property)] = true;
             $arguments[] = $this->value(
                 $property->getValue($object),
                 $depth + 1,
             );
         }
 
+        $this->assertNoUnrepresentedProperties($reflection, $represented);
+
         return 'new \\' . $object::class . '(' . implode(', ', $arguments) . ')';
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @param array<string,true> $represented
+     */
+    private function assertNoUnrepresentedProperties(
+        ReflectionClass $reflection,
+        array $represented,
+    ): void {
+        foreach (self::instanceProperties($reflection) as $property) {
+            if (isset($represented[self::propertyKey($property)])) {
+                continue;
+            }
+
+            throw new ExportException(sprintf(
+                'Cannot export object of type "%s": instance property "%s::$%s" is not represented by a public promoted constructor parameter.',
+                $reflection->getName(),
+                $property->getDeclaringClass()->getName(),
+                $property->getName(),
+            ));
+        }
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @return list<ReflectionProperty>
+     */
+    private static function instanceProperties(ReflectionClass $reflection): array
+    {
+        /** @var array<string,ReflectionProperty> $properties */
+        $properties = [];
+        foreach ($reflection->getProperties() as $property) {
+            if (!$property->isStatic()) {
+                $properties[self::propertyKey($property)] = $property;
+            }
+        }
+
+        for ($parent = $reflection->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
+            foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
+                if (!$property->isStatic()
+                    && $property->getDeclaringClass()->getName() === $parent->getName()
+                ) {
+                    $properties[self::propertyKey($property)] = $property;
+                }
+            }
+        }
+
+        return array_values($properties);
+    }
+
+    private static function propertyKey(ReflectionProperty $property): string
+    {
+        return $property->getDeclaringClass()->getName() . "\0" . $property->getName();
     }
 
     private function isTrusted(GeneratedDefinitionCode $code): bool
