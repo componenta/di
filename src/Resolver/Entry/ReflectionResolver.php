@@ -12,9 +12,6 @@ use ReflectionClass;
 /** Reflection fallback for entries without an explicit definition. */
 final class ReflectionResolver implements EntryResolverInterface
 {
-    /** @var array<string, true> */
-    private array $missing = [];
-
     public function __construct(private readonly ObjectPipeline $objects) {}
 
     public function can(string $id): bool
@@ -36,14 +33,6 @@ final class ReflectionResolver implements EntryResolverInterface
     /** @return ReflectionClass<object>|null */
     private function reflect(string $id): ?ReflectionClass
     {
-        $key = strtolower(ltrim($id, '\\'));
-        if (isset($this->missing[$key])) {
-            return null;
-        }
-        $class = Reflection::class($id);
-        if ($class === null) {
-            $this->missing[$key] = true;
-        }
-        return $class;
+        return Reflection::class($id);
     }
 }
