@@ -22,7 +22,7 @@ it('autoloads package helper functions instead of one-method helper classes', fu
         ->and(is_entry_class_eligible(new \ReflectionClass(\stdClass::class)))->toBeTrue();
 });
 
-it('does not expose obsolete helper classes or NullContainer', function (): void {
+it('does not expose obsolete helper classes or duplicate cache exporters', function (): void {
     foreach ([
         'Componenta\\DI\\NullContainer',
         'Componenta\\DI\\Resolver\\EnvNameNormalizer',
@@ -31,6 +31,8 @@ it('does not expose obsolete helper classes or NullContainer', function (): void
         'Componenta\\DI\\Resolver\\Parameter\\ParameterResolutionResult',
         'Componenta\\DI\\Compile\\Definition\\DefaultDefinitionCodeGenerators',
         'Componenta\\DI\\Compile\\Factory\\CompiledFactoryPipelineFingerprint',
+        'Componenta\\DI\\Cache\\DiCacheGraphExporter',
+        'Componenta\\DI\\Cache\\DiCacheObjectExporter',
     ] as $class) {
         expect(class_exists($class) || interface_exists($class))->toBeFalse();
     }
