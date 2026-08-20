@@ -93,7 +93,10 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             }
 
             $candidate = $context->provided[$typeName];
-            if (is_object($candidate) && $target->accepts($candidate)) {
+            if (is_object($candidate)
+                && $candidate instanceof $typeName
+                && $target->accepts($candidate)
+            ) {
                 return ParameterAttributeValue::resolved($candidate);
             }
         }
