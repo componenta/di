@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\TypeHints;
 use ReflectionAttribute;
@@ -171,7 +172,7 @@ final readonly class AutowireClassGraph
     private function appendMethodDependencies(array &$dependencies, ReflectionMethod $method): void
     {
         foreach ($method->getParameters() as $parameter) {
-            if ($this->isProvidedByAttribute($parameter)) {
+            if ($this->isProvidedByAttributeHandler($parameter)) {
                 continue;
             }
 
@@ -182,10 +183,25 @@ final readonly class AutowireClassGraph
         }
     }
 
-    private function isProvidedByAttribute(ReflectionParameter $parameter): bool
+    private function isProvidedByAttributeHandler(ReflectionParameter $parameter): bool
     {
-        return $this->plans !== null
-            && $this->plans->build($parameter)->has(ValueProvider::class);
+        if ($this->plans === null) {
+            return false;
+        }
+
+        foreach ($this->plans->build($parameter)->usages as $usage) {
+            if (!$usage->definition->handler instanceof ParameterAttributeHandlerInterface) {
+                continue;
+            }
+
+            foreach ($usage->definition->capabilities as $capability) {
+                if (is_a($capability, ValueProvider::class, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** @param array<class-string,true> $dependencies */
