@@ -27,7 +27,7 @@ final class CycleGuard
     /** @var WeakMap<object, array<string, true>> Fiber-keyed execution stacks. */
     private WeakMap $fiberStacks;
 
-    /** @var array<string, object|WeakReference> Shared-entry owner token by id. */
+    /** @var array<string, object> Shared-entry owner token by id. */
     private array $sharedOwners = [];
 
     /** Main execution-context owner token. */
@@ -106,7 +106,7 @@ final class CycleGuard
         $this->leave($id);
     }
 
-    private function ownedBy(object $owner, ?Fiber $execution): bool
+    private function ownedBy(object $owner, ?object $execution): bool
     {
         if ($execution === null) {
             return $owner === $this->mainOwner;
