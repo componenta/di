@@ -13,6 +13,7 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\TypeHints;
@@ -153,7 +154,19 @@ final readonly class AutowireClassGraph
     private function hasConstructorPolicy(ReflectionClass $class): bool
     {
         if ($this->plans !== null) {
-            return $this->plans->build($class)->has(ConstructorPolicy::class);
+            foreach ($this->plans->build($class)->all(ConstructorPolicy::class) as $usage) {
+                $definition = $usage->definition;
+                if (!$definition->handler instanceof AttributeHandlerInterface) {
+                    continue;
+                }
+                if ($definition->phase === AttributePhase::BeforeInstantiation
+                    || $definition->phase === AttributePhase::Both
+                ) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         return $class->getAttributes(
