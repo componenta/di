@@ -17,6 +17,7 @@ final readonly class AttributeUsage
     /** @var ReflectionAttribute<object> */
     public ReflectionAttribute $reflection;
 
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function __construct(
         public object $attribute,
         public AttributeDefinition $definition,
