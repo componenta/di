@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\CurrentRequest;
 use Componenta\DI\Attribute\CurrentUri;
+use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
@@ -25,20 +26,23 @@ final readonly class CurrentRequestAotTarget
     ) {}
 }
 
-test('current request attributes resolve from the HTTP context transport', function (): void {
+test('current request attributes share the HTTP context transport with request extractors', function (): void {
     $container = (new ContainerBuilder())->build();
-    $request = new ServerRequest('GET', 'https://example.test/orders?page=2');
+    $request = (new ServerRequest('GET', 'https://example.test/orders?page=2'))
+        ->withQueryParams(['page' => '2']);
 
     $resolved = $container->call(
         static fn(
             #[CurrentRequest] ServerRequestInterface $currentRequest,
             #[CurrentUri] UriInterface $currentUri,
-        ): array => [$currentRequest, $currentUri],
+            #[QueryParam] string $page,
+        ): array => [$currentRequest, $currentUri, $page],
         [ServerRequestInterface::class => $request],
     );
 
     expect($resolved[0])->toBe($request)
-        ->and($resolved[1])->toBe($request->getUri());
+        ->and($resolved[1])->toBe($request->getUri())
+        ->and($resolved[2])->toBe('2');
 });
 
 test('current request attributes are authoritative over generic caller parameters', function (): void {
