@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Internal\Resolver\Parameter\ParameterDefaultValue;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
 /** Resolves a native PHP parameter default. */
@@ -20,7 +19,7 @@ final class DefaultValueResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         return $target->hasDefault
-            ? [$target->position, ParameterDefaultValue::materialize($target)]
+            ? [$target->position, $target->reflection->getDefaultValue()]
             : null;
     }
 }
