@@ -1,147 +1,35 @@
-# Componenta DI v5 — финальная архитектурная спецификация
+# Componenta DI v5 — архитектурная спецификация
 
-> Статус: реализованная архитектура ветки `v5`.
+> Статус: текущая архитектура ветки `v5`.
 >
-> Baseline совместимости: фактическое поведение `main`/v4, если возможность не заменена явным более детерминированным v5 API.
->
-> Главный инвариант: параметры имеют ровно один `ParameterResolverInterface` pipeline; атрибуты class/property/method имеют один `AttributeProcessor`; parameter attributes входят в parameter pipeline только через один `AttributeParameterResolver`.
+> Главный инвариант: development и AOT используют один runtime semantic engine. AOT не генерирует собственные правила autowiring, parameter resolution или attribute execution.
 
----
-
-# 1. Цели v5
-
-V5 должен одновременно:
-
-1. сохранить функциональные возможности v4;
-2. убрать отдельную dev/prod реализацию DI semantics;
-3. сделать композицию атрибутов валидируемой до исполнения;
-4. сохранить custom parameter resolution;
-5. сохранить custom attribute execution;
-6. не иметь публичного transport-specific resolution context;
-7. не иметь глобального fallback/value pipeline;
-8. позволять нескольким совместимым атрибутам работать на одном target.
-
-Итоговая модель разделяет четыре ответственности:
+## 1. Runtime model
 
 ```text
-ParametersResolver
-    orchestration parameter resolver chain
+Container
+  ├─ AliasResolver
+  ├─ EntryCache
+  ├─ EntryResolverInterface
+  │    └─ CompositeResolver
+  │         ├─ FactoryResolver
+  │         ├─ InvokableResolver
+  │         └─ ReflectionResolver
+  └─ CallableExecutor
 
-AttributePlanBuilder
-    composition + validation + ordering metadata
-
-AttributeParameterResolver
-    bridge AttributePlan -> parameter handlers
-
-AttributeProcessor
-    execution class/property/method handlers
+ReflectionResolver ─┐
+FactoryResolver/AOT ├─> ObjectPipeline
+                    │      ├─ AttributeProcessor
+                    │      └─ InstanceCreator
+                    │             └─ ParametersResolver
+                    └──────────────────────────────
 ```
 
----
+Compiled shard содержит только thin entry methods, которые делегируют в тот же `ObjectPipeline`, что и reflection path.
 
-# 2. Неподлежащие нарушению инварианты
+## 2. Parameter resolution
 
-## 2.1. Parameter resolution
-
-1. Любой constructor/callable parameter разрешается только `ParameterResolverInterface`.
-2. `ParametersResolver` сам не знает `Config`, `Env`, `Cast`, HTTP и другие attribute semantics.
-3. `ArrayResolver` и `ArrayTypedResolver` не знают ни одного конкретного атрибута.
-4. Parameter attribute никогда не исполняется напрямую из `ObjectPipeline`.
-5. Все parameter attributes входят в resolver chain через один `AttributeParameterResolver`.
-6. Custom convention resolver без атрибута остаётся first-class extension point.
-7. Result каждого resolver-а проходит `ParameterResolutionResult` validation.
-8. Resolver chain immutable после `seal()`.
-9. `supports()` не может мутировать chain.
-
-## 2.2. Attribute composition
-
-1. `AttributeDefinition` — единственный semantic registration одного attribute class.
-2. `AttributePlanBuilder` валидирует target, cardinality, requires/forbids, custom rules и ordering.
-3. Capability inheritance учитывается одинаково в `AttributePlanBuilder`, `AttributeSet` и `AttributePlan`.
-4. `ValueProvider` — единственный source slot на target.
-5. `ValueTransformer` — отдельная capability и не занимает source slot.
-6. Один source + transformer(s) допустимы.
-7. Два несовместимых source attributes дают `AttributeCompositionException`.
-8. Ordering задаётся semantic constraints; built-in `Cast` выполняется после `ValueProvider`.
-9. AOT вызывает ту же composition validation до записи shard.
-
-## 2.3. Attribute execution
-
-1. `PropertyResolverInterface` отсутствует.
-2. Class/property/method handlers реализуют `AttributeHandlerInterface`.
-3. Parameter-only handlers реализуют отдельный `ParameterAttributeHandlerInterface`.
-4. `ParameterAttributeHandlerInterface` не наследует `AttributeHandlerInterface`.
-5. Parameter-only handler не обязан иметь фиктивный `handle()`.
-6. Handler, работающий и с parameter, и с property/class/method, явно реализует оба интерфейса.
-7. `AttributeProcessor` выполняет только `AttributeHandlerInterface`.
-8. `AttributeParameterResolver` выполняет только `ParameterAttributeHandlerInterface`.
-
-## 2.4. Public context
-
-1. `FactoryInterface::make(string, array $params = [])`.
-2. `CallableInvokerInterface::call(..., array $params = [])`.
-3. `Container::make()` и `Container::call()` принимают обычный array.
-4. `ResolutionContext` отсутствует.
-5. Нет global `explicit`, `mapped`, `trusted` categories.
-6. PSR-7 request передаётся обычным typed key.
-7. Request provenance остаётся internal HTTP metadata.
-
-## 2.5. Dev / AOT parity
-
-1. Reflection и AOT используют один `ObjectPipeline`.
-2. Reflection и AOT используют один `ParametersResolver`.
-3. Reflection и AOT используют один `AttributeParameterResolver`.
-4. Reflection и AOT вызывают те же handler implementations.
-5. Custom resolver/handler не требует production code generator.
-6. Stale semantic fingerprint отклоняется.
-7. Invalid composition должна падать до записи AOT shard.
-
----
-
-# 3. Финальные public contracts
-
-## 3.1. Factory
-
-```php
-interface FactoryInterface
-{
-    public function make(string $entry, array $params = []): object;
-}
-```
-
-`$params` поддерживает:
-
-- parameter name;
-- numeric position;
-- declared class/interface key;
-- framework object key, например `ServerRequestInterface::class`.
-
-## 3.2. Callable API
-
-```php
-interface CallableInvokerInterface
-{
-    public function call(mixed $callable, array $params = []): mixed;
-}
-```
-
-```php
-interface CallableResolverInterface
-{
-    public function resolve(mixed $callable): callable;
-}
-```
-
-```php
-interface CallableExecutorInterface
-    extends CallableInvokerInterface, CallableResolverInterface
-{
-}
-```
-
-Отдельного `execute()` нет.
-
-## 3.3. ParameterResolverInterface
+Любой constructor/callable parameter разрешается через один `ParameterResolverInterface` pipeline:
 
 ```php
 interface ParameterResolverInterface
@@ -156,9 +44,102 @@ interface ParameterResolverInterface
 }
 ```
 
-`null` означает «продолжить chain».
+Встроенный порядок:
 
-## 3.4. AttributeHandlerInterface
+```text
+1200  AttributeParameterResolver
+1100  ArrayResolver
+1000  ArrayTypedResolver
+ 800  RequestContextResolver
+ 300  AutowireByTypeResolver
+ 200  DefaultValueResolver
+ 100  NullableResolver
+```
+
+`supports()` классифицирует immutable target metadata. После seal pipeline не меняется.
+
+### 2.1. Prepared parameter plans
+
+Hot path не повторяет resolver classification.
+
+```text
+ReflectionParameter
+    -> ParameterTarget
+    -> supports() classification
+    -> PreparedParameter { target, resolverSlots }
+    -> PreparedParameterPlan
+```
+
+`PreparedParameterPlan` содержит только execution structure. В него не попадают:
+
+- request objects;
+- mapped-request provenance;
+- current user;
+- resolved values;
+- default object values;
+- resolver instances;
+- container state.
+
+Constructor plans создаются лениво при фактическом resolution. `Container::has()` / `ObjectPipeline::canCreate()` не запускают `ParameterResolverInterface::supports()`.
+
+Closure metadata кешируется через `WeakMap` exact closure instance. Named functions/methods могут использовать strong immutable metadata cache.
+
+## 3. Parameter override semantics
+
+Caller params могут адресоваться:
+
+```text
+parameter name
+numeric position
+declared class/interface key
+framework typed key, например ServerRequestInterface::class
+```
+
+`ArrayResolver` отвечает только за name/position.
+
+`ArrayTypedResolver` отвечает только за compatible object по declared type key.
+
+Attribute semantics не находятся в array resolvers.
+
+## 4. Attribute composition
+
+`AttributeDefinitionRegistry` является mutable только во время composition/bootstrap и sealed до выдачи готового container.
+
+`AttributePlanBuilder`:
+
+- проверяет PHP attribute target mask;
+- строит semantic `AttributePlan`;
+- проверяет capability cardinality;
+- проверяет `requires` / `forbids`;
+- выполняет custom rules;
+- строит `before` / `after` ordering;
+- обнаруживает cycles;
+- валидирует parameter source-handler composition;
+- валидирует readonly property composition.
+
+Capabilities inheritance-aware.
+
+`ValueProvider` — source capability.
+
+`ValueTransformer` — независимая transformer capability.
+
+Допустимо:
+
+```php
+#[QueryParam('count'), Cast('int')]
+int $count
+```
+
+Недопустимо два независимых source:
+
+```php
+#[QueryParam('value'), Header('X-Value')]
+string $value
+```
+
+## 5. Attribute execution
+
+Object и parameter attributes имеют отдельные execution contracts.
 
 ```php
 interface AttributeHandlerInterface
@@ -170,10 +151,6 @@ interface AttributeHandlerInterface
     ): void;
 }
 ```
-
-Используется только для class/property/method execution.
-
-## 3.5. ParameterAttributeHandlerInterface
 
 ```php
 interface ParameterAttributeHandlerInterface
@@ -188,213 +165,15 @@ interface ParameterAttributeHandlerInterface
 }
 ```
 
-Контракт самостоятельный и не наследует object handler.
+`AttributeParameterResolver` — единственный bridge из parameter resolver pipeline к parameter attribute handlers.
 
-## 3.6. ParameterAttributeValue
+`AttributeProcessor` выполняет class/property/method handlers.
 
-```php
-final readonly class ParameterAttributeValue
-{
-    public bool $resolved;
-    public mixed $value;
+Каждый runtime handler invocation получает fresh attribute instance. Cached `AttributePlan` хранит semantic metadata, а не mutable runtime attribute state.
 
-    public static function unresolved(): self;
-    public static function resolved(mixed $value): self;
-}
-```
+## 6. Built-in handlers
 
-Это внутренний immutable state только одной операции композиции parameter attributes. Это не публичный `ResolutionContext`, не fallback registry и не глобальный `ValuePipeline`.
-
----
-
-# 4. Финальная parameter resolver chain
-
-```text
-priority 1200  AttributeParameterResolver
-priority 1100  ArrayResolver
-priority 1000  ArrayTypedResolver
-priority  800  RequestContextResolver
-priority  300  AutowireByTypeResolver
-priority  200  DefaultValueResolver
-priority  100  NullableResolver
-```
-
-Причина, почему attribute resolver выше raw explicit resolvers: только он знает, является ли caller value конечным значением, input для transformer-а или запрещён authoritative source-ом.
-
-## 4.1. ArrayResolver
-
-Ответственность только:
-
-```text
-provided by name
-provided by numeric position
-```
-
-Никаких проверок `Cast`, `CurrentUser` или других attributes.
-
-## 4.2. ArrayTypedResolver
-
-Ответственность только:
-
-```text
-provided object by declared class/interface key
-```
-
-Также attribute-agnostic.
-
-## 4.3. AttributeParameterResolver
-
-Алгоритм:
-
-```text
-ParameterTarget
-    -> AttributePlanBuilder::build()
-    -> определить initial ParameterAttributeValue
-    -> пройти plan usages в semantic order
-    -> вызвать ParameterAttributeHandlerInterface handlers
-    -> получить final ParameterAttributeValue
-    -> вернуть [$position, $value]
-```
-
-Initial value:
-
-1. если plan содержит `AuthoritativeValueProvider` — unresolved;
-2. иначе caller value по имени;
-3. иначе caller value по позиции;
-4. иначе compatible typed caller object;
-5. иначе unresolved.
-
-Таким образом `AttributeParameterResolver` не знает конкретных классов `CurrentUser`, `Cast`, `Config` и т. д. Он работает только с capabilities и handlers.
-
-## 4.4. RequestContextResolver
-
-Отдельный resolver нужен только для non-attribute request context, например:
-
-```php
-UriInterface $uri
-```
-
-Request-source attributes относятся к `AttributeParameterResolver`.
-
-## 4.5. Custom convention resolver
-
-Custom `ParameterResolverInterface` остаётся для semantics без attribute marker:
-
-```php
-final class TenantResolver implements ParameterResolverInterface
-{
-    public function supports(ParameterTarget $target): bool
-    {
-        return $target->name === 'tenant';
-    }
-}
-```
-
----
-
-# 5. Parameter attribute composition
-
-## 5.1. Source + transformer
-
-Валидная комбинация:
-
-```php
-#[QueryParam('count'), Cast('int')]
-int $count
-```
-
-Flow:
-
-```text
-unresolved
-    -> RequestAttributeHandler
-    -> resolved('41')
-    -> CastHandler
-    -> resolved(41)
-```
-
-`Cast` definition содержит `after: [ValueProvider::class]`, поэтому даже:
-
-```php
-#[Cast('int'), QueryParam('count')]
-```
-
-исполняется как source → transformer.
-
-## 5.2. Explicit input + transformer
-
-```php
-#[Cast('int')]
-int $count
-```
-
-с:
-
-```php
-['count' => '41']
-```
-
-Flow:
-
-```text
-AttributeParameterResolver seeds resolved('41')
-    -> CastHandler
-    -> resolved(41)
-```
-
-`ArrayResolver` при этом не знает о `Cast`.
-
-## 5.3. Normal source + explicit override
-
-Например `#[Config]` с caller value:
-
-```text
-AttributeParameterResolver seeds caller value
-    -> ConfigHandler sees resolved state
-    -> leaves it unchanged
-```
-
-Это сохраняет v4 precedence обычного caller override над Config/Env/Make.
-
-## 5.4. Authoritative source
-
-`#[CurrentUser]` registered как `AuthoritativeValueProvider`.
-
-Flow:
-
-```text
-caller value ignored at initial seed stage
-    -> CurrentUserHandler resolves authenticated user
-```
-
-Array resolvers не содержат специальных исключений.
-
-## 5.5. Source conflict
-
-```php
-#[QueryParam('value'), Header('X-Value')]
-string $value
-```
-
-Оба являются `ValueProvider`.
-
-`CapabilityPolicy(ValueProvider::class, 1)` вызывает `AttributeCompositionException` ещё при построении plan.
-
-## 5.6. Handler conflict beyond capabilities
-
-Для parameter target `AttributePlanBuilder` дополнительно проверяет parameter-aware source handlers. Разные non-transformer handlers не могут одновременно владеть source semantics.
-
-Несколько definitions могут ссылаться на один source handler, если это одна связанная семантика. Пример:
-
-```text
-#[Make] + #[Proxy]
-```
-
-оба обслуживаются одним `MakeHandler`.
-
----
-
-# 6. Built-in handlers
+Parameter/property handlers:
 
 ```text
 CastHandler
@@ -403,7 +182,17 @@ EnvHandler
 EntryIdHandler
 CurrentUserHandler
 MakeHandler
+```
+
+Parameter-only:
+
+```text
 RequestAttributeHandler
+```
+
+Object-only lifecycle handlers:
+
+```text
 InjectHandler
 InitHandler
 LazyHandler
@@ -411,100 +200,46 @@ NoConstructorHandler
 SetUpRunner
 ```
 
-## 6.1. Dual-surface handlers
+`MakeHandler` также обслуживает `#[Proxy]` semantics.
 
-Следующие handlers реализуют оба интерфейса:
+## 7. Object creation
 
-```text
-CastHandler
-ConfigHandler
-EnvHandler
-EntryIdHandler
-CurrentUserHandler
-MakeHandler
-```
+`ObjectPipeline` является единственным runtime владельцем object construction semantics.
 
-Они имеют parameter и property/class semantics.
+Он кеширует:
 
-## 6.2. Parameter-only handler
+- `ObjectMetadata`;
+- constructor `ParameterTarget` metadata;
+- warmed `PreparedParameterPlan`.
 
-`RequestAttributeHandler` реализует только `ParameterAttributeHandlerInterface`.
-
-У него нет `handle()` и нет фиктивного `LogicException` для object targets.
-
-## 6.3. Object-only handlers
-
-`InjectHandler`, `InitHandler`, `LazyHandler`, `NoConstructorHandler`, `SetUpRunner` относятся только к object attribute processing.
-
----
-
-# 7. Property composition
-
-`ValueProvider` и `ValueTransformer` являются разными capabilities также для property.
-
-Для mutable property поддерживается:
-
-```php
-#[Config('raw'), Cast('trim')]
-public string $value;
-```
-
-`AttributeProcessor` выполняет provider первым. `ObjectCreationContext` фиксирует claim property. `CastHandler` видит уже claimed property, читает source value и переписывает его transformed value.
-
-`Cast` без другого source сохраняет собственную v4 semantics: использует object-creation parameters или `Cast::default`; initialized property default сам по себе не становится скрытым новым source.
-
----
-
-# 8. AttributePlan и capability semantics
-
-`AttributePlanBuilder`:
-
-- инстанцирует только зарегистрированные DI attributes;
-- валидирует PHP attribute target mask;
-- корректно обрабатывает promoted reflection duplicates;
-- проверяет capability cardinality;
-- проверяет parameter source handler conflicts;
-- проверяет requires/forbids;
-- вызывает custom composition rules;
-- выполняет topological ordering;
-- обнаруживает ordering cycles;
-- кеширует named targets;
-- использует `WeakMap` для anonymous closure parameters.
-
-`AttributeSet` и `AttributePlan` используют inheritance-aware capability matching.
-
-`AttributePlanBuilder::FORMAT_VERSION` увеличивается при изменении semantic planning rules, поэтому AOT fingerprint меняется.
-
----
-
-# 9. AttributeProcessor
-
-Обрабатывает только:
+Runtime flow:
 
 ```text
-ReflectionClass
-ReflectionProperty
-ReflectionMethod
+metadata
+ -> class composition plan
+ -> constructor prepared plan
+ -> before-instantiation handlers
+ -> eager / lazy / proxy strategy
+ -> constructor parameter resolution
+ -> object initialization
+ -> after-instantiation handlers
 ```
 
-Execution flow:
+Для classes без object-level handlers `ObjectPipeline` идёт напрямую в `InstanceCreator` с тем же prepared constructor plan.
 
-```text
-AttributePlan
-    -> usages with handler instanceof AttributeHandlerInterface
-    -> before phase
-    -> after phase
-```
+## 8. Lazy / proxy semantics
 
-Parameter-only handlers игнорируются `AttributeProcessor`.
+`#[Lazy]` использует native PHP lazy ghost.
 
-Private properties и private methods родителей включаются в execution plan.
+`#[Proxy]` использует native lazy proxy.
 
----
+Deferred object обязан удерживать constructor input snapshot до фактической инициализации. Это object-owned deferred state, а не container-global request cache.
 
-# 10. PSR-7 request subsystem
+Raw internal resolution params хранятся во внутреннем `ObjectResolutionParameterStore` на `WeakMap<ObjectCreationContext, array>`. После освобождения creation/lazy graph store не удерживает его как strong key.
 
-Request передаётся как:
+## 9. Request context boundary
+
+PSR-7 request передаётся как обычное caller-provided typed value:
 
 ```php
 [
@@ -512,250 +247,149 @@ Request передаётся как:
 ]
 ```
 
-Все request attributes обслуживаются одним `RequestAttributeHandler`:
+Сам request является public input и доступен request-aware resolver/handler.
+
+Mapped-request provenance — internal DI metadata:
 
 ```text
-QueryParam
-PayloadParam
-Header
-Cookie
-RequestAttribute
-ServerParam
-UploadedFile
-MapQueryString
-MapRequestPayload
-MapHeaders
-MapCookies
-MapRequestAttributes
-MapServerParams
-MapUploadedFiles
-MapRequest
+\0componenta.di.*
 ```
 
-## 10.1. Mapping pipeline
+Она не является частью public parameter/object context.
+
+`ResolutionMetadata::publicParameters()` удаляет DI-owned metadata перед extension boundaries.
+
+Internal provenance разрешено видеть только встроенным resolution components, которым она нужна для security checks.
+
+Custom:
+
+- `ParameterResolverInterface`;
+- `ParameterAttributeHandlerInterface`;
+- `AttributeHandlerInterface`;
+- `EntryResolverInterface`;
+- user factory;
+- lazy factory;
+
+не получают `\0componenta.di.*` metadata.
+
+## 10. Request source protection
+
+`MappedRequestParameterSourceGuard` не является обычным resolver-ом и не участвует в priority competition.
+
+Security preflight выполняется до resolver chain и запрещает mapped DTO data подменять explicit sources:
 
 ```text
-extract raw sources
-    -> conflict merge
-    -> raw validation
-    -> map
-    -> cast
-    -> defaults
-    -> sortMap
-    -> exclude
-    -> DTO construction
+#[Header]
+#[QueryParam]
+#[Cookie]
+#[RequestAttribute]
+#[ServerParam]
+#[UploadedFile]
+ServerRequestInterface
+UriInterface
 ```
 
-## 10.2. Request provenance
+Provenance сохраняется внутри DI через nested alias / `ClassDefinition` / lazy / `SetUp`, но удаляется перед user extension boundary.
 
-Nested DTO mapping добавляет internal `MappedRequestContext` metadata.
+Custom `ExtractorInterface` получает исходный request без служебных DI attributes. Fallback parameter name доступен только через `ParameterNameAwareExtractorInterface`.
 
-`MappedRequestParameterSourceGuard` выполняется до resolver priority и до lazy/proxy creation.
+## 11. Current user
 
-Mapped payload не может spoof:
+`CurrentUserProviderInterface` остаётся публичным provider contract.
 
-- explicitly sourced parameter;
-- request object;
-- URI;
-- typed object source;
-- source-bound parameter через ClassDefinition/alias/lazy/AOT boundary.
+Default `CurrentUserProvider` хранит main-context state и Fiber-local snapshot/override state через `WeakMap`.
 
-Internal marker удаляется из обычных object/property parameters.
+Уже начавшийся Fiber не должен начать видеть изменившегося main user после suspend/resume.
 
----
+Sequential long-running integration всё равно обязана очищать main request state в `finally`.
 
-# 11. Object creation pipeline
+`PreparedParameterPlan` никогда не кеширует результат `getUser()`.
+
+## 12. Callable execution
+
+`CallableExecutor` разделяет:
 
 ```text
-ObjectPipeline::create()
-    -> cached ObjectMetadata
-    -> AttributeProcessor BEFORE
-    -> creation strategy
-    -> InstanceCreator
-    -> ParametersResolver
-    -> object initialization
-    -> AttributeProcessor AFTER
-    -> object
+null plan  = magic/dynamic callable без отражаемой сигнатуры
+empty plan = реальный reflected zero-argument callable
 ```
 
-Reflection entry и compiled entry используют этот же pipeline.
+Magic `__call` / `__callStatic`, включая inaccessible declared method, сохраняет native PHP dispatch semantics.
 
-`ObjectCreationContext` хранит только state одной object creation operation:
+Closure plans кешируются через `WeakMap`, поэтому executor не владеет lifetime closure/captured request graph.
 
-- constructor enabled;
-- creation strategy;
-- initialized entry;
-- ordinary parameters;
-- internal resolution parameters with request provenance;
-- claimed property set.
+User callable body не является DI exception boundary: throwable из тела explicitly invoked callable выходит без DI wrapping.
 
-Он не является public factory context.
+## 13. Exception diagnostics
 
----
+`ResolutionException` хранит detached diagnostics:
 
-# 12. Lazy / Proxy / Make
+- parameter/property names;
+- positions;
+- declared types;
+- declaring context;
+- types provided/resolved values.
 
-`#[Lazy]` выбирает native lazy strategy.
+Он не хранит live request/service arrays или `ReflectionParameter` closure-а.
 
-`#[Proxy]`:
+`InvalidCallableException` хранит detached callable type/description, а не callable object.
 
-- на class выбирает proxy creation strategy;
-- на parameter/property работает через `MakeHandler`;
-- может принимать explicit concrete proxy class.
+Foreign cause сохраняется через `getPrevious()`.
 
-`#[Make] + #[Proxy]` обслуживаются одним `MakeHandler`, поэтому service id и concrete proxy class могут быть заданы независимо.
+## 14. Factory resolver
 
-Lazy/proxy path не должен обходить request provenance preflight.
-
----
-
-# 13. SetUp
-
-`#[SetUp]` repeatable.
-
-Setup method вызывается через DI-aware `call()`, поэтому его обычные method parameters идут через тот же `ParametersResolver`.
-
-Descriptors внутри `SetUp::params` сохраняют v4 behavior:
+`FactoryResolver` зависит только от того, что реально требуется runtime factory resolution:
 
 ```text
-Config
-Env
-EntryId
-ContainerValue
+factory definitions
+ContainerInterface
+ProxyFactoryInterface
+ObjectPipeline
+CallableExecutorInterface
+optional compiled factory base dir
 ```
 
----
+Attribute registry и parameter resolver не являются его зависимостями.
 
-# 14. Factory ABI
+User factory получает sanitized `array $params`; internal DI metadata перед invocation удаляется.
 
-Public factory:
+## 15. AOT
+
+AOT shard не содержит resolver/attribute semantics.
+
+Generated method:
 
 ```php
-callable(ContainerValue|ContainerInterface, array $params): mixed
-```
-
-Допустимы compatible сокращённые signatures.
-
-`FactorySpecificationValidator` заранее отклоняет incompatible required arguments и invalid method factories.
-
----
-
-# 15. ClassDefinition
-
-`ClassDefinition` остаётся declarative definition.
-
-Runtime override normalization выполняется по:
-
-```text
-parameter name
-parameter position
-declared object/interface type
-```
-
-После normalization значение всё равно проходит обычный `ParametersResolver`; отдельной hidden resolution implementation нет.
-
-Persistent cache использует тот же path.
-
----
-
-# 16. Extension materialization
-
-Поддерживаются:
-
-```text
-instance
-service id
-Closure factory
-callable factory
-[serviceId, method]
-```
-
-String service id имеет container ownership semantics; service-method factory валидируется как callable после materialization.
-
----
-
-# 17. ContainerBuilder configuration
-
-Dependency keys:
-
-```text
-factories
-invokables
-aliases
-delegators
-services
-parameter_resolvers
-parameter_resolvers_replace
-attribute_definitions
-attribute_definitions_replace
-attribute_capabilities
-```
-
-Integer keys `parameter_resolvers` — priorities и не переиндексируются.
-
-Custom user resolver priorities должны быть уникальны в builder registration.
-
-`replaceParameterResolvers()` отключает default chain.
-
-`replaceAttributeDefinitions()` отключает built-in definitions.
-
----
-
-# 18. Package discovery
-
-`Componenta\DI\ConfigProvider` экспортируется через:
-
-```text
-extra.componenta.config-providers
-```
-
-Built-in resolver/attribute registrations собираются самим `ContainerBuilder`, поэтому package ConfigProvider не дублирует runtime registrations.
-
----
-
-# 19. AOT
-
-Generated factory method имеет только thin delegation:
-
-```php
-public function createEntry(array $params = []): object
+public function createEntry0(array $params = []): object
 {
-    return $this->objects->create(Target::class, $params);
+    return $this->objects->create(\App\Service::class, $params);
 }
 ```
 
-AOT prepare вызывает тот же `ObjectPipeline::prepare()` и тот же `AttributePlanBuilder`.
-
-Следовательно:
-
-- invalid composition падает до shard write;
-- source + transformer semantics совпадают dev/prod;
-- custom parameter handler работает без code generator;
-- custom object handler работает без code generator.
-
-Semantic fingerprint включает:
-
-- attribute plan format;
-- definition versions;
-- handler classes;
-- phases;
-- capabilities;
-- requires/forbids/before/after;
-- custom rule semantics;
-- capability policies;
-- ordered parameter resolver chain.
-
----
-
-# 20. Persistent cache
-
-Current cache format:
+Shard ABI содержит:
 
 ```text
-ContainerBuilder::CACHE_VERSION = 16
+FORMAT_VERSION
+ENTRIES: method => entry class
+content-addressed PHP file
 ```
 
-Envelope:
+Loader проверяет:
+
+- path trust boundary;
+- content address/hash;
+- shard format;
+- method metadata;
+- target class availability;
+- `ObjectPipeline::canCreate()`.
+
+Stale/malformed artifact отклоняется fail-closed с требованием rebuild.
+
+Resolver registration, attribute definitions и handler semantics не зашиваются в shard и всегда берутся из текущего runtime pipeline.
+
+## 16. Cache generation
+
+Persistent DI cache использует versioned envelope:
 
 ```php
 [
@@ -764,134 +398,99 @@ Envelope:
 ]
 ```
 
-Older/unknown versions отклоняются fail-closed.
+Current v5 cache format: `17`.
 
----
+Generated PHP cache/shard:
 
-# 21. Удалённые архитектурные поверхности
+1. пишется в exclusive `xb` temp file;
+2. полностью flush-ится;
+3. проверяется `php -l`;
+4. только затем atomically переименовывается;
+5. temp очищается при failure.
 
-Не должны возвращаться:
+Warning suppression применяется только непосредственно к конкретным синхронным native operations. Global process-wide error handler вокруг произвольного callback отсутствует.
+
+## 17. Extension points
+
+Builder:
 
 ```text
-ResolutionContext
-CallableExecutor::execute()
-ValuePipeline
-ValueContext
-ValueResult
-ValueFallbackInterface
-ValueFallbackRegistry
-ExplicitValueFallback
-MappedValueFallback
-TrustedValueFallback
-AutowireValueFallback
-DefaultValueFallback
-NullableValueFallback
-ValueProviderHandlerInterface
-ValueTransformerHandlerInterface
-CreationStrategyHandlerInterface
-ConstructorPolicyHandlerInterface
-LifecycleHookHandlerInterface
-PropertyResolverInterface
-CastableResolver as parameter resolver
-ConfigAttributeResolver as parameter resolver
-EnvResolver as parameter resolver
-EntryIdResolver as parameter resolver
-CurrentUserResolver as parameter resolver
-MakeAttributeResolver as parameter resolver
-RequestResolver as attribute-specific parameter resolver
+addFactory / addFactories
+addDefinition
+addInvokable / addInvokables
+addAlias / addAliases
+addDelegator / addDelegators
+addService / addServices
+addParameterResolver
+replaceParameterResolvers
+addAttributeDefinition
+replaceAttributeDefinitions
+defineAttributeCapability
+compileFactories
+toArray
+build
 ```
 
----
+Internal builder extension points не должны получать dependencies, которыми они не пользуются.
 
-# 22. Обязательная test matrix
+## 18. Dev / AOT parity
 
-## Public API
+Обязательный инвариант:
 
-- `FactoryInterface::make(..., array)`;
-- callable array API;
-- v4 attribute constructor named arguments;
-- ConfigProvider discovery.
+```text
+DEV                         AOT
+ReflectionResolver          Compiled factory method
+       \                    /
+        \                  /
+          ObjectPipeline
+                |
+       PreparedParameterPlan
+                |
+        ParametersResolver
+                |
+ AttributeParameterResolver
+                |
+              handlers
+```
 
-## Parameter resolution
+Для одинакового runtime container state должны совпадать:
 
-- explicit name;
-- explicit position;
-- typed explicit;
-- custom convention resolver;
-- autowire;
-- default;
-- nullable;
-- unsupported variadic/reference diagnostics.
+- resolved values;
+- resolver precedence;
+- attribute semantics;
+- request source-conflict behavior;
+- lazy/proxy behavior;
+- exception boundary.
 
-## Parameter attribute composition
+AOT оптимизирует discovery/artifact lookup, но не дублирует DI semantics.
 
-- `QueryParam + Cast`;
-- reverse declaration `Cast + QueryParam`;
-- explicit input + Cast;
-- source + source conflict;
-- authoritative CurrentUser;
-- custom parameter handler without custom resolver;
-- dev/AOT parity.
+## 19. CI и performance
 
-## Object attribute composition
+CI на PHP 8.4 и 8.5 выполняет:
 
-- Config + Cast mutable property;
-- Inject/Init source conflicts;
-- class/property/method custom handler;
-- private inherited properties;
-- promoted/readonly behavior;
-- static property failure.
+```text
+composer validate --strict
+PHP-CS-Fixer dry run
+PHPStan level=max
+Pest
+RuntimeBench smoke
+GeneratedVsReflectionBench smoke
+BuildPhasesBench smoke
+ParameterPlanBench smoke
+```
 
-## Request
+`ParameterPlanBench` отдельно измеряет preparation, adapter `resolveTargets()` и warmed `resolvePrepared()`.
 
-- scalar extractors;
-- specialized Map*;
-- generic MapRequest;
-- source merge conflict;
-- raw validation order;
-- nested DTO provenance;
-- typed key spoof protection;
-- ClassDefinition boundary;
-- alias/lazy boundary;
-- high-priority custom resolver cannot bypass provenance guard.
+Полный v4 ↔ v5 benchmark запускается отдельно и не является основанием для изменения semantic contract.
 
-## Core
+## 20. Запрещённые направления
 
-- shared get / fresh make;
-- aliases;
-- delegators;
-- external container ownership;
-- cycles;
-- cross-Fiber concurrent resolution;
-- runtime invalidation.
+Не возвращать без отдельного доказанного RFC:
 
-## AOT/cache
-
-- reflection == AOT result;
-- invalid composition before shard write;
-- stale semantic fingerprint rejected;
-- cache version rejected when stale;
-- cached ClassDefinition uses same resolver semantics.
-
----
-
-# 23. Критерии готовности
-
-V5 считается архитектурно готовым только если одновременно выполняются все условия:
-
-1. Parameters всегда идут через `ParameterResolverInterface`.
-2. Все parameter attributes идут через один `AttributeParameterResolver`.
-3. `ArrayResolver`/`ArrayTypedResolver` не знают concrete attributes.
-4. Source + transformer реально работают на одном parameter.
-5. Несовместимые sources дают `AttributeCompositionException`.
-6. Parameter-only handler не наследует object handler.
-7. Class/property/method используют `AttributeProcessor`.
-8. Нет `ResolutionContext` и fallback subsystem.
-9. Request-specific metadata не попадает в generic public API.
-10. Reflection и AOT используют одну runtime semantics.
-11. Custom parameter handler не требует custom resolver/codegen.
-12. PHPStan max clean.
-13. Pest clean.
-14. CI PHP 8.4 clean.
-15. CI PHP 8.5 clean.
-16. README и эта спецификация описывают фактический код.
+- production-only autowire resolver;
+- generated copies resolver semantics;
+- отдельный dev/prod parameter pipeline;
+- request/current-user values внутри prepared plan;
+- strong closure-signature cache с reflection objects;
+- public transport-specific resolution context;
+- semantic fingerprint, который замораживает runtime resolver/attribute registrations в thin AOT shard.
