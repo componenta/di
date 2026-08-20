@@ -22,6 +22,7 @@ use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
+use Psr\Container\NotFoundExceptionInterface;
 use ReflectionClass;
 use Reflector;
 
@@ -33,6 +34,12 @@ final readonly class AotGraphCapabilityOnly {}
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class AotGraphSkipConstructor {}
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final readonly class AotGraphCapabilityOnlyConstructorPolicy {}
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final readonly class AotGraphLateConstructorPolicy {}
 
 final class AotGraphNonAutowireDependency
 {
@@ -70,6 +77,12 @@ final class AotGraphConstructorPolicyRoot
     }
 }
 
+#[AotGraphCapabilityOnlyConstructorPolicy]
+abstract class AotGraphCapabilityOnlyConstructorTarget {}
+
+#[AotGraphLateConstructorPolicy]
+abstract class AotGraphLateConstructorPolicyTarget {}
+
 final readonly class AotGraphSourceHandler implements ParameterAttributeHandlerInterface
 {
     public function resolveParameter(
@@ -94,6 +107,21 @@ final readonly class AotGraphSkipConstructorHandler implements AttributeHandlerI
     ): void {
         if (!$attribute instanceof AotGraphSkipConstructor || !$target instanceof ReflectionClass) {
             throw new LogicException('Unexpected constructor-policy target.');
+        }
+
+        $context->disableConstructor();
+    }
+}
+
+final readonly class AotGraphLateConstructorPolicyHandler implements AttributeHandlerInterface
+{
+    public function handle(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+    ): void {
+        if (!$attribute instanceof AotGraphLateConstructorPolicy || !$target instanceof ReflectionClass) {
+            throw new LogicException('Unexpected late constructor-policy target.');
         }
 
         $context->disableConstructor();
@@ -204,4 +232,32 @@ test('custom constructor policies have identical development and compiled produc
     } finally {
         cleanupAotGraphDirectory($directory);
     }
+});
+
+test('constructor policy must execute before instantiation to make a non-instantiable entry resolvable', function (): void {
+    $capabilityOnly = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(
+            AotGraphCapabilityOnlyConstructorPolicy::class,
+            handler: null,
+            capabilities: [ConstructorPolicy::class],
+            phase: AttributePhase::BeforeInstantiation,
+        ))
+        ->build();
+
+    expect($capabilityOnly->has(AotGraphCapabilityOnlyConstructorTarget::class))->toBeFalse();
+    expect(fn(): mixed => $capabilityOnly->get(AotGraphCapabilityOnlyConstructorTarget::class))
+        ->toThrow(NotFoundExceptionInterface::class);
+
+    $late = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(
+            AotGraphLateConstructorPolicy::class,
+            new AotGraphLateConstructorPolicyHandler(),
+            capabilities: [ConstructorPolicy::class],
+            phase: AttributePhase::AfterInstantiation,
+        ))
+        ->build();
+
+    expect($late->has(AotGraphLateConstructorPolicyTarget::class))->toBeFalse();
+    expect(fn(): mixed => $late->get(AotGraphLateConstructorPolicyTarget::class))
+        ->toThrow(NotFoundExceptionInterface::class);
 });
