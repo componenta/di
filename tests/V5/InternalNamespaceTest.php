@@ -58,7 +58,15 @@ it('exposes internal implementations only from their Internal FQCNs', function (
         ->and(class_exists('Componenta\\DI\\Resolver\\Parameter\\Request\\MappedRequestContext'))->toBeFalse()
         ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\MappedRequestContext'))->toBeTrue()
         ->and(class_exists('Componenta\\DI\\Resolver\\Parameter\\Request\\MappedRequestParameterSourceGuard'))->toBeFalse()
-        ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\MappedRequestParameterSourceGuard'))->toBeTrue();
+        ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\MappedRequestParameterSourceGuard'))->toBeTrue()
+        ->and(class_exists('Componenta\\DI\\Resolver\\Parameter\\Request\\LazyFactory'))->toBeFalse()
+        ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\LazyFactory'))->toBeTrue()
+        ->and(class_exists('Componenta\\DI\\Resolver\\Parameter\\Request\\LazyCasterProvider'))->toBeFalse()
+        ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\LazyCasterProvider'))->toBeTrue()
+        ->and(class_exists('Componenta\\DI\\Resolver\\Parameter\\Request\\LazyValidationProvider'))->toBeFalse()
+        ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\LazyValidationProvider'))->toBeTrue()
+        ->and(class_exists('Componenta\\DI\\Resolver\\Parameter\\Request\\RequestParameter'))->toBeFalse()
+        ->and(class_exists('Componenta\\DI\\Internal\\Resolver\\Parameter\\Request\\RequestParameter'))->toBeTrue();
 });
 
 it('uses a function instead of the stateless request mapper helper class', function (): void {
