@@ -62,6 +62,7 @@ final class ParametersResolver
         if (isset($this->registered[$objectId])) {
             throw new InvalidConfigurationException(sprintf(
                 'Parameter resolver %s is already registered.',
+                $resolver::class,
             ));
         }
 
