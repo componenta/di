@@ -16,8 +16,6 @@ use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\VarExport\Config\ExportConfig;
 use Throwable;
 
-use function Componenta\DI\with_suppressed_warnings;
-
 /** Default persistent-container cache writer. */
 final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 {
@@ -70,32 +68,26 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         $wasOpcodeCached = is_file($path)
             && function_exists('opcache_is_script_cached')
-            && with_suppressed_warnings(
-                static fn(): bool => opcache_is_script_cached($path),
-            );
+            && @opcache_is_script_cached($path);
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
         $temporary = $this->writeTemporary($directory, basename($path), $contents);
 
         try {
             $this->lint($temporary);
 
-            $committed = with_suppressed_warnings(
-                static fn(): bool => rename($temporary, $path),
-            );
+            $committed = @rename($temporary, $path);
 
             if (!$committed) {
                 throw new CompilationException(sprintf('Failed to commit DI cache file: %s', $path));
             }
         } finally {
             if (is_file($temporary)) {
-                with_suppressed_warnings(static fn(): bool => unlink($temporary));
+                @unlink($temporary);
             }
         }
 
         if (function_exists('opcache_invalidate')) {
-            $invalidated = with_suppressed_warnings(
-                static fn(): bool => opcache_invalidate($path, true),
-            );
+            $invalidated = @opcache_invalidate($path, true);
 
             if ($wasOpcodeCached && !$invalidated) {
                 throw new CompilationException(sprintf(
@@ -151,9 +143,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             return;
         }
 
-        $created = with_suppressed_warnings(
-            static fn(): bool => mkdir($dir, 0o755, recursive: true),
-        );
+        $created = @mkdir($dir, 0o755, recursive: true);
 
         if (!$created && !is_dir($dir)) {
             throw new CompilationException(sprintf('Failed to create DI cache directory: %s', $dir));
@@ -168,9 +158,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                 . $baseName
                 . '.tmp.'
                 . bin2hex(random_bytes(8));
-            $handle = with_suppressed_warnings(
-                static fn() => fopen($temporary, 'xb'),
-            );
+            $handle = @fopen($temporary, 'xb');
 
             if (!is_resource($handle)) {
                 continue;
@@ -181,9 +169,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                 $offset = 0;
 
                 while ($offset < $length) {
-                    $written = with_suppressed_warnings(
-                        static fn(): int|false => fwrite($handle, substr($contents, $offset)),
-                    );
+                    $written = @fwrite($handle, substr($contents, $offset));
 
                     if ($written === false || $written === 0) {
                         throw new CompilationException(sprintf(
@@ -195,19 +181,19 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
                     $offset += $written;
                 }
 
-                if (!with_suppressed_warnings(static fn(): bool => fflush($handle))) {
+                if (!@fflush($handle)) {
                     throw new CompilationException(sprintf(
                         'Failed to flush DI cache temp file: %s',
                         $temporary,
                     ));
                 }
             } catch (Throwable $e) {
-                with_suppressed_warnings(static fn(): bool => fclose($handle));
-                with_suppressed_warnings(static fn(): bool => unlink($temporary));
+                @fclose($handle);
+                @unlink($temporary);
                 throw $e;
             }
 
-            with_suppressed_warnings(static fn(): bool => fclose($handle));
+            @fclose($handle);
             return $temporary;
         }
 
@@ -226,14 +212,12 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         }
 
         $pipes = [];
-        $process = with_suppressed_warnings(static function () use (&$pipes, $file) {
-            return proc_open(
-                [PHP_BINARY, '-n', '-d', 'memory_limit=-1', '-l', $file],
-                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-                $pipes,
-                options: ['bypass_shell' => true],
-            );
-        });
+        $process = @proc_open(
+            [PHP_BINARY, '-n', '-d', 'memory_limit=-1', '-l', $file],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            options: ['bypass_shell' => true],
+        );
         $stdin = $pipes[0] ?? null;
         $stdoutPipe = $pipes[1] ?? null;
         $stderrPipe = $pipes[2] ?? null;
@@ -246,12 +230,12 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             throw new CompilationException('Cannot start PHP syntax validation for a DI cache artifact.');
         }
 
-        with_suppressed_warnings(static fn(): bool => fclose($stdin));
-        $stdout = with_suppressed_warnings(static fn(): string|false => stream_get_contents($stdoutPipe));
-        $stderr = with_suppressed_warnings(static fn(): string|false => stream_get_contents($stderrPipe));
-        with_suppressed_warnings(static fn(): bool => fclose($stdoutPipe));
-        with_suppressed_warnings(static fn(): bool => fclose($stderrPipe));
-        $status = with_suppressed_warnings(static fn(): int => proc_close($process));
+        @fclose($stdin);
+        $stdout = @stream_get_contents($stdoutPipe);
+        $stderr = @stream_get_contents($stderrPipe);
+        @fclose($stdoutPipe);
+        @fclose($stderrPipe);
+        $status = @proc_close($process);
 
         if ($status !== 0) {
             $output = trim((is_string($stdout) ? $stdout : '') . "\n" . (is_string($stderr) ? $stderr : ''));
