@@ -55,3 +55,25 @@ test('default current user provider isolates explicitly assigned Fiber users', f
         ->and($secondAfter)->toBe($secondUser)
         ->and($provider->getUser())->toBe($main);
 });
+
+test('a Fiber snapshots inherited current user before the main context changes', function (): void {
+    $firstUser = new AuditFiberUser('first-main');
+    $secondUser = new AuditFiberUser('second-main');
+    $provider = new CurrentUserProvider($firstUser);
+
+    $fiber = new Fiber(function () use ($provider): array {
+        $before = $provider->getUser();
+        Fiber::suspend();
+        return [$before, $provider->getUser()];
+    });
+
+    $fiber->start();
+    $provider->setUser($secondUser);
+    $fiber->resume();
+
+    [$before, $after] = $fiber->getReturn();
+
+    expect($before)->toBe($firstUser)
+        ->and($after)->toBe($firstUser)
+        ->and($provider->getUser())->toBe($secondUser);
+});
