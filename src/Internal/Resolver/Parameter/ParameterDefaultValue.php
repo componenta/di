@@ -45,6 +45,13 @@ final class ParameterDefaultValue
             );
         }
 
+        if (!$function instanceof ReflectionFunction) {
+            throw new LogicException(sprintf(
+                'Unsupported declaring function reflector %s.',
+                $function::class,
+            ));
+        }
+
         if ($function->isClosure()) {
             return new ReflectionFunction($function->getClosure());
         }
