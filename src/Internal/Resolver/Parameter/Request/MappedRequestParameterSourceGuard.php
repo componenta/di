@@ -8,8 +8,6 @@ use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
-use Psr\Http\Message\ServerRequestInterface;
-use Psr\Http\Message\UriInterface;
 use ReflectionClass;
 use ReflectionParameter;
 
@@ -122,7 +120,7 @@ final class MappedRequestParameterSourceGuard
         foreach ($constructor->getParameters() as $parameter) {
             /** @var list<class-string> $typeNames */
             $typeNames = TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass());
-            $source = self::declaredSource($parameter, $typeNames);
+            $source = self::declaredSource($parameter);
             if ($source !== null) {
                 $bindings[] = self::binding($parameter->getName(), $source, $typeNames);
             }
@@ -159,11 +157,8 @@ final class MappedRequestParameterSourceGuard
         ];
     }
 
-    /**
-     * @param list<class-string> $typeNames
-     * @return class-string|null
-     */
-    private static function declaredSource(ReflectionParameter $parameter, array $typeNames): ?string
+    /** @return class-string|null */
+    private static function declaredSource(ReflectionParameter $parameter): ?string
     {
         foreach ($parameter->getAttributes() as $attribute) {
             /** @var class-string $attributeClass */
@@ -172,7 +167,7 @@ final class MappedRequestParameterSourceGuard
                 return $attributeClass;
             }
         }
-        return self::implicitTypeSource($typeNames);
+        return null;
     }
 
     /** @return class-string|null */
@@ -181,20 +176,6 @@ final class MappedRequestParameterSourceGuard
         foreach ($target->attributeClasses as $attributeClass) {
             if (is_a($attributeClass, ParameterSourceAttributeInterface::class, true)) {
                 return $attributeClass;
-            }
-        }
-        return self::implicitTypeSource($target->typeNames);
-    }
-
-    /**
-     * @param list<class-string> $typeNames
-     * @return class-string|null
-     */
-    private static function implicitTypeSource(array $typeNames): ?string
-    {
-        foreach ($typeNames as $typeName) {
-            if ($typeName === ServerRequestInterface::class || $typeName === UriInterface::class) {
-                return $typeName;
             }
         }
         return null;
