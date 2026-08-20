@@ -143,6 +143,13 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             return;
         }
 
+        if (file_exists($dir)) {
+            throw new CompilationException(sprintf(
+                'DI cache parent path is not a directory: %s',
+                $dir,
+            ));
+        }
+
         $created = @mkdir($dir, 0o755, recursive: true);
 
         if (!$created && !is_dir($dir)) {
