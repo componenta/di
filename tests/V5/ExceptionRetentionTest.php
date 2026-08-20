@@ -27,6 +27,7 @@ test('resolution failures release closure captures and request objects after the
     $closure = static function (string $value) use ($captured): void {
         unset($value, $captured);
     };
+    $closureReference = WeakReference::create($closure);
 
     try {
         $container->call($closure, [ServerRequestInterface::class => $request]);
@@ -37,7 +38,8 @@ test('resolution failures release closure captures and request objects after the
     unset($closure, $request, $captured);
     gc_collect_cycles();
 
-    expect($capturedReference->get())->toBeNull()
+    expect($closureReference->get())->toBeNull()
+        ->and($capturedReference->get())->toBeNull()
         ->and($requestReference->get())->toBeNull()
         ->and($error->parameterName)->toBe('value')
         ->and($error->parameterPosition)->toBe(0)
