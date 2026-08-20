@@ -14,6 +14,7 @@ use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
@@ -22,7 +23,6 @@ use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
-use Psr\Container\NotFoundExceptionInterface;
 use ReflectionClass;
 use Reflector;
 
@@ -246,7 +246,7 @@ test('constructor policy must execute before instantiation to make a non-instant
 
     expect($capabilityOnly->has(AotGraphCapabilityOnlyConstructorTarget::class))->toBeFalse();
     expect(fn(): mixed => $capabilityOnly->get(AotGraphCapabilityOnlyConstructorTarget::class))
-        ->toThrow(NotFoundExceptionInterface::class);
+        ->toThrow(NotFoundException::class);
 
     $late = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
@@ -259,5 +259,5 @@ test('constructor policy must execute before instantiation to make a non-instant
 
     expect($late->has(AotGraphLateConstructorPolicyTarget::class))->toBeFalse();
     expect(fn(): mixed => $late->get(AotGraphLateConstructorPolicyTarget::class))
-        ->toThrow(NotFoundExceptionInterface::class);
+        ->toThrow(NotFoundException::class);
 });
