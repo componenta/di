@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
+use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\CallableResolver;
-use Componenta\DI\Internal\Resolver\Parameter\Request\LazyValidationProvider;
+use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ServerRequestInterface;
 
 final class NativeCallableParityTarget
 {
@@ -26,6 +29,11 @@ final class ServiceCallableParityTarget
     {
         return 'service:' . $value;
     }
+}
+
+final readonly class TransientValidationDto
+{
+    public function __construct(public string $value) {}
 }
 
 function callableParityContainer(array $entries): ContainerInterface
@@ -66,22 +74,25 @@ test('native static array callables keep PHP precedence over a same-named contai
         ->toBe('native:x');
 });
 
-test('LazyValidationProvider retries after a transient lookup failure', function (): void {
+test('request validation retries a transient provider lookup failure on the next resolution', function (): void {
     $validation = new class () implements ValidationProviderInterface {
         public function provide(string $entryId): ?ValidatorInterface
         {
             return null;
         }
     };
-    $container = new class ($validation) implements ContainerInterface {
+    $external = new class ($validation) implements ContainerInterface {
         public bool $fail = true;
 
         public function __construct(private readonly ValidationProviderInterface $validation) {}
 
         public function get(string $id): mixed
         {
+            if ($id !== ValidationProviderInterface::class) {
+                throw new \RuntimeException('missing ' . $id);
+            }
             if ($this->fail) {
-                throw new \RuntimeException('transient');
+                throw new \RuntimeException('transient validation lookup');
             }
 
             return $this->validation;
@@ -92,15 +103,18 @@ test('LazyValidationProvider retries after a transient lookup failure', function
             return $id === ValidationProviderInterface::class;
         }
     };
-    $provider = new LazyValidationProvider($container);
+    $container = (new ContainerBuilder())->build();
+    $container->addContainer($external);
+    $request = (new ServerRequest('POST', '/'))->withParsedBody(['value' => 'ok']);
+    $callable = static fn(#[MapRequestPayload] TransientValidationDto $dto): string => $dto->value;
+    $params = [ServerRequestInterface::class => $request];
 
-    expect(fn() => $provider->provide('FirstDto'))
-        ->toThrow(\RuntimeException::class, 'transient');
+    expect(fn() => $container->call($callable, $params))
+        ->toThrow(ResolutionException::class, 'transient validation lookup');
 
-    $container->fail = false;
+    $external->fail = false;
 
-    expect($provider->provide('SecondDto'))->toBeNull()
-        ->and($provider->provide('ThirdDto'))->toBeNull();
+    expect($container->call($callable, $params))->toBe('ok');
 });
 
 test('ServerParam preserves an explicitly present null instead of using its missing default', function (): void {
