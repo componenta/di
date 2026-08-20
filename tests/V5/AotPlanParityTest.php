@@ -14,7 +14,6 @@ use Componenta\DI\Attribute\Env;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -271,8 +270,8 @@ test('custom class property and method handlers execute identically in developme
     }
 });
 
-test('compiled production rejects stale shards when parameter attribute semantics change', function (): void {
-    $directory = sys_get_temp_dir() . '/componenta-di-v5-extension-fingerprint-' . bin2hex(random_bytes(5));
+test('thin compiled shards execute current runtime semantics after attribute definition changes', function (): void {
+    $directory = sys_get_temp_dir() . '/componenta-di-v5-extension-runtime-semantics-' . bin2hex(random_bytes(5));
     $compilerBuilder = aotHandledParameterBuilder(1);
 
     try {
@@ -280,8 +279,8 @@ test('compiled production rejects stale shards when parameter attribute semantic
         $runtimeBuilder = aotHandledParameterBuilder(2);
         $production = productionBuilderFromCompiled($runtimeBuilder, $compiled, $directory)->build();
 
-        expect(fn() => $production->make(AotHandledParameterTarget::class))
-            ->toThrow(InvalidConfigurationException::class, 'semantic fingerprint');
+        expect($production->make(AotHandledParameterTarget::class)->value)
+            ->toBe('attribute-handler-ok');
     } finally {
         cleanupDirectory($directory);
     }
