@@ -10,6 +10,7 @@ use Componenta\DI\Exception\ConcurrentResolutionException;
 use Fiber;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
+use WeakReference;
 
 function v5DeferredDelegatorNative(string $entry, ContainerInterface $container): string
 {
@@ -43,6 +44,31 @@ test('shared resolution distinguishes concurrent Fiber ownership from dependency
 
     expect($builds)->toBe(1)
         ->and($container->get('fiber.shared'))->toBe($resolved);
+});
+
+test('abandoned suspended Fiber releases shared resolution ownership', function (): void {
+    $builds = 0;
+    $container = (new ContainerBuilder())
+        ->addFactory('fiber.abandoned', static function () use (&$builds): object {
+            ++$builds;
+            if ($builds === 1) {
+                Fiber::suspend('factory-suspended');
+            }
+            return new \stdClass();
+        })
+        ->build();
+
+    $fiber = new Fiber(static fn(): object => $container->get('fiber.abandoned'));
+    $reference = WeakReference::create($fiber);
+
+    expect($fiber->start())->toBe('factory-suspended');
+
+    unset($fiber);
+    gc_collect_cycles();
+
+    expect($reference->get())->toBeNull()
+        ->and($container->get('fiber.abandoned'))->toBeInstanceOf(\stdClass::class)
+        ->and($builds)->toBe(2);
 });
 
 test('changing an alias invalidates entries decorated through that deferred delegator', function (): void {
