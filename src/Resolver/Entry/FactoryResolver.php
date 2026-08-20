@@ -160,7 +160,10 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 }
 
                 $value = $runtime[$typeName];
-                if (is_object($value) && $target->accepts($value)) {
+                if (is_object($value)
+                    && $value instanceof $typeName
+                    && $target->accepts($value)
+                ) {
                     $provided[$target->name] = $value;
                     break;
                 }
