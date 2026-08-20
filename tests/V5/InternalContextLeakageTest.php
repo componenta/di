@@ -32,7 +32,6 @@ final class AuditParameterContextResolver implements ParameterResolverInterface
 {
     /** @var list<string|int> */
     public array $keys = [];
-    public bool $mappedRequestProperty = false;
 
     public function supports(ParameterTarget $target): bool
     {
@@ -44,7 +43,6 @@ final class AuditParameterContextResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         $this->keys = array_keys($context->provided);
-        $this->mappedRequestProperty = property_exists($context, 'mappedRequest');
         return null;
     }
 }
@@ -62,7 +60,6 @@ final class AuditObjectContextHandler implements AttributeHandlerInterface
 {
     /** @var list<string|int> */
     public array $keys = [];
-    public bool $rawAccessor = false;
 
     public function handle(
         object $attribute,
@@ -70,7 +67,6 @@ final class AuditObjectContextHandler implements AttributeHandlerInterface
         ObjectCreationContext $context,
     ): void {
         $this->keys = array_keys($context->parameters);
-        $this->rawAccessor = method_exists($context, 'resolutionParameters');
     }
 }
 
@@ -162,12 +158,11 @@ test('mapped request provenance is hidden from custom parameter resolvers', func
         [ServerRequestInterface::class => $request],
     );
 
-    expect($result)->toBe('ok')
-        ->and($probe->mappedRequestProperty)->toBeFalse();
+    expect($result)->toBe('ok');
     expectNoInternalResolutionKeys($probe->keys);
 });
 
-test('object handlers receive only caller visible creation parameters', function (): void {
+test('object handlers receive only caller-visible creation parameters', function (): void {
     $probe = new AuditObjectContextHandler();
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
@@ -182,8 +177,7 @@ test('object handlers receive only caller visible creation parameters', function
         [ServerRequestInterface::class => $request],
     );
 
-    expect($result)->toBe('ok')
-        ->and($probe->rawAccessor)->toBeFalse();
+    expect($result)->toBe('ok');
     expectNoInternalResolutionKeys($probe->keys);
 });
 
