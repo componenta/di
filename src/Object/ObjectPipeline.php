@@ -68,23 +68,6 @@ final class ObjectPipeline
         return $metadata->classPlan->has(ConstructorPolicy::class);
     }
 
-    /** @param class-string|ReflectionClass<object> $class */
-    public function canUsePlainConstructorFastPath(string|ReflectionClass $class): bool
-    {
-        $metadata = $this->metadata($class);
-        return $metadata->class->isInstantiable()
-            && !$metadata->hasAttributeHandlers;
-    }
-
-    /** @param class-string|ReflectionClass<object> $class */
-    public function canDirectInstantiate(string|ReflectionClass $class): bool
-    {
-        $metadata = $this->metadata($class);
-        return $this->canCreate($metadata->class)
-            && $this->canUsePlainConstructorFastPath($metadata->class)
-            && ($metadata->constructor === null || $metadata->constructorTargets === []);
-    }
-
     /**
      * @param class-string|ReflectionClass<object> $class
      * @return list<ParameterTarget>
