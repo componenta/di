@@ -10,7 +10,6 @@ use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Internal\Resolver\Parameter\ParameterDefaultValue;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -44,7 +43,7 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             if ($attribute->default !== DefaultValue::None) {
                 $value = ParameterAttributeValue::resolved($attribute->default);
             } elseif ($target->hasDefault) {
-                $value = ParameterAttributeValue::resolved(ParameterDefaultValue::materialize($target));
+                $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
