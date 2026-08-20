@@ -14,8 +14,10 @@ final class InvalidParameterInjectTarget
 {
     public function __construct(
         #[Inject]
-        public \stdClass $value,
-    ) {}
+        \stdClass $value,
+    ) {
+        unset($value);
+    }
 }
 
 test('Inject is declared for properties only', function (): void {
