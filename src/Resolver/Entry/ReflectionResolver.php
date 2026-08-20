@@ -7,7 +7,6 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\Reflection\Reflection;
-use ReflectionClass;
 
 /** Reflection fallback for entries without an explicit definition. */
 final class ReflectionResolver implements EntryResolverInterface
