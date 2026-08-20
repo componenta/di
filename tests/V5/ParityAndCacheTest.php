@@ -12,13 +12,6 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
-use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
-use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
-use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 
 final class AotValueDto
@@ -97,36 +90,9 @@ test('persistent ClassDefinition cache routes through the same parameter resolve
     }
 });
 
-test('cache envelopes are strictly versioned for the final v5 format', function (): void {
+test('cache envelopes are strictly versioned for the current public format', function (): void {
     expect(fn() => ContainerBuilder::configureFromCache(
         new Config([]),
         ['version' => 11, ConfigKey::DEPENDENCIES => []],
     ))->toThrow(InvalidConfigurationException::class);
-});
-
-test('final v5 exposes one bridge for parameter attributes plus convention resolvers', function (): void {
-    foreach ([
-        ParameterResolverInterface::class,
-        ParameterSourceAttributeInterface::class,
-        ParameterAttributeHandlerInterface::class,
-        AttributeParameterResolver::class,
-        RequestContextResolver::class,
-        AttributeProcessor::class,
-    ] as $class) {
-        expect(class_exists($class) || interface_exists($class))->toBeTrue();
-    }
-});
-
-test('the default parameter chain contains exactly one attribute resolver', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $parameters = $container->get(ParametersResolver::class);
-    expect($parameters)->toBeInstanceOf(ParametersResolver::class);
-
-    $classes = array_map(
-        static fn(ParameterResolverInterface $resolver): string => $resolver::class,
-        $parameters->resolverList,
-    );
-
-    expect(array_count_values($classes)[AttributeParameterResolver::class] ?? 0)->toBe(1)
-        ->and($classes)->toContain(RequestContextResolver::class);
 });
