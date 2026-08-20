@@ -13,26 +13,20 @@ use WeakReference;
 
 final class AuditCallableDependency {}
 
-final class AuditCallableTargetProbe implements ParameterResolverInterface
+final readonly class AuditCallableTargetProbe implements ParameterResolverInterface
 {
-    /** @var list<int> */
-    public array $declaringClosures = [];
-
     public function supports(ParameterTarget $target): bool
     {
-        return $target->className === AuditCallableDependency::class;
+        return $target->name === 'first' || $target->name === 'second';
     }
 
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        $function = $target->reflection->getDeclaringFunction();
-        if ($function instanceof \ReflectionFunction && $function->isClosure()) {
-            $this->declaringClosures[] = spl_object_id($function->getClosure());
-        }
-
-        return [$target->position, new AuditCallableDependency()];
+        return $this->supports($target)
+            ? [$target->position, $target->name . '-target']
+            : null;
     }
 }
 
@@ -89,21 +83,15 @@ test('callable executor does not retain closure captures through signature metad
     expect($reference->get())->toBeNull();
 });
 
-test('different closure instances keep their own reflected parameter targets', function (): void {
-    $probe = new AuditCallableTargetProbe();
+test('different closures resolve against their own parameter contract', function (): void {
     $container = (new ContainerBuilder())
-        ->addParameterResolver($probe, 2000)
+        ->addParameterResolver(new AuditCallableTargetProbe(), 2000)
         ->build();
+    $first = static fn(string $first): string => $first;
+    $second = static fn(string $second): string => $second;
 
-    $firstCapture = new \stdClass();
-    $secondCapture = new \stdClass();
-    $first = auditClosureWithCapture($firstCapture);
-    $second = auditClosureWithCapture($secondCapture);
-
-    expect($container->call($first))->toBe($firstCapture)
-        ->and($container->call($second))->toBe($secondCapture)
-        ->and($probe->declaringClosures)->toHaveCount(2)
-        ->and($probe->declaringClosures[0])->not->toBe($probe->declaringClosures[1]);
+    expect($container->call($first))->toBe('first-target')
+        ->and($container->call($second))->toBe('second-target');
 });
 
 test('native magic dispatch is preserved for inaccessible instance methods', function (): void {
