@@ -19,7 +19,7 @@ final class DefaultValueResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         return $target->hasDefault
-            ? [$target->position, $target->default]
+            ? [$target->position, $target->reflection->getDefaultValue()]
             : null;
     }
 }
