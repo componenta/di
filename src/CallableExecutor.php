@@ -16,14 +16,10 @@ use LogicException;
 use ReflectionFunction;
 use ReflectionParameter;
 use Throwable;
-use WeakMap;
 
 /** DI-aware callable executor. */
 final class CallableExecutor implements CallableExecutorInterface
 {
-    /** @var WeakMap<Closure, PreparedParameterPlan>|null */
-    private ?WeakMap $closurePlans = null;
-
     /** @var array<string, PreparedParameterPlan|null> */
     private array $callablePlans = [];
 
@@ -71,21 +67,15 @@ final class CallableExecutor implements CallableExecutorInterface
     private function plan(callable $callable): ?PreparedParameterPlan
     {
         if ($callable instanceof Closure) {
-            $cache = $this->closurePlans ??= new WeakMap();
-            if (isset($cache[$callable]) && $this->parameters->isCurrentPlan($cache[$callable])) {
-                return $cache[$callable];
-            }
-
+            // Prepared targets retain ReflectionParameter instances and those
+            // reflectors retain their declaring Closure. Caching such a plan,
+            // even behind a WeakMap key, therefore creates a value -> key strong
+            // reference and keeps closure captures alive. Closures are prepared
+            // per invocation; stable named/method callables remain cacheable.
             $reflection = new ReflectionFunction($callable);
             /** @var list<ReflectionParameter> $parameters */
             $parameters = array_values($reflection->getParameters());
-            $plan = $this->parameters->prepare($parameters);
-
-            if ($this->parameters->isSealed) {
-                $cache[$callable] = $plan;
-            }
-
-            return $plan;
+            return $this->parameters->prepare($parameters);
         }
 
         $key = self::cacheKey($callable);
