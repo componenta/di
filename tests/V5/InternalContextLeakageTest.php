@@ -6,7 +6,6 @@ namespace Componenta\DI\Tests\V5;
 
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\ContainerBuilder;
@@ -18,7 +17,6 @@ use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Container\ContainerInterface;
@@ -112,8 +110,6 @@ final class AuditRootResolverBuilder extends ContainerBuilder
         ProxyFactoryInterface $proxyFactory,
         ObjectPipeline $objects,
         CallableExecutorInterface $executor,
-        AttributeDefinitionRegistry $attributes,
-        ParametersResolver $parameters,
     ): EntryResolverInterface {
         return $this->root;
     }
@@ -131,8 +127,6 @@ final class AuditNestedResolverBuilder extends ContainerBuilder
         ProxyFactoryInterface $proxyFactory,
         ObjectPipeline $objects,
         CallableExecutorInterface $executor,
-        AttributeDefinitionRegistry $attributes,
-        ParametersResolver $parameters,
     ): EntryResolverInterface {
         return new CompositeResolver(
             $this->probe,
@@ -141,8 +135,6 @@ final class AuditNestedResolverBuilder extends ContainerBuilder
                 $proxyFactory,
                 $objects,
                 $executor,
-                $attributes,
-                $parameters,
             ),
         );
     }
