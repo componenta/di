@@ -13,7 +13,6 @@ use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
-use ReflectionFunction;
 use ReflectionParameter;
 use Throwable;
 use WeakMap;
@@ -63,7 +62,6 @@ final class ParametersResolver
         if (isset($this->registered[$objectId])) {
             throw new InvalidConfigurationException(sprintf(
                 'Parameter resolver %s is already registered.',
-                $resolver::class,
             ));
         }
 
@@ -316,11 +314,11 @@ final class ParametersResolver
     {
         $function = $target->reflection->getDeclaringFunction();
 
-        // PreparedParameter retains its ParameterTarget. A WeakMap value that
-        // retains its closure-owned key would therefore keep the target,
-        // ReflectionParameter, declaring Closure and captured request state
-        // alive. Stable named functions/methods remain safely cacheable.
-        return !$function instanceof ReflectionFunction || !$function->isClosure();
+        // ReflectionParameter may expose a closure scoped to a method through
+        // ReflectionMethod. isClosure() is therefore the semantic distinction:
+        // PreparedParameter retains its target, and caching any closure-owned
+        // target would retain the declaring Closure and its captures.
+        return !$function->isClosure();
     }
 
     /** @return list<int> */
