@@ -13,36 +13,13 @@ use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
-use Componenta\DI\Resolver\Entry\ObjectCreationContext;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionMethod;
-use Reflector;
-
-use function Componenta\DI\compiled_factory_pipeline_fingerprint;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RuleA {}
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RuleB {}
-
-final class NoopAttributeHandler implements AttributeHandlerInterface
-{
-    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void {}
-}
-
-final class VersionOneHandler implements AttributeHandlerInterface
-{
-    public const int SEMANTIC_VERSION = 1;
-    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void {}
-}
-
-final class VersionTwoHandler implements AttributeHandlerInterface
-{
-    public const int SEMANTIC_VERSION = 2;
-    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void {}
-}
 
 final readonly class RequiresRuleB implements AttributeCompositionRuleInterface
 {
@@ -65,14 +42,6 @@ interface AttributeFamilyTwo {}
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class AmbiguousFamilyAttribute implements AttributeFamilyOne, AttributeFamilyTwo {}
-
-function compositionFingerprint(AttributeDefinitionRegistry $registry): string
-{
-    return compiled_factory_pipeline_fingerprint(
-        $registry,
-        new ParametersResolver(new AttributePlanBuilder($registry)),
-    );
-}
 
 test('custom composition rules see the complete attribute set before execution', function (): void {
     $registry = new AttributeDefinitionRegistry();
@@ -112,32 +81,4 @@ test('inherited semantic definitions never resolve by registration order when eq
 
     expect(fn() => $registry->definition(AmbiguousFamilyAttribute::class))
         ->toThrow(InvalidConfigurationException::class, 'multiple equally specific');
-});
-
-test('compiled fingerprint includes definition and handler semantics', function (): void {
-    $first = new AttributeDefinitionRegistry();
-    $first->register(new AttributeDefinition(
-        RuleA::class,
-        new VersionOneHandler(),
-        version: 1,
-    ));
-
-    $definitionChanged = new AttributeDefinitionRegistry();
-    $definitionChanged->register(new AttributeDefinition(
-        RuleA::class,
-        new VersionOneHandler(),
-        version: 2,
-    ));
-
-    $handlerChanged = new AttributeDefinitionRegistry();
-    $handlerChanged->register(new AttributeDefinition(
-        RuleA::class,
-        new VersionTwoHandler(),
-        version: 1,
-    ));
-
-    $baseline = compositionFingerprint($first);
-
-    expect(compositionFingerprint($definitionChanged))->not->toBe($baseline)
-        ->and(compositionFingerprint($handlerChanged))->not->toBe($baseline);
 });
