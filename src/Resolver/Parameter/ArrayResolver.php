@@ -19,7 +19,7 @@ final class ArrayResolver implements ParameterResolverInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        if (array_key_exists($target->name, $context->provided)) {
+        if (isset($context->provided[$target->name]) || array_key_exists($target->name, $context->provided)) {
             $value = $context->provided[$target->name];
 
             if ($target->accepts($value)) {
@@ -34,7 +34,7 @@ final class ArrayResolver implements ParameterResolverInterface
             );
         }
 
-        if (array_key_exists($target->position, $context->provided)) {
+        if (isset($context->provided[$target->position]) || array_key_exists($target->position, $context->provided)) {
             $value = $context->provided[$target->position];
 
             if ($target->accepts($value)) {
