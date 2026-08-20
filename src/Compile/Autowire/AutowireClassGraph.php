@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Compile\Autowire;
 
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\NoConstructor;
@@ -104,10 +105,7 @@ final readonly class AutowireClassGraph
     private function dependencies(ReflectionClass $class): array
     {
         $dependencies = [];
-        $constructorDisabled = $class->getAttributes(
-            NoConstructor::class,
-            ReflectionAttribute::IS_INSTANCEOF,
-        ) !== [];
+        $constructorDisabled = $this->hasConstructorPolicy($class);
         $constructor = $class->getConstructor();
 
         if (!$constructorDisabled && $constructor !== null) {
@@ -149,6 +147,19 @@ final readonly class AutowireClassGraph
         }
 
         return array_keys($dependencies);
+    }
+
+    /** @param ReflectionClass<object> $class */
+    private function hasConstructorPolicy(ReflectionClass $class): bool
+    {
+        if ($this->plans !== null) {
+            return $this->plans->build($class)->has(ConstructorPolicy::class);
+        }
+
+        return $class->getAttributes(
+            NoConstructor::class,
+            ReflectionAttribute::IS_INSTANCEOF,
+        ) !== [];
     }
 
     /**
