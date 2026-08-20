@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
@@ -62,6 +63,17 @@ final readonly class TypedMappedUriEnvelope
     ) {}
 }
 
+interface TypedUnionLeft {}
+interface TypedUnionRight {}
+
+final readonly class TypedUnionLeftValue implements TypedUnionLeft {}
+final readonly class TypedUnionRightValue implements TypedUnionRight {}
+
+final readonly class TypedUnionTarget
+{
+    public function __construct(public TypedUnionLeft|TypedUnionRight $service) {}
+}
+
 test('mapped type keys cannot shadow source-bound object parameters', function (): void {
     $request = (new ServerRequest('POST', '/'))->withParsedBody([
         TypedMappedSourceContract::class => new TypedMappedSourceValue(),
@@ -105,4 +117,16 @@ test('ordinary programmatic typed explicit parameters remain valid', function ()
     ]);
 
     expect($dto->service)->toBe($value);
+});
+
+test('typed explicit keys in unions accept only values implementing that exact key', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $right = new TypedUnionRightValue();
+
+    expect($container->make(TypedUnionTarget::class, [
+        TypedUnionRight::class => $right,
+    ])->service)->toBe($right)
+        ->and(fn() => $container->make(TypedUnionTarget::class, [
+            TypedUnionLeft::class => $right,
+        ]))->toThrow(ResolutionException::class);
 });
