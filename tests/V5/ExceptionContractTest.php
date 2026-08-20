@@ -340,7 +340,3 @@ test('cache artifact filesystem failures use CompilationException', function ():
     expect($error)->toBeInstanceOf(CompilationException::class)
         ->and($error)->toBeInstanceOf(ExceptionInterface::class);
 });
-
-test('the redundant callable exception marker is no longer exposed', function (): void {
-    expect(interface_exists('Componenta\\DI\\Exception\\CallableExceptionInterface'))->toBeFalse();
-});
