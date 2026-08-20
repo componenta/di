@@ -22,6 +22,9 @@ use ReflectionClass;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class AotGraphSource {}
 
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class AotGraphCapabilityOnly {}
+
 final class AotGraphNonAutowireDependency
 {
     public function __construct(
@@ -30,11 +33,21 @@ final class AotGraphNonAutowireDependency
     ) {}
 }
 
+final readonly class AotGraphNormalDependency {}
+
 final readonly class AotGraphSourceRoot
 {
     public function __construct(
         #[AotGraphSource]
         public AotGraphNonAutowireDependency $dependency,
+    ) {}
+}
+
+final readonly class AotGraphCapabilityOnlyRoot
+{
+    public function __construct(
+        #[AotGraphCapabilityOnly]
+        public AotGraphNormalDependency $dependency,
     ) {}
 }
 
@@ -67,7 +80,7 @@ function cleanupAotGraphDirectory(string $directory): void
     rmdir($directory);
 }
 
-test('AOT graph does not treat a class-typed ValueProvider parameter as an autowire dependency', function (): void {
+test('AOT graph does not treat a class-typed runtime ValueProvider as an autowire dependency', function (): void {
     $directory = sys_get_temp_dir() . '/componenta-di-aot-source-' . bin2hex(random_bytes(5));
     $builder = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
         AotGraphSource::class,
@@ -100,6 +113,31 @@ test('AOT graph does not treat a class-typed ValueProvider parameter as an autow
 
         expect($developmentEntry->dependency)->toBeInstanceOf(AotGraphNonAutowireDependency::class)
             ->and($productionEntry->dependency)->toBeInstanceOf(AotGraphNonAutowireDependency::class);
+    } finally {
+        cleanupAotGraphDirectory($directory);
+    }
+});
+
+test('AOT graph keeps autowire dependencies for capability-only attributes without a parameter handler', function (): void {
+    $directory = sys_get_temp_dir() . '/componenta-di-aot-capability-only-' . bin2hex(random_bytes(5));
+    $builder = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
+        AotGraphCapabilityOnly::class,
+        handler: null,
+        capabilities: [ValueProvider::class],
+    ));
+
+    try {
+        $development = $builder->build();
+        expect($development->make(AotGraphCapabilityOnlyRoot::class)->dependency)
+            ->toBeInstanceOf(AotGraphNormalDependency::class);
+
+        $compiled = $builder->compileFactories([AotGraphCapabilityOnlyRoot::class], $directory);
+        $classes = array_keys($compiled);
+        sort($classes, SORT_STRING);
+        $expected = [AotGraphCapabilityOnlyRoot::class, AotGraphNormalDependency::class];
+        sort($expected, SORT_STRING);
+
+        expect($classes)->toBe($expected);
     } finally {
         cleanupAotGraphDirectory($directory);
     }
