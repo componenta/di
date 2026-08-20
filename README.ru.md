@@ -1,8 +1,16 @@
 # Componenta DI
 
-PSR-11-контейнер внедрения зависимостей для PHP 8.4+ с autowiring, композицией атрибутов, PSR-7 request mapping, native lazy objects и AOT factory shards.
+[English version](README.md)
 
-**[English](README.md)** | **[Русский](README.ru.md)**
+Componenta DI — PSR-11 контейнер внедрения зависимостей для PHP 8.4+. Он объединяет обычную конфигурацию контейнера, reflection-autowiring, DI-aware вызов callable, PHP-атрибуты, lazy-объекты, отображение PSR-7 request в аргументы/DTO и опциональную AOT-компиляцию фабрик.
+
+Основной принцип контейнера: **обычное и скомпилированное production-разрешение используют один и тот же object/parameter pipeline**. Компиляция заменяет дорогую reflection-подготовку сгенерированными factory shards, но не создаёт отдельную семантику DI.
+
+## Требования
+
+- PHP 8.4 или новее;
+- `psr/container` 2.x;
+- реализация PSR-7 `ServerRequestInterface` нужна только при использовании HTTP request mapping.
 
 ## Установка
 
@@ -10,199 +18,598 @@ PSR-11-контейнер внедрения зависимостей для PHP
 composer require componenta/di
 ```
 
-## Базовый API
+## Базовая модель
+
+У контейнера есть три основных способа выполнить разрешение:
+
+- `get($id)` получает **shared entry** и кеширует его;
+- `make($class, $params)` создаёт **новый объект** через тот же DI pipeline;
+- `call($callable, $params)` разрешает аргументы callable и вызывает его.
+
+В обычном приложении удобнее начать с configuration provider, получить `Config` и построить контейнер.
 
 ```php
-$container = (new Componenta\DI\ContainerBuilder())
-    ->addService(LoggerInterface::class, new FileLogger())
-    ->build();
+<?php
 
-$shared = $container->get(LoggerInterface::class);
-$fresh = $container->make(UserService::class, ['userId' => 7]);
-$result = $container->call([$service, 'handle'], ['id' => 42]);
+declare(strict_types=1);
+
+use Componenta\Config\ConfigLoader;
+use Componenta\Config\ConfigProvider;
+use Componenta\Config\ContainerValue;
+use Componenta\DI\Container;
+use Psr\Log\LoggerInterface;
+
+final class AppConfigProvider extends ConfigProvider
+{
+    protected function getFactories(): array
+    {
+        return [
+            DatabaseConnection::class => static function (
+                ContainerValue $container,
+                array $params,
+            ): DatabaseConnection {
+                return new DatabaseConnection(
+                    dsn: $container->config->string('database.dsn'),
+                );
+            },
+        ];
+    }
+
+    protected function getInvokables(): array
+    {
+        return [
+            Logger::class,
+            LoggerInterface::class => Logger::class,
+        ];
+    }
+
+    protected function getConfig(): array
+    {
+        return [
+            'database.dsn' => 'sqlite::memory:',
+        ];
+    }
+}
+
+$config = ConfigLoader::load(null, new AppConfigProvider());
+$container = Container::create($config);
+
+$service = $container->get(OrderService::class);
 ```
 
-`get()` выполняет shared PSR-11 resolution. `make()` создаёт свежий локальный объект. `call()` является DI-aware. Публичные factory/callable границы используют обычный `array $params`; публичного resolution-context объекта нет.
+Конкретные классы, которые не зарегистрированы явно, обычно могут быть разрешены через reflection autowiring. Для интерфейсов и других абстрактных id нужен factory, alias, service, invokable mapping, внешний контейнер или другая явная привязка.
 
-Framework values передаются тем же массивом:
+## Конфигурация
+
+Componenta DI читает секцию `dependencies`, формируемую `componenta/config`. Для application/package-конфигурации рекомендуется наследоваться от `Componenta\Config\ConfigProvider`.
+
+### Factories
+
+Factory нужен, когда создание объекта содержит явную прикладную логику.
 
 ```php
-$controller = $container->make(Controller::class, [
+use Componenta\Config\ConfigProvider;
+use Componenta\Config\ContainerValue;
+
+final class AppConfigProvider extends ConfigProvider
+{
+    protected function getFactories(): array
+    {
+        return [
+            HttpClientInterface::class => HttpClientFactory::class,
+        ];
+    }
+}
+
+final class HttpClientFactory
+{
+    public function __invoke(
+        ContainerValue $container,
+        array $params = [],
+    ): HttpClientInterface {
+        return new HttpClient(
+            baseUri: $container->config->string('http.base_uri'),
+        );
+    }
+}
+```
+
+Runtime ABI фабрики:
+
+```php
+(ContainerValue $container, array $params): mixed
+```
+
+Callable может не объявлять один или оба параметра, если его PHP-сигнатура допускает передаваемые runtime-аргументы. Типизированные параметры фабрики валидируются при построении/материализации конфигурации, поэтому несовместимая сигнатура считается ошибкой конфигурации, а не случайной runtime-ошибкой при первом обращении.
+
+Factory specification может быть обычным callable, callable service id, парой `[service, method]` или DI definition.
+
+### Invokables
+
+Invokable — конкретный класс, зарегистрированный как entry. Запись со строковым ключом одновременно создаёт alias.
+
+```php
+protected function getInvokables(): array
+{
+    return [
+        Clock::class,
+        ClockInterface::class => Clock::class,
+    ];
+}
+```
+
+### Aliases
+
+Alias перенаправляет один id на другой.
+
+```php
+protected function getAliases(): array
+{
+    return [
+        CacheInterface::class => RedisCache::class,
+    ];
+}
+```
+
+Цепочка aliases сводится к canonical id. Циклы и конфликтующие bindings отвергаются при построении контейнера.
+
+### Services
+
+Services — уже созданные значения, которые сразу помещаются в контейнер.
+
+```php
+protected function getServices(): array
+{
+    return [
+        BuildInfo::class => new BuildInfo('production'),
+    ];
+}
+```
+
+Используйте services для значений, которые действительно должны существовать до контейнера. Для соединений, клиентов, потоков и других runtime-ресурсов обычно лучше factory.
+
+### Delegators
+
+Delegator декорирует entry после разрешения базового значения. Несколько delegators выполняются в порядке регистрации.
+
+```php
+protected function getDelegators(): array
+{
+    return [
+        MailerInterface::class => [
+            TracingMailerDelegator::class,
+            MetricsMailerDelegator::class,
+        ],
+    ];
+}
+
+final class TracingMailerDelegator
+{
+    public function __invoke(
+        MailerInterface $mailer,
+        \Psr\Container\ContainerInterface $container,
+    ): MailerInterface {
+        return new TracingMailer($mailer, $container->get(Tracer::class));
+    }
+}
+```
+
+Runtime-сигнатура delegator:
+
+```php
+(mixed $entry, ContainerInterface $container): mixed
+```
+
+Контейнер отслеживает зависимости от deferred service-based delegators. Изменение alias, entry или владельца во внешнем контейнере инвалидирует затронутые декорированные значения, а не оставляет устаревший wrapper в кеше.
+
+### Definitions
+
+Definitions удобны, когда нужно декларативно задать constructor parameters, ссылки на другие entries или последовательность method calls.
+
+```php
+use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\Definition;
+
+protected function getFactories(): array
+{
+    return [
+        ApiClient::class => ClassDefinition::create(ApiClient::class)
+            ->constructor([
+                'timeout' => 10,
+                'transport' => Definition::reference(TransportInterface::class),
+            ])
+            ->method('setLogger', [
+                Definition::reference(LoggerInterface::class),
+            ]),
+    ];
+}
+```
+
+Runtime-параметры, переданные в `make()`, имеют приоритет над configured constructor parameters.
+
+## Получение объектов
+
+### Shared entries через `get()`
+
+```php
+$orderService = $container->get(OrderService::class);
+```
+
+`get()` реализует PSR-11 семантику. Разрешённый entry является shared для данного контейнера и кешируется с учётом requested/canonical id.
+
+### Новый объект через `make()`
+
+```php
+$exporter = $container->make(ReportExporter::class, [
+    'format' => 'csv',
+]);
+```
+
+`make()` всегда запускает новое object resolution. Явные параметры можно передавать по имени или позиции; runtime-значения по type id также используются, когда тип параметра их принимает.
+
+### DI-aware callable
+
+```php
+$result = $container->call(
+    [$controller, 'show'],
+    ['id' => 42],
+);
+```
+
+Аргументы callable разрешаются тем же parameter resolver pipeline, что и параметры конструктора. Это подходит для controller actions, setup methods, jobs и других прикладных callable.
+
+### Runtime-изменения
+
+Если композицию действительно нужно менять после build, контейнер предоставляет ограниченный mutable API:
+
+```php
+$container->set(FeatureFlags::class, $flags);
+$container->alias(StorageInterface::class, S3Storage::class);
+$container->delegator(StorageInterface::class, StorageTracingDelegator::class);
+$container->addContainer($externalContainer);
+```
+
+Внутренние DI services защищены: их нельзя заменить или декорировать. При изменении binding соответствующие cached entries инвалидируются.
+
+Внешние контейнеры проверяются до локального разрешения. Нельзя добавлять сам Componenta container как внешний контейнер.
+
+## Autowiring и разрешение параметров
+
+Параметры конструктора обычного конкретного класса проходят через упорядоченную цепочку resolvers. Чем выше priority, тем раньше resolver получает возможность разрешить параметр.
+
+Стандартная цепочка:
+
+| Priority | Назначение |
+| ---: | --- |
+| `ContainerBuilder::PRIORITY_PARAM_ATTRIBUTE` (1200) | composed parameter attributes |
+| `PRIORITY_PARAM_ARRAY` (1100) | явно переданные значения |
+| `PRIORITY_PARAM_ARRAY_TYPED` (1000) | переданные значения по объявленному типу |
+| `PRIORITY_PARAM_REQUEST_CONTEXT` (800) | PSR-7 request context |
+| `PRIORITY_PARAM_AUTOWIRE` (300) | разрешение class/interface по типу |
+| `PRIORITY_PARAM_DEFAULT_VALUE` (200) | PHP default value |
+| `PRIORITY_PARAM_NULLABLE` (100) | `null` для неразрешённого nullable-параметра |
+
+Variadic и by-reference параметры не входят в контракт DI parameter resolution.
+
+## Встроенные атрибуты
+
+Сначала атрибуты компонуются в детерминированный plan, затем выполняются. На одном параметре допускается один совместимый value provider и подходящие transformers; class-level creation/lifecycle attributes подчиняются своим capability rules.
+
+### Источники значений
+
+`#[Config]` получает значение из application configuration:
+
+```php
+use Componenta\Config\ConfigPath;
+use Componenta\DI\Attribute\Config;
+
+final class ApiClient
+{
+    public function __construct(
+        #[Config(new ConfigPath('api.endpoint'))]
+        public string $endpoint,
+    ) {}
+}
+```
+
+Обычная строка в `#[Config]` — literal config key. Для обхода вложенной структуры по точкам используйте `ConfigPath`.
+
+`#[Env]` получает исходное значение environment variable:
+
+```php
+use Componenta\DI\Attribute\Env;
+
+final class RuntimeOptions
+{
+    public function __construct(
+        #[Env('APP_REGION', 'local')]
+        public string $region,
+    ) {}
+}
+```
+
+`#[EntryId]` получает значение по явному container id:
+
+```php
+use Componenta\DI\Attribute\EntryId;
+
+public function __construct(
+    #[EntryId('mailer.transactional')]
+    private MailerInterface $mailer,
+) {}
+```
+
+`#[CurrentUser]` получает текущего пользователя из `CurrentUserProviderInterface`. Default provider изолирует user state по Fiber, поэтому конкурентные Fiber-контексты не перезаписывают друг друга.
+
+```php
+use Componenta\DI\Attribute\CurrentUser;
+
+public function __construct(
+    #[CurrentUser(User::class)]
+    private User $user,
+) {}
+```
+
+Приложение может зарегистрировать собственную реализацию `CurrentUserProviderInterface`, связанную с его request/session lifecycle.
+
+`#[Make]` создаёт новый объект вместо получения shared entry:
+
+```php
+use Componenta\DI\Attribute\Make;
+
+public function __construct(
+    #[Make(JobContext::class, ['queue' => 'emails'])]
+    private JobContext $context,
+) {}
+```
+
+`#[Init]` вычисляет значение через DI-aware callable:
+
+```php
+use Componenta\DI\Attribute\Init;
+
+public function __construct(
+    #[Init([LocaleFactory::class, 'current'])]
+    private Locale $locale,
+) {}
+```
+
+### Преобразование через `#[Cast]`
+
+`#[Cast]` выполняется после совместимого value provider и передаёт значение named caster, зарегистрированному в `componenta/caster`.
+
+```php
+use Componenta\DI\Attribute\Cast;
+use Componenta\DI\Attribute\Env;
+
+public function __construct(
+    #[Env('PAGE_SIZE')]
+    #[Cast('registered-caster-name')]
+    private int $pageSize,
+) {}
+```
+
+Имя caster — имя регистрации в используемом caster provider. DI не содержит project-specific каталога имён caster-ов.
+
+### Property injection
+
+`#[Inject]` внедряет property из контейнера по объявленному типу.
+
+```php
+use Componenta\DI\Attribute\Inject;
+
+final class Handler
+{
+    #[Inject]
+    private LoggerInterface $logger;
+}
+```
+
+Property handler сначала резервирует property для записи. Static properties отвергаются, уже инициализированные readonly properties не перезаписываются.
+
+`#[Config]`, `#[Env]`, `#[EntryId]`, `#[CurrentUser]`, `#[Make]` и `#[Init]` также могут применяться к properties, если это разрешено объявлением соответствующего атрибута.
+
+### Lifecycle объекта
+
+`#[SetUp]` вызывает метод после создания объекта. Атрибут repeatable, а параметры setup method проходят стандартный DI resolver pipeline.
+
+```php
+use Componenta\DI\Attribute\SetUp;
+
+#[SetUp('setLogger')]
+#[SetUp('boot', ['warmup' => true])]
+final class SearchIndex
+{
+    public function setLogger(LoggerInterface $logger): void {}
+
+    public function boot(bool $warmup = false): void {}
+}
+```
+
+`#[NoConstructor]` создаёт объект без вызова конструктора, после чего обычный pipeline продолжает property injection и setup processing. Используйте его только когда обход конструктора является сознательной частью модели объекта.
+
+### Lazy objects и virtual proxies
+
+`#[Lazy]` использует native lazy ghost PHP 8.4 для autowired-класса. Объект сохраняет настоящую class identity и инициализирует состояние при первом наблюдаемом обращении.
+
+```php
+use Componenta\DI\Attribute\Lazy;
+
+#[Lazy]
+final class ExpensiveCatalog
+{
+    public function __construct(DatabaseConnection $db) {}
+}
+```
+
+Opaque factory-bound service нельзя автоматически превратить в ghost: DI не владеет его constructor path. Для такого entry используйте `#[Proxy]` или реализуйте `LazyServiceFactoryInterface` в factory.
+
+`#[Proxy]` выбирает native virtual-proxy creation и может использоваться на классе либо injection point.
+
+Тот же API доступен напрямую:
+
+```php
+$lazy = $container->makeLazy(ExpensiveCatalog::class, $initializer);
+$proxy = $container->makeProxy(RemoteClient::class, $factory);
+```
+
+## Значения из PSR-7 request
+
+Request attributes работают, когда текущий `ServerRequestInterface` передан в explicit parameter array по id самого интерфейса.
+
+```php
+use Psr\Http\Message\ServerRequestInterface;
+
+$container->call([$action, '__invoke'], [
     ServerRequestInterface::class => $request,
 ]);
 ```
 
-## Разрешение параметров
+### Получение одного значения
 
-Любой параметр конструктора или callable разрешается исключительно через `ParameterResolverInterface`:
+Для одного аргумента из одного request source используются:
+
+- `#[QueryParam]` — query string;
+- `#[PayloadParam]` — parsed body; `ConfigPath` позволяет выбрать вложенный путь;
+- `#[Header]` — header;
+- `#[Cookie]` — cookie;
+- `#[RequestAttribute]` — PSR-7 request attribute;
+- `#[ServerParam]` — server parameter;
+- `#[UploadedFile]` — uploaded file.
+
+Если extractor поддерживает `name` и оно не указано, используется имя PHP-параметра. Отсутствие обязательного значения завершает resolution ошибкой, если у атрибута нет default. Extractor с параметром `cast` использует configured caster provider.
 
 ```php
-interface ParameterResolverInterface
-{
-    public function supports(ParameterTarget $target): bool;
+use Componenta\DI\Attribute\QueryParam;
 
-    /** @return array{0:int,1:mixed}|null */
-    public function resolveParameter(
-        ParameterTarget $target,
-        ParameterResolutionContext $context,
-    ): ?array;
+final class ListProductsAction
+{
+    public function __invoke(
+        #[QueryParam(default: 1)] int $page,
+    ): array {
+        // ...
+    }
 }
 ```
 
-Встроенная цепочка намеренно небольшая:
+### Mapping в array или DTO
 
-```text
-1200  AttributeParameterResolver
-1100  ArrayResolver
-1000  ArrayTypedResolver
- 800  RequestContextResolver
- 300  AutowireByTypeResolver
- 200  DefaultValueResolver
- 100  NullableResolver
-```
+Семейство `Map*` отображает целый источник request data:
 
-`ArrayResolver` и `ArrayTypedResolver` ничего не знают об атрибутах. Приоритеты, совместимость и порядок атрибутов полностью относятся к `AttributeParameterResolver` и `AttributePlan`.
+- `MapRequestPayload`;
+- `MapQueryString`;
+- `MapHeaders`;
+- `MapCookies`;
+- `MapRequestAttributes`;
+- `MapServerParams`;
+- `MapUploadedFiles`.
 
-Для прогретых constructor и named-callable paths классификация resolver-ов подготавливается один раз. Prepared plan хранит только immutable metadata параметров и индексы resolver-ов; request values, current user, resolved objects, default objects и экземпляры resolver-ов в plan не кешируются. `has()` / `canCreate()` не запускают `ParameterResolverInterface::supports()`.
-
-Custom `ParameterResolverInterface` нужен для convention-based правил без атрибута:
+`MapRequest` позволяет явно объединить несколько источников.
 
 ```php
-final readonly class TenantResolver implements ParameterResolverInterface
+use Componenta\DI\Attribute\MapRequest;
+use Componenta\DI\Attribute\RequestDataSource;
+
+final class SearchAction
 {
+    public function __invoke(
+        #[MapRequest(
+            sources: [RequestDataSource::Query, RequestDataSource::Attributes],
+            map: ['q' => 'query'],
+            defaults: ['page' => 1],
+            exclude: ['internal'],
+        )]
+        SearchRequest $input,
+    ): array {
+        // ...
+    }
+}
+```
+
+Если parameter имеет тип `array`, mapper возвращает transformed array. Если parameter содержит ровно один class type, DI создаёт DTO через `FactoryInterface::make()`, поэтому его constructor продолжает использовать обычный resolver pipeline.
+
+По умолчанию `MapRequest` запрещает конфликтующие значения из разных sources. Если ожидаема модель «первый источник побеждает», её нужно явно выбрать через `RequestDataConflictPolicy::FirstWins`.
+
+Порядок request mapping намеренно фиксирован:
+
+1. извлечение и объединение request data;
+2. валидация извлечённых данных DTO, если доступен `ValidationProviderInterface`;
+3. mapper transformations (`map`, casts, defaults, sort mapping, exclusions);
+4. создание typed DTO.
+
+Таким образом validation работает с исходными transport/source data до mapper transformations. Нормализация и object construction остаются отдельными этапами.
+
+## Собственный parameter resolver
+
+Реализуйте `ParameterResolverInterface`, если у приложения есть источник параметров, который должен участвовать в обычном разрешении constructors и callable.
+
+```php
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
+
+final class TenantResolver implements ParameterResolverInterface
+{
+    public function __construct(private TenantContext $tenants) {}
+
     public function supports(ParameterTarget $target): bool
     {
-        return $target->name === 'tenant';
+        return $target->className === Tenant::class;
     }
 
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        return [$target->position, $this->tenant];
+        return [$target->position, $this->tenants->current()];
     }
 }
-
-$builder->addParameterResolver(new TenantResolver($tenant), 750);
 ```
 
-Resolver можно зарегистрировать instance-ом, service id контейнера, callable factory или формой `[serviceId, method]`. `replaceParameterResolvers()` отключает встроенную цепочку.
-
-## Композиция атрибутов
-
-`AttributeDefinition` связывает атрибут с handler-ом и semantic metadata:
+Регистрация по priority:
 
 ```php
-new AttributeDefinition(
-    attribute: MyAttribute::class,
-    handler: new MyHandler(),
-    capabilities: [MyCapability::class],
-    requires: [],
-    forbids: [],
-    before: [],
-    after: [],
-    rules: [],
-    version: 1,
-);
-```
-
-`AttributePlanBuilder` проверяет:
-
-- допустимые targets;
-- cardinality capabilities;
-- `requires` / `forbids`;
-- custom composition rules;
-- порядок `before` / `after`;
-- совместимость parameter value sources.
-
-Наследование capabilities одинаково учитывается в `AttributePlanBuilder`, `AttributeSet` и `AttributePlan`.
-
-Composition plan кеширует semantic metadata, но не mutable runtime state handler-а. Каждый runtime handler invocation получает новый экземпляр атрибута, поэтому изменение attribute object не переносит request-local состояние в следующий request или Fiber.
-
-### Несколько атрибутов на одном параметре
-
-На параметре допускается один источник значения и transformers. Например:
-
-```php
-public function __construct(
-    #[QueryParam('count'), Cast('int')]
-    public int $count,
-) {}
-```
-
-План ставит request source перед `#[Cast]`, поэтому строковое query-значение превращается в `int`. Порядок объявления для этой встроенной композиции не важен:
-
-```php
-#[Cast('int'), QueryParam('count')]
-```
-
-даёт тот же source → transformer порядок.
-
-Два несовместимых value source отклоняются уже при построении плана:
-
-```php
-#[QueryParam('value'), Header('X-Value')]
-string $value
-```
-
-вызывает `AttributeCompositionException` до разрешения параметра. Та же проверка выполняется при AOT prepare до записи shard.
-
-`ValueProvider` — единственный на target. `ValueTransformer` является отдельной capability: source + transformer допустимы, source + source — нет.
-
-## Контракты исполнения атрибутов
-
-Object attributes и parameter attributes используют разные интерфейсы.
-
-Class/property/method handler:
-
-```php
-interface AttributeHandlerInterface
+protected function getParameterResolvers(): array
 {
-    public function handle(
-        object $attribute,
-        Reflector $target,
-        ObjectCreationContext $context,
-    ): void;
+    return [
+        900 => TenantResolver::class,
+    ];
 }
 ```
 
-Parameter-only handler:
+Больший priority выполняется раньше. Resolver возвращает `null`, чтобы продолжить цепочку, либо `[позиция параметра, значение]`. DI проверяет и позицию, и соответствие значения объявленному type.
+
+`supports()` выполняет только классификацию target: он не должен мутировать resolver chain или сохранять per-resolution mutable state.
+
+Resolver specification может быть:
+
+- экземпляром `ParameterResolverInterface`;
+- service id/class, разрешаемым контейнером;
+- callable factory, получающим container;
+- парой `[service id, method]`.
+
+Возвращайте `true` из `shouldReplaceParameterResolvers()` только если намеренно заменяете **всю** стандартную resolver chain собственной.
+
+## Собственный DI-атрибут
+
+Пользовательский атрибут регистрируется как `AttributeDefinition`. Definition описывает **семантическую роль атрибута**, **handler**, который его выполняет, и **правила композиции** с другими атрибутами.
+
+Для parameter-only атрибута реализуйте `ParameterAttributeHandlerInterface`.
 
 ```php
-interface ParameterAttributeHandlerInterface
-{
-    public function resolveParameter(
-        object $attribute,
-        ParameterTarget $target,
-        ParameterResolutionContext $context,
-        AttributePlan $plan,
-        ParameterAttributeValue $value,
-    ): ParameterAttributeValue;
-}
-```
+use Attribute;
+use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
-`ParameterAttributeHandlerInterface` **не наследует** `AttributeHandlerInterface`. Поэтому parameter-only handler не обязан иметь бессмысленный `handle()`, который только выбрасывает исключение. Handler, работающий и с параметром, и с property/class/method, явно реализует оба интерфейса.
-
-`AttributeParameterResolver` — единственный built-in мост из parameter resolution в parameter handlers. Он:
-
-1. получает уже проверенный `AttributePlan`;
-2. при необходимости использует caller input как начальное значение;
-3. выполняет handlers в скомпонованном порядке;
-4. передаёт immutable `ParameterAttributeValue` от source к transformer;
-5. возвращает финальное значение обычному resolver pipeline.
-
-Authoritative source, например `#[CurrentUser]`, описывается capability `AuthoritativeValueProvider`; `AttributeParameterResolver` не содержит проверок конкретных классов атрибутов.
-
-### Custom parameter attribute
-
-```php
 #[Attribute(Attribute::TARGET_PARAMETER)]
-final readonly class CurrentTenant {}
+final readonly class TenantId {}
 
-final readonly class CurrentTenantHandler
-    implements ParameterAttributeHandlerInterface
+final class TenantIdHandler implements ParameterAttributeHandlerInterface
 {
-    public function __construct(private Tenant $tenant) {}
+    public function __construct(private TenantContext $tenants) {}
 
     public function resolveParameter(
         object $attribute,
@@ -211,200 +618,184 @@ final readonly class CurrentTenantHandler
         AttributePlan $plan,
         ParameterAttributeValue $value,
     ): ParameterAttributeValue {
-        return $value->resolved
-            ? $value
-            : ParameterAttributeValue::resolved($this->tenant);
+        return ParameterAttributeValue::resolved($this->tenants->id());
     }
 }
-
-$builder->addAttributeDefinition(new AttributeDefinition(
-    CurrentTenant::class,
-    new CurrentTenantHandler($tenant),
-    capabilities: [ValueProvider::class],
-));
 ```
 
-Отдельный custom parameter resolver для атрибутного расширения не нужен.
-
-## Встроенные handlers
-
-Семантика built-in атрибутов находится в handlers, а не в отдельных parameter resolvers:
-
-```text
-CastHandler
-ConfigHandler
-EnvHandler
-EntryIdHandler
-CurrentUserHandler
-MakeHandler
-RequestAttributeHandler
-```
-
-`ConfigHandler`, `EnvHandler`, `EntryIdHandler`, `CurrentUserHandler`, `MakeHandler` и `CastHandler` реализуют оба execution contract, так как соответствующие атрибуты работают также со свойствами. `RequestAttributeHandler` является parameter-only.
-
-`#[Cast]` — transformer. Он может преобразовывать caller input или значение, созданное другим source handler. Для mutable property также поддерживается source → `Cast` композиция.
-
-`#[CurrentUser]` является authoritative source и не может быть заменён caller-provided значением. Default `CurrentUserProvider` изолирует явно заданного пользователя по активному Fiber; long-running integration всё равно должен очищать последовательное request state в `finally`.
-
-`#[Make]` и `#[Proxy]` используют один `MakeHandler`; `#[Make('service.id'), Proxy(ConcreteService::class)]` сохраняет независимость service id и proxy class.
-
-## Object attributes
-
-`AttributeProcessor` выполняет планы class/property/method. `PropertyResolverInterface` отсутствует.
-
-Поддерживаются:
-
-- `#[Inject]`;
-- `#[Init]`;
-- `#[NoConstructor]`;
-- `#[Lazy]`;
-- `#[Proxy]`;
-- repeatable `#[SetUp]`.
-
-Обрабатываются private свойства родителей. Static DI properties дают явную ошибку. Mutable promoted `#[Init]` property может быть изменено после конструктора; уже инициализированное readonly promoted property сохраняется.
-
-## PSR-7 request attributes
-
-Request передаётся обычным typed parameter:
+Регистрация semantic definition:
 
 ```php
-$params = [ServerRequestInterface::class => $request];
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+
+protected function getAttributeDefinitions(): array
+{
+    return [
+        static fn (\Psr\Container\ContainerInterface $container) =>
+            new AttributeDefinition(
+                attribute: TenantId::class,
+                handler: $container->get(TenantIdHandler::class),
+                capabilities: [ValueProvider::class],
+            ),
+    ];
+}
 ```
 
-Сам request остаётся обычным caller-provided значением. Internal mapped-request provenance передаётся только между встроенными resolution boundaries и удаляется до вызова custom parameter resolver, parameter/object handler, factory и entry resolver. Custom `ExtractorInterface` получает исходный PSR-7 request без внутренних DI attributes; fallback имени DI-параметра доступен только через opt-in `ParameterNameAwareExtractorInterface`.
+Для class/property/method атрибута используется `AttributeHandlerInterface`. Handler, который осознанно поддерживает обе поверхности, реализует оба интерфейса.
 
-Все request-source атрибуты обслуживает один `RequestAttributeHandler`:
+### Attribute capabilities
 
-```text
-#[QueryParam]
-#[PayloadParam]
-#[Header]
-#[Cookie]
-#[RequestAttribute]
-#[ServerParam]
-#[UploadedFile]
-#[MapQueryString]
-#[MapRequestPayload]
-#[MapHeaders]
-#[MapCookies]
-#[MapRequestAttributes]
-#[MapServerParams]
-#[MapUploadedFiles]
-#[MapRequest]
-```
+Capabilities описывают роль, а не конкретное имя атрибута:
 
-Общий mapping pipeline:
+- `ValueProvider` — предоставляет parameter/property value; по умолчанию не более одного на target;
+- `AuthoritativeValueProvider` — value provider, который generic caller parameters не могут перекрыть;
+- `ValueTransformer` — преобразует уже полученное значение; несколько transformers могут композироваться;
+- `CreationStrategy` — выбирает способ создания объекта, например lazy/proxy; по умолчанию не более одного;
+- `ConstructorPolicy` — меняет поведение конструктора; по умолчанию не более одного;
+- `LifecycleHook` — lifecycle hook; несколько hooks могут композироваться.
 
-```text
-extract
--> validate raw data
--> map
--> cast
--> defaults
--> sortMap
--> exclude
--> construct DTO
-```
+`AttributeDefinition` дополнительно позволяет задавать:
 
-Nested DTO mapping переносит внутренний provenance. `MappedRequestParameterSourceGuard` срабатывает до resolver priorities и до lazy/proxy creation, поэтому mapped payload не может подменить явно объявленный source. Та же provenance сохраняется внутри DI для проверки параметров `#[SetUp]`, но raw metadata не доступно через `ObjectCreationContext`.
+- `requires` — обязательный соседний attribute/capability;
+- `forbids` — несовместимый attribute/capability;
+- `before` / `after` — детерминированный порядок;
+- `rules` — пользовательские `AttributeCompositionRuleInterface` проверки;
+- `phase` — `BeforeInstantiation`, `AfterInstantiation` или `Both`.
 
-`RequestContextResolver` существует отдельно только потому, что implicit `UriInterface` resolution не имеет атрибута.
+Selectors в `requires`, `forbids`, `before` и `after` могут ссылаться либо на class атрибута, либо на class, реализующий `AttributeCapabilityInterface`.
 
-## Factory, definitions и cache
-
-Пользовательская factory использует array ABI:
+Cardinality пользовательской capability можно задать через `CapabilityPolicy`:
 
 ```php
-$builder->addFactory(
-    MailerInterface::class,
-    static fn(ContainerValue $container, array $params): MailerInterface =>
-        new SmtpMailer($container->get(SmtpConfig::class)),
+use Componenta\DI\Attribute\Composition\CapabilityPolicy;
+
+protected function getAttributeCapabilities(): array
+{
+    return [
+        new CapabilityPolicy(MyCapability::class, maxPerTarget: 1),
+    ];
+}
+```
+
+`shouldReplaceAttributeDefinitions() === true` следует использовать только когда приложение намеренно удаляет все встроенные attribute definitions и полностью определяет модель атрибутов самостоятельно.
+
+## Программная настройка через ContainerBuilder
+
+Configuration providers — основной application-facing API, но контейнер можно собрать и программно:
+
+```php
+use Componenta\DI\ContainerBuilder;
+
+$container = (new ContainerBuilder())
+    ->addService(BuildInfo::class, $buildInfo)
+    ->addInvokable(LoggerInterface::class, Logger::class)
+    ->addFactory(HttpClientInterface::class, $httpClientFactory)
+    ->addAlias(CacheInterface::class, RedisCache::class)
+    ->addParameterResolver(TenantResolver::class, priority: 900)
+    ->addAttributeDefinition($tenantAttributeDefinition)
+    ->build();
+```
+
+Если конфигурация собирается пакетами через `componenta/config`, предпочтительнее `ContainerBuilder::configure($config)`.
+
+## Persistent DI cache
+
+`DiCacheGenerator` валидирует dependency configuration и сериализует её в PHP cache artifact. Запись выполняется во временный файл, файл проходит PHP syntax check и только после этого атомарно активируется.
+
+```php
+use Componenta\DI\Cache\DiCacheGenerator;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
+
+$builder = ContainerBuilder::configure($config);
+$dependencies = $builder->toArray()[ConfigKey::DEPENDENCIES];
+$cacheFile = __DIR__ . '/var/cache/di.php';
+
+(new DiCacheGenerator())->generate($dependencies, $cacheFile);
+```
+
+Production загрузка cache выполняется явно:
+
+```php
+$cacheFile = __DIR__ . '/var/cache/di.php';
+$cache = require $cacheFile;
+
+$container = ContainerBuilder::configureFromCache(
+    $config,
+    $cache,
+    baseDir: dirname($cacheFile),
+)->build();
+```
+
+Cache envelope содержит format version и валидируется до использования. Generated DI cache — build artifact, а не конфигурационный файл для ручного редактирования.
+
+## AOT compiled factory shards
+
+Для reflection-autowired application roots `compileFactories()` генерирует content-addressed PHP shards. Сгенерированные методы являются тонкими entry points в тот же `ObjectPipeline`, который используется reflection resolution, поэтому attribute/lifecycle/request/lazy/parameter semantics не расходятся.
+
+```php
+use Componenta\DI\Attribute\Autowire;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
+
+#[Autowire]
+final class CheckoutHandler
+{
+    public function __construct(
+        private PaymentGateway $payments,
+        private OrderRepository $orders,
+    ) {}
+}
+
+$builder = ContainerBuilder::configure($config);
+$directory = __DIR__ . '/var/cache/di-factories';
+
+$compiled = $builder->compileFactories(
+    [CheckoutHandler::class],
+    $directory,
 );
+
+$dependencies = $builder->toArray()[ConfigKey::DEPENDENCIES];
+$dependencies[ConfigKey::FACTORIES] = [
+    ...$dependencies[ConfigKey::FACTORIES],
+    ...$compiled,
+];
 ```
 
-`ClassDefinition` использует тот же runtime parameter pipeline. Runtime overrides проецируются на constructor signature по имени, позиции и declared object type.
+Compiler расширяет граф eligible autowired dependencies от заданных roots и исключает entries, которыми уже владеют explicit factories, services, invokables или protected container services. Имена shard-файлов content-addressed и повторно проверяются на runtime boundary.
 
-Persistent cache имеет строгий versioned envelope:
+Если cached compiled definitions содержат относительные имена shard-файлов, при `configureFromCache()` передайте каталог shards как `baseDir`.
 
-```php
-[
-    'version' => ContainerBuilder::CACHE_VERSION,
-    ConfigKey::DEPENDENCIES => $dependencies,
-]
-```
+## Исключения
 
-Текущий cache format v5: **17**.
+Ошибки, принадлежащие контейнеру, реализуют `Componenta\DI\Exception\ExceptionInterface`. PSR-11 lookup failures нормализуются в package `NotFoundException`/resolution exceptions, а configuration и compilation failures имеют отдельные типы.
 
-Cache artifact сначала записывается в exclusive временный файл, затем проверяется текущим PHP через `php -l` и только после успешной проверки atomically заменяет итоговый файл. Ошибка custom definition code generator поэтому не может заменить валидный cache синтаксически некорректным PHP.
+Основные категории ошибок:
 
-## AOT
+- неверная или конфликтующая dependency configuration;
+- отсутствующие/cyclic entries;
+- ошибки parameter resolution;
+- несовместимая attribute composition;
+- request-data conflicts и ошибки mapping;
+- неверные cache/compiled-factory artifacts.
 
-`compileFactories()` создаёт content-addressed shards. Generated methods остаются тонкими:
+Container намеренно завершает build как можно раньше при ошибке конфигурации, чтобы неверный binding не доживал до случайного production request.
+
+## Рекомендуемая структура приложения
+
+Для небольшого приложения достаточно:
 
 ```text
-reflection entry -> ObjectPipeline
-compiled shard   -> ObjectPipeline
+src/
+  ConfigProvider.php
+  ... application classes ...
+var/
+  cache/
 ```
 
-Оба режима используют один `ParametersResolver`, те же prepared parameter plans, один `AttributeParameterResolver` и те же handlers. Custom resolver/handler не требует отдельного production code generator.
+Bindings конкретного пакета держите в provider этого пакета, затем компонуйте providers на уровне приложения. DI/cache artifacts генерируйте на build/deploy этапе. Прикладные классы обычно должны зависеть от интерфейсов и constructor injection, а не обращаться к контейнеру напрямую.
 
-Shard содержит только ABI `FORMAT_VERSION`, карту `ENTRIES` вида `method => entry class` и тонкие методы, делегирующие в `ObjectPipeline`. Loader проверяет format и runtime-creatability target entry и fail-closed отклоняет stale/malformed metadata. Resolver/attribute semantics **не зашиваются** и не замораживаются в shard: ранее созданный thin shard исполняет текущий runtime pipeline так же, как development mode.
+## Лицензия
 
-## ContainerBuilder extensions
-
-```text
-addFactory() / addFactories()
-addDefinition()
-addInvokable() / addInvokables()
-addAlias() / addAliases()
-addDelegator() / addDelegators()
-addService() / addServices()
-addParameterResolver()
-replaceParameterResolvers()
-addAttributeDefinition()
-replaceAttributeDefinitions()
-defineAttributeCapability()
-compileFactories()
-toArray()
-build()
-```
-
-Dependency keys:
-
-```text
-factories
-invokables
-aliases
-delegators
-services
-parameter_resolvers
-parameter_resolvers_replace
-attribute_definitions
-attribute_definitions_replace
-attribute_capabilities
-```
-
-Integer keys `parameter_resolvers` являются priorities и не переиндексируются. Неизвестные dependency keys отклоняются.
-
-Пакет экспортирует `Componenta\DI\ConfigProvider` через `extra.componenta.config-providers` для Componenta package discovery.
-
-## Контракт исключений
-
-`Componenta\DI\Exception\ExceptionInterface` — единая package-level граница для ошибок, принадлежащих DI или нормализованных DI. Интерфейс также наследует PSR-11 `ContainerExceptionInterface`.
-
-- `get()` и `make()` выпускают только Componenta DI exceptions; отсутствующий entry представлен `NotFoundException`, который также реализует PSR-11 `NotFoundExceptionInterface`.
-- ошибки parameter resolvers, attribute handlers, конструктора, factory, delegator, external container, validation и caster нормализуются владельцем соответствующего DI pipeline; исходный foreign throwable сохраняется в `getPrevious()`.
-- `call()` разделён на две фазы: подготовка callable и аргументов относится к DI boundary, а после входа в явно вызванное пользовательское callable его исключения проходят без изменения.
-- `AttributeCompositionException` является специализированным `InvalidConfigurationException`.
-- неверный builder/AOT input даёт `InvalidConfigurationException`; ошибки сериализации, filesystem, lint и activation сгенерированных артефактов дают `CompilationException`.
-- типы validation/caster exceptions не входят в публичный exception ABI DI. Request mapping сохраняет их как cause внутри `ResolutionException`.
-
-Diagnostic state `ResolutionException` отделён от живых request/service/callable/reflection objects. Поэтому сохранение exception для логирования или telemetry само по себе не удерживает уже завершённый request graph; исходная причина по-прежнему доступна через `getPrevious()`.
-
-Один и тот же exception contract действует в reflection и compiled/AOT режимах, включая deferred initialization встроенных lazy objects.
-
-## CI и parity
-
-CI выполняет Composer validation, PHP-CS-Fixer, PHPStan на максимальном уровне и Pest на PHP 8.4/8.5. Runtime, AOT, build-phase и prepared-parameter benchmark harness запускаются как smoke-проверки на обеих версиях.
-
-Parity suite покрывает публичные сигнатуры v4, prepared parameter plans, custom convention resolvers, custom parameter/object handlers, композицию нескольких атрибутов параметра, конфликты sources, reflection/AOT parity, изоляцию request provenance, безопасность persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers и строгий exception contract.
+MIT.
