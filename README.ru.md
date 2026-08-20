@@ -63,6 +63,8 @@ interface ParameterResolverInterface
 
 `ArrayResolver` и `ArrayTypedResolver` ничего не знают об атрибутах. Приоритеты, совместимость и порядок атрибутов полностью относятся к `AttributeParameterResolver` и `AttributePlan`.
 
+Для прогретых constructor и named-callable paths классификация resolver-ов подготавливается один раз. Prepared plan хранит только immutable metadata параметров и индексы resolver-ов; request values, current user, resolved objects, default objects и экземпляры resolver-ов в plan не кешируются. `has()` / `canCreate()` не запускают `ParameterResolverInterface::supports()`.
+
 Custom `ParameterResolverInterface` нужен для convention-based правил без атрибута:
 
 ```php
@@ -114,6 +116,8 @@ new AttributeDefinition(
 - совместимость parameter value sources.
 
 Наследование capabilities одинаково учитывается в `AttributePlanBuilder`, `AttributeSet` и `AttributePlan`.
+
+Composition plan кеширует semantic metadata, но не mutable runtime state handler-а. Каждый runtime handler invocation получает новый экземпляр атрибута, поэтому изменение attribute object не переносит request-local состояние в следующий request или Fiber.
 
 ### Несколько атрибутов на одном параметре
 
@@ -240,7 +244,7 @@ RequestAttributeHandler
 
 `#[Cast]` — transformer. Он может преобразовывать caller input или значение, созданное другим source handler. Для mutable property также поддерживается source → `Cast` композиция.
 
-`#[CurrentUser]` является authoritative source и не может быть заменён caller-provided значением.
+`#[CurrentUser]` является authoritative source и не может быть заменён caller-provided значением. Default `CurrentUserProvider` изолирует явно заданного пользователя по активному Fiber; long-running integration всё равно должен очищать последовательное request state в `finally`.
 
 `#[Make]` и `#[Proxy]` используют один `MakeHandler`; `#[Make('service.id'), Proxy(ConcreteService::class)]` сохраняет независимость service id и proxy class.
 
@@ -266,6 +270,8 @@ Request передаётся обычным typed parameter:
 ```php
 $params = [ServerRequestInterface::class => $request];
 ```
+
+Сам request остаётся обычным caller-provided значением. Internal mapped-request provenance передаётся только между встроенными resolution boundaries и удаляется до вызова custom parameter resolver, parameter/object handler, factory и entry resolver. Custom `ExtractorInterface` получает исходный PSR-7 request без внутренних DI attributes; fallback имени DI-параметра доступен только через opt-in `ParameterNameAwareExtractorInterface`.
 
 Все request-source атрибуты обслуживает один `RequestAttributeHandler`:
 
@@ -300,7 +306,7 @@ extract
 -> construct DTO
 ```
 
-Nested DTO mapping переносит provenance через внутренний request-only marker. `MappedRequestParameterSourceGuard` срабатывает до resolver priorities и до lazy/proxy creation, поэтому mapped payload не может подменить явно объявленный source.
+Nested DTO mapping переносит внутренний provenance. `MappedRequestParameterSourceGuard` срабатывает до resolver priorities и до lazy/proxy creation, поэтому mapped payload не может подменить явно объявленный source. Та же provenance сохраняется внутри DI для проверки параметров `#[SetUp]`, но raw metadata не доступно через `ObjectCreationContext`.
 
 `RequestContextResolver` существует отдельно только потому, что implicit `UriInterface` resolution не имеет атрибута.
 
@@ -327,7 +333,9 @@ Persistent cache имеет строгий versioned envelope:
 ]
 ```
 
-Текущий cache format v5: **16**.
+Текущий cache format v5: **17**.
+
+Cache artifact сначала записывается в exclusive временный файл, затем проверяется текущим PHP через `php -l` и только после успешной проверки atomically заменяет итоговый файл. Ошибка custom definition code generator поэтому не может заменить валидный cache синтаксически некорректным PHP.
 
 ## AOT
 
@@ -338,9 +346,9 @@ reflection entry -> ObjectPipeline
 compiled shard   -> ObjectPipeline
 ```
 
-Оба режима используют один `ParametersResolver`, один `AttributeParameterResolver` и те же handlers. Custom resolver/handler не требует отдельного production code generator.
+Оба режима используют один `ParametersResolver`, те же prepared parameter plans, один `AttributeParameterResolver` и те же handlers. Custom resolver/handler не требует отдельного production code generator.
 
-Semantic fingerprint включает format attribute plan, definitions, handler classes, capabilities, composition rules/policies и фактическую ordered resolver chain. Stale shard отклоняется.
+Shard содержит только ABI `FORMAT_VERSION`, карту `ENTRIES` вида `method => entry class` и тонкие методы, делегирующие в `ObjectPipeline`. Loader проверяет format и runtime-creatability target entry и fail-closed отклоняет stale/malformed metadata. Resolver/attribute semantics **не зашиваются** и не замораживаются в shard: ранее созданный thin shard исполняет текущий runtime pipeline так же, как development mode.
 
 ## ContainerBuilder extensions
 
@@ -391,10 +399,12 @@ Integer keys `parameter_resolvers` являются priorities и не пере�
 - неверный builder/AOT input даёт `InvalidConfigurationException`; ошибки сериализации, filesystem, lint и activation сгенерированных артефактов дают `CompilationException`.
 - типы validation/caster exceptions не входят в публичный exception ABI DI. Request mapping сохраняет их как cause внутри `ResolutionException`.
 
+Diagnostic state `ResolutionException` отделён от живых request/service/callable/reflection objects. Поэтому сохранение exception для логирования или telemetry само по себе не удерживает уже завершённый request graph; исходная причина по-прежнему доступна через `getPrevious()`.
+
 Один и тот же exception contract действует в reflection и compiled/AOT режимах, включая deferred initialization встроенных lazy objects.
 
 ## CI и parity
 
-CI выполняет Composer validation, PHP-CS-Fixer, PHPStan на максимальном уровне и Pest на PHP 8.4/8.5.
+CI выполняет Composer validation, PHP-CS-Fixer, PHPStan на максимальном уровне и Pest на PHP 8.4/8.5. Runtime, AOT, build-phase и prepared-parameter benchmark harness запускаются как smoke-проверки на обеих версиях.
 
-Parity suite покрывает публичные сигнатуры v4, custom convention resolvers, custom parameter/object handlers, композицию нескольких атрибутов параметра, конфликты sources, reflection/AOT parity, request provenance, persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers и строгий exception contract.
+Parity suite покрывает публичные сигнатуры v4, prepared parameter plans, custom convention resolvers, custom parameter/object handlers, композицию нескольких атрибутов параметра, конфликты sources, reflection/AOT parity, изоляцию request provenance, безопасность persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers и строгий exception contract.
