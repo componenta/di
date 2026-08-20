@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -17,11 +18,7 @@ it('keeps parameter resolution as an explicit extension contract', function (): 
         ->toBe(ParameterResolutionContext::class);
 });
 
-it('allows a custom resolver to classify an immutable parameter target', function (): void {
-    $callable = static function (string $value): void {};
-    $parameter = (new ReflectionFunction($callable))->getParameters()[0];
-    $target = new ParameterTarget($parameter);
-
+it('custom parameter resolvers participate in public callable resolution', function (): void {
     $resolver = new class () implements ParameterResolverInterface {
         public function supports(ParameterTarget $target): bool
         {
@@ -32,11 +29,14 @@ it('allows a custom resolver to classify an immutable parameter target', functio
             ParameterTarget $target,
             ParameterResolutionContext $context,
         ): ?array {
-            return [$target->position, 'custom'];
+            return $target->name === 'value'
+                ? [$target->position, 'custom']
+                : null;
         }
     };
+    $container = (new ContainerBuilder())
+        ->addParameterResolver($resolver, 2000)
+        ->build();
 
-    expect($resolver->supports($target))->toBeTrue()
-        ->and($resolver->resolveParameter($target, new ParameterResolutionContext()))
-        ->toBe([0, 'custom']);
+    expect($container->call(static fn(string $value): string => $value))->toBe('custom');
 });
