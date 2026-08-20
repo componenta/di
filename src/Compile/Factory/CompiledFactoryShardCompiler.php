@@ -16,16 +16,9 @@ final readonly class CompiledFactoryShardCompiler
 
     public function __construct(
         private FactoryCodeGenerator $factories,
-        string $pipelineFingerprint,
         private CompiledFactoryShardWriter $writer = new CompiledFactoryShardWriter(),
         private ?ObjectPipeline $objects = null,
-    ) {
-        if (preg_match('/^[a-f0-9]{64}$/D', $pipelineFingerprint) !== 1) {
-            throw new InvalidConfigurationException(
-                'Compiled factory fingerprint must be a lowercase SHA-256 digest.',
-            );
-        }
-    }
+    ) {}
 
     /**
      * @param iterable<class-string> $classes
