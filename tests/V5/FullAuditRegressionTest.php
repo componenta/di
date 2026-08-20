@@ -80,6 +80,16 @@ final readonly class AuditUnsafeReadonlyCacheValue
     }
 }
 
+final readonly class AuditDerivedReadonlyCacheValue
+{
+    public string $derived;
+
+    public function __construct(public string $seed)
+    {
+        $this->derived = $seed . ':' . bin2hex(random_bytes(4));
+    }
+}
+
 test('request validation provider added after an initial miss is observed without rebuilding the container', function (): void {
     $container = (new ContainerBuilder())->build();
     $request = (new ServerRequest('POST', '/'))->withParsedBody(['value' => 'first']);
@@ -162,6 +172,25 @@ test('persistent cache rejects readonly objects whose constructor state cannot b
                 'unsafe' => new AuditUnsafeReadonlyCacheValue('value'),
             ],
         ], $path))->toThrow(CompilationException::class, 'public promoted property');
+    } finally {
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
+});
+
+test('persistent cache rejects readonly state not represented by constructor arguments', function (): void {
+    $path = sys_get_temp_dir() . '/componenta-di-derived-readonly-' . bin2hex(random_bytes(5)) . '.php';
+
+    try {
+        expect(fn() => (new DiCacheGenerator())->generate([
+            ConfigKey::SERVICES => [
+                'derived' => new AuditDerivedReadonlyCacheValue('seed'),
+            ],
+        ], $path))->toThrow(
+            CompilationException::class,
+            'not represented by a public promoted constructor parameter',
+        );
     } finally {
         if (is_file($path)) {
             unlink($path);
