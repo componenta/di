@@ -61,7 +61,7 @@ test('failed parameter resolution does not persist closure or request state in t
         ]);
 });
 
-test('invalid callable failures do not retain rejected objects', function (): void {
+test('failed callable resolution does not persist rejected objects in the container', function (): void {
     $container = (new ContainerBuilder())->build();
     $captured = new AuditExceptionCapturedValue();
     $reference = WeakReference::create($captured);
@@ -73,10 +73,13 @@ test('invalid callable failures do not retain rejected objects', function (): vo
     } catch (InvalidCallableException $error) {
     }
 
-    unset($probe, $captured);
+    $diagnostic = [$error->callableType, $error->callableDescription];
+    unset($error, $probe, $captured);
     gc_collect_cycles();
 
     expect($reference->get())->toBeNull()
-        ->and($error->callableType)->toBe(AuditInvalidCallableProbe::class)
-        ->and($error->callableDescription)->toBe('object ' . AuditInvalidCallableProbe::class);
+        ->and($diagnostic)->toBe([
+            AuditInvalidCallableProbe::class,
+            'object ' . AuditInvalidCallableProbe::class,
+        ]);
 });
