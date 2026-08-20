@@ -10,7 +10,7 @@
          beStrictAboutTestsThatDoNotTestAnything="true"
 >
     <testsuites>
-        <testsuite name="Unit">
+        <testsuite name="All">
             <directory>tests</directory>
         </testsuite>
     </testsuites>
