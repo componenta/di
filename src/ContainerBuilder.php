@@ -257,7 +257,7 @@ class ContainerBuilder
         $plans = new AttributePlanBuilder($attributes);
         $parameters = new ParametersResolver($plans);
         $attributeProcessor = new AttributeProcessor($attributes, $plans);
-        $proxyFactory = $this->createProxyFactory();
+        $proxyFactory = new ProxyFactory();
         $resolutionParameters = new ObjectResolutionParameterStore();
         $objects = new ObjectPipeline(
             $plans,
@@ -694,11 +694,6 @@ class ContainerBuilder
         }
 
         return $extension;
-    }
-
-    protected function createProxyFactory(): ProxyFactoryInterface
-    {
-        return new ProxyFactory();
     }
 
     /** @param callable(ContainerValue,array<string|int,mixed>):mixed $factory */
