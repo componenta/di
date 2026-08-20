@@ -37,11 +37,6 @@ final class ParameterTarget
     public readonly ?ReflectionType $type;
     public readonly bool $allowsNull;
     public readonly bool $hasDefault;
-
-    public mixed $default {
-        get => $this->hasDefault ? $this->reflection->getDefaultValue() : null;
-    }
-
     public readonly bool $variadic;
     public readonly bool $byReference;
     public readonly string $declaringContext;
