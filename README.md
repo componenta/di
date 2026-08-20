@@ -63,6 +63,8 @@ The default chain is intentionally small:
 
 `ArrayResolver` and `ArrayTypedResolver` are attribute-agnostic. Attribute precedence and composition belong entirely to `AttributeParameterResolver` and the attribute plan.
 
+Resolver classification is prepared once for warmed constructor/named-callable paths. A prepared plan stores immutable parameter metadata and resolver slots only; request values, current users, resolved objects, default objects and resolver instances are never cached in the plan. `has()` / `canCreate()` do not trigger parameter-resolver `supports()` classification.
+
 Use a custom `ParameterResolverInterface` for convention-based rules that do not need an attribute:
 
 ```php
@@ -114,6 +116,8 @@ new AttributeDefinition(
 - parameter source compatibility.
 
 Capabilities support inheritance consistently in `AttributePlanBuilder`, `AttributeSet` and `AttributePlan`.
+
+Composition plans cache semantic metadata, not mutable runtime handler state. Each handler invocation receives a fresh attribute instance, so attribute mutation cannot carry request-local state into a later resolution or Fiber.
 
 ### Multiple parameter attributes
 
@@ -240,7 +244,7 @@ RequestAttributeHandler
 
 `#[Cast]` is a transformer. It can transform caller input or a value produced by another source handler. Mutable properties also support source → `Cast` composition.
 
-`#[CurrentUser]` is authoritative and ignores caller-provided replacement values.
+`#[CurrentUser]` is authoritative and ignores caller-provided replacement values. The default `CurrentUserProvider` isolates explicitly assigned users by active Fiber; long-running integrations must still clear sequential request state in a `finally` boundary.
 
 `#[Make]` and `#[Proxy]` share `MakeHandler`; `#[Make('service.id'), Proxy(ConcreteService::class)]` keeps service id and proxy class independent.
 
@@ -266,6 +270,8 @@ Request extraction is isolated from generic DI internals. Supply the request as 
 ```php
 $params = [ServerRequestInterface::class => $request];
 ```
+
+The request itself remains ordinary caller input. Internal mapped-request provenance is transported only through built-in resolution boundaries and is removed before custom parameter resolvers, parameter handlers, object handlers, factories and entry resolvers are invoked. Custom `ExtractorInterface` implementations receive the original PSR-7 request; fallback DI parameter names are exposed only through the opt-in `ParameterNameAwareExtractorInterface` contract.
 
 All request-source attributes use one `RequestAttributeHandler`:
 
@@ -300,7 +306,7 @@ extract
 -> construct DTO
 ```
 
-Nested request DTOs carry internal mapping provenance. `MappedRequestParameterSourceGuard` runs before resolver priority and before lazy/proxy creation, preventing mapped payload keys from spoofing explicitly declared sources.
+Nested request DTOs carry internal mapping provenance. `MappedRequestParameterSourceGuard` runs before resolver priority and before lazy/proxy creation, preventing mapped payload keys from spoofing explicitly declared sources. The same provenance is preserved internally for `#[SetUp]` parameter checks without exposing raw metadata through `ObjectCreationContext`.
 
 `RequestContextResolver` is separate because implicit `UriInterface` resolution has no parameter attribute.
 
@@ -327,7 +333,9 @@ Persistent cache uses a strict versioned envelope:
 ]
 ```
 
-Current v5 cache format: **16**.
+Current v5 cache format: **17**.
+
+Cache artifacts are written to an exclusive temporary file, syntax-checked with the active PHP binary, and atomically renamed only after validation. A broken custom definition code generator therefore cannot replace an existing valid cache with syntactically invalid PHP.
 
 ## AOT compiled entries
 
@@ -338,9 +346,9 @@ reflection entry -> ObjectPipeline
 compiled shard   -> ObjectPipeline
 ```
 
-Both modes execute the same `ParametersResolver`, the same `AttributeParameterResolver`, and the same handlers. Custom resolvers and handlers therefore require no production-specific code generator.
+Both modes execute the same `ParametersResolver`, prepared parameter plans, `AttributeParameterResolver` and handlers. Custom resolvers and handlers therefore require no production-specific code generator.
 
-The semantic fingerprint covers the attribute-plan format, definitions, handler classes, capabilities, composition rules/policies and the actual ordered parameter resolver chain. Stale shards are rejected.
+A shard contains only its ABI `FORMAT_VERSION`, a `method => entry class` `ENTRIES` map and thin methods delegating to `ObjectPipeline`. The loader validates the shard format and target entry eligibility and rejects stale/malformed entry metadata. Resolver and attribute semantics are **not** embedded into or frozen by a shard: a previously generated thin shard executes the current runtime pipeline, exactly like development mode.
 
 ## ContainerBuilder extensions
 
@@ -391,10 +399,12 @@ The package exports `Componenta\DI\ConfigProvider` through `extra.componenta.con
 - invalid builder/AOT inputs use `InvalidConfigurationException`; generated-artifact serialization, filesystem, lint and activation failures use `CompilationException`.
 - validation/caster exception types are not part of the DI public exception ABI. Request mapping preserves them as the cause of `ResolutionException`.
 
+Resolution diagnostics are detached from live request, service, callable and reflection objects. Retaining a `ResolutionException` for logging/telemetry therefore does not itself retain a completed request graph; the original foreign cause remains available through `getPrevious()`.
+
 The exception contract is shared by reflection and compiled/AOT execution, including deferred built-in lazy initialization.
 
 ## CI and parity
 
-CI runs Composer validation, PHP-CS-Fixer, PHPStan at max level and Pest on PHP 8.4 and 8.5.
+CI runs Composer validation, PHP-CS-Fixer, PHPStan at max level and Pest on PHP 8.4 and 8.5. Runtime, AOT, build-phase and prepared-parameter benchmark harnesses are smoke-tested on both versions.
 
-The v5 parity suite covers public v4 signatures, custom convention resolvers, custom parameter/object handlers, multi-attribute parameter composition, source conflicts, reflection/AOT parity, request provenance, persistent cache, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers and the strict exception boundary.
+The v5 parity suite covers public v4 signatures, prepared parameter plans, custom convention resolvers, custom parameter/object handlers, multi-attribute parameter composition, source conflicts, reflection/AOT parity, request provenance isolation, persistent cache safety, proxy/make semantics, promoted/private/static properties, Fibers, aliases, delegators, external containers and the strict exception boundary.
