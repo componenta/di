@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\V5;
 use Attribute;
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
@@ -17,6 +18,9 @@ use Psr\Container\ContainerInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class DeferredValue {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class DeferredAutowiredValue {}
 
 final readonly class DeferredValueResolver implements ParameterResolverInterface
 {
@@ -74,6 +78,18 @@ final readonly class DeferredExtensionFactoryService
     }
 }
 
+final readonly class DeferredAutowiredDependency {}
+
+final readonly class DeferredAutowiredAttributeFactory
+{
+    public function __construct(public DeferredAutowiredDependency $dependency) {}
+
+    public function attribute(ContainerInterface $container): AttributeDefinition
+    {
+        return new AttributeDefinition(DeferredAutowiredValue::class);
+    }
+}
+
 final readonly class DeferredExtensionDto
 {
     public function __construct(
@@ -95,6 +111,20 @@ test('builder materializes deferred attribute and parameter resolver service met
 
     expect($dto->value)->toBe('from-service-method')
         ->and($dto->fallback)->toBe('from-deferred-resolver');
+});
+
+test('deferred attribute factory services can use default constructor autowiring during bootstrap', function (): void {
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition([DeferredAutowiredAttributeFactory::class, 'attribute'])
+        ->build();
+
+    $factory = $container->get(DeferredAutowiredAttributeFactory::class);
+    $registry = $container->get(AttributeDefinitionRegistry::class);
+
+    expect($factory)->toBeInstanceOf(DeferredAutowiredAttributeFactory::class)
+        ->and($factory->dependency)->toBeInstanceOf(DeferredAutowiredDependency::class)
+        ->and($registry)->toBeInstanceOf(AttributeDefinitionRegistry::class)
+        ->and($registry->definition(DeferredAutowiredValue::class))->toBeInstanceOf(AttributeDefinition::class);
 });
 
 test('config accepts the same deferred extension service method forms', function (): void {
