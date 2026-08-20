@@ -16,7 +16,7 @@ final readonly class LazyCasterProvider implements CasterProviderInterface
     public function provide(string $name): ?CasterInterface
     {
         $provider = $this->container->get(CasterProviderInterface::class);
-        
+
         if (!$provider instanceof CasterProviderInterface) {
             throw new InvalidConfigurationException(sprintf(
                 'Service "%s" must implement %s; got %s.',
@@ -25,7 +25,7 @@ final readonly class LazyCasterProvider implements CasterProviderInterface
                 get_debug_type($provider),
             ));
         }
-        
+
         return $provider->provide($name);
     }
 }
