@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
 /** Resolves an explicit object registered under its declared class/interface type. */
@@ -19,6 +20,10 @@ final class ArrayTypedResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         foreach ($target->typeNames as $typeName) {
+            if (RequestParameter::isTransportType($typeName)) {
+                continue;
+            }
+
             if (!isset($context->provided[$typeName]) || !array_key_exists($typeName, $context->provided)) {
                 continue;
             }
