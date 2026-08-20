@@ -12,12 +12,12 @@ it('does not expose the removed v5 migration subsystems', function (): void {
         ->and(interface_exists('Componenta\\DI\\Attribute\\Handler\\ValueProviderHandlerInterface'))->toBeFalse();
 });
 
-it('autoloads package helper functions instead of one-method helper classes', function (): void {
+it('autoloads only supported package helper functions', function (): void {
     expect(function_exists('Componenta\\DI\\normalize_env_name'))->toBeTrue()
         ->and(function_exists('Componenta\\DI\\is_entry_class_eligible'))->toBeTrue()
-        ->and(function_exists('Componenta\\DI\\with_suppressed_warnings'))->toBeTrue()
         ->and(function_exists('Componenta\\DI\\validate_parameter_resolution_result'))->toBeTrue()
-        ->and(function_exists('Componenta\\DI\\compiled_factory_pipeline_fingerprint'))->toBeTrue()
+        ->and(function_exists('Componenta\\DI\\with_suppressed_warnings'))->toBeFalse()
+        ->and(function_exists('Componenta\\DI\\compiled_factory_pipeline_fingerprint'))->toBeFalse()
         ->and(normalize_env_name('someValue'))->toBe('SOME_VALUE')
         ->and(is_entry_class_eligible(new \ReflectionClass(\stdClass::class)))->toBeTrue();
 });
