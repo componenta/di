@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Attribute;
+use Componenta\DI\Attribute\CurrentRequest;
+use Componenta\DI\Attribute\CurrentUri;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
@@ -39,7 +41,10 @@ final readonly class TypedMappedSourceEnvelope
 
 final readonly class TypedMappedRequestDto
 {
-    public function __construct(public ServerRequestInterface $request) {}
+    public function __construct(
+        #[CurrentRequest]
+        public ServerRequestInterface $request,
+    ) {}
 }
 
 final readonly class TypedMappedRequestEnvelope
@@ -52,7 +57,10 @@ final readonly class TypedMappedRequestEnvelope
 
 final readonly class TypedMappedUriDto
 {
-    public function __construct(public UriInterface $uri) {}
+    public function __construct(
+        #[CurrentUri]
+        public UriInterface $uri,
+    ) {}
 }
 
 final readonly class TypedMappedUriEnvelope
@@ -91,7 +99,7 @@ test('mapped type keys cannot shadow source-bound object parameters', function (
     }
 });
 
-test('mapped type keys cannot spoof request and uri parameters', function (): void {
+test('mapped type keys cannot spoof explicit current request sources', function (): void {
     $container = (new ContainerBuilder())->build();
     $spoofedRequest = new ServerRequest('GET', '/spoofed');
 
