@@ -54,6 +54,7 @@ jobs:
           php benchmarks/RuntimeBench.php >/dev/null
           php benchmarks/GeneratedVsReflectionBench.php >/dev/null
           php benchmarks/BuildPhasesBench.php >/dev/null
+          php benchmarks/ParameterPlanBench.php >/dev/null
 
       - name: Publish check status
         if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
