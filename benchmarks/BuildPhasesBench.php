@@ -25,14 +25,12 @@ namespace {
 }
 
 namespace Componenta\DI\Benchmarks\Build {
-    use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
     use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
     use Componenta\DI\CallableExecutorInterface;
     use Componenta\DI\ContainerBuilder;
     use Componenta\DI\Object\ObjectPipeline;
     use Componenta\DI\ProxyFactoryInterface;
     use Componenta\DI\Resolver\Entry\EntryResolverInterface;
-    use Componenta\DI\Resolver\Parameter\ParametersResolver;
     use Psr\Container\ContainerInterface;
 
     final class ProfilingBuilder extends ContainerBuilder
@@ -65,8 +63,6 @@ namespace Componenta\DI\Benchmarks\Build {
             ProxyFactoryInterface $proxyFactory,
             ObjectPipeline $objects,
             CallableExecutorInterface $executor,
-            AttributeDefinitionRegistry $attributes,
-            ParametersResolver $parameters,
         ): EntryResolverInterface {
             $started = hrtime(true);
 
@@ -76,8 +72,6 @@ namespace Componenta\DI\Benchmarks\Build {
                     $proxyFactory,
                     $objects,
                     $executor,
-                    $attributes,
-                    $parameters,
                 );
             } finally {
                 self::record('entry resolver graph', $started);
