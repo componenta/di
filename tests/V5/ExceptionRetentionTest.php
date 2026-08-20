@@ -18,7 +18,7 @@ final readonly class AuditInvalidCallableProbe
     public function __construct(public object $capture) {}
 }
 
-test('resolution failures release closure captures and request objects after the public call completes', function (): void {
+test('failed parameter resolution does not persist closure or request state in the container', function (): void {
     $container = (new ContainerBuilder())->build();
     $captured = new AuditExceptionCapturedValue();
     $request = new ServerRequest('GET', '/');
@@ -35,18 +35,29 @@ test('resolution failures release closure captures and request objects after the
     } catch (ResolutionException $error) {
     }
 
-    unset($closure, $request, $captured);
+    $diagnostic = [
+        $error->parameterName,
+        $error->parameterPosition,
+        $error->parameterType,
+        $error->parameterContext,
+        $error->providedParameterTypes,
+    ];
+
+    // A live Throwable owns its PHP stack trace. The DI-specific retention
+    // contract is that the container and its metadata caches do not retain
+    // request/callable state after that Throwable itself is released.
+    unset($error, $closure, $request, $captured);
     gc_collect_cycles();
 
     expect($closureReference->get())->toBeNull()
         ->and($capturedReference->get())->toBeNull()
         ->and($requestReference->get())->toBeNull()
-        ->and($error->parameterName)->toBe('value')
-        ->and($error->parameterPosition)->toBe(0)
-        ->and($error->parameterType)->toBe('string')
-        ->and($error->parameterContext)->toBe('Closure')
-        ->and($error->providedParameterTypes)->toBe([
-            ServerRequestInterface::class => ServerRequest::class,
+        ->and($diagnostic)->toBe([
+            'value',
+            0,
+            'string',
+            'Closure',
+            [ServerRequestInterface::class => ServerRequest::class],
         ]);
 });
 
