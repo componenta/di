@@ -166,14 +166,14 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
     private static function formatFunctionName(ReflectionParameter $parameter): string
     {
         $function = $parameter->getDeclaringFunction();
-        $class = $parameter->getDeclaringClass();
-
-        if ($class !== null) {
-            return sprintf('%s::%s()', $class->getName(), $function->getName());
-        }
 
         if ($function->isClosure()) {
             return 'Closure';
+        }
+
+        $class = $parameter->getDeclaringClass();
+        if ($class !== null) {
+            return sprintf('%s::%s()', $class->getName(), $function->getName());
         }
 
         return sprintf('%s()', $function->getName());
