@@ -119,8 +119,8 @@ namespace Componenta\DI\Benchmarks\Generated {
         printf("%-22s %10.1f ns %12.0f ops/s\n", 'compiled/default', $compiledDefault['nanoseconds'], $compiledDefault['operations']);
         printf("%-22s %10.1f ns %12.0f ops/s\n", 'reflection/override', $reflectionOverride['nanoseconds'], $reflectionOverride['operations']);
         printf("%-22s %10.1f ns %12.0f ops/s\n", 'compiled/override', $compiledOverride['nanoseconds'], $compiledOverride['operations']);
-        printf("speedup default: %.2fx\n", $reflectionDefault['nanoseconds'] / $compiledDefault['nanoseconds']);
-        printf("speedup override: %.2fx\n", $reflectionOverride['nanoseconds'] / $compiledOverride['nanoseconds']);
+        printf("compiled/reflection default ratio: %.2fx\n", $compiledDefault['nanoseconds'] / $reflectionDefault['nanoseconds']);
+        printf("compiled/reflection override ratio: %.2fx\n", $compiledOverride['nanoseconds'] / $reflectionOverride['nanoseconds']);
     } finally {
         foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
             @unlink($file);
