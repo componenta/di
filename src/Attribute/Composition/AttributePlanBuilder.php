@@ -16,17 +16,14 @@ use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
-use WeakMap;
 
-/** Builds, validates, orders and memoizes the semantic attribute plan for one target. */
+/** Builds, validates, orders and memoizes the semantic attribute plan for stable targets. */
 final class AttributePlanBuilder
 {
     public const int FORMAT_VERSION = 5;
 
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
-    /** @var WeakMap<object, AttributePlan>|null */
-    private ?WeakMap $anonymousPlans = null;
     /** @var array<class-string,int> */
     private array $attributeTargetFlags = [];
     private int $registryRevision = -1;
@@ -42,12 +39,6 @@ final class AttributePlanBuilder
         $key = self::cacheKey($target);
         if ($key !== null && isset($this->namedPlans[$key])) {
             return $this->namedPlans[$key];
-        }
-        if ($key === null) {
-            $anonymous = $this->anonymousPlans ??= new WeakMap();
-            if (isset($anonymous[$target])) {
-                return $anonymous[$target];
-            }
         }
 
         $usages = [];
@@ -89,13 +80,15 @@ final class AttributePlanBuilder
         $this->assertCustomRules($usages);
 
         $plan = new AttributePlan($target, $this->ordered($target, $usages));
-        if ($key !== null) {
-            return $this->namedPlans[$key] = $plan;
+        if ($key === null) {
+            // Closure parameters are intentionally not memoized. AttributePlan
+            // retains its target reflector, and ReflectionParameter retains the
+            // declaring Closure; caching such a plan would keep closure captures
+            // alive after the public call has completed.
+            return $plan;
         }
 
-        $anonymous = $this->anonymousPlans ??= new WeakMap();
-        $anonymous[$target] = $plan;
-        return $plan;
+        return $this->namedPlans[$key] = $plan;
     }
 
     private function synchronizeRegistryRevision(): void
@@ -105,7 +98,6 @@ final class AttributePlanBuilder
         }
 
         $this->namedPlans = [];
-        $this->anonymousPlans = new WeakMap();
         $this->registryRevision = $this->registry->revision;
     }
 
