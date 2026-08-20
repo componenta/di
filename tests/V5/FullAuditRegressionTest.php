@@ -163,6 +163,8 @@ test('persistent cache rejects readonly objects whose constructor state cannot b
             ],
         ], $path))->toThrow(CompilationException::class, 'public promoted property');
     } finally {
-        @unlink($path);
+        if (is_file($path)) {
+            unlink($path);
+        }
     }
 });
