@@ -133,12 +133,15 @@ final class ParameterTarget
     private static function declaringContext(ReflectionParameter $parameter): string
     {
         $function = $parameter->getDeclaringFunction();
-        $class = $parameter->getDeclaringClass();
+        if ($function->isClosure()) {
+            return 'Closure';
+        }
 
+        $class = $parameter->getDeclaringClass();
         if ($class !== null) {
             return sprintf('%s::%s()', $class->getName(), $function->getName());
         }
 
-        return $function->isClosure() ? 'Closure' : sprintf('%s()', $function->getName());
+        return sprintf('%s()', $function->getName());
     }
 }
