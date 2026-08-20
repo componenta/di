@@ -101,8 +101,14 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Run checks
-        run: composer check
+      - name: Check coding style
+        run: composer cs-check
+
+      - name: Run PHPStan
+        run: composer phpstan
+
+      - name: Run Pest
+        run: composer pest
 
   coverage:
     name: Coverage PHP 8.4
