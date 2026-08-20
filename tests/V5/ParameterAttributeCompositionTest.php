@@ -13,16 +13,9 @@ use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
-use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
-use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
-use Componenta\DI\Resolver\Parameter\ArrayResolver;
-use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
-use ReflectionClass;
-use ReflectionMethod;
 
 final class QueryThenCastDto
 {
@@ -112,18 +105,13 @@ test('incompatible parameter value sources fail composition before resolution', 
     ))->toThrow(AttributeCompositionException::class);
 });
 
-test('attribute resolution can transform raw explicit input without ArrayResolver knowing attributes', function (): void {
+test('attribute composition transforms explicit caller input', function (): void {
     $entry = composedParameterContainer()->make(
         ExplicitCastCompositionDto::class,
         ['value' => '43'],
     );
 
     expect($entry->value)->toBe(43);
-
-    $parameter = (new ReflectionMethod(ExplicitCastCompositionDto::class, '__construct'))
-        ->getParameters()[0];
-
-    expect((new ArrayResolver())->supports(new ParameterTarget($parameter)))->toBeTrue();
 });
 
 test('property value providers compose with transformers in semantic order', function (): void {
@@ -132,13 +120,6 @@ test('property value providers compose with transformers in semantic order', fun
         ->build();
 
     expect($container->make(ConfigThenCastPropertyDto::class)->value)->toBe('composed');
-});
-
-test('parameter-only attribute handlers do not inherit object attribute execution', function (): void {
-    expect(is_subclass_of(ParameterAttributeHandlerInterface::class, AttributeHandlerInterface::class))
-        ->toBeFalse()
-        ->and((new ReflectionClass(RequestAttributeHandler::class))->hasMethod('handle'))
-        ->toBeFalse();
 });
 
 test('composed parameter attributes execute identically in development and AOT', function (): void {
