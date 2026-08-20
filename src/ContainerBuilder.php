@@ -325,8 +325,6 @@ class ContainerBuilder
             $proxyFactory,
             $objects,
             $executor,
-            $attributes,
-            $parameters,
         );
         $bootstrap->initialize($entryResolver, $executor);
 
@@ -404,12 +402,7 @@ class ContainerBuilder
     ): array {
         $container = $this->build();
         $objects = $container->get(ObjectPipeline::class);
-        $attributes = $container->get(AttributeDefinitionRegistry::class);
-        $parameters = $container->get(ParametersResolver::class);
-        if (!$objects instanceof ObjectPipeline
-            || !$attributes instanceof AttributeDefinitionRegistry
-            || !$parameters instanceof ParametersResolver
-        ) {
+        if (!$objects instanceof ObjectPipeline) {
             throw new InvalidConfigurationException('Runtime compiler services are unavailable.');
         }
 
@@ -430,7 +423,6 @@ class ContainerBuilder
 
         return (new CompiledFactoryShardCompiler(
             new FactoryCodeGenerator(),
-            compiled_factory_pipeline_fingerprint($attributes, $parameters),
             objects: $objects,
         ))->compile($classes, $directory, $maxShardBytes, $namespace);
     }
@@ -460,8 +452,6 @@ class ContainerBuilder
         ProxyFactoryInterface $proxyFactory,
         ObjectPipeline $objects,
         CallableExecutorInterface $executor,
-        AttributeDefinitionRegistry $attributes,
-        ParametersResolver $parameters,
     ): EntryResolverInterface {
         return new CompositeResolver(
             new EntryFactoryResolver(
@@ -470,8 +460,6 @@ class ContainerBuilder
                 $proxyFactory,
                 $objects,
                 $executor,
-                $attributes,
-                $parameters,
                 $this->compiledFactoryBaseDir,
             ),
             new InvokableResolver($this->invokables),
