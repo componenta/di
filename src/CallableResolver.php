@@ -26,33 +26,29 @@ class CallableResolver implements CallableResolverInterface
     public function resolve(mixed $callable): callable
     {
         try {
-            return $this->resolveInternal($callable);
+            if ($callable instanceof \Closure) {
+                return $callable;
+            }
+
+            if (is_string($callable)) {
+                return $this->resolveString($callable);
+            }
+    
+            if (is_callable($callable)) {
+                return $callable;
+            }
+    
+            if (is_array($callable)) {
+                return $this->resolveArray($callable);
+            }
+
+            throw InvalidCallableException::forValue($callable);
+            
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
             throw InvalidCallableException::forValue($callable, $e);
         }
-    }
-
-    private function resolveInternal(mixed $callable): callable
-    {
-        if ($callable instanceof \Closure) {
-            return $callable;
-        }
-
-        if (is_string($callable)) {
-            return $this->resolveString($callable);
-        }
-
-        if (is_callable($callable)) {
-            return $callable;
-        }
-
-        if (is_array($callable)) {
-            return $this->resolveArray($callable);
-        }
-
-        throw InvalidCallableException::forValue($callable);
     }
 
     protected function resolveString(string $callable): callable
