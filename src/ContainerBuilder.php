@@ -60,6 +60,9 @@ use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
+use Componenta\DI\Internal\Resolver\Parameter\Request\LazyCasterProvider;
+use Componenta\DI\Internal\Resolver\Parameter\Request\LazyFactory;
+use Componenta\DI\Internal\Resolver\Parameter\Request\LazyValidationProvider;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -97,9 +100,6 @@ use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Parameter\Request\LazyCasterProvider;
-use Componenta\DI\Resolver\Parameter\Request\LazyFactory;
-use Componenta\DI\Resolver\Parameter\Request\LazyValidationProvider;
 use Componenta\DI\Resolver\Parameter\RequestContextResolver;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -343,14 +343,14 @@ class ContainerBuilder
             $attributes->defineCapability($policy);
         }
 
-        foreach ($this->attributeDefinitions as $spec) {
-            $attributes->register($this->materializeAttributeDefinition($spec, $container));
-        }
-
         if (!$this->replaceParameterResolvers) {
             foreach ($this->defaultParameterResolvers($container, $plans) as [$resolver, $priority]) {
                 $parameters->add($resolver, $priority);
             }
+        }
+
+        foreach ($this->attributeDefinitions as $spec) {
+            $attributes->register($this->materializeAttributeDefinition($spec, $container));
         }
 
         foreach ($this->parameterResolvers as [$spec, $priority]) {
@@ -402,7 +402,8 @@ class ContainerBuilder
     ): array {
         $container = $this->build();
         $objects = $container->get(ObjectPipeline::class);
-        if (!$objects instanceof ObjectPipeline) {
+        $plans = $container->get(AttributePlanBuilder::class);
+        if (!$objects instanceof ObjectPipeline || !$plans instanceof AttributePlanBuilder) {
             throw new InvalidConfigurationException('Runtime compiler services are unavailable.');
         }
 
@@ -416,7 +417,7 @@ class ContainerBuilder
             $excluded[$aliasResolver->resolve($id)] = true;
         }
 
-        $classes = (new AutowireClassGraph($this->aliases))->expand($entries, $excluded);
+        $classes = (new AutowireClassGraph($this->aliases, $plans))->expand($entries, $excluded);
         if ($classes === []) {
             return [];
         }
