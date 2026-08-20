@@ -33,7 +33,9 @@ final class CurrentUserProvider implements CurrentUserProviderInterface
         }
 
         if (!isset($this->fiberUsers[$fiber])) {
-            return $this->mainUser;
+            $user = $this->mainUser;
+            $this->fiberUsers[$fiber] = $user ?? $this->nullUser;
+            return $user;
         }
 
         $user = $this->fiberUsers[$fiber];
