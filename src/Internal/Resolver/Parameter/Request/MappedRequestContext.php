@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
+use Componenta\DI\Internal\ResolutionMetadata;
+
 /** Carries transformed HTTP DTO provenance through nested make(). @internal */
 final readonly class MappedRequestContext
 {
@@ -37,13 +39,15 @@ final readonly class MappedRequestContext
     }
 
     /**
+     * Removes mapped-request provenance and every other DI-owned metadata key
+     * before parameters cross a user extension boundary.
+     *
      * @param array<string|int,mixed> $context
      * @return array<string|int,mixed>
      */
     public static function strip(array $context): array
     {
-        unset($context[self::KEY]);
-        return $context;
+        return ResolutionMetadata::publicParameters($context);
     }
 
     public function contains(string $key): bool
