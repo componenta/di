@@ -25,7 +25,10 @@ final class ArrayTypedResolver implements ParameterResolverInterface
 
             $value = $context->provided[$typeName];
 
-            if (is_object($value) && $target->accepts($value)) {
+            if (is_object($value)
+                && $value instanceof $typeName
+                && $target->accepts($value)
+            ) {
                 return [$target->position, $value];
             }
         }
