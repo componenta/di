@@ -11,6 +11,7 @@ use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Exception\AttributeCompositionException;
+use ReflectionParameter;
 use ReflectionProperty;
 
 /** Enforces the dual creation/value-source semantics of #[Proxy] injection points. */
@@ -18,16 +19,20 @@ final readonly class ProxyCompositionRule implements AttributeCompositionRuleInt
 {
     public function validate(AttributeUsage $attribute, AttributeSet $set): void
     {
-        foreach ($set->all(ValueProvider::class) as $provider) {
-            if ($provider->attribute instanceof Make) {
-                continue;
-            }
+        if ($attribute->target instanceof ReflectionParameter
+            || $attribute->target instanceof ReflectionProperty
+        ) {
+            foreach ($set->all(ValueProvider::class) as $provider) {
+                if ($provider->attribute instanceof Make) {
+                    continue;
+                }
 
-            throw new AttributeCompositionException(sprintf(
-                '#[%s] cannot be combined with value provider #[%s] on the same target.',
-                $attribute->attribute::class,
-                $provider->attribute::class,
-            ));
+                throw new AttributeCompositionException(sprintf(
+                    '#[%s] cannot be combined with value provider #[%s] on the same target.',
+                    $attribute->attribute::class,
+                    $provider->attribute::class,
+                ));
+            }
         }
 
         if ($attribute->target instanceof ReflectionProperty
