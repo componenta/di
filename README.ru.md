@@ -126,7 +126,7 @@ protected function getFactories(): array
 
 ### Delegators
 
-Каждый service id соответствует pipeline-list. Callable pair — один вложенный элемент pipeline:
+Каждый service id соответствует pipeline-list:
 
 ```php
 protected function getDelegators(): array
@@ -140,7 +140,7 @@ protected function getDelegators(): array
 }
 ```
 
-Прямая pair `[MetricsDelegator::class, 'decorate']` не является однозначным pipeline и отклоняется config v3.
+Нативная callable pair вроде `[MetricsDelegator::class, 'decorate']` может быть передана напрямую как единственный delegator. Deferred service-method pair вроде `['metrics.delegator', 'decorate']` должна быть вложена в pipeline-list, чтобы не смешиваться с двумя строковыми delegators.
 
 ### Parameter resolvers
 
@@ -248,7 +248,7 @@ public function __invoke(
 }
 ```
 
-Голый `ServerRequestInterface` или `UriInterface` не имеет скрытой семантики current request. Framework integrations передают текущий request в resolution context по ключу `ServerRequestInterface::class`, а request-aware атрибуты явно используют этот transport.
+Голый `ServerRequestInterface` или `UriInterface` не имеет скрытой семантики current request. Framework integrations передают текущий request в resolution context по ключу `ServerRequestInterface::class`, а request-aware атрибуты явно используют этот transport. Transport key не считается generic typed override, в том числе внутри non-authoritative attribute pipeline; явные значения по имени или позиции параметра остаются допустимыми.
 
 Следующий код отклоняется при композиции attribute plan:
 
@@ -286,6 +286,8 @@ final class Handler
 Request attributes поддерживают scalar extraction и object mapping из PSR-7 request. Источники: query parameters, payload, headers, cookies, request attributes, server parameters и uploaded files. Source conflicts выявляются явно; mapped values могут использовать lazy casting и validation providers.
 
 Для typed DTO mapping DI валидирует request data, применяет mapper transformations и создаёт DTO через `FactoryInterface::make()`. Parameters с `ParameterSourceAttributeInterface` защищены от подмены mapped request data.
+
+`MapRequestAttributes` возвращает полный bag request attributes, когда наследуемый selector `$attributes` пуст; subclasses могут задать в `$attributes` явный whitelist. `MapUploadedFiles` использует такую же семантику через `$files`. `['*']` явно выбирает весь соответствующий bag, и wildcard должен быть единственным selector.
 
 ## Custom attributes
 
@@ -357,7 +359,7 @@ Provider mode и cache mode создают финальный normalized runtime
 
 ## External containers
 
-Built container может разрешать entries из внешних PSR-11 containers. External lookup участвует в cycle protection.
+Built container может разрешать entries из внешних PSR-11 containers. External lookup участвует в cycle protection и не может подменять protected DI core ids, включая aliases, canonical target которых является protected id.
 
 ## Exceptions
 
