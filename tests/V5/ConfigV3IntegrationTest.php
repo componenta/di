@@ -101,8 +101,9 @@ test('integer application keys survive DI normalization and cache bootstrap with
     }
 });
 
-test('DI config key facade exactly follows config v3 schema', function (): void {
-    expect(ConfigKey::dependencyKeys())->toBe(BaseConfigKey::dependencyKeys())
+test('DI config key inherits the shared config v3 schema', function (): void {
+    expect(is_subclass_of(ConfigKey::class, BaseConfigKey::class))->toBeTrue()
+        ->and(ConfigKey::dependencyKeys())->toBe(BaseConfigKey::dependencyKeys())
         ->and(ConfigKey::ATTRIBUTE_DEFINITIONS)->toBe(BaseConfigKey::ATTRIBUTE_DEFINITIONS)
         ->and(ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE)->toBe(BaseConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE)
         ->and(ConfigKey::ATTRIBUTE_CAPABILITIES)->toBe(BaseConfigKey::ATTRIBUTE_CAPABILITIES);
