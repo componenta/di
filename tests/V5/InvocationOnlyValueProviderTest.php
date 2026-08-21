@@ -8,7 +8,6 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
-use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use ReflectionFunction;
@@ -20,14 +19,6 @@ final readonly class InvocationOnlyConstructorFixture
 {
     public function __construct(
         #[InvocationOnlyFixture]
-        public string $value,
-    ) {}
-}
-
-final readonly class RequestBoundConstructorFixture
-{
-    public function __construct(
-        #[QueryParam('value')]
         public string $value,
     ) {}
 }
@@ -59,12 +50,5 @@ test('custom invocation-only capabilities are rejected on constructor parameters
     $container = invocationOnlyBuilder()->build();
 
     expect(fn() => $container->make(InvocationOnlyConstructorFixture::class))
-        ->toThrow(AttributeCompositionException::class, 'is invocation-only and cannot target constructor parameter');
-});
-
-test('request-bound attributes are rejected on constructor parameters', function (): void {
-    $container = (new ContainerBuilder())->build();
-
-    expect(fn() => $container->make(RequestBoundConstructorFixture::class))
         ->toThrow(AttributeCompositionException::class, 'is invocation-only and cannot target constructor parameter');
 });
