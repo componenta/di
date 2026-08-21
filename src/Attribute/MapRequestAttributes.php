@@ -14,9 +14,12 @@ class MapRequestAttributes extends RequestMapper implements RequestDataExtractor
 
     public function extract(ServerRequestInterface $request): array
     {
-        return $this->mergeRequestData([
-            ...$this->extractSharedSources($request),
-            'request attributes' => $request->getAttributes(),
-        ]);
+        $sources = $this->extractSharedSources($request);
+
+        if ($this->attributes === []) {
+            $sources['request attributes'] = $request->getAttributes();
+        }
+
+        return $this->mergeRequestData($sources);
     }
 }
