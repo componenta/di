@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Parameter;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -88,6 +89,10 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
         }
 
         foreach ($target->typeNames as $typeName) {
+            if (RequestParameter::isTransportType($typeName)) {
+                continue;
+            }
+
             if (!isset($context->provided[$typeName]) || !array_key_exists($typeName, $context->provided)) {
                 continue;
             }
