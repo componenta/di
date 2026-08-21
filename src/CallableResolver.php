@@ -33,17 +33,16 @@ class CallableResolver implements CallableResolverInterface
             if (is_string($callable)) {
                 return $this->resolveString($callable);
             }
-    
+
             if (is_callable($callable)) {
                 return $callable;
             }
-    
+
             if (is_array($callable)) {
                 return $this->resolveArray($callable);
             }
 
             throw InvalidCallableException::forValue($callable);
-            
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
