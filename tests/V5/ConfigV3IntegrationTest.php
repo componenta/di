@@ -66,6 +66,41 @@ test('provider and DI cache paths preserve the same config v3 runtime environmen
     }
 });
 
+test('integer application keys survive DI normalization and cache bootstrap without reindexing', function (): void {
+    $environment = new Environment([]);
+    $application = [
+        404 => 'not-found',
+        500 => 'server-error',
+    ];
+    $dependencies = [
+        ConfigKey::SERVICES => ['configured.service' => 'ready'],
+    ];
+
+    $providerContainer = ContainerBuilder::configure(new Config([
+        404 => 'not-found',
+        500 => 'server-error',
+        ConfigKey::DEPENDENCIES => $dependencies,
+    ], $environment))->build();
+
+    $cachedContainer = ContainerBuilder::configureFromCache(
+        new Config($application, $environment),
+        [
+            'version' => ContainerBuilder::CACHE_VERSION,
+            ConfigKey::DEPENDENCIES => ContainerBuilder::normalizeDependencies($dependencies),
+        ],
+    )->build();
+
+    foreach ([$providerContainer, $cachedContainer] as $container) {
+        $runtimeConfig = $container->get(Config::class);
+
+        expect($runtimeConfig)->toBeInstanceOf(Config::class)
+            ->and($runtimeConfig->get(404))->toBe('not-found')
+            ->and($runtimeConfig->get(500))->toBe('server-error')
+            ->and($runtimeConfig->has(0))->toBeFalse()
+            ->and($runtimeConfig->environment)->toBe($environment);
+    }
+});
+
 test('DI config key facade exactly follows config v3 schema', function (): void {
     expect(ConfigKey::dependencyKeys())->toBe(BaseConfigKey::dependencyKeys())
         ->and(ConfigKey::ATTRIBUTE_DEFINITIONS)->toBe(BaseConfigKey::ATTRIBUTE_DEFINITIONS)
