@@ -40,6 +40,14 @@ jobs:
           ref: main
           path: .ci/config
 
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -55,6 +63,12 @@ jobs:
         run: >-
           composer config repositories.componenta-config
           '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -94,6 +108,14 @@ jobs:
           ref: main
           path: .ci/config
 
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -110,6 +132,12 @@ jobs:
         run: >-
           composer config repositories.componenta-config
           '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -133,6 +161,14 @@ jobs:
           ref: main
           path: .ci/config
 
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -148,6 +184,12 @@ jobs:
         run: >-
           composer config repositories.componenta-config
           '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -183,6 +225,14 @@ jobs:
           ref: main
           path: .ci/config
 
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
       - name: Checkout v4.0.10 baseline
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -204,6 +254,12 @@ jobs:
         run: >-
           composer config repositories.componenta-config
           '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
 
       - name: Install v5 dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
