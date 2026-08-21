@@ -548,7 +548,7 @@ class ContainerBuilder
             $registry->register(new AttributeDefinition(
                 $attribute,
                 handler: $request,
-                capabilities: [ValueProvider::class, InvocationOnlyValueProvider::class],
+                capabilities: [ValueProvider::class],
             ));
         }
 
