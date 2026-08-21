@@ -6,8 +6,8 @@ namespace Componenta\DI\Attribute;
 
 use Attribute;
 
-/** Provides a target value by executing a DI-aware callable. */
-#[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
+/** Initializes a property value by executing a DI-aware callable. */
+#[Attribute(Attribute::TARGET_PROPERTY)]
 final readonly class Init
 {
     /** @param array<string|int, mixed> $params */
