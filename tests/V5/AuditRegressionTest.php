@@ -104,7 +104,7 @@ test('an aliased current user provider service is not replaced by the default pr
     expect($container->get(CurrentUserProviderInterface::class))->toBe($provider);
 });
 
-test('lazy service factories keep the v4 ContainerValue ABI', function (): void {
+test('lazy service factories use the current ContainerValue runtime ABI', function (): void {
     $factory = new AuditLazyFactory();
     $container = (new ContainerBuilder())
         ->addFactory('audit.lazy', $factory)
