@@ -9,7 +9,6 @@ use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
-use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -25,21 +24,6 @@ final readonly class AuditMappedFactoryEnvelope
         #[MapRequestPayload]
         public AuditMappedFactoryDto $dto,
     ) {}
-}
-
-final class AuditCurrentUserProvider implements CurrentUserProviderInterface
-{
-    private ?object $user = null;
-
-    public function getUser(): ?object
-    {
-        return $this->user;
-    }
-
-    public function setUser(?object $user): void
-    {
-        $this->user = $user;
-    }
 }
 
 final class AuditLazyFactory implements LazyServiceFactoryInterface
@@ -92,16 +76,6 @@ test('mapped request provenance stays internal when a DTO is created by a user f
     ));
 
     expect($internalKeys)->toBe([]);
-});
-
-test('an aliased current user provider service is not replaced by the default provider', function (): void {
-    $provider = new AuditCurrentUserProvider();
-    $container = (new ContainerBuilder())
-        ->addAlias('audit.current-user-provider', CurrentUserProviderInterface::class)
-        ->addService('audit.current-user-provider', $provider)
-        ->build();
-
-    expect($container->get(CurrentUserProviderInterface::class))->toBe($provider);
 });
 
 test('lazy service factories use the current ContainerValue runtime ABI', function (): void {

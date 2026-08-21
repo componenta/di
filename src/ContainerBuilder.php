@@ -15,6 +15,7 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\Attribute\Composition\Capability\CreationStrategy;
+use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
@@ -23,7 +24,6 @@ use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Cookie;
 use Componenta\DI\Attribute\CurrentRequest;
 use Componenta\DI\Attribute\CurrentUri;
-use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Header;
@@ -71,7 +71,6 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
 use Componenta\DI\Resolver\Attribute\Handler\ConfigHandler;
-use Componenta\DI\Resolver\Attribute\Handler\CurrentUserHandler;
 use Componenta\DI\Resolver\Attribute\Handler\EntryIdHandler;
 use Componenta\DI\Resolver\Attribute\Handler\EnvHandler;
 use Componenta\DI\Resolver\Attribute\Handler\InitHandler;
@@ -81,8 +80,6 @@ use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
-use Componenta\DI\Resolver\CurrentUserProvider;
-use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\FactoryResolver as EntryFactoryResolver;
@@ -217,6 +214,7 @@ class ContainerBuilder
         $builder->compiledFactoryBaseDir = $baseDir;
         return $builder;
     }
+
     /**
      * @param array<array-key,mixed> $dependencies
      * @return array<string,mixed>
@@ -274,11 +272,6 @@ class ContainerBuilder
         $cache = new EntryCache();
         foreach ($this->services as $id => $service) {
             $cache->putBase($aliases->resolve($id), $service);
-        }
-        if (!$this->hasBinding(CurrentUserProviderInterface::class)
-            && !$cache->tryGetBase(CurrentUserProviderInterface::class, $registeredCurrentUserProvider)
-        ) {
-            $cache->putBase(CurrentUserProviderInterface::class, new CurrentUserProvider());
         }
 
         $bootstrap = new ContainerBootstrapState();
@@ -503,8 +496,6 @@ class ContainerBuilder
         $cast = $handlers[CastHandler::class];
         /** @var ConfigHandler $config */
         $config = $handlers[ConfigHandler::class];
-        /** @var CurrentUserHandler $currentUser */
-        $currentUser = $handlers[CurrentUserHandler::class];
         /** @var EntryIdHandler $entryId */
         $entryId = $handlers[EntryIdHandler::class];
         /** @var EnvHandler $env */
@@ -518,9 +509,14 @@ class ContainerBuilder
             [ConfigAttribute::class, $config, [ValueProvider::class]],
             [Env::class, $env, [ValueProvider::class]],
             [EntryId::class, $entryId, [ValueProvider::class]],
-            [CurrentRequest::class, $request, [AuthoritativeValueProvider::class]],
-            [CurrentUri::class, $request, [AuthoritativeValueProvider::class]],
-            [CurrentUser::class, $currentUser, [AuthoritativeValueProvider::class]],
+            [CurrentRequest::class, $request, [
+                AuthoritativeValueProvider::class,
+                InvocationOnlyValueProvider::class,
+            ]],
+            [CurrentUri::class, $request, [
+                AuthoritativeValueProvider::class,
+                InvocationOnlyValueProvider::class,
+            ]],
             [Make::class, $make, [ValueProvider::class]],
             [Inject::class, new InjectHandler($container), [ValueProvider::class]],
             [Init::class, new InitHandler($container), [ValueProvider::class]],
@@ -603,7 +599,6 @@ class ContainerBuilder
         return [
             CastHandler::class => new CastHandler($container),
             ConfigHandler::class => new ConfigHandler($container),
-            CurrentUserHandler::class => new CurrentUserHandler($container),
             EntryIdHandler::class => new EntryIdHandler($container),
             EnvHandler::class => new EnvHandler($container),
             MakeHandler::class => new MakeHandler($container, $proxyFactory),

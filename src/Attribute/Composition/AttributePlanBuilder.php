@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -19,7 +20,7 @@ use Throwable;
 /** Builds, validates, orders and memoizes the semantic attribute plan for stable targets. */
 final class AttributePlanBuilder
 {
-    public const int FORMAT_VERSION = 5;
+    public const int FORMAT_VERSION = 6;
 
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
@@ -73,6 +74,7 @@ final class AttributePlanBuilder
         }
 
         $this->assertCapabilityCardinality($target, $usages);
+        $this->assertInvocationOnlyComposition($target, $usages);
         $this->assertReadonlyPropertyComposition($target, $usages);
         $this->assertParameterHandlerComposition($target, $usages);
         $this->assertDependencies($target, $usages);
@@ -236,6 +238,50 @@ final class AttributePlanBuilder
                     static fn(AttributeUsage $usage): string => '#[' . $usage->attribute::class . ']',
                     $members,
                 )),
+            ));
+        }
+    }
+
+    /**
+     * Invocation-only values belong to the current callable execution and must
+     * not be captured by constructor-created object state.
+     *
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
+    private function assertInvocationOnlyComposition(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ): void {
+        $invocationOnly = null;
+        foreach ($usages as $usage) {
+            foreach ($usage->definition->capabilities as $capability) {
+                if (is_a($capability, InvocationOnlyValueProvider::class, true)) {
+                    $invocationOnly = $usage;
+                    break 2;
+                }
+            }
+        }
+
+        if ($invocationOnly === null) {
+            return;
+        }
+
+        if (!$target instanceof ReflectionParameter) {
+            throw new AttributeCompositionException(sprintf(
+                '#[%s] is invocation-only and can target callable parameters only; got %s.',
+                $invocationOnly->attribute::class,
+                self::targetName($target),
+            ));
+        }
+
+        $function = $target->getDeclaringFunction();
+        if ($function instanceof ReflectionMethod && $function->isConstructor()) {
+            throw new AttributeCompositionException(sprintf(
+                '#[%s] is invocation-only and cannot target constructor parameter $%s of %s::__construct().',
+                $invocationOnly->attribute::class,
+                $target->getName(),
+                $function->getDeclaringClass()->getName(),
             ));
         }
     }
@@ -526,7 +572,7 @@ final class AttributePlanBuilder
                 $target->getName(),
             ),
             $target instanceof ReflectionMethod => sprintf(
-                'method:%s::%s',
+                'method:%s::%s()',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),

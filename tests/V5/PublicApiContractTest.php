@@ -9,7 +9,6 @@ use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Cookie;
 use Componenta\DI\Attribute\CurrentRequest;
 use Componenta\DI\Attribute\CurrentUri;
-use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Header;
@@ -80,7 +79,6 @@ test('attribute constructors keep their named-argument contract', function (
     'Cast' => [Cast::class, ['name', 'default']],
     'CurrentRequest' => [CurrentRequest::class, []],
     'CurrentUri' => [CurrentUri::class, []],
-    'CurrentUser' => [CurrentUser::class, ['type']],
     'SetUp' => [SetUp::class, ['method', 'params']],
     'Proxy' => [Proxy::class, ['class']],
     'QueryParam' => [QueryParam::class, ['name', 'default', 'cast']],

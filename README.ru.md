@@ -2,7 +2,7 @@
 
 `componenta/di` — PSR-11 DI-контейнер для PHP 8.4+ с autowiring, декларативной конфигурацией, композицией атрибутов, lazy objects и AOT-компиляцией factories.
 
-DI v5 использует `componenta/config` v3 как configuration runtime. `ContainerBuilder` создаёт финальный runtime `Config` с нормализованными DI dependencies, сохраняя **тот же объект `Environment`**, который передало приложение. Runtime и DI-cache пути используют одну dependency schema.
+DI v5 использует `componenta/config` v3 как configuration runtime. `ContainerBuilder` создаёт финальный runtime `Config` с нормализованными DI dependencies, сохраняя тот же объект `Environment`, который передало приложение. Runtime и DI-cache пути используют одну dependency schema.
 
 ## Установка
 
@@ -179,13 +179,14 @@ Descriptor разрешается через `Config::$environment` при чт�
 $shared = $container->get(Service::class);
 $exists = $container->has(Service::class);
 $fresh = $container->make(Service::class);
+$result = $container->call([$controller, 'show'], ['id' => 42]);
 ```
 
-`get()` выполняет shared/cached resolution. `make()` выполняет fresh resolution. Aliases canonicalize-ятся до resolution, circular/concurrent paths завершаются явными исключениями.
+`get()` выполняет shared/cached resolution. `make()` выполняет fresh resolution. `call()` разрешает параметры callable тем же parameter pipeline. Aliases canonicalize-ятся до resolution, circular/concurrent paths завершаются явными исключениями.
 
 ## Autowiring и parameter resolution
 
-Concrete class может быть reflection-resolved при отсутствии explicit binding. Constructor parameters проходят через единый priority pipeline:
+Concrete class может быть reflection-resolved при отсутствии explicit binding. Constructor и callable parameters проходят через единый priority pipeline:
 
 ```text
 1200  parameter attributes
@@ -200,14 +201,26 @@ Custom resolvers могут расширить или заменить этот 
 
 ## Attributes
 
-DI v5 композирует attributes через capabilities: value providers, authoritative value providers, value transformers, creation strategies, constructor policies и lifecycle hooks.
+DI v5 композирует attributes через semantic capabilities. Built-in capabilities:
+
+```text
+ValueProvider
+AuthoritativeValueProvider
+InvocationOnlyValueProvider
+ValueTransformer
+CreationStrategy
+ConstructorPolicy
+LifecycleHook
+```
+
+`InvocationOnlyValueProvider` помечает значения текущего execution context, допустимые только при вызове callable. Атрибут с этой capability отклоняется на constructor parameter, чтобы request-local значение не могло случайно стать состоянием объекта. Интеграционные пакеты могут использовать ту же capability для собственных contextual attributes.
 
 Built-in attributes:
 
 ```text
 #[Config] #[Env] #[EntryId] #[Inject] #[Make]
 #[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast]
-#[CurrentRequest] #[CurrentUri] #[CurrentUser]
+#[CurrentRequest] #[CurrentUri]
 #[Header] #[Cookie] #[QueryParam] #[PayloadParam]
 #[RequestAttribute] #[ServerParam] #[UploadedFile]
 #[MapRequest] #[MapQueryString] #[MapRequestPayload]
@@ -215,7 +228,54 @@ Built-in attributes:
 #[MapServerParams] #[MapUploadedFiles]
 ```
 
-Parameter attributes выполняются через parameter resolver pipeline. Object lifecycle поведение выполняется через attribute composition pipeline.
+Authentication-specific context не является ответственностью DI core. Пакеты вроде `componenta/auth-app` могут регистрировать свои invocation-only атрибуты через `AttributeDefinition`.
+
+### Текущий HTTP context
+
+`#[CurrentRequest]` и `#[CurrentUri]` — authoritative invocation-only value sources:
+
+```php
+use Componenta\DI\Attribute\CurrentRequest;
+use Componenta\DI\Attribute\CurrentUri;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UriInterface;
+
+public function __invoke(
+    #[CurrentRequest] ServerRequestInterface $request,
+    #[CurrentUri] UriInterface $uri,
+): ResponseInterface {
+    // $uri === $request->getUri()
+}
+```
+
+Голый `ServerRequestInterface` или `UriInterface` не имеет скрытой семантики current request. Framework integrations передают текущий request в resolution context по ключу `ServerRequestInterface::class`, а request-aware атрибуты явно используют этот transport.
+
+Следующий код отклоняется при композиции attribute plan:
+
+```php
+final class Service
+{
+    public function __construct(
+        #[CurrentRequest] ServerRequestInterface $request,
+    ) {}
+}
+```
+
+То же правило применяется к custom attributes с `InvocationOnlyValueProvider` и одинаково действует в runtime reflection и AOT preparation.
+
+### Property injection
+
+`#[Inject]` явно разрешает class-typed property из контейнера:
+
+```php
+final class Handler
+{
+    #[Inject]
+    private LoggerInterface $logger;
+}
+```
+
+Записанное состояние живёт столько же, сколько receiving object. DI не пытается угадывать application-specific lifetime обычных зависимостей; для execution-context значений используется `InvocationOnlyValueProvider`, если их удержание противоречит семантике.
 
 ## `#[SetUp]`
 
@@ -224,6 +284,34 @@ Parameter attributes выполняются через parameter resolver pipeli
 ## Request mapping
 
 Request attributes поддерживают scalar extraction и object mapping из PSR-7 request. Источники: query parameters, payload, headers, cookies, request attributes, server parameters и uploaded files. Source conflicts выявляются явно; mapped values могут использовать lazy casting и validation providers.
+
+Для typed DTO mapping DI валидирует request data, применяет mapper transformations и создаёт DTO через `FactoryInterface::make()`. Parameters с `ParameterSourceAttributeInterface` защищены от подмены mapped request data.
+
+## Custom attributes
+
+Extension attributes регистрируются через `AttributeDefinition`:
+
+```php
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
+use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
+
+protected function getAttributeDefinitions(): array
+{
+    return [
+        static fn(Psr\Container\ContainerInterface $container) => new AttributeDefinition(
+            CurrentTenant::class,
+            $container->get(CurrentTenantHandler::class),
+            [
+                AuthoritativeValueProvider::class,
+                InvocationOnlyValueProvider::class,
+            ],
+        ),
+    ];
+}
+```
+
+Capabilities участвуют в композиции, ordering и validation до выполнения handlers.
 
 ## Persistent caches
 
@@ -273,7 +361,7 @@ Built container может разрешать entries из внешних PSR-11
 
 ## Exceptions
 
-Основные ошибки представлены `InvalidConfigurationException`, `ResolutionException`, `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException` и `CompilationException`.
+Основные ошибки представлены `InvalidConfigurationException`, `AttributeCompositionException`, `ResolutionException`, `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException` и `CompilationException`.
 
 `has()` намеренно non-throwing и возвращает `false`, если entry нельзя безопасно разрешить.
 

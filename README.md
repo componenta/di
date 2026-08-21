@@ -179,13 +179,14 @@ The descriptor is resolved against `Config::$environment` when read. DI `#[Env]`
 $shared = $container->get(Service::class);
 $exists = $container->has(Service::class);
 $fresh = $container->make(Service::class);
+$result = $container->call([$controller, 'show'], ['id' => 42]);
 ```
 
-`get()` performs shared/cached resolution. `make()` performs fresh resolution. Aliases are canonicalized before resolution, and circular/concurrent paths fail explicitly.
+`get()` performs shared/cached resolution. `make()` performs fresh resolution. `call()` resolves callable arguments through the same parameter pipeline. Aliases are canonicalized before resolution, and circular/concurrent paths fail explicitly.
 
 ## Autowiring and parameter resolution
 
-Concrete classes can be reflection-resolved when no explicit binding exists. Constructor parameters use one priority pipeline:
+Concrete classes can be reflection-resolved when no explicit binding exists. Constructor and callable parameters use one priority pipeline:
 
 ```text
 1200  parameter attributes
@@ -200,14 +201,26 @@ Custom resolvers can extend or replace this pipeline.
 
 ## Attributes
 
-DI v5 composes attributes by capabilities: value providers, authoritative value providers, value transformers, creation strategies, constructor policies and lifecycle hooks.
+DI v5 composes attributes by semantic capabilities. Built-in capabilities include:
+
+```text
+ValueProvider
+AuthoritativeValueProvider
+InvocationOnlyValueProvider
+ValueTransformer
+CreationStrategy
+ConstructorPolicy
+LifecycleHook
+```
+
+`InvocationOnlyValueProvider` marks execution-context values that are valid only while invoking a callable. A registered attribute with this capability is rejected on constructor parameters, so request-local state cannot accidentally become object state. Integration packages can reuse the capability for their own contextual attributes.
 
 Built-in attributes include:
 
 ```text
 #[Config] #[Env] #[EntryId] #[Inject] #[Make]
 #[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast]
-#[CurrentRequest] #[CurrentUri] #[CurrentUser]
+#[CurrentRequest] #[CurrentUri]
 #[Header] #[Cookie] #[QueryParam] #[PayloadParam]
 #[RequestAttribute] #[ServerParam] #[UploadedFile]
 #[MapRequest] #[MapQueryString] #[MapRequestPayload]
@@ -215,7 +228,54 @@ Built-in attributes include:
 #[MapServerParams] #[MapUploadedFiles]
 ```
 
-Parameter attributes run through the parameter resolver pipeline. Object lifecycle behavior runs through the attribute composition pipeline.
+Authentication-specific context does not belong to DI core. Packages such as `componenta/auth-app` can register their own invocation-only attributes through `AttributeDefinition`.
+
+### Current HTTP context
+
+`#[CurrentRequest]` and `#[CurrentUri]` are authoritative invocation-only value sources:
+
+```php
+use Componenta\DI\Attribute\CurrentRequest;
+use Componenta\DI\Attribute\CurrentUri;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UriInterface;
+
+public function __invoke(
+    #[CurrentRequest] ServerRequestInterface $request,
+    #[CurrentUri] UriInterface $uri,
+): ResponseInterface {
+    // $uri === $request->getUri()
+}
+```
+
+A bare `ServerRequestInterface` or `UriInterface` parameter has no hidden current-request meaning. Framework integrations pass the current request through the resolution context under `ServerRequestInterface::class`; request-aware attributes consume that transport explicitly.
+
+The following is rejected during attribute-plan composition:
+
+```php
+final class Service
+{
+    public function __construct(
+        #[CurrentRequest] ServerRequestInterface $request,
+    ) {}
+}
+```
+
+The same rule applies to custom attributes registered with `InvocationOnlyValueProvider` and is shared by runtime reflection and AOT preparation.
+
+### Property injection
+
+`#[Inject]` explicitly resolves a class-typed property from the container:
+
+```php
+final class Handler
+{
+    #[Inject]
+    private LoggerInterface $logger;
+}
+```
+
+Injected object state naturally lives as long as the receiving object. DI does not infer application-specific lifetimes for ordinary dependencies; execution-context values use `InvocationOnlyValueProvider` when retaining them would contradict their semantics.
 
 ## `#[SetUp]`
 
@@ -224,6 +284,34 @@ Parameter attributes run through the parameter resolver pipeline. Object lifecyc
 ## Request mapping
 
 Request attributes support scalar extraction and object mapping from PSR-7 requests. Sources include query parameters, payload, headers, cookies, request attributes, server parameters and uploaded files. Source conflicts are detected explicitly; mapped values can use lazy casting and validation providers.
+
+For typed DTO mapping, DI validates request data, applies mapper transformations and creates the DTO through `FactoryInterface::make()`. Parameters declared with `ParameterSourceAttributeInterface` remain protected from mapped-data spoofing.
+
+## Custom attributes
+
+Register extension attributes through `AttributeDefinition`:
+
+```php
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
+use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
+
+protected function getAttributeDefinitions(): array
+{
+    return [
+        static fn(Psr\Container\ContainerInterface $container) => new AttributeDefinition(
+            CurrentTenant::class,
+            $container->get(CurrentTenantHandler::class),
+            [
+                AuthoritativeValueProvider::class,
+                InvocationOnlyValueProvider::class,
+            ],
+        ),
+    ];
+}
+```
+
+Capabilities participate in composition, ordering and validation before handlers execute.
 
 ## Persistent caches
 
@@ -273,7 +361,7 @@ A built container can resolve entries from external PSR-11 containers. External 
 
 ## Exceptions
 
-Core failures use Componenta DI exceptions including `InvalidConfigurationException`, `ResolutionException`, `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException` and `CompilationException`.
+Core failures use Componenta DI exceptions including `InvalidConfigurationException`, `AttributeCompositionException`, `ResolutionException`, `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException` and `CompilationException`.
 
 `has()` is intentionally non-throwing and returns `false` when an entry cannot be resolved safely.
 
