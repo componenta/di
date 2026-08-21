@@ -105,16 +105,6 @@ final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeH
         string $declaringContext,
     ): mixed {
         $environment = $this->environment();
-        if ($environment === null) {
-            if ($hasDefault) {
-                return $default;
-            }
-
-            throw new ResolutionException(sprintf(
-                'Environment is not available in Config while resolving %s.',
-                $declaringContext,
-            ));
-        }
 
         if (!$environment->has($envName)) {
             if ($hasDefault) {
@@ -138,7 +128,7 @@ final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeH
         };
     }
 
-    private function environment(): ?Environment
+    private function environment(): Environment
     {
         $config = $this->container->get(Config::class);
         if (!$config instanceof Config) {
