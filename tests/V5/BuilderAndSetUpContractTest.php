@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
 use Componenta\Config\Environment;
+use Componenta\Config\EnvironmentEntry;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
@@ -20,32 +21,42 @@ final class SetUpDependency {}
     'name' => new ConfigAttribute('name'),
     'dependency' => new EntryId(SetUpDependency::class),
     'flag' => new Env('FEATURE_FLAG', 'fallback'),
+    'runtimeFlag' => new EnvironmentEntry('FEATURE_FLAG', 'fallback'),
 ])]
-final class SetUpCompatibilityTarget
+final class SetUpContractTarget
 {
     public string $name = '';
     public ?SetUpDependency $dependency = null;
     public string $flag = '';
+    public string $runtimeFlag = '';
 
-    public function configure(string $name, SetUpDependency $dependency, string $flag): void
-    {
+    public function configure(
+        string $name,
+        SetUpDependency $dependency,
+        string $flag,
+        string $runtimeFlag,
+    ): void {
         $this->name = $name;
         $this->dependency = $dependency;
         $this->flag = $flag;
+        $this->runtimeFlag = $runtimeFlag;
     }
 }
 
-test('SetUp descriptors preserve v4 Config Env and EntryId resolution semantics', function (): void {
+test('SetUp resolves current config v3 and DI value descriptors', function (): void {
+    $environment = new Environment(['FEATURE_FLAG' => 'enabled']);
     $container = ContainerBuilder::configure(new Config(
         ['name' => 'configured'],
-        new Environment(['FEATURE_FLAG' => 'enabled']),
+        $environment,
     ))->build();
 
-    $entry = $container->make(SetUpCompatibilityTarget::class);
+    $entry = $container->make(SetUpContractTarget::class);
 
     expect($entry->name)->toBe('configured')
         ->and($entry->dependency)->toBeInstanceOf(SetUpDependency::class)
-        ->and($entry->flag)->toBe('enabled');
+        ->and($entry->flag)->toBe('enabled')
+        ->and($entry->runtimeFlag)->toBe('enabled')
+        ->and($container->get(Environment::class))->toBe($environment);
 });
 
 test('dependency normalization rejects factory ids made unreachable by aliases', function (): void {

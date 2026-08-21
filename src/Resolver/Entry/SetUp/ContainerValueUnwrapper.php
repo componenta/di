@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Entry\SetUp;
 use Componenta\Config\ConfigEntry;
 use Componenta\Config\ContainerEntry;
 use Componenta\Config\ContainerValue;
+use Componenta\Config\EnvironmentEntry;
 use Componenta\Config\LazyValue;
 
 /** Resolves Componenta config value objects used by #[SetUp]. */
@@ -18,6 +19,7 @@ final readonly class ContainerValueUnwrapper implements SetUpValueUnwrapperInter
     {
         return $value instanceof ContainerEntry
             || $value instanceof ConfigEntry
+            || $value instanceof EnvironmentEntry
             || $value instanceof LazyValue;
     }
 
@@ -26,6 +28,7 @@ final readonly class ContainerValueUnwrapper implements SetUpValueUnwrapperInter
         return match (true) {
             $value instanceof ContainerEntry => $value->resolve($this->container),
             $value instanceof ConfigEntry => $value->resolve($this->container->config),
+            $value instanceof EnvironmentEntry => $value->resolve($this->container->config->environment),
             $value instanceof LazyValue => $value->resolve($this->container),
             default => $value,
         };
