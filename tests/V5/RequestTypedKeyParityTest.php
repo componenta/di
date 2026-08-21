@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\CurrentRequest;
 use Componenta\DI\Attribute\CurrentUri;
 use Componenta\DI\Attribute\MapRequestPayload;
+use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Exception\ResolutionException;
@@ -71,6 +72,26 @@ final readonly class TypedMappedUriEnvelope
     ) {}
 }
 
+interface ProxyMappedSourceContract {}
+
+final readonly class ProxyMappedSourceValue implements ProxyMappedSourceContract {}
+
+final readonly class ProxyMappedSourceDto
+{
+    public function __construct(
+        #[Proxy(ProxyMappedSourceValue::class)]
+        public ProxyMappedSourceContract $service,
+    ) {}
+}
+
+final readonly class ProxyMappedSourceEnvelope
+{
+    public function __construct(
+        #[MapRequestPayload]
+        public ProxyMappedSourceDto $dto,
+    ) {}
+}
+
 interface TypedUnionLeft {}
 interface TypedUnionRight {}
 
@@ -118,10 +139,30 @@ test('mapped type keys cannot spoof explicit current request sources', function 
     ]))->toThrow(RequestParameterSourceConflictException::class);
 });
 
+test('mapped values cannot shadow Proxy parameter sources', function (): void {
+    $request = (new ServerRequest('POST', '/'))->withParsedBody([
+        'service' => new ProxyMappedSourceValue(),
+    ]);
+
+    expect(fn() => (new ContainerBuilder())->build()->make(
+        ProxyMappedSourceEnvelope::class,
+        [ServerRequestInterface::class => $request],
+    ))->toThrow(RequestParameterSourceConflictException::class);
+});
+
 test('ordinary programmatic typed explicit parameters remain valid', function (): void {
     $value = new TypedMappedSourceValue();
     $dto = (new ContainerBuilder())->build()->make(TypedMappedSourceDto::class, [
         TypedMappedSourceContract::class => $value,
+    ]);
+
+    expect($dto->service)->toBe($value);
+});
+
+test('ordinary programmatic explicit values can still override Proxy sources', function (): void {
+    $value = new ProxyMappedSourceValue();
+    $dto = (new ContainerBuilder())->build()->make(ProxyMappedSourceDto::class, [
+        'service' => $value,
     ]);
 
     expect($dto->service)->toBe($value);
