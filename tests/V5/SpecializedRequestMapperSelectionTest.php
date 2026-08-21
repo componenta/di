@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\MapRequestAttributes;
 use Componenta\DI\Attribute\MapUploadedFiles;
+use InvalidArgumentException;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
@@ -15,9 +16,19 @@ final class SelectedRequestAttributesFixture extends MapRequestAttributes
     protected array $attributes = ['trusted'];
 }
 
+final class InvalidRequestAttributesWildcardFixture extends MapRequestAttributes
+{
+    protected array $attributes = ['*', 'trusted'];
+}
+
 final class SelectedUploadedFilesFixture extends MapUploadedFiles
 {
     protected array $files = ['avatar'];
+}
+
+final class InvalidUploadedFilesWildcardFixture extends MapUploadedFiles
+{
+    protected array $files = ['*', 'avatar'];
 }
 
 function uploadedFileFixture(string $name): UploadedFileInterface
@@ -77,4 +88,15 @@ test('MapUploadedFiles exposes the full bag by default and honors descendant sel
         ->toBe(['avatar' => $avatar, 'private' => $private])
         ->and((new SelectedUploadedFilesFixture())->extract($request))
         ->toBe(['avatar' => $avatar]);
+});
+
+test('specialized mapper wildcards must be exclusive selectors', function (): void {
+    $request = (new ServerRequest('POST', '/'))
+        ->withAttribute('trusted', 'yes')
+        ->withUploadedFiles(['avatar' => uploadedFileFixture('avatar.txt')]);
+
+    expect(fn() => (new InvalidRequestAttributesWildcardFixture())->extract($request))
+        ->toThrow(InvalidArgumentException::class, 'Request attribute wildcard must be the only selector')
+        ->and(fn() => (new InvalidUploadedFilesWildcardFixture())->extract($request))
+        ->toThrow(InvalidArgumentException::class, 'Uploaded-file wildcard must be the only selector');
 });
