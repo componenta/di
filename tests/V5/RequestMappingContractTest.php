@@ -16,7 +16,7 @@ use Componenta\Validation\ValidatorInterface;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
-final readonly class RequestMappingCompatibilityDto
+final readonly class RequestMappingContractDto
 {
     /** @param array<string, mixed>|null $orderBy */
     public function __construct(
@@ -26,7 +26,7 @@ final readonly class RequestMappingCompatibilityDto
     ) {}
 }
 
-test('MapRequest preserves v4 mapping cast defaults sort and exclude capabilities', function (): void {
+test('MapRequest maps casts defaults sorts and excludes fields', function (): void {
     $request = (new ServerRequest('GET', '/items'))
         ->withQueryParams([
             'raw' => '42',
@@ -48,8 +48,8 @@ test('MapRequest preserves v4 mapping cast defaults sort and exclude capabilitie
                 cast: ['value' => 'int'],
                 sortMap: ['newest' => ['createdAt' => 'DESC']],
             )]
-            RequestMappingCompatibilityDto $dto,
-        ): RequestMappingCompatibilityDto => $dto,
+            RequestMappingContractDto $dto,
+        ): RequestMappingContractDto => $dto,
         [ServerRequestInterface::class => $request],
     );
 
@@ -98,7 +98,7 @@ test('MapRequest validates raw transport data before transformations', function 
 
         public function provide(string $entryId): ?ValidatorInterface
         {
-            return $entryId === RequestMappingCompatibilityDto::class ? $this->validator : null;
+            return $entryId === RequestMappingContractDto::class ? $this->validator : null;
         }
     };
     $request = (new ServerRequest('GET', '/items'))->withQueryParams(['raw' => '7']);
@@ -115,8 +115,8 @@ test('MapRequest validates raw transport data before transformations', function 
                 defaults: ['mode' => 'fallback', 'orderBy' => null],
                 cast: ['value' => 'int'],
             )]
-            RequestMappingCompatibilityDto $dto,
-        ): RequestMappingCompatibilityDto => $dto,
+            RequestMappingContractDto $dto,
+        ): RequestMappingContractDto => $dto,
         [ServerRequestInterface::class => $request],
     );
 

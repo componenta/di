@@ -15,7 +15,7 @@ use Psr\Http\Message\UriInterface;
 
 final class CallableDependency {}
 
-test('CallableExecutor keeps the v4 DI-aware call convenience API', function (): void {
+test('CallableExecutor exposes the DI-aware call API', function (): void {
     $container = (new ContainerBuilder())->build();
     $executor = $container->get(CallableExecutorInterface::class);
 
@@ -38,7 +38,7 @@ test('reflected zero-argument callables ignore unrelated provided parameters', f
     ))->toBe('ok');
 });
 
-test('container CallableInvokerInterface remains DI-aware as in v4', function (): void {
+test('container CallableInvokerInterface remains DI-aware', function (): void {
     $container = (new ContainerBuilder())->build();
     $invoker = $container->get(CallableInvokerInterface::class);
 
