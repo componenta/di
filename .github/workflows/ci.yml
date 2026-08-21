@@ -27,6 +27,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Checkout config v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
@@ -36,6 +43,11 @@ jobs:
 
       - name: Validate Composer metadata
         run: composer validate --strict
+
+      - name: Use config v3 workspace
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -67,6 +79,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Checkout config v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
@@ -77,6 +96,11 @@ jobs:
 
       - name: Validate Composer metadata
         run: composer validate --strict
+
+      - name: Use config v3 workspace
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -92,12 +116,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Checkout config v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
           coverage: pcov
           tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Use config v3 workspace
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -125,6 +164,13 @@ jobs:
       - name: Checkout v5
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Checkout config v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
       - name: Checkout v4 baseline
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -137,6 +183,14 @@ jobs:
           php-version: '8.4'
           coverage: none
           tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Use config v3 workspace
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
 
       - name: Install v5 dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
