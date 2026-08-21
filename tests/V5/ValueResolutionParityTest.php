@@ -110,7 +110,7 @@ test('Cast parameter resolution stays in the parameter resolver chain', function
     expect($dto->value)->toBe(42);
 });
 
-test('Cast keeps the v4 attribute-owned default contract', function (): void {
+test('Cast keeps its attribute-owned default contract', function (): void {
     $dto = parityValueContainer()->make(CastDefaultParityDto::class);
 
     expect($dto->value)->toBe(7);
@@ -133,7 +133,7 @@ test('Init remains a property attribute handler and executes once after instanti
         ->and(TestCounter::$value)->toBe(1);
 });
 
-test('explicit named parameters keep v4 precedence over Config parameter resolution', function (): void {
+test('explicit named parameters keep precedence over Config parameter resolution', function (): void {
     $container = ContainerBuilder::configure(new Config(['value' => 'configured']))->build();
 
     expect($container->make(ConfigOverrideParityDto::class, ['value' => 'explicit'])->value)
@@ -167,7 +167,7 @@ test('CurrentUser remains authoritative over caller-provided parameter values', 
         ->toBe($authenticated);
 });
 
-test('Env keeps v4 target-type conversion', function (): void {
+test('Env converts values for scalar target types', function (): void {
     $container = ContainerBuilder::configure(new Config(
         [],
         new Environment(['PORT' => '3306', 'DEBUG' => 'true']),
@@ -179,8 +179,8 @@ test('Env keeps v4 target-type conversion', function (): void {
         ->and($dto->debug)->toBeTrue();
 });
 
-test('Env keeps its v4 attribute default when Config has no Environment', function (): void {
-    $container = ContainerBuilder::configure(new Config([], null))->build();
+test('Env uses its attribute default when the runtime environment key is missing', function (): void {
+    $container = ContainerBuilder::configure(new Config([]))->build();
 
     expect($container->make(MissingEnvironmentDefaultParityDto::class)->port)->toBe(8080);
 });
