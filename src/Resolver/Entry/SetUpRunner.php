@@ -12,6 +12,7 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionParameter;
 use Reflector;
 
 /** Runtime owner of repeatable class-level #[SetUp]. */
@@ -47,6 +48,7 @@ final class SetUpRunner implements AttributeHandlerInterface
             $this->providedParameters(
                 $attribute,
                 $this->resolutionParameters->get($context),
+                $method,
             ),
         );
     }
@@ -58,11 +60,14 @@ final class SetUpRunner implements AttributeHandlerInterface
      * @param array<string|int,mixed> $context
      * @return array<string|int,mixed>
      */
-    public function providedParameters(SetUp $attribute, array $context = []): array
-    {
+    public function providedParameters(
+        SetUp $attribute,
+        array $context = [],
+        ?ReflectionMethod $method = null,
+    ): array {
         return ResolutionMetadata::mergePublicPreservingInternal(
             $context,
-            $this->unwrapParams($attribute->params),
+            $this->unwrapParams($attribute->params, $method),
         );
     }
 
@@ -93,26 +98,43 @@ final class SetUpRunner implements AttributeHandlerInterface
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
-    private function unwrapParams(array $params): array
+    private function unwrapParams(array $params, ?ReflectionMethod $method): array
     {
-        if ($this->valueUnwrappers === []) {
+        if ($this->valueUnwrappers === [] || $params === []) {
             return $params;
+        }
+
+        /** @var array<string,ReflectionParameter> $parameters */
+        $parameters = [];
+        if ($method !== null) {
+            foreach ($method->getParameters() as $parameter) {
+                $parameters[$parameter->getName()] = $parameter;
+            }
         }
 
         $resolved = [];
         foreach ($params as $key => $value) {
-            $resolved[$key] = $this->unwrap($value, (string) $key);
+            $resolved[$key] = $this->unwrap(
+                $value,
+                $key,
+                $parameters[$key] ?? null,
+            );
         }
+
         return $resolved;
     }
 
-    private function unwrap(mixed $value, string $key): mixed
-    {
+    private function unwrap(
+        mixed $value,
+        string $key,
+        ?ReflectionParameter $parameter,
+    ): mixed {
         foreach ($this->valueUnwrappers as $unwrapper) {
             if ($unwrapper->supports($value)) {
-                return $unwrapper->unwrap($value, $key);
+                return $unwrapper->unwrap($value, $key, $parameter);
             }
         }
+
         return $value;
     }
 }

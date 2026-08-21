@@ -6,6 +6,7 @@ namespace Componenta\DI\Resolver\Entry\SetUp;
 
 use Componenta\DI\Attribute\EntryId;
 use Psr\Container\ContainerInterface;
+use ReflectionParameter;
 
 /** Resolves #[EntryId] descriptors used as #[SetUp] parameter values. */
 final readonly class EntryIdUnwrapper implements SetUpValueUnwrapperInterface
@@ -17,8 +18,11 @@ final readonly class EntryIdUnwrapper implements SetUpValueUnwrapperInterface
         return $value instanceof EntryId;
     }
 
-    public function unwrap(mixed $value, string $key): mixed
-    {
+    public function unwrap(
+        mixed $value,
+        string $key,
+        ?ReflectionParameter $parameter = null,
+    ): mixed {
         /** @var EntryId $value */
         return $this->container->get($value->value);
     }

@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry\SetUp;
 
+use ReflectionParameter;
+
 /** Resolves one declarative value used inside #[SetUp] parameters. */
 interface SetUpValueUnwrapperInterface
 {
     public function supports(mixed $value): bool;
 
-    public function unwrap(mixed $value, string $key): mixed;
+    public function unwrap(
+        mixed $value,
+        string $key,
+        ?ReflectionParameter $parameter = null,
+    ): mixed;
 }

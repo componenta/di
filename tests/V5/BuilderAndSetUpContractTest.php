@@ -22,6 +22,10 @@ final class SetUpDependency {}
     'dependency' => new EntryId(SetUpDependency::class),
     'flag' => new Env('FEATURE_FLAG', 'fallback'),
     'runtimeFlag' => new EnvironmentEntry('FEATURE_FLAG', 'fallback'),
+    'port' => new Env('PORT', 8080),
+    'runtimePort' => new EnvironmentEntry('PORT', '8080'),
+    'debug' => new Env('DEBUG', false),
+    'runtimeDebug' => new EnvironmentEntry('DEBUG', 'false'),
 ])]
 final class SetUpContractTarget
 {
@@ -29,22 +33,38 @@ final class SetUpContractTarget
     public ?SetUpDependency $dependency = null;
     public string $flag = '';
     public string $runtimeFlag = '';
+    public int $port = 0;
+    public int $runtimePort = 0;
+    public bool $debug = false;
+    public bool $runtimeDebug = false;
 
     public function configure(
         string $name,
         SetUpDependency $dependency,
         string $flag,
         string $runtimeFlag,
+        int $port,
+        int $runtimePort,
+        bool $debug,
+        bool $runtimeDebug,
     ): void {
         $this->name = $name;
         $this->dependency = $dependency;
         $this->flag = $flag;
         $this->runtimeFlag = $runtimeFlag;
+        $this->port = $port;
+        $this->runtimePort = $runtimePort;
+        $this->debug = $debug;
+        $this->runtimeDebug = $runtimeDebug;
     }
 }
 
-test('SetUp resolves current config v3 and DI value descriptors', function (): void {
-    $environment = new Environment(['FEATURE_FLAG' => 'enabled']);
+test('SetUp resolves current config v3 and DI value descriptors with target types', function (): void {
+    $environment = new Environment([
+        'FEATURE_FLAG' => 'enabled',
+        'PORT' => '9001',
+        'DEBUG' => 'yes',
+    ]);
     $container = ContainerBuilder::configure(new Config(
         ['name' => 'configured'],
         $environment,
@@ -56,6 +76,10 @@ test('SetUp resolves current config v3 and DI value descriptors', function (): v
         ->and($entry->dependency)->toBeInstanceOf(SetUpDependency::class)
         ->and($entry->flag)->toBe('enabled')
         ->and($entry->runtimeFlag)->toBe('enabled')
+        ->and($entry->port)->toBe(9001)
+        ->and($entry->runtimePort)->toBe(9001)
+        ->and($entry->debug)->toBeTrue()
+        ->and($entry->runtimeDebug)->toBeTrue()
         ->and($container->get(Environment::class))->toBe($environment);
 });
 

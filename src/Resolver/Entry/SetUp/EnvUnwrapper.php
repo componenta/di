@@ -6,9 +6,12 @@ namespace Componenta\DI\Resolver\Entry\SetUp;
 
 use Componenta\Config\Config;
 use Componenta\Config\DefaultValue;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\ResolutionException;
 use Psr\Container\ContainerInterface;
+use ReflectionNamedType;
+use ReflectionParameter;
 
 use function Componenta\DI\normalize_env_name;
 
@@ -22,8 +25,11 @@ final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
         return $value instanceof Env;
     }
 
-    public function unwrap(mixed $value, string $key): mixed
-    {
+    public function unwrap(
+        mixed $value,
+        string $key,
+        ?ReflectionParameter $parameter = null,
+    ): mixed {
         /** @var Env $value */
         $config = $this->container->get(Config::class);
         if (!$config instanceof Config) {
@@ -39,7 +45,25 @@ final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
             );
         }
 
-        return $config->environment->get($name);
+        return self::read($config->environment, $name, $parameter);
+    }
+
+    private static function read(
+        Environment $environment,
+        string $name,
+        ?ReflectionParameter $parameter,
+    ): mixed {
+        $type = $parameter?->getType();
+        $typeName = $type instanceof ReflectionNamedType ? $type->getName() : null;
+
+        return match ($typeName) {
+            'string' => $environment->string($name),
+            'int' => $environment->int($name),
+            'float' => $environment->float($name),
+            'bool' => $environment->bool($name),
+            'array' => $environment->array($name),
+            default => $environment->get($name),
+        };
     }
 
     private function defaultOrFail(Env $env, string $key, string $reason): mixed

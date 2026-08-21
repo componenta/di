@@ -8,6 +8,7 @@ use Componenta\Config\Config;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Exception\ResolutionException;
 use Psr\Container\ContainerInterface;
+use ReflectionParameter;
 use Throwable;
 
 /** Resolves #[Config] descriptors used as #[SetUp] parameter values. */
@@ -20,8 +21,11 @@ final readonly class ConfigUnwrapper implements SetUpValueUnwrapperInterface
         return $value instanceof ConfigAttribute;
     }
 
-    public function unwrap(mixed $value, string $key): mixed
-    {
+    public function unwrap(
+        mixed $value,
+        string $key,
+        ?ReflectionParameter $parameter = null,
+    ): mixed {
         /** @var ConfigAttribute $value */
         try {
             $config = $this->container->get(Config::class);
