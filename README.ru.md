@@ -2,7 +2,7 @@
 
 `componenta/di` — PSR-11 DI-контейнер для PHP 8.4+ с autowiring, декларативной конфигурацией, композицией атрибутов, lazy objects и AOT-компиляцией factories.
 
-DI v5 использует `componenta/config` v3 как configuration runtime. В контейнер регистрируются те же экземпляры `Config` и `Environment`, а runtime и compiled-cache пути используют одну нормализованную dependency schema.
+DI v5 использует `componenta/config` v3 как configuration runtime. `ContainerBuilder` создаёт финальный runtime `Config` с нормализованными DI dependencies, сохраняя **тот же объект `Environment`**, который передало приложение. Runtime и DI-cache пути используют одну dependency schema.
 
 ## Установка
 
@@ -10,11 +10,7 @@ DI v5 использует `componenta/config` v3 как configuration runtime. 
 composer require componenta/di
 ```
 
-Требования:
-
-- PHP 8.4+
-- `componenta/config` 3.x
-- PSR-11 2.x
+Требования: PHP 8.4+, `componenta/config` 3.x и PSR-11 2.x.
 
 ## Быстрый старт
 
@@ -43,19 +39,24 @@ $name = $container->get('app.name');
 
 `Container::create()` делегирует создание в `ContainerBuilder::configure($config)->build()`.
 
-Контейнер содержит те же runtime snapshots:
+Контейнер содержит финальный normalized config и тот же runtime environment:
 
 ```php
 use Componenta\Config\Config;
 use Componenta\Config\Environment;
 
-$container->get(Config::class) === $config;
-$container->get(Environment::class) === $config->environment;
+$runtimeConfig = $container->get(Config::class);
+
+$runtimeConfig instanceof Config; // true
+$runtimeConfig->environment === $environment; // true
+$container->get(Environment::class) === $environment; // true
 ```
+
+Финальный `Config` может быть другим объектом относительно входного: DI v5 добавляет в него нормализованный dependency graph.
 
 ## Конфигурация
 
-DI v5 потребляет секцию `dependencies`, определённую в `componenta/config` v3. Необходимо наследовать `Componenta\Config\ConfigProvider` и использовать актуальные hooks:
+DI v5 потребляет `dependencies` schema из `componenta/config` v3. Необходимо наследовать `Componenta\Config\ConfigProvider` и использовать актуальные hooks:
 
 ```text
 getFactories()
@@ -70,7 +71,7 @@ shouldReplaceAttributeDefinitions()
 getAttributeCapabilities()
 ```
 
-Config v3 отвечает за детерминированную композицию providers и structural validation. DI v5 отвечает за semantic validation и canonicalization factories, aliases, invokables, delegators, resolver specifications и attribute definitions.
+Config v3 отвечает за детерминированную композицию providers и structural validation. DI v5 отвечает за semantic validation и canonicalization значений внутри этих sections.
 
 ### Services
 
@@ -102,26 +103,30 @@ protected function getAliases(): array
 }
 ```
 
-Keyed invokable в DI v5 canonicalize-ится в invokable class плюс alias.
+Keyed invokable canonicalize-ится в invokable class плюс alias.
 
 ### Factories
 
-Factories валидируются при нормализации конфигурации. Callable factory должен соответствовать v5 factory contract и получает runtime context, определённый пакетом.
+Runtime factory ABI — `(ContainerValue, array)`. Пользовательский callable может объявлять любую совместимую prefix/signature, которую принимает validator.
 
 ```php
+use Componenta\Config\ContainerValue;
+
 protected function getFactories(): array
 {
     return [
-        Client::class => static function ($containerValue, array $context): Client {
-            return new Client($containerValue->config->string('endpoint'));
+        Client::class => static function (ContainerValue $container, array $context): Client {
+            return new Client($container->config->string('endpoint'));
         },
     ];
 }
 ```
 
+Невалидная factory signature отклоняется при проверке конфигурации, а не при первом resolve.
+
 ### Delegators
 
-Каждый service id соответствует pipeline-list. Callable pair является одним вложенным элементом pipeline:
+Каждый service id соответствует pipeline-list. Callable pair — один вложенный элемент pipeline:
 
 ```php
 protected function getDelegators(): array
@@ -135,11 +140,11 @@ protected function getDelegators(): array
 }
 ```
 
-Прямая pair `[MetricsDelegator::class, 'decorate']` не является pipeline и отклоняется config v3 при композиции.
+Прямая pair `[MetricsDelegator::class, 'decorate']` не является однозначным pipeline и отклоняется config v3.
 
 ### Parameter resolvers
 
-Integer keys resolver map являются semantic priorities и не переиндексируются при композиции providers:
+Integer keys являются semantic priorities и сохраняются при provider composition:
 
 ```php
 protected function getParameterResolvers(): array
@@ -150,13 +155,11 @@ protected function getParameterResolvers(): array
 }
 ```
 
-`shouldReplaceParameterResolvers()` имеет tri-state семантику: `true`/`false` — explicit value, `null` — provider не изменяет уже составленное значение.
-
-То же правило действует для `shouldReplaceAttributeDefinitions()`.
+`shouldReplaceParameterResolvers()` и `shouldReplaceAttributeDefinitions()` имеют tri-state семантику: `true`/`false` — explicit value, `null` не изменяет ранее составленное значение.
 
 ## Runtime environment
 
-Environment является runtime state и не входит в DI cache. В application config можно использовать runtime-bound descriptor из config v3:
+Environment — runtime state и не хранится в DI cache. Application config может использовать runtime-bound descriptor из config v3:
 
 ```php
 use function Componenta\Config\env;
@@ -166,36 +169,23 @@ return [
 ];
 ```
 
-Значение разрешается через `Config::$environment` при чтении config key. `env()` не переносит build-time secret в persistent application-config cache.
-
-DI-атрибуты, читающие environment, используют тот же экземпляр `Environment`, зарегистрированный в контейнере.
+Descriptor разрешается через `Config::$environment` при чтении. DI `#[Env]` использует тот же объект `Environment`, зарегистрированный в контейнере.
 
 ## Container API
 
-`Container` реализует:
-
-- `Psr\Container\ContainerInterface`
-- `Componenta\DI\FactoryInterface`
-- `Componenta\DI\CallableExecutorInterface`
-- `Componenta\DI\ProxyFactoryInterface`
-
-Базовое разрешение:
+`Container` реализует `Psr\Container\ContainerInterface`, `FactoryInterface`, `CallableExecutorInterface` и `ProxyFactoryInterface`.
 
 ```php
-$service = $container->get(Service::class);
+$shared = $container->get(Service::class);
 $exists = $container->has(Service::class);
 $fresh = $container->make(Service::class);
 ```
 
-`get()` — shared/cached resolution. `make()` — fresh-resolution API для создания нового object graph.
+`get()` выполняет shared/cached resolution. `make()` выполняет fresh resolution. Aliases canonicalize-ятся до resolution, circular/concurrent paths завершаются явными исключениями.
 
-Aliases canonicalize-ятся до resolution. Circular и concurrent resolution paths завершаются DI-исключениями, а не игнорируются.
+## Autowiring и parameter resolution
 
-## Autowiring
-
-Concrete class может быть разрешён reflection-механизмом, если explicit binding отсутствует. Constructor parameters проходят через единый parameter resolver pipeline.
-
-Built-in priorities:
+Concrete class может быть reflection-resolved при отсутствии explicit binding. Constructor parameters проходят через единый priority pipeline:
 
 ```text
 1200  parameter attributes
@@ -206,87 +196,59 @@ Built-in priorities:
  100  nullable fallback
 ```
 
-Custom resolvers можно добавить или полностью заменить через config/`ContainerBuilder`.
+Custom resolvers могут расширить или заменить этот pipeline.
 
 ## Attributes
 
-DI v5 композирует атрибуты через capabilities, а не через набор специальных pairwise правил.
+DI v5 композирует attributes через capabilities: value providers, authoritative value providers, value transformers, creation strategies, constructor policies и lifecycle hooks.
 
-Built-in capabilities:
-
-- value providers;
-- authoritative value providers;
-- value transformers;
-- creation strategies;
-- constructor policies;
-- lifecycle hooks.
-
-Основные built-in attributes:
+Built-in attributes:
 
 ```text
-#[Config]
-#[Env]
-#[EntryId]
-#[Inject]
-#[Make]
-#[Lazy]
-#[Proxy]
-#[NoConstructor]
-#[Init]
-#[SetUp]
-#[Cast]
-#[CurrentRequest]
-#[CurrentUri]
-#[CurrentUser]
-#[Header]
-#[Cookie]
-#[QueryParam]
-#[PayloadParam]
-#[RequestAttribute]
-#[ServerParam]
-#[UploadedFile]
-#[MapRequest]
-#[MapQueryString]
-#[MapRequestPayload]
-#[MapHeaders]
-#[MapCookies]
-#[MapRequestAttributes]
-#[MapServerParams]
-#[MapUploadedFiles]
+#[Config] #[Env] #[EntryId] #[Inject] #[Make]
+#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast]
+#[CurrentRequest] #[CurrentUri] #[CurrentUser]
+#[Header] #[Cookie] #[QueryParam] #[PayloadParam]
+#[RequestAttribute] #[ServerParam] #[UploadedFile]
+#[MapRequest] #[MapQueryString] #[MapRequestPayload]
+#[MapHeaders] #[MapCookies] #[MapRequestAttributes]
+#[MapServerParams] #[MapUploadedFiles]
 ```
 
-Parameter attributes выполняются через parameter resolver pipeline. Class/property/method lifecycle поведение идёт через attribute composition pipeline.
+Parameter attributes выполняются через parameter resolver pipeline. Object lifecycle поведение выполняется через attribute composition pipeline.
 
 ## `#[SetUp]`
 
-`#[SetUp]` выполняет lifecycle methods после создания объекта и разрешает value descriptors через текущие container/config/runtime состояния.
-
-Built-in setup values поддерживают DI entry references, config references, environment descriptors, entry ids и explicit lazy/config wrappers из `componenta/config`.
+`#[SetUp]` выполняет lifecycle methods после создания объекта. Его аргументы могут разрешаться через текущие container, config, environment и entry id встроенными setup unwrappers.
 
 ## Request mapping
 
-Request attributes поддерживают scalar extraction и object mapping из PSR-7 request. Источники включают query parameters, payload, headers, cookies, request attributes, server params и uploaded files.
+Request attributes поддерживают scalar extraction и object mapping из PSR-7 request. Источники: query parameters, payload, headers, cookies, request attributes, server parameters и uploaded files. Source conflicts выявляются явно; mapped values могут использовать lazy casting и validation providers.
 
-Конфликты request sources выявляются явно. Mapped values могут проходить через lazy casting и validation providers при сохранении одинаковой семантики runtime и compiled modes.
+## Persistent caches
 
-## DI cache
+Application config и DI graph имеют раздельную ответственность:
 
-`DiCacheGenerator` хранит только нормализованный DI dependency graph. Application `Config` и его `Environment` snapshot в DI cache не сериализуются.
+- `ConfigLoader` кэширует application/package config data и runtime-bound config descriptors;
+- `DiCacheGenerator` кэширует только normalized DI dependencies;
+- ни один cache не сериализует runtime объект `Environment`.
+
+Создание DI cache:
 
 ```php
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 
 $dependencies = $config->get(ConfigKey::DEPENDENCIES, []);
 (new DiCacheGenerator())->generate($dependencies, 'var/cache/di.php');
 ```
 
-В runtime application config загружается с текущим environment, после чего подключается DI cache:
+Runtime-загрузка обоих cache с текущим environment:
 
 ```php
 use Componenta\Config\ConfigLoader;
 use Componenta\Config\Environment;
+use Componenta\DI\ContainerBuilder;
 
 $environment = Environment::fromGlobals();
 $config = ConfigLoader::loadFromFile('var/cache/config.php', $environment);
@@ -299,31 +261,21 @@ $container = ContainerBuilder::configureFromCache(
 )->build();
 ```
 
-`ContainerBuilder` добавляет normalized dependencies в новый runtime `Config`, сохраняя **тот же** объект `Environment`. Поэтому provider и cache modes сходятся к одной runtime config-модели.
-
-DI cache имеет независимую версию `ContainerBuilder::CACHE_VERSION`. Unknown keys и stale versions отклоняются fail-fast.
+Provider mode и cache mode создают финальный normalized runtime `Config`, сохраняя переданный объект `Environment`. DI cache имеет независимую версию `ContainerBuilder::CACHE_VERSION`; stale/malformed cache отклоняется fail-fast.
 
 ## AOT factories
 
-`ContainerBuilder::compileFactories()` может генерировать factory shards для discovered autowire entries. Runtime loading проверяет compiled artifacts и не должен молча менять object semantics при stale/invalid artifact.
+`ContainerBuilder::compileFactories()` генерирует factory shards для выбранных autowire entries. Compiled artifacts используют те же object/attribute/parameter semantics, что и runtime reflection, и покрыты parity tests.
 
 ## External containers
 
-Built container может разрешать entries из внешних PSR-11 containers. External lookup участвует в cycle protection, поэтому cross-container recursion не может уйти в бесконечный цикл.
+Built container может разрешать entries из внешних PSR-11 containers. External lookup участвует в cycle protection.
 
 ## Exceptions
 
-Основные исключения:
+Основные ошибки представлены `InvalidConfigurationException`, `ResolutionException`, `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException` и `CompilationException`.
 
-- `InvalidConfigurationException`
-- `ResolutionException`
-- `NotFoundException`
-- `CircularDependencyException`
-- `ConcurrentResolutionException`
-- `DelegatorException`
-- `CompilationException`
-
-`has()` намеренно является non-throwing API и возвращает `false`, если entry нельзя безопасно разрешить.
+`has()` намеренно non-throwing и возвращает `false`, если entry нельзя безопасно разрешить.
 
 ## Проверки разработки
 
@@ -331,4 +283,4 @@ Built container может разрешать entries из внешних PSR-11
 composer check
 ```
 
-В test suite есть explicit runtime/AOT/cache parity tests для object creation, attributes, request mapping, parameter resolution, callable handling и compiled factories.
+Test suite содержит runtime/AOT/cache parity coverage для object creation, attributes, request mapping, parameter resolution, callables и compiled factories.
