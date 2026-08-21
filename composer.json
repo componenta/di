@@ -23,7 +23,7 @@
     "require": {
         "php": "^8.4",
         "componenta/caster": "^1.0",
-        "componenta/config": "^2.0.2",
+        "componenta/config": "^3.0",
         "componenta/reflection": "^2.0",
         "componenta/validation": "^1.0 || ^2.0.0",
         "componenta/var-export": "^1.0",
@@ -60,11 +60,6 @@
     "prefer-stable": true,
     "provide": {"psr/container-implementation": "2.0"},
     "extra": {
-        "branch-alias": {"dev-v5": "5.x-dev"},
-        "componenta": {
-            "config-providers": [
-                "Componenta\\DI\\ConfigProvider"
-            ]
-        }
+        "branch-alias": {"dev-v5": "5.x-dev"}
     }
 }

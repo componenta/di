@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-/** Configuration keys consumed by DI v5. */
+/** DI v5 facade over the dependency keys defined by componenta/config v3. */
 final class ConfigKey
 {
     public const string DEPENDENCIES = \Componenta\Config\ConfigKey::DEPENDENCIES;
@@ -18,25 +18,14 @@ final class ConfigKey
     public const string PARAMETER_RESOLVERS = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS;
     public const string PARAMETER_RESOLVERS_REPLACE = \Componenta\Config\ConfigKey::PARAMETER_RESOLVERS_REPLACE;
 
-    public const string ATTRIBUTE_DEFINITIONS = 'attribute_definitions';
-    public const string ATTRIBUTE_DEFINITIONS_REPLACE = 'attribute_definitions_replace';
-    public const string ATTRIBUTE_CAPABILITIES = 'attribute_capabilities';
+    public const string ATTRIBUTE_DEFINITIONS = \Componenta\Config\ConfigKey::ATTRIBUTE_DEFINITIONS;
+    public const string ATTRIBUTE_DEFINITIONS_REPLACE = \Componenta\Config\ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE;
+    public const string ATTRIBUTE_CAPABILITIES = \Componenta\Config\ConfigKey::ATTRIBUTE_CAPABILITIES;
 
     /** @return list<string> */
     public static function dependencyKeys(): array
     {
-        return [
-            self::FACTORIES,
-            self::INVOKABLES,
-            self::ALIASES,
-            self::DELEGATORS,
-            self::SERVICES,
-            self::PARAMETER_RESOLVERS,
-            self::PARAMETER_RESOLVERS_REPLACE,
-            self::ATTRIBUTE_DEFINITIONS,
-            self::ATTRIBUTE_DEFINITIONS_REPLACE,
-            self::ATTRIBUTE_CAPABILITIES,
-        ];
+        return \Componenta\Config\ConfigKey::dependencyKeys();
     }
 
     private function __construct() {}

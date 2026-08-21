@@ -26,8 +26,8 @@ final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
     {
         /** @var Env $value */
         $config = $this->container->get(Config::class);
-        if (!$config instanceof Config || $config->environment === null) {
-            return $this->defaultOrFail($value, $key, 'environment is unavailable');
+        if (!$config instanceof Config) {
+            return $this->defaultOrFail($value, $key, 'configuration is unavailable');
         }
 
         $name = $value->name ?? normalize_env_name($key);
