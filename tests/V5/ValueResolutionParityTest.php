@@ -15,6 +15,8 @@ use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Componenta\DI\Tests\Support\TestCounter;
+use Nyholm\Psr7\ServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
 
 final class CastParameterParityDto
 {
@@ -49,6 +51,14 @@ final class ConfigOverrideParityDto
     public function __construct(
         #[ConfigAttribute('value')]
         public string $value,
+    ) {}
+}
+
+final class AttributedRequestTransportDto
+{
+    public function __construct(
+        #[ConfigAttribute('request')]
+        public ServerRequestInterface $request,
     ) {}
 }
 
@@ -127,6 +137,21 @@ test('explicit named parameters keep precedence over Config parameter resolution
 
     expect($container->make(ConfigOverrideParityDto::class, ['value' => 'explicit'])->value)
         ->toBe('explicit');
+});
+
+test('HTTP request transport is not a generic attributed typed override', function (): void {
+    $configured = new ServerRequest('GET', '/configured');
+    $transport = new ServerRequest('GET', '/transport');
+    $explicit = new ServerRequest('GET', '/explicit');
+    $container = ContainerBuilder::configure(new Config(['request' => $configured]))->build();
+
+    expect($container->make(AttributedRequestTransportDto::class, [
+        ServerRequestInterface::class => $transport,
+    ])->request)->toBe($configured)
+        ->and($container->make(AttributedRequestTransportDto::class, [
+            ServerRequestInterface::class => $transport,
+            'request' => $explicit,
+        ])->request)->toBe($explicit);
 });
 
 test('attributed typed overrides must satisfy the type named by their key', function (): void {
