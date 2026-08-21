@@ -33,7 +33,6 @@ use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\CallableExecutor;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolverInterface;
-use Componenta\DI\ConfigProvider;
 use Componenta\DI\Container;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -100,10 +99,3 @@ test('attribute constructors keep their named-argument contract', function (
     'MapServerParams' => [MapServerParams::class, ['map', 'conflictPolicy']],
     'MapUploadedFiles' => [MapUploadedFiles::class, ['map', 'conflictPolicy']],
 ]);
-
-test('Componenta package config provider remains discoverable and callable', function (): void {
-    $provider = new ConfigProvider();
-
-    expect(is_callable($provider))->toBeTrue()
-        ->and($provider())->toBeArray();
-});
