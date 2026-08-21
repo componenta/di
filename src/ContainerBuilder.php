@@ -20,6 +20,7 @@ use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
+use Componenta\DI\Attribute\Composition\Rule\ProxyCompositionRule;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Cookie;
 use Componenta\DI\Attribute\CurrentRequest;
@@ -568,6 +569,8 @@ class ContainerBuilder
             Proxy::class,
             $make,
             [CreationStrategy::class],
+            before: [ValueTransformer::class],
+            rules: [new ProxyCompositionRule()],
             phase: AttributePhase::Both,
         ));
         $registry->register(new AttributeDefinition(
