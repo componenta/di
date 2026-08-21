@@ -126,7 +126,7 @@ Invalid callable signatures fail during configuration validation instead of at f
 
 ### Delegators
 
-Each service maps to a pipeline list. A callable pair is one nested pipeline item:
+Each service maps to a pipeline list:
 
 ```php
 protected function getDelegators(): array
@@ -140,7 +140,7 @@ protected function getDelegators(): array
 }
 ```
 
-A direct pair such as `[MetricsDelegator::class, 'decorate']` is rejected because it is not an unambiguous pipeline.
+A native callable pair such as `[MetricsDelegator::class, 'decorate']` may also be supplied directly as the single delegator value. A deferred service-method pair such as `['metrics.delegator', 'decorate']` must be nested inside the pipeline list so it is not confused with two string delegators.
 
 ### Parameter resolvers
 
@@ -248,7 +248,7 @@ public function __invoke(
 }
 ```
 
-A bare `ServerRequestInterface` or `UriInterface` parameter has no hidden current-request meaning. Framework integrations pass the current request through the resolution context under `ServerRequestInterface::class`; request-aware attributes consume that transport explicitly.
+A bare `ServerRequestInterface` or `UriInterface` parameter has no hidden current-request meaning. Framework integrations pass the current request through the resolution context under `ServerRequestInterface::class`; request-aware attributes consume that transport explicitly. The transport key is not treated as a generic typed override, including inside non-authoritative attribute pipelines; explicit values by parameter name or position remain supported.
 
 The following is rejected during attribute-plan composition:
 
@@ -286,6 +286,8 @@ Injected object state naturally lives as long as the receiving object. DI does n
 Request attributes support scalar extraction and object mapping from PSR-7 requests. Sources include query parameters, payload, headers, cookies, request attributes, server parameters and uploaded files. Source conflicts are detected explicitly; mapped values can use lazy casting and validation providers.
 
 For typed DTO mapping, DI validates request data, applies mapper transformations and creates the DTO through `FactoryInterface::make()`. Parameters declared with `ParameterSourceAttributeInterface` remain protected from mapped-data spoofing.
+
+`MapRequestAttributes` exposes the complete request-attribute bag when its inherited `$attributes` selector is empty; subclasses may set `$attributes` to an explicit whitelist. `MapUploadedFiles` behaves the same way through `$files`. `['*']` explicitly selects the complete corresponding bag and the wildcard must be the only selector.
 
 ## Custom attributes
 
@@ -357,7 +359,7 @@ Provider mode and cache mode both create a final normalized runtime `Config` whi
 
 ## External containers
 
-A built container can resolve entries from external PSR-11 containers. External lookup participates in cycle protection.
+A built container can resolve entries from external PSR-11 containers. External lookup participates in cycle protection and cannot shadow protected DI core ids, including aliases that canonicalize to a protected id.
 
 ## Exceptions
 
