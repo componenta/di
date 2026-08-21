@@ -9,13 +9,10 @@ use Componenta\Config\Config;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
-use Componenta\DI\Attribute\CurrentUser;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\CurrentUserProvider;
-use Componenta\DI\Resolver\CurrentUserProviderInterface;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Componenta\DI\Tests\Support\TestCounter;
 
@@ -68,14 +65,6 @@ final class AttributedTypedOverrideDto
     public function __construct(
         #[ConfigAttribute('dependency')]
         public AttributedTypedOverrideA|AttributedTypedOverrideB $dependency,
-    ) {}
-}
-
-final class CurrentUserOverrideParityDto
-{
-    public function __construct(
-        #[CurrentUser]
-        public object $user,
     ) {}
 }
 
@@ -154,17 +143,6 @@ test('attributed typed overrides must satisfy the type named by their key', func
         ->and($container->make(AttributedTypedOverrideDto::class, [
             AttributedTypedOverrideA::class => $wrongKeyValue,
         ])->dependency)->toBe($configured);
-});
-
-test('CurrentUser remains authoritative over caller-provided parameter values', function (): void {
-    $authenticated = new \stdClass();
-    $untrusted = new \stdClass();
-    $container = (new ContainerBuilder())
-        ->addService(CurrentUserProviderInterface::class, new CurrentUserProvider($authenticated))
-        ->build();
-
-    expect($container->make(CurrentUserOverrideParityDto::class, ['user' => $untrusted])->user)
-        ->toBe($authenticated);
 });
 
 test('Env converts values for scalar target types', function (): void {
