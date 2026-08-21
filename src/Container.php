@@ -107,7 +107,11 @@ final class Container implements
 
     private function getInternal(string $id): mixed
     {
-        if ($this->externalContainers !== null && !ProtectedServiceIds::contains($id)) {
+        $entryId = $this->aliases->resolve($id);
+        if ($this->externalContainers !== null
+            && !ProtectedServiceIds::contains($id)
+            && !ProtectedServiceIds::contains($entryId)
+        ) {
             $externalGuard = "\0external:" . $id;
             $this->cycleGuard->enter($externalGuard);
             try {
@@ -124,7 +128,6 @@ final class Container implements
             return $entry;
         }
 
-        $entryId = $this->aliases->resolve($id);
         $this->cycleGuard->enterShared($entryId);
         try {
             return $this->resolveAndStore($id, $entryId);
@@ -152,7 +155,9 @@ final class Container implements
             $guardId = "\0has:" . $id;
             $this->cycleGuard->enter($guardId);
             try {
+                $entryId = $this->aliases->resolve($id);
                 if (!ProtectedServiceIds::contains($id)
+                    && !ProtectedServiceIds::contains($entryId)
                     && $this->externalContainers?->findOwning($id) !== null
                 ) {
                     return true;
@@ -160,7 +165,6 @@ final class Container implements
                 if ($this->cache->tryGetResolved($id, $resolved)) {
                     return true;
                 }
-                $entryId = $this->aliases->resolve($id);
                 if ($this->cache->tryGetBase($entryId, $base)) {
                     return true;
                 }
