@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
+use InvalidArgumentException;
 use Psr\Http\Message\ServerRequestInterface;
 
 trait ExtractsRequestData
@@ -33,6 +34,8 @@ trait ExtractsRequestData
     /** @return array<string|int,mixed> */
     private function extractConfiguredRequestAttributes(ServerRequestInterface $request): array
     {
+        self::assertSelector($this->attributes, 'Request attribute');
+
         if ($this->attributes === [self::WILDCARD]) {
             return $request->getAttributes();
         }
@@ -53,6 +56,8 @@ trait ExtractsRequestData
     /** @return array<string|int,mixed> */
     private function extractConfiguredUploadedFiles(ServerRequestInterface $request): array
     {
+        self::assertSelector($this->files, 'Uploaded-file');
+
         if ($this->files === [self::WILDCARD]) {
             return $request->getUploadedFiles();
         }
@@ -68,5 +73,16 @@ trait ExtractsRequestData
             }
         }
         return $data;
+    }
+
+    /** @param list<string> $selection */
+    private static function assertSelector(array $selection, string $source): void
+    {
+        if ($selection !== [self::WILDCARD] && in_array(self::WILDCARD, $selection, true)) {
+            throw new InvalidArgumentException(sprintf(
+                '%s wildcard must be the only selector.',
+                $source,
+            ));
+        }
     }
 }
