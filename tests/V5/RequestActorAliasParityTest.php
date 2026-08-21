@@ -32,6 +32,7 @@ final readonly class ActorMappedCommandFixture
     public function __construct(
         public RequestActorFixture $actor,
         public string $commandId,
+        public ?string $private = null,
     ) {}
 }
 
@@ -81,7 +82,8 @@ test('request attribute aliases can populate a fresh actor-aware style message i
     $actor = new RequestActorFixture();
     $request = (new ServerRequest('POST', '/commands/command-42'))
         ->withAttribute(RequestActorFixtureInterface::class, $actor)
-        ->withAttribute('commandId', 'command-42');
+        ->withAttribute('commandId', 'command-42')
+        ->withAttribute('private', 'must-not-be-mapped');
     $provided = [ServerRequestInterface::class => $request];
 
     try {
@@ -90,8 +92,10 @@ test('request attribute aliases can populate a fresh actor-aware style message i
 
         expect($expected->actor)->toBe($actor)
             ->and($expected->commandId)->toBe('command-42')
+            ->and($expected->private)->toBeNull()
             ->and($actual->actor)->toBe($actor)
-            ->and($actual->commandId)->toBe('command-42');
+            ->and($actual->commandId)->toBe('command-42')
+            ->and($actual->private)->toBeNull();
     } finally {
         foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
             @unlink($file);
