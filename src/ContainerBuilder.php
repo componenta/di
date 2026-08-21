@@ -251,7 +251,7 @@ class ContainerBuilder
         $this->assertBindings();
 
         $config = $this->config ?? new Config([], new Environment([]));
-        $environment = $config->environment ?? new Environment([]);
+        $environment = $config->environment;
         $attributes = new AttributeDefinitionRegistry();
         $plans = new AttributePlanBuilder($attributes);
         $parameters = new ParametersResolver($plans);
