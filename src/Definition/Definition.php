@@ -8,7 +8,8 @@ namespace Componenta\DI\Definition;
 final class Definition
 {
     /**
-     * @param callable(\Componenta\Config\ContainerValue, array<string|int, mixed>):mixed $factory
+     * Factory callables may declare any 0/1/2-argument prefix compatible with
+     * the runtime `(ContainerValue, array)` invocation ABI.
      */
     public static function factory(callable $factory): FactoryDefinition
     {
