@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
+use Componenta\DI\Attribute\Composition\Capability\CreationStrategy;
+use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
 /** Mutable composition-time registry, sealed before the container becomes usable. */
@@ -17,6 +22,13 @@ final class AttributeDefinitionRegistry
 
     private bool $sealed = false;
     private int $generation = 0;
+
+    public function __construct()
+    {
+        foreach (self::corePolicies() as $policy) {
+            $this->policies[$policy->capability] = $policy;
+        }
+    }
 
     public int $revision {
         get => $this->generation;
@@ -129,6 +141,18 @@ final class AttributeDefinitionRegistry
     public function policies(): array
     {
         return array_values($this->policies);
+    }
+
+    /** @return list<CapabilityPolicy> */
+    private static function corePolicies(): array
+    {
+        return [
+            new CapabilityPolicy(ValueProvider::class, 1),
+            new CapabilityPolicy(ValueTransformer::class),
+            new CapabilityPolicy(CreationStrategy::class, 1),
+            new CapabilityPolicy(ConstructorPolicy::class, 1),
+            new CapabilityPolicy(LifecycleHook::class),
+        ];
     }
 
     private function assertMutable(): void
