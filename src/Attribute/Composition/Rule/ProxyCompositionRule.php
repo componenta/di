@@ -36,6 +36,7 @@ final readonly class ProxyCompositionRule implements AttributeCompositionRuleInt
         }
 
         if ($attribute->target instanceof ReflectionProperty
+            && !$attribute->target->isPromoted()
             && $attribute->target->isReadOnly()
             && $set->has(ValueTransformer::class)
         ) {
