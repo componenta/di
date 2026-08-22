@@ -105,9 +105,11 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     }
 
     /**
-     * GeneratedDefinitionCode is intentionally valid only inside factories, so
-     * validate the rest of a custom compiler's output through the same canonical
-     * dependency normalization used before compilation and at cache bootstrap.
+     * GeneratedDefinitionCode is executable cache output rather than an ordinary
+     * factory specification. Replace only those values with a valid placeholder
+     * while canonical normalization validates their ids, alias collisions,
+     * protected ids and every non-factory section, then restore the generated
+     * expressions unchanged.
      *
      * @param array<string,mixed> $dependencies
      * @return array<string,mixed>
@@ -115,11 +117,28 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     private function normalizeCompiledDependencies(array $dependencies): array
     {
         $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
-        $validation = $dependencies;
-        $validation[ConfigKey::FACTORIES] = [];
+        if (!is_array($factories)) {
+            throw new InvalidConfigurationException('Factories must be an array after definition compilation.');
+        }
 
+        $generated = [];
+        $validationFactories = $factories;
+        foreach ($factories as $id => $factory) {
+            if (!$factory instanceof GeneratedDefinitionCode) {
+                continue;
+            }
+
+            $generated[$id] = $factory;
+            $validationFactories[$id] = static fn(): null => null;
+        }
+
+        $validation = $dependencies;
+        $validation[ConfigKey::FACTORIES] = $validationFactories;
         $normalized = ContainerBuilder::normalizeDependencies($validation);
-        $normalized[ConfigKey::FACTORIES] = $factories;
+
+        foreach ($generated as $id => $factory) {
+            $normalized[ConfigKey::FACTORIES][$id] = $factory;
+        }
 
         return $normalized;
     }
