@@ -69,6 +69,16 @@ test('factory callable signatures accept ContainerValue or ContainerInterface pl
 });
 
 test('standalone lazy service factories do not need to be callable', function (): void {
+    $fluent = new StandaloneLazyServiceFactory();
+    $bulk = new StandaloneLazyServiceFactory();
+    $fluentContainer = (new ContainerBuilder())
+        ->addFactory('lazy.fluent', $fluent)
+        ->addFactories(['lazy.bulk' => $bulk])
+        ->build();
+
+    $fluentResult = $fluentContainer->make('lazy.fluent', ['source' => 'fluent']);
+    $bulkResult = $fluentContainer->make('lazy.bulk', ['source' => 'bulk']);
+
     $direct = new StandaloneLazyServiceFactory();
     $directContainer = ContainerBuilder::configure(new Config([
         ConfigKey::DEPENDENCIES => [
@@ -94,7 +104,13 @@ test('standalone lazy service factories do not need to be callable', function ()
 
     $deferredResult = $deferredContainer->make('lazy.deferred', ['source' => 'service']);
 
-    expect($directResult->container)->toBeInstanceOf(ContainerValue::class)
+    expect($fluentResult->container)->toBeInstanceOf(ContainerValue::class)
+        ->and($fluentResult->context)->toBe(['source' => 'fluent'])
+        ->and($fluent->seenContext)->toBe(['source' => 'fluent'])
+        ->and($bulkResult->container)->toBeInstanceOf(ContainerValue::class)
+        ->and($bulkResult->context)->toBe(['source' => 'bulk'])
+        ->and($bulk->seenContext)->toBe(['source' => 'bulk'])
+        ->and($directResult->container)->toBeInstanceOf(ContainerValue::class)
         ->and($directResult->context)->toBe(['source' => 'direct'])
         ->and($direct->seenContext)->toBe(['source' => 'direct'])
         ->and($deferredResult->container)->toBeInstanceOf(ContainerValue::class)
