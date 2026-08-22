@@ -8,6 +8,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Object\CreationStrategy;
 use LogicException;
+use PropertyHookType;
 use ReflectionClass;
 use ReflectionProperty;
 use Throwable;
@@ -106,6 +107,13 @@ final class ObjectCreationContext
             );
         }
 
+        if ($property->isVirtual() && !$property->hasHook(PropertyHookType::Set)) {
+            throw ResolutionException::forProperty(
+                $property,
+                reason: 'virtual properties without a set hook are not writable by DI property handlers',
+            );
+        }
+
         if ((!$allowPromoted && $property->isPromoted())
             || ($property->isReadOnly() && $property->isInitialized($this->entry))
         ) {
@@ -133,6 +141,13 @@ final class ObjectCreationContext
             $property->getName(),
             $this->class->getName(),
         ));
+
+        if ($property->isVirtual() && !$property->hasHook(PropertyHookType::Get)) {
+            throw ResolutionException::forProperty(
+                $property,
+                reason: 'write-only virtual properties cannot be read by DI property handlers',
+            );
+        }
 
         return $property->isInitialized($entry)
             ? $property->getValue($entry)
