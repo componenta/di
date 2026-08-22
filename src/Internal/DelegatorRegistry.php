@@ -170,13 +170,16 @@ final class DelegatorRegistry
             $ids = [$delegator => true];
             if (str_contains($delegator, '::')) {
                 [$owner, $method] = explode('::', $delegator, 2);
-                if ($owner !== ''
-                    && $method !== ''
-                    && (class_exists($owner) || interface_exists($owner))
-                    && method_exists($owner, $method)
-                    && !(new ReflectionMethod($owner, $method))->isStatic()
-                ) {
-                    $ids[$owner] = true;
+                if ($owner !== '' && $method !== '') {
+                    $isKnownStatic = (class_exists($owner) || interface_exists($owner))
+                        && method_exists($owner, $method)
+                        && (new ReflectionMethod($owner, $method))->isStatic();
+                    if (!$isKnownStatic) {
+                        // A class may be autoloaded only after registration. Track
+                        // its owner conservatively so a later non-static method
+                        // resolved through the container is invalidated correctly.
+                        $ids[$owner] = true;
+                    }
                 }
             }
             return array_keys($ids);
