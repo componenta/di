@@ -675,9 +675,16 @@ class ContainerBuilder
         return $extension;
     }
 
-    /** @param callable(ContainerValue,array<string|int,mixed>):mixed $factory */
-    public function addFactory(string $id, callable $factory): static
-    {
+    /**
+     * Registers a runtime factory.
+     *
+     * Callable factories may declare any 0/1/2-argument prefix compatible with
+     * the runtime `(ContainerValue, array)` invocation ABI.
+     */
+    public function addFactory(
+        string $id,
+        callable|LazyServiceFactoryInterface $factory,
+    ): static {
         self::assertId($id, 'factory');
         FactorySpecificationValidator::assertValid($id, $factory);
         $this->factories[$id] = $factory;
@@ -701,12 +708,13 @@ class ContainerBuilder
             }
             if ($factory instanceof DefinitionInterface) {
                 $this->addDefinition($id, $factory);
-            } elseif (is_callable($factory)) {
+            } elseif ($factory instanceof LazyServiceFactoryInterface || is_callable($factory)) {
                 $this->addFactory($id, $factory);
             } else {
                 throw new InvalidConfigurationException(sprintf(
-                    'Factory "%s" must be callable or DefinitionInterface.',
+                    'Factory "%s" must be callable, %s or DefinitionInterface.',
                     $id,
+                    LazyServiceFactoryInterface::class,
                 ));
             }
         }
