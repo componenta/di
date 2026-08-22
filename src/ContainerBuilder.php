@@ -170,14 +170,38 @@ class ContainerBuilder
     /** @param array<array-key,mixed> $dependencies */
     public static function configureWithDependencies(Config $config, array $dependencies): static
     {
+        $replaceParameterResolvers = array_key_exists(ConfigKey::PARAMETER_RESOLVERS_REPLACE, $dependencies)
+            ? $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE]
+            : null;
+        $replaceAttributeDefinitions = array_key_exists(ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE, $dependencies)
+            ? $dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE]
+            : null;
+
         $dependencies = DependencyConfiguration::normalize($dependencies, self::DEFAULT_ALIASES);
         $builder = new static();
 
-        $builder->factories = $dependencies[ConfigKey::FACTORIES] ?? [];
-        $builder->invokables = $dependencies[ConfigKey::INVOKABLES] ?? [];
-        $builder->aliases = $dependencies[ConfigKey::ALIASES] ?? self::DEFAULT_ALIASES;
-        $builder->delegators = $dependencies[ConfigKey::DELEGATORS] ?? [];
-        $builder->services = $dependencies[ConfigKey::SERVICES] ?? [];
+        $builder->factories = array_replace(
+            $builder->factories,
+            $dependencies[ConfigKey::FACTORIES] ?? [],
+        );
+        foreach ($dependencies[ConfigKey::INVOKABLES] ?? [] as $invokable) {
+            if (!in_array($invokable, $builder->invokables, true)) {
+                $builder->invokables[] = $invokable;
+            }
+        }
+        $builder->aliases = array_replace(
+            $builder->aliases,
+            $dependencies[ConfigKey::ALIASES] ?? [],
+        );
+        foreach ($dependencies[ConfigKey::DELEGATORS] ?? [] as $id => $items) {
+            foreach ($items as $item) {
+                $builder->delegators[$id][] = $item;
+            }
+        }
+        $builder->services = array_replace(
+            $builder->services,
+            $dependencies[ConfigKey::SERVICES] ?? [],
+        );
 
         foreach ($dependencies[ConfigKey::PARAMETER_RESOLVERS] ?? [] as $priority => $resolver) {
             $replaced = false;
@@ -196,11 +220,21 @@ class ContainerBuilder
             }
         }
 
-        $builder->replaceParameterResolvers = $dependencies[ConfigKey::PARAMETER_RESOLVERS_REPLACE] ?? false;
-        $builder->attributeDefinitions = array_values($dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS] ?? []);
-        $builder->replaceAttributeDefinitions = $dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE] ?? false;
-        $builder->attributeCapabilities = array_values($dependencies[ConfigKey::ATTRIBUTE_CAPABILITIES] ?? []);
-        $builder->config = self::configWithDependencies($config, $dependencies);
+        if ($replaceParameterResolvers !== null) {
+            /** @var bool $replaceParameterResolvers */
+            $builder->replaceParameterResolvers = $replaceParameterResolvers;
+        }
+        foreach ($dependencies[ConfigKey::ATTRIBUTE_DEFINITIONS] ?? [] as $definition) {
+            $builder->attributeDefinitions[] = $definition;
+        }
+        if ($replaceAttributeDefinitions !== null) {
+            /** @var bool $replaceAttributeDefinitions */
+            $builder->replaceAttributeDefinitions = $replaceAttributeDefinitions;
+        }
+        foreach ($dependencies[ConfigKey::ATTRIBUTE_CAPABILITIES] ?? [] as $policy) {
+            $builder->attributeCapabilities[] = $policy;
+        }
+        $builder->config = self::configWithDependencies($config, $builder->dependencyArray());
 
         return $builder;
     }
@@ -426,18 +460,7 @@ class ContainerBuilder
     {
         /** @var array<string,mixed> $data */
         $data = $this->config?->toArray() ?? [];
-        $data[ConfigKey::DEPENDENCIES] = [
-            ConfigKey::FACTORIES => $this->factories,
-            ConfigKey::INVOKABLES => $this->invokables,
-            ConfigKey::ALIASES => $this->aliases,
-            ConfigKey::DELEGATORS => $this->delegators,
-            ConfigKey::SERVICES => $this->services,
-            ConfigKey::PARAMETER_RESOLVERS => $this->resolversToMap($this->parameterResolvers),
-            ConfigKey::PARAMETER_RESOLVERS_REPLACE => $this->replaceParameterResolvers,
-            ConfigKey::ATTRIBUTE_DEFINITIONS => $this->attributeDefinitions,
-            ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE => $this->replaceAttributeDefinitions,
-            ConfigKey::ATTRIBUTE_CAPABILITIES => $this->attributeCapabilities,
-        ];
+        $data[ConfigKey::DEPENDENCIES] = $this->dependencyArray();
         return $data;
     }
 
@@ -483,16 +506,6 @@ class ContainerBuilder
         array $handlers,
         ObjectResolutionParameterStore $resolutionParameters,
     ): void {
-        foreach ([
-            new CapabilityPolicy(ValueProvider::class, 1),
-            new CapabilityPolicy(ValueTransformer::class),
-            new CapabilityPolicy(CreationStrategy::class, 1),
-            new CapabilityPolicy(ConstructorPolicy::class, 1),
-            new CapabilityPolicy(LifecycleHook::class),
-        ] as $policy) {
-            $registry->defineCapability($policy);
-        }
-
         /** @var CastHandler $cast */
         $cast = $handlers[CastHandler::class];
         /** @var ConfigHandler $config */
@@ -921,14 +934,6 @@ class ContainerBuilder
         }
     }
 
-    private function hasBinding(string $id): bool
-    {
-        return array_key_exists($id, $this->services)
-            || array_key_exists($id, $this->factories)
-            || array_key_exists($id, $this->aliases)
-            || in_array($id, $this->invokables, true);
-    }
-
     private static function assertId(string $id, string $kind): void
     {
         if ($id === '') {
@@ -944,6 +949,23 @@ class ContainerBuilder
                 $id,
             ));
         }
+    }
+
+    /** @return array<string,mixed> */
+    private function dependencyArray(): array
+    {
+        return [
+            ConfigKey::FACTORIES => $this->factories,
+            ConfigKey::INVOKABLES => $this->invokables,
+            ConfigKey::ALIASES => $this->aliases,
+            ConfigKey::DELEGATORS => $this->delegators,
+            ConfigKey::SERVICES => $this->services,
+            ConfigKey::PARAMETER_RESOLVERS => $this->resolversToMap($this->parameterResolvers),
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE => $this->replaceParameterResolvers,
+            ConfigKey::ATTRIBUTE_DEFINITIONS => $this->attributeDefinitions,
+            ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE => $this->replaceAttributeDefinitions,
+            ConfigKey::ATTRIBUTE_CAPABILITIES => $this->attributeCapabilities,
+        ];
     }
 
     /**
