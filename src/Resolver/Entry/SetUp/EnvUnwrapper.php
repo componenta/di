@@ -13,7 +13,7 @@ use Psr\Container\ContainerInterface;
 use ReflectionNamedType;
 use ReflectionParameter;
 
-use function Componenta\DI\normalize_env_name;
+use function Componenta\DI\Internal\normalize_env_name;
 
 /** Resolves #[Env] descriptors used as #[SetUp] parameter values. */
 final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
