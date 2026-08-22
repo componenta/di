@@ -81,10 +81,16 @@ test('standalone lazy service factories do not need to be callable', function ()
     $directResult = $directContainer->make('lazy.direct', ['source' => 'direct']);
 
     $deferred = new StandaloneLazyServiceFactory();
-    $deferredContainer = (new ContainerBuilder())
-        ->addService('lazy.factory', $deferred)
-        ->addFactories(['lazy.deferred' => 'lazy.factory'])
-        ->build();
+    $deferredContainer = ContainerBuilder::configure(new Config([
+        ConfigKey::DEPENDENCIES => [
+            ConfigKey::SERVICES => [
+                'lazy.factory' => $deferred,
+            ],
+            ConfigKey::FACTORIES => [
+                'lazy.deferred' => 'lazy.factory',
+            ],
+        ],
+    ]))->build();
 
     $deferredResult = $deferredContainer->make('lazy.deferred', ['source' => 'service']);
 
