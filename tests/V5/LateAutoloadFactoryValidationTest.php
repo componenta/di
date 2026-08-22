@@ -27,7 +27,7 @@ test('late-loaded static factories are validated against the runtime factory ABI
     )->build();
 
     eval(sprintf(
-        'namespace %s; final class %s { public static function create(mixed $a, mixed $b, mixed $c): string { return "invalid"; } }',
+        'namespace %s; final class %s { public static function create(mixed $a, mixed $b, mixed $c): object { return new \\stdClass(); } }',
         __NAMESPACE__,
         $invalidShort,
     ));
@@ -49,10 +49,10 @@ test('late-loaded static factories with a compatible ABI remain valid', function
     )->build();
 
     eval(sprintf(
-        'namespace %s; final class %s { public static function create(\\Componenta\\Config\\ContainerValue $container, array $params): string { return $params["value"] ?? "default"; } }',
+        'namespace %s; final class %s { public static function create(\\Componenta\\Config\\ContainerValue $container, array $params): object { return (object) ["value" => $params["value"] ?? "default"]; } }',
         __NAMESPACE__,
         $validShort,
     ));
 
-    expect($container->make('late.valid', ['value' => 'ready']))->toBe('ready');
+    expect($container->make('late.valid', ['value' => 'ready'])->value)->toBe('ready');
 });
