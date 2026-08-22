@@ -24,7 +24,7 @@ use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
 
-use function Componenta\DI\is_entry_class_eligible;
+use function Componenta\DI\Internal\is_entry_class_eligible;
 
 /** Expands explicit AOT roots through statically knowable autowire dependencies. */
 final readonly class AutowireClassGraph
