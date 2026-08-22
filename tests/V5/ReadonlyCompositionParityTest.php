@@ -9,7 +9,6 @@ use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\ConfigKey;
