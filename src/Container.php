@@ -286,6 +286,22 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $alias));
         }
 
+        // Validate the complete candidate graph before mutating the live alias
+        // resolver. Runtime alias changes must preserve the same protected-core
+        // invariant enforced by ContainerBuilder for declarative configuration.
+        $candidate = clone $this->aliases;
+        $candidate->set($alias, $target);
+        foreach ($this->delegators->entryIds() as $delegatorId) {
+            $canonical = $candidate->resolve($delegatorId);
+            if (ProtectedServiceIds::contains($canonical)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Cannot retarget delegator for id "%s" to protected DI id "%s".',
+                    $delegatorId,
+                    $canonical,
+                ));
+            }
+        }
+
         $before = $this->deferredDependencyTargets();
         $previous = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
