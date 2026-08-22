@@ -45,6 +45,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
 
         $dependencies = ContainerBuilder::normalizeDependencies($dependencies);
         $dependencies = $this->definitionCompiler->compile($dependencies);
+        $dependencies = $this->normalizeCompiledDependencies($dependencies);
         $this->assertCompiledFactories($dependencies);
         $cache = [
             'version' => ContainerBuilder::CACHE_VERSION,
@@ -101,6 +102,26 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         if (function_exists('opcache_invalidate')) {
             @\opcache_invalidate($path, true);
         }
+    }
+
+    /**
+     * GeneratedDefinitionCode is intentionally valid only inside factories, so
+     * validate the rest of a custom compiler's output through the same canonical
+     * dependency normalization used before compilation and at cache bootstrap.
+     *
+     * @param array<string,mixed> $dependencies
+     * @return array<string,mixed>
+     */
+    private function normalizeCompiledDependencies(array $dependencies): array
+    {
+        $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
+        $validation = $dependencies;
+        $validation[ConfigKey::FACTORIES] = [];
+
+        $normalized = ContainerBuilder::normalizeDependencies($validation);
+        $normalized[ConfigKey::FACTORIES] = $factories;
+
+        return $normalized;
     }
 
     /** @param array<string,mixed> $dependencies */
