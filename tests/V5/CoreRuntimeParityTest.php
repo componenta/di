@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\ConcurrentResolutionException;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Fiber;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
@@ -87,6 +88,78 @@ test('changing an alias invalidates entries decorated through that deferred dele
     expect($container->get('service'))->toBe('base:second');
 });
 
+test('deferred delegator invalidation propagates through the complete dependency graph', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    $container->set(
+        'handler.inner',
+        static fn(callable $entry): callable =>
+            static fn(string $value): string => $entry($value) . ':inner-1',
+    );
+    $container->set(
+        'handler.outer',
+        static fn(string $value): string => $value . ':outer',
+    );
+    $container->delegator('handler.outer', 'handler.inner');
+    $container->set('service.transitive', 'base');
+    $container->delegator('service.transitive', 'handler.outer');
+
+    expect($container->get('service.transitive'))->toBe('base:outer:inner-1');
+
+    $container->set(
+        'handler.inner',
+        static fn(callable $entry): callable =>
+            static fn(string $value): string => $entry($value) . ':inner-2',
+    );
+
+    expect($container->get('service.transitive'))->toBe('base:outer:inner-2');
+});
+
+test('transitive deferred dependencies follow alias retargeting', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    $container->set(
+        'handler.inner.first',
+        static fn(callable $entry): callable =>
+            static fn(string $value): string => $entry($value) . ':first',
+    );
+    $container->set(
+        'handler.inner.second',
+        static fn(callable $entry): callable =>
+            static fn(string $value): string => $entry($value) . ':second',
+    );
+    $container->alias('handler.inner.alias', 'handler.inner.first');
+    $container->set('handler.alias.outer', static fn(string $value): string => $value . ':outer');
+    $container->delegator('handler.alias.outer', 'handler.inner.alias');
+    $container->set('service.alias.transitive', 'base');
+    $container->delegator('service.alias.transitive', 'handler.alias.outer');
+
+    expect($container->get('service.alias.transitive'))->toBe('base:outer:first');
+
+    $container->alias('handler.inner.alias', 'handler.inner.second');
+
+    expect($container->get('service.alias.transitive'))->toBe('base:outer:second');
+});
+
+test('runtime alias mutation cannot retarget an existing delegator to protected core', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    $container->set('protected.target', 'base');
+    $container->alias('protected.alias', 'protected.target');
+    $container->delegator(
+        'protected.alias',
+        static fn(string $entry): string => $entry . ':decorated',
+    );
+
+    expect($container->get('protected.alias'))->toBe('base:decorated')
+        ->and(fn() => $container->alias('protected.target', ContainerInterface::class))
+        ->toThrow(InvalidConfigurationException::class, 'protected DI id');
+
+    $container->set('protected.target', 'next');
+
+    expect($container->get('protected.alias'))->toBe('next:decorated');
+});
+
 test('adding an external container invalidates deferred callable ownership', function (): void {
     $container = (new ContainerBuilder())->build();
     $callableId = __NAMESPACE__ . '\\v5DeferredDelegatorNative';
@@ -117,6 +190,43 @@ test('adding an external container invalidates deferred callable ownership', fun
     $container->addContainer($external);
 
     expect($container->get('service'))->toBe('base:external');
+});
+
+test('external takeover invalidates transitive deferred callable dependents', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    $container->set(
+        'external.inner',
+        static fn(callable $entry): callable =>
+            static fn(string $value): string => $entry($value) . ':local',
+    );
+    $container->set('external.outer', static fn(string $value): string => $value . ':outer');
+    $container->delegator('external.outer', 'external.inner');
+    $container->set('external.service', 'base');
+    $container->delegator('external.service', 'external.outer');
+
+    expect($container->get('external.service'))->toBe('base:outer:local');
+
+    $external = new class () implements ContainerInterface {
+        public function get(string $id): mixed
+        {
+            if ($id !== 'external.inner') {
+                throw new RuntimeException($id);
+            }
+
+            return static fn(callable $entry): callable =>
+                static fn(string $value): string => $entry($value) . ':external';
+        }
+
+        public function has(string $id): bool
+        {
+            return $id === 'external.inner';
+        }
+    };
+
+    $container->addContainer($external);
+
+    expect($container->get('external.service'))->toBe('base:outer:external');
 });
 
 test('external containers own shared get while fresh make keeps the local runtime definition', function (): void {
