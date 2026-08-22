@@ -11,7 +11,7 @@ use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 
-use function Componenta\DI\transform_request_mapper_data;
+use function Componenta\DI\Internal\transform_request_mapper_data;
 
 /** Base declarative transformation contract for all Map* request attributes. */
 abstract class RequestMapper implements MapperInterface, CasterProviderAwareInterface
