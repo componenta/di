@@ -233,7 +233,7 @@ final class ParametersResolver
                 $resolver = $resolvers[$slot];
                 $result = $resolver->resolveParameter($target, $context);
                 if ($result !== null) {
-                    return \Componenta\DI\validate_parameter_resolution_result(
+                    return \Componenta\DI\Internal\validate_parameter_resolution_result(
                         $result,
                         $resolver,
                         $target,
