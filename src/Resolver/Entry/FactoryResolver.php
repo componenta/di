@@ -275,7 +275,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             self::assertShardFormat($class);
             $shard = new $class($this->objects);
             $this->compiledShards[$file] = $shard;
-        } elseif (!$shard instanceof $class) {
+        } elseif (strcasecmp($shard::class, $class) !== 0) {
             throw new InvalidConfigurationException(sprintf(
                 'Compiled shard file "%s" is already loaded as "%s", not "%s".',
                 $file,
