@@ -48,27 +48,64 @@ final class DelegatorRegistry
     }
 
     /** @return list<string> */
+    public function entryIds(): array
+    {
+        return array_keys($this->raw);
+    }
+
+    /** @return list<string> */
     public function deferredDependencies(): array
     {
         return array_keys($this->dependents);
     }
 
     /**
+     * Invalidates every delegator chain transitively depending on any supplied
+     * dependency id. The traversal is cycle-safe because an entry may itself be
+     * used as a deferred callable dependency by another entry (or by a cycle).
+     *
      * @param iterable<string> $dependencyIds
      * @return list<string>
      */
     public function invalidateDependencies(iterable $dependencyIds): array
     {
+        /** @var list<string> $queue */
+        $queue = [];
+        /** @var array<string, true> $queued */
+        $queued = [];
+        /** @var array<string, true> $visited */
+        $visited = [];
         /** @var array<string, true> $entries */
         $entries = [];
+
         foreach ($dependencyIds as $dependencyId) {
+            if (isset($queued[$dependencyId])) {
+                continue;
+            }
+            $queued[$dependencyId] = true;
+            $queue[] = $dependencyId;
+        }
+
+        for ($offset = 0; isset($queue[$offset]); ++$offset) {
+            $dependencyId = $queue[$offset];
+            if (isset($visited[$dependencyId])) {
+                continue;
+            }
+            $visited[$dependencyId] = true;
+
             foreach ($this->dependents[$dependencyId] ?? [] as $entry => $_) {
-                $entries[$entry] = true;
+                if (!isset($entries[$entry])) {
+                    $entries[$entry] = true;
+                    unset($this->callables[$entry]);
+                }
+
+                if (!isset($queued[$entry])) {
+                    $queued[$entry] = true;
+                    $queue[] = $entry;
+                }
             }
         }
-        foreach ($entries as $entry => $_) {
-            unset($this->callables[$entry]);
-        }
+
         return array_keys($entries);
     }
 
