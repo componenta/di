@@ -61,6 +61,9 @@ final class FactorySpecificationValidator
                 $id,
             ));
         }
+        if ($factory instanceof LazyServiceFactoryInterface) {
+            return;
+        }
 
         if (is_string($factory) && $factory !== '') {
             return;
