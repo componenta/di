@@ -157,6 +157,34 @@ test('compiled shard metadata cannot reuse a class preloaded from another file',
     }
 });
 
+test('equivalent shard copies may satisfy a preloaded generated class', function (): void {
+    $artifact = writeAuditStaleShard(
+        CompiledFactoryShardCompiler::FORMAT_VERSION,
+        ['createEntry' => AuditStaleAotEntry::class],
+    );
+    $copy = sys_get_temp_dir()
+        . '/componenta-di-equivalent-shard-'
+        . bin2hex(random_bytes(5))
+        . '.php';
+    copy($artifact['file'], $copy);
+
+    try {
+        require $artifact['file'];
+
+        $container = (new ContainerBuilder())
+            ->addDefinition(
+                'equivalent.copy',
+                new CompiledFactoryDefinition($copy, $artifact['class'], 'createEntry'),
+            )
+            ->build();
+
+        expect($container->make('equivalent.copy'))->toBeInstanceOf(AuditStaleAotEntry::class);
+    } finally {
+        @unlink($artifact['file']);
+        @unlink($copy);
+    }
+});
+
 test('one compiled shard file cannot be cached under two generated classes', function (): void {
     $declared = writeAuditStaleShard(
         CompiledFactoryShardCompiler::FORMAT_VERSION,
