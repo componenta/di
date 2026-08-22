@@ -287,9 +287,14 @@ final class AttributePlanBuilder
     }
 
     /**
-     * Readonly properties can be written only once by the DI object pipeline.
-     * A value source followed by a transformer requires two writes and therefore
-     * cannot be represented safely by the property-handler contract.
+     * Non-promoted readonly properties can be written only once by the object
+     * handler pipeline. Promoted readonly state is initialized through the
+     * constructor-parameter pipeline; post-instantiation handlers cannot claim
+     * an already initialized promoted readonly property.
+     *
+     * A source followed by a transformer, or more than one transformer, would
+     * require multiple property writes and therefore cannot be represented by
+     * the property-handler contract.
      *
      * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param list<AttributeUsage> $usages
@@ -298,22 +303,36 @@ final class AttributePlanBuilder
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         array $usages,
     ): void {
-        if (!$target instanceof ReflectionProperty || !$target->isReadOnly()) {
+        if (!$target instanceof ReflectionProperty
+            || !$target->isReadOnly()
+            || $target->isPromoted()
+        ) {
             return;
         }
 
         $provider = false;
-        $transformer = false;
+        $transformers = 0;
         foreach ($usages as $usage) {
+            $isTransformer = false;
             foreach ($usage->definition->capabilities as $capability) {
                 $provider = $provider || is_a($capability, ValueProvider::class, true);
-                $transformer = $transformer || is_a($capability, ValueTransformer::class, true);
+                $isTransformer = $isTransformer || is_a($capability, ValueTransformer::class, true);
+            }
+            if ($isTransformer) {
+                ++$transformers;
             }
         }
 
-        if ($provider && $transformer) {
+        if ($provider && $transformers > 0) {
             throw new AttributeCompositionException(sprintf(
                 '%s cannot combine a value source with a transformer because readonly properties can be written only once.',
+                self::targetName($target),
+            ));
+        }
+
+        if ($transformers > 1) {
+            throw new AttributeCompositionException(sprintf(
+                '%s cannot combine multiple value transformers because readonly properties can be written only once.',
                 self::targetName($target),
             ));
         }
