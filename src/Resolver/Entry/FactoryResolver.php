@@ -23,6 +23,7 @@ use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
+use ReflectionClass;
 use Throwable;
 
 /** Resolves configured factories, class definitions and compiled entry shards. */
@@ -262,6 +263,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 }
             }
 
+            self::assertShardClassFile($class, $file);
+
             if (defined($class . '::FAST_PATHS')) {
                 throw new InvalidConfigurationException(sprintf(
                     'Compiled shard "%s" uses the obsolete semantic fast-path format; rebuild the DI cache.',
@@ -272,6 +275,13 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             self::assertShardFormat($class);
             $shard = new $class($this->objects);
             $this->compiledShards[$file] = $shard;
+        } elseif (!$shard instanceof $class) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard file "%s" is already loaded as "%s", not "%s".',
+                $file,
+                $shard::class,
+                $class,
+            ));
         }
 
         $this->assertCompiledEntry($class, $definition);
@@ -286,6 +296,28 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
 
         return $factory;
+    }
+
+    /** @param class-string $class */
+    private static function assertShardClassFile(string $class, string $file): void
+    {
+        $loadedFile = new ReflectionClass($class)->getFileName();
+        $expected = realpath($file);
+        $actual = is_string($loadedFile) ? realpath($loadedFile) : false;
+        $same = is_string($expected)
+            && is_string($actual)
+            && (DIRECTORY_SEPARATOR === '\\'
+                ? strcasecmp($expected, $actual) === 0
+                : $expected === $actual);
+
+        if (!$same) {
+            throw new InvalidConfigurationException(sprintf(
+                'Compiled shard class "%s" is loaded from an unexpected file; expected "%s", got "%s".',
+                $class,
+                $file,
+                is_string($loadedFile) ? $loadedFile : '<unknown>',
+            ));
+        }
     }
 
     /** @param class-string $class */
