@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
+use Componenta\Config\Config;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
@@ -28,6 +29,18 @@ final readonly class InvalidDependencyDefinitionCompiler implements DefinitionCo
     public function compile(array $dependencies): array
     {
         $dependencies[ConfigKey::ALIASES] = ['broken.alias' => ''];
+
+        return $dependencies;
+    }
+}
+
+final readonly class InvalidGeneratedBindingCompiler implements DefinitionCompilerInterface
+{
+    public function compile(array $dependencies): array
+    {
+        $dependencies[ConfigKey::FACTORIES] = [
+            Config::class => new GeneratedDefinitionCode('static fn(): null => null'),
+        ];
 
         return $dependencies;
     }
@@ -62,6 +75,27 @@ test('invalid non-factory compiler output is rejected before cache replacement',
     try {
         expect(fn() => (new DiCacheGenerator(new InvalidDependencyDefinitionCompiler()))->generate([], $path))
             ->toThrow(InvalidConfigurationException::class, 'Aliases must map non-empty string ids');
+
+        expect(file_get_contents($path))->toBe($sentinel)
+            ->and(glob($path . '.tmp.*') ?: [])->toBe([]);
+    } finally {
+        if (is_file($path)) {
+            unlink($path);
+        }
+        foreach (glob($path . '.tmp.*') ?: [] as $temporary) {
+            unlink($temporary);
+        }
+    }
+});
+
+test('generated factory ids still obey canonical protected binding rules', function (): void {
+    $path = sys_get_temp_dir() . '/componenta-di-invalid-generated-binding-' . bin2hex(random_bytes(5)) . '.php';
+    $sentinel = "<?php\nreturn ['sentinel' => true];\n";
+    file_put_contents($path, $sentinel);
+
+    try {
+        expect(fn() => (new DiCacheGenerator(new InvalidGeneratedBindingCompiler()))->generate([], $path))
+            ->toThrow(InvalidConfigurationException::class, 'protected DI id');
 
         expect(file_get_contents($path))->toBe($sentinel)
             ->and(glob($path . '.tmp.*') ?: [])->toBe([]);
