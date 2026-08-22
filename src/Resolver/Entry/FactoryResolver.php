@@ -199,7 +199,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return $resolved;
     }
 
-    private function resolveFactory(string $id): callable
+    private function resolveFactory(string $id): callable|LazyServiceFactoryInterface
     {
         $factory = $this->factories[$id];
 
@@ -214,14 +214,16 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             $factory[0] = $this->container->get($factory[0]);
         }
 
-        if (!is_callable($factory)) {
+        if (!$factory instanceof LazyServiceFactoryInterface && !is_callable($factory)) {
             throw new InvalidConfigurationException(sprintf(
-                'Factory service for "%s" resolved to non-callable %s.',
+                'Factory service for "%s" resolved to unsupported %s.',
                 $id,
                 get_debug_type($factory),
             ));
         }
-        if (isset($this->validateResolvedFactories[$id])) {
+        if (isset($this->validateResolvedFactories[$id])
+            && !$factory instanceof LazyServiceFactoryInterface
+        ) {
             FactorySpecificationValidator::assertResolvedCallable($id, $factory);
         }
         return $factory;
