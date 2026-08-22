@@ -19,7 +19,10 @@ function normalize_env_name(string $name): string
     return strtoupper(preg_replace('/([a-z])([A-Z])/', '$1_$2', $name) ?? $name);
 }
 
-/** @internal @param ReflectionClass<object> $class */
+/**
+ * @internal
+ * @param ReflectionClass<object> $class
+ */
 function is_entry_class_eligible(ReflectionClass $class): bool
 {
     if ($class->isAnonymous()
