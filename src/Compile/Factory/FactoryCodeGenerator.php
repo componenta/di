@@ -7,7 +7,7 @@ namespace Componenta\DI\Compile\Factory;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
 
-use function Componenta\DI\is_entry_class_eligible;
+use function Componenta\DI\Internal\is_entry_class_eligible;
 
 /** Generates thin AOT entry methods that delegate execution to ObjectPipeline. */
 final readonly class FactoryCodeGenerator
