@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Exception\InvalidConfigurationException;
 
 final class ClassDefinitionParityDependency {}
 
@@ -30,6 +31,11 @@ final class ClassDefinitionConstructorPolicyTarget
     {
         $this->constructorRan = true;
     }
+}
+
+final class ClassDefinitionPrivateConstructorTarget
+{
+    private function __construct() {}
 }
 
 interface ClassDefinitionUnionLeft {}
@@ -113,6 +119,18 @@ test('ClassDefinition honors constructor policies from the shared object pipelin
 
     expect($entry)->toBeInstanceOf(ClassDefinitionConstructorPolicyTarget::class)
         ->and($entry->constructorRan)->toBeFalse();
+});
+
+test('ClassDefinition without a constructor policy is rejected by the shared object pipeline', function (): void {
+    $container = (new ContainerBuilder())
+        ->addDefinition(
+            'class.definition.private-constructor',
+            ClassDefinition::create(ClassDefinitionPrivateConstructorTarget::class),
+        )
+        ->build();
+
+    expect(fn() => $container->make('class.definition.private-constructor'))
+        ->toThrow(InvalidConfigurationException::class, 'cannot be created by the current object pipeline');
 });
 
 test('ClassDefinition typed union overrides match the concrete type key exactly', function (): void {
