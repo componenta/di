@@ -32,6 +32,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     private array $compiledShards = [];
     /** @var array<string,callable(array<string|int,mixed>):mixed> */
     private array $compiledFactories = [];
+    /** @var array<string,true> */
+    private array $validateResolvedFactories = [];
 
     /** @param array<string,mixed> $factories */
     public function __construct(
@@ -46,9 +48,17 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             if (!is_string($id) || $id === '') {
                 throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
             }
+
+            if (is_string($factory) || !is_callable($factory)) {
+                $this->validateResolvedFactories[$id] = true;
+            }
+
             FactorySpecificationValidator::assertValid($id, $factory);
             if ($factory instanceof FactoryDefinition) {
                 $this->factories[$id] = $factory->value;
+                if (is_string($factory->value) || !is_callable($factory->value)) {
+                    $this->validateResolvedFactories[$id] = true;
+                }
             }
         }
     }
@@ -192,7 +202,6 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     private function resolveFactory(string $id): callable
     {
         $factory = $this->factories[$id];
-        $validate = is_string($factory) || !is_callable($factory);
 
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
@@ -212,7 +221,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 get_debug_type($factory),
             ));
         }
-        if ($validate) {
+        if (isset($this->validateResolvedFactories[$id])) {
             FactorySpecificationValidator::assertResolvedCallable($id, $factory);
         }
         return $factory;
@@ -351,7 +360,12 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         $this->factories[$id] = $definition instanceof FactoryDefinition
             ? $definition->value
             : $definition;
-        unset($this->compiledFactories[$id]);
+        unset($this->compiledFactories[$id], $this->validateResolvedFactories[$id]);
+        if ($definition instanceof FactoryDefinition
+            && (is_string($definition->value) || !is_callable($definition->value))
+        ) {
+            $this->validateResolvedFactories[$id] = true;
+        }
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
