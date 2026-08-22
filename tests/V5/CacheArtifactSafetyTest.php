@@ -8,7 +8,9 @@ use Componenta\Config\Config;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
+use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
+use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\CompilationException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
@@ -106,5 +108,41 @@ test('generated factory ids still obey canonical protected binding rules', funct
         foreach (glob($path . '.tmp.*') ?: [] as $temporary) {
             unlink($temporary);
         }
+    }
+});
+
+test('compiled factory objects restored at the cache boundary remain path confined', function (): void {
+    $root = sys_get_temp_dir()
+        . '/componenta-di-cache-object-trust-'
+        . bin2hex(random_bytes(5));
+    $base = $root . '/base';
+    $outside = $root . '/outside.php';
+    mkdir($base, 0o775, true);
+    file_put_contents($outside, '<?php throw new \\RuntimeException("must not execute");');
+
+    try {
+        $container = ContainerBuilder::configureFromCache(
+            new Config([]),
+            [
+                'version' => ContainerBuilder::CACHE_VERSION,
+                ConfigKey::DEPENDENCIES => [
+                    ConfigKey::FACTORIES => [
+                        'entry' => new CompiledFactoryDefinition(
+                            $outside,
+                            \stdClass::class,
+                            'create',
+                        ),
+                    ],
+                ],
+            ],
+            $base,
+        )->build();
+
+        expect(fn() => $container->get('entry'))
+            ->toThrow(InvalidConfigurationException::class, 'relative path');
+    } finally {
+        @unlink($outside);
+        @rmdir($base);
+        @rmdir($root);
     }
 });
