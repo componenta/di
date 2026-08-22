@@ -304,20 +304,41 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         $loadedFile = new ReflectionClass($class)->getFileName();
         $expected = realpath($file);
         $actual = is_string($loadedFile) ? realpath($loadedFile) : false;
-        $same = is_string($expected)
-            && is_string($actual)
-            && (DIRECTORY_SEPARATOR === '\\'
-                ? strcasecmp($expected, $actual) === 0
-                : $expected === $actual);
 
-        if (!$same) {
-            throw new InvalidConfigurationException(sprintf(
-                'Compiled shard class "%s" is loaded from an unexpected file; expected "%s", got "%s".',
-                $class,
-                $file,
-                is_string($loadedFile) ? $loadedFile : '<unknown>',
-            ));
+        if (!is_string($expected) || !is_string($actual)) {
+            self::throwUnexpectedShardFile($class, $file, $loadedFile);
         }
+
+        $samePath = DIRECTORY_SEPARATOR === '\\'
+            ? strcasecmp($expected, $actual) === 0
+            : $expected === $actual;
+        if ($samePath) {
+            return;
+        }
+
+        $expectedHash = hash_file('sha256', $expected);
+        $actualHash = hash_file('sha256', $actual);
+        if (is_string($expectedHash)
+            && is_string($actualHash)
+            && hash_equals($expectedHash, $actualHash)
+        ) {
+            return;
+        }
+
+        self::throwUnexpectedShardFile($class, $file, $loadedFile);
+    }
+
+    private static function throwUnexpectedShardFile(
+        string $class,
+        string $expectedFile,
+        string|false $loadedFile,
+    ): never {
+        throw new InvalidConfigurationException(sprintf(
+            'Compiled shard class "%s" is loaded from an unexpected file; expected "%s", got "%s".',
+            $class,
+            $expectedFile,
+            is_string($loadedFile) ? $loadedFile : '<unknown>',
+        ));
     }
 
     /** @param class-string $class */
