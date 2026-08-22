@@ -25,7 +25,7 @@ use ReflectionType;
 use Reflector;
 use Throwable;
 
-use function Componenta\DI\normalize_env_name;
+use function Componenta\DI\Internal\normalize_env_name;
 
 /** Handles #[Env] on parameters and properties. */
 final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
