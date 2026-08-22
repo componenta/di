@@ -20,6 +20,8 @@ use ReflectionMethod;
 use ReflectionParameter;
 use WeakMap;
 
+use function Componenta\DI\Internal\is_entry_class_eligible;
+
 /**
  * Validates factory forms and their runtime `(ContainerValue, array)` ABI.
  *
@@ -278,9 +280,9 @@ final class FactorySpecificationValidator
         /** @var class-string $className */
         /** @var ReflectionClass<object> $class */
         $class = new ReflectionClass($className);
-        if (!$class->isInstantiable()) {
+        if (!is_entry_class_eligible($class)) {
             throw new InvalidConfigurationException(sprintf(
-                'ClassDefinition for "%s" targets non-instantiable class "%s".',
+                'ClassDefinition for "%s" targets runtime-ineligible class "%s".',
                 $id,
                 $className,
             ));
