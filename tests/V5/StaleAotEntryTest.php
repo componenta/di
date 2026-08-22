@@ -12,12 +12,18 @@ use Componenta\DI\Object\ObjectPipeline;
 
 final class AuditStaleAotEntry {}
 
+final class AuditCrosswiredAotEntry {}
+
 /**
  * @param array<string,string> $entries
+ * @param class-string $target
  * @return array{file:string,class:class-string}
  */
-function writeAuditStaleShard(int $format, array $entries): array
-{
+function writeAuditStaleShard(
+    int $format,
+    array $entries,
+    string $target = AuditStaleAotEntry::class,
+): array {
     $suffix = bin2hex(random_bytes(5));
     $namespace = 'Componenta\\DI\\Tests\\Generated\\Stale' . $suffix;
     $class = $namespace . '\\Shard';
@@ -51,7 +57,7 @@ PHP,
         $format,
         var_export($entries, true),
         ObjectPipeline::class,
-        AuditStaleAotEntry::class,
+        $target,
     );
     file_put_contents($file, $code);
 
@@ -119,5 +125,68 @@ test('compiled shards reject entry metadata for unavailable target classes', fun
             ->toThrow(InvalidConfigurationException::class, 'stale for method');
     } finally {
         @unlink($artifact['file']);
+    }
+});
+
+test('compiled shard metadata cannot reuse a class preloaded from another file', function (): void {
+    $declared = writeAuditStaleShard(
+        CompiledFactoryShardCompiler::FORMAT_VERSION,
+        ['createEntry' => AuditStaleAotEntry::class],
+    );
+    $foreign = writeAuditStaleShard(
+        CompiledFactoryShardCompiler::FORMAT_VERSION,
+        ['createEntry' => AuditCrosswiredAotEntry::class],
+        AuditCrosswiredAotEntry::class,
+    );
+
+    try {
+        require $foreign['file'];
+
+        $container = (new ContainerBuilder())
+            ->addDefinition(
+                'crosswired.preloaded',
+                new CompiledFactoryDefinition($declared['file'], $foreign['class'], 'createEntry'),
+            )
+            ->build();
+
+        expect(fn() => $container->make('crosswired.preloaded'))
+            ->toThrow(InvalidConfigurationException::class, 'unexpected file');
+    } finally {
+        @unlink($declared['file']);
+        @unlink($foreign['file']);
+    }
+});
+
+test('one compiled shard file cannot be cached under two generated classes', function (): void {
+    $declared = writeAuditStaleShard(
+        CompiledFactoryShardCompiler::FORMAT_VERSION,
+        ['createEntry' => AuditStaleAotEntry::class],
+    );
+    $foreign = writeAuditStaleShard(
+        CompiledFactoryShardCompiler::FORMAT_VERSION,
+        ['createEntry' => AuditCrosswiredAotEntry::class],
+        AuditCrosswiredAotEntry::class,
+    );
+
+    try {
+        require $foreign['file'];
+
+        $container = (new ContainerBuilder())
+            ->addDefinition(
+                'crosswired.correct',
+                new CompiledFactoryDefinition($declared['file'], $declared['class'], 'createEntry'),
+            )
+            ->addDefinition(
+                'crosswired.cached',
+                new CompiledFactoryDefinition($declared['file'], $foreign['class'], 'createEntry'),
+            )
+            ->build();
+
+        expect($container->make('crosswired.correct'))->toBeInstanceOf(AuditStaleAotEntry::class)
+            ->and(fn() => $container->make('crosswired.cached'))
+            ->toThrow(InvalidConfigurationException::class, 'already loaded as');
+    } finally {
+        @unlink($declared['file']);
+        @unlink($foreign['file']);
     }
 });
