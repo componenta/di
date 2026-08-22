@@ -21,7 +21,7 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 
-use function Componenta\DI\is_entry_class_eligible;
+use function Componenta\DI\Internal\is_entry_class_eligible;
 
 /** Single object-creation runtime shared by reflection and compiled entries. */
 final class ObjectPipeline
