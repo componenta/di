@@ -61,7 +61,7 @@ test('invalid non-factory compiler output is rejected before cache replacement',
 
     try {
         expect(fn() => (new DiCacheGenerator(new InvalidDependencyDefinitionCompiler()))->generate([], $path))
-            ->toThrow(InvalidConfigurationException::class, 'Alias target must be a non-empty');
+            ->toThrow(InvalidConfigurationException::class, 'Aliases must map non-empty string ids');
 
         expect(file_get_contents($path))->toBe($sentinel)
             ->and(glob($path . '.tmp.*') ?: [])->toBe([]);
