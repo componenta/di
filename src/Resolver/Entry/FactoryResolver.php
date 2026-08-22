@@ -112,6 +112,13 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     /** @param array<string|int, mixed> $params */
     private function classDefinition(ClassDefinition $definition, array $params): object
     {
+        if (!$this->objects->canCreate($definition->value)) {
+            throw new InvalidConfigurationException(sprintf(
+                'ClassDefinition target "%s" cannot be created by the current object pipeline.',
+                $definition->value,
+            ));
+        }
+
         $configured = $this->resolveDefinitionValue($definition->constructorParams);
         if (!is_array($configured)) {
             throw new InvalidConfigurationException('ClassDefinition constructor parameters must resolve to an array.');
