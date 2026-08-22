@@ -121,6 +121,7 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
             throw new InvalidConfigurationException('Factories must be an array after definition compilation.');
         }
 
+        /** @var array<array-key,GeneratedDefinitionCode> $generated */
         $generated = [];
         $validationFactories = $factories;
         foreach ($factories as $id => $factory) {
@@ -135,10 +136,15 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
         $validation = $dependencies;
         $validation[ConfigKey::FACTORIES] = $validationFactories;
         $normalized = ContainerBuilder::normalizeDependencies($validation);
+        $normalizedFactories = $normalized[ConfigKey::FACTORIES] ?? [];
+        if (!is_array($normalizedFactories)) {
+            throw new InvalidConfigurationException('Normalized factories must be an array.');
+        }
 
         foreach ($generated as $id => $factory) {
-            $normalized[ConfigKey::FACTORIES][$id] = $factory;
+            $normalizedFactories[$id] = $factory;
         }
+        $normalized[ConfigKey::FACTORIES] = $normalizedFactories;
 
         return $normalized;
     }
