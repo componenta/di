@@ -30,11 +30,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
 
       - name: Checkout config v3 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/config
           ref: main
@@ -42,11 +42,19 @@ jobs:
 
       - name: Checkout validation workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/validation
           ref: main
           path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
@@ -69,6 +77,12 @@ jobs:
         run: >-
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -98,11 +112,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
 
       - name: Checkout config v3 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/config
           ref: main
@@ -110,11 +124,19 @@ jobs:
 
       - name: Checkout validation workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/validation
           ref: main
           path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
@@ -139,6 +161,12 @@ jobs:
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
 
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
+
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
@@ -151,11 +179,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
 
       - name: Checkout config v3 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/config
           ref: main
@@ -163,11 +191,19 @@ jobs:
 
       - name: Checkout validation workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/validation
           ref: main
           path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
@@ -190,6 +226,12 @@ jobs:
         run: >-
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -215,11 +257,11 @@ jobs:
 
     steps:
       - name: Checkout v5
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
 
       - name: Checkout config v3 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/config
           ref: main
@@ -227,14 +269,22 @@ jobs:
 
       - name: Checkout validation workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           repository: componenta/validation
           ref: main
           path: .ci/validation
 
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
+
       - name: Checkout v4.0.10 baseline
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5834248c87452386958240 # v4.4.0
         with:
           ref: 5d0e7d7c2e804dd113df5e0f732c2fff882b3bd1
           path: .benchmark/v4
@@ -260,6 +310,12 @@ jobs:
         run: >-
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
 
       - name: Install v5 dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
