@@ -22,7 +22,7 @@ test('lazy request context is released with the lazy object', function (): void 
     $reference = WeakReference::create($request);
 
     $lazy = $container->make(AuditLazyRequestRetentionTarget::class, [
-        ServerRequestInterface::class => $request,
+        'request' => $request,
     ]);
 
     unset($request);
