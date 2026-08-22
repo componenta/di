@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
+use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 
@@ -19,6 +20,17 @@ final class ClassDefinitionParityTarget
 }
 
 final class ClassDefinitionParityNoConstructorTarget {}
+
+#[NoConstructor]
+final class ClassDefinitionConstructorPolicyTarget
+{
+    public bool $constructorRan = false;
+
+    private function __construct()
+    {
+        $this->constructorRan = true;
+    }
+}
 
 interface ClassDefinitionUnionLeft {}
 interface ClassDefinitionUnionRight {}
@@ -87,6 +99,20 @@ test('ClassDefinition target without constructor ignores unrelated make context'
         'class.definition.no-constructor',
         ['unrelated' => 'ignored'],
     ))->toBeInstanceOf(ClassDefinitionParityNoConstructorTarget::class);
+});
+
+test('ClassDefinition honors constructor policies from the shared object pipeline', function (): void {
+    $container = (new ContainerBuilder())
+        ->addDefinition(
+            'class.definition.constructor-policy',
+            ClassDefinition::create(ClassDefinitionConstructorPolicyTarget::class),
+        )
+        ->build();
+
+    $entry = $container->make('class.definition.constructor-policy');
+
+    expect($entry)->toBeInstanceOf(ClassDefinitionConstructorPolicyTarget::class)
+        ->and($entry->constructorRan)->toBeFalse();
 });
 
 test('ClassDefinition typed union overrides match the concrete type key exactly', function (): void {
