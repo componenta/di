@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Componenta\DI;
+namespace Componenta\DI\Internal;
 
 use Componenta\Caster\CasterNotFoundException;
 use Componenta\Caster\CasterProviderInterface;
@@ -13,12 +13,13 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use InvalidArgumentException;
 use ReflectionClass;
 
+/** @internal */
 function normalize_env_name(string $name): string
 {
     return strtoupper(preg_replace('/([a-z])([A-Z])/', '$1_$2', $name) ?? $name);
 }
 
-/** @param ReflectionClass<object> $class */
+/** @internal @param ReflectionClass<object> $class */
 function is_entry_class_eligible(ReflectionClass $class): bool
 {
     if ($class->isAnonymous()
@@ -34,6 +35,7 @@ function is_entry_class_eligible(ReflectionClass $class): bool
 }
 
 /**
+ * @internal
  * @param array<mixed> $result
  * @return array{0:int,1:mixed}
  */
@@ -76,6 +78,7 @@ function validate_parameter_resolution_result(
 }
 
 /**
+ * @internal
  * @param array<string|int,mixed> $data
  * @param array<string,string> $map
  * @param array<string,mixed> $defaults
