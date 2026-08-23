@@ -10,6 +10,8 @@ use Componenta\VarExport\Config\ExportConfig;
 use Componenta\VarExport\Exception\ExportException;
 use Componenta\VarExport\VarExporter;
 use ReflectionClass;
+use ReflectionParameter;
+use ReflectionProperty;
 use UnitEnum;
 
 /** Exports one cache graph while preserving repeated object and Closure identity. */
@@ -80,12 +82,19 @@ final class DiCacheGraphExporter
 
         $keys = array_keys($values);
         if ($this->config->sortKeys) {
-            usort($keys, static fn(int|string $left, int|string $right): int => $left <=> $right);
+            usort($keys, self::compareKeys(...));
         }
 
         $list = array_is_list($values);
         $items = [];
         foreach ($keys as $key) {
+            if (\ReflectionReference::fromArrayElement($values, $key) !== null) {
+                throw new ExportException(sprintf(
+                    'DI cache array contains a PHP reference at key %s; alias semantics cannot be persisted safely.',
+                    var_export($key, true),
+                ));
+            }
+
             $item = $this->value($values[$key], $depth + 1);
             $items[] = $list ? $item : $this->values->export($key) . ' => ' . $item;
         }
@@ -101,6 +110,25 @@ final class DiCacheGraphExporter
         return "[\n{$itemIndent}"
             . implode(",\n{$itemIndent}", $items)
             . "{$trailing}\n{$baseIndent}]";
+    }
+
+    private static function compareKeys(int|string $left, int|string $right): int
+    {
+        if (is_int($left) && is_string($right)) {
+            return -1;
+        }
+
+        if (is_string($left) && is_int($right)) {
+            return 1;
+        }
+
+        if (is_int($left)) {
+            /** @var int $right */
+            return $left <=> $right;
+        }
+
+        /** @var string $right */
+        return strcmp($left, $right);
     }
 
     /** @param Closure(): string $expression */
@@ -134,12 +162,7 @@ final class DiCacheGraphExporter
     private function readonlyObject(object $object, int $depth): string
     {
         $reflection = new ReflectionClass($object);
-        if (!$reflection->isReadOnly()) {
-            throw new ExportException(sprintf(
-                'Cannot export object of type "%s": only readonly classes are supported.',
-                $object::class,
-            ));
-        }
+        $this->assertReconstructable($reflection, $object);
 
         $constructor = $reflection->getConstructor();
         if ($constructor === null) {
@@ -148,22 +171,142 @@ final class DiCacheGraphExporter
 
         $arguments = [];
         foreach ($constructor->getParameters() as $parameter) {
-            $name = $parameter->getName();
-            if (!$reflection->hasProperty($name) || !$reflection->getProperty($name)->isPublic()) {
-                throw new ExportException(sprintf(
-                    'Cannot export object of type "%s": constructor parameter "$%s" has no corresponding public property.',
-                    $object::class,
-                    $name,
-                ));
-            }
-
+            $property = $reflection->getProperty($parameter->getName());
             $arguments[] = $this->value(
-                $reflection->getProperty($name)->getValue($object),
+                $property->getValue($object),
                 $depth + 1,
             );
         }
 
         return 'new \\' . $object::class . '(' . implode(', ', $arguments) . ')';
+    }
+
+    /** @param ReflectionClass<object> $reflection */
+    private function assertReconstructable(ReflectionClass $reflection, object $object): void
+    {
+        if (!$reflection->isReadOnly()) {
+            throw new ExportException(sprintf(
+                'Cannot export object of type "%s": only strict readonly constructor values are supported.',
+                $object::class,
+            ));
+        }
+
+        if ($reflection->isAnonymous()) {
+            throw new ExportException(sprintf(
+                'Cannot export anonymous readonly object of type "%s".',
+                $object::class,
+            ));
+        }
+
+        $constructor = $reflection->getConstructor();
+        $properties = $this->instanceProperties($reflection);
+
+        if ($constructor === null) {
+            if ($properties !== []) {
+                throw new ExportException(sprintf(
+                    'Readonly object "%s" has state but no reconstructing constructor.',
+                    $object::class,
+                ));
+            }
+
+            return;
+        }
+
+        if (!$constructor->isPublic()) {
+            throw new ExportException(sprintf(
+                'Constructor of readonly object "%s" must be public.',
+                $object::class,
+            ));
+        }
+
+        $parameterNames = [];
+        foreach ($constructor->getParameters() as $parameter) {
+            $this->assertParameter($reflection, $object, $parameter);
+            $parameterNames[$parameter->getName()] = true;
+        }
+
+        foreach ($properties as $property) {
+            if (!isset($parameterNames[$property->getName()])) {
+                throw new ExportException(sprintf(
+                    'Readonly object "%s" has instance property "$%s" outside constructor state.',
+                    $object::class,
+                    $property->getName(),
+                ));
+            }
+        }
+
+        if ($reflection->hasMethod('__unserialize')) {
+            throw new ExportException(sprintf(
+                'Readonly object "%s" defines __unserialize(); generic constructor reconstruction is unsafe.',
+                $object::class,
+            ));
+        }
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @return list<ReflectionProperty>
+     */
+    private function instanceProperties(ReflectionClass $reflection): array
+    {
+        $properties = [];
+        $class = $reflection;
+
+        do {
+            foreach ($class->getProperties() as $property) {
+                if ($property->isStatic() || $property->getDeclaringClass()->getName() !== $class->getName()) {
+                    continue;
+                }
+
+                $properties[] = $property;
+            }
+
+            $class = $class->getParentClass();
+        } while ($class !== false);
+
+        return $properties;
+    }
+
+    /** @param ReflectionClass<object> $reflection */
+    private function assertParameter(
+        ReflectionClass $reflection,
+        object $object,
+        ReflectionParameter $parameter,
+    ): void {
+        $name = $parameter->getName();
+
+        if ($parameter->isVariadic() || $parameter->isPassedByReference()) {
+            throw new ExportException(sprintf(
+                'Constructor parameter "%s::$%s" cannot be variadic or passed by reference.',
+                $reflection->getName(),
+                $name,
+            ));
+        }
+
+        if (!$parameter->isPromoted() || !$reflection->hasProperty($name)) {
+            throw new ExportException(sprintf(
+                'Constructor parameter "%s::$%s" must be a promoted property.',
+                $reflection->getName(),
+                $name,
+            ));
+        }
+
+        $property = $reflection->getProperty($name);
+        if (!$property->isPublic() || !$property->isPromoted() || $property->isVirtual() || $property->hasHooks()) {
+            throw new ExportException(sprintf(
+                'Promoted property "%s::$%s" must be public, concrete and hook-free.',
+                $reflection->getName(),
+                $name,
+            ));
+        }
+
+        if (!$property->isInitialized($object)) {
+            throw new ExportException(sprintf(
+                'Promoted property "%s::$%s" is not initialized.',
+                $reflection->getName(),
+                $name,
+            ));
+        }
     }
 
     private function isTrusted(GeneratedDefinitionCode $code): bool
