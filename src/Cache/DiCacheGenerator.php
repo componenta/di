@@ -12,7 +12,10 @@ use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\WarningGuard;
 use Componenta\DI\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\VarExport\Config\ClosureExportPolicy;
+use Componenta\VarExport\Config\ClosureUseMode;
 use Componenta\VarExport\Config\ExportConfig;
+use Componenta\VarExport\Config\SourcePathPolicy;
 
 /** Default persistent-container cache writer. */
 final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
@@ -27,68 +30,32 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     public function generate(array $dependencies, string $path): void
     {
         $this->ensureDirectory(dirname($path));
-
         $dependencies = ContainerBuilder::normalizeDependencies($dependencies);
         $dependencies = $this->definitionCompiler->compile($dependencies);
         $this->assertCompiledFactories($dependencies);
-        $cache = [
-            'version' => ContainerBuilder::CACHE_VERSION,
-            ConfigKey::DEPENDENCIES => $dependencies,
-        ];
+        $cache = ['version' => ContainerBuilder::CACHE_VERSION, ConfigKey::DEPENDENCIES => $dependencies];
 
         try {
-            $config = ExportConfig::pretty()->withTrailingComma();
-            $exported = (new DiCacheGraphExporter(
-                $config,
-                $this->trustedGeneratedCode($dependencies),
-            ))->export($cache);
+            $config = ExportConfig::pretty()
+                ->withTrailingComma()
+                ->withClosureUseMode(ClosureUseMode::Inline)
+                ->withClosureExportPolicy(ClosureExportPolicy::PortableExpression)
+                ->withSourcePathPolicy(SourcePathPolicy::Reject);
+            $exported = (new DiCacheGraphExporter($config, $this->trustedGeneratedCode($dependencies)))->export($cache);
         } catch (\Throwable $e) {
-            throw new InvalidConfigurationException(
-                sprintf('Failed to serialise DI cache for "%s": %s', $path, $e->getMessage()),
-                previous: $e,
-            );
+            throw new InvalidConfigurationException(sprintf('Failed to serialise DI cache for "%s": %s', $path, $e->getMessage()), previous: $e);
         }
 
-        $wasOpcodeCached = is_file($path)
-            && function_exists('opcache_is_script_cached')
-            && WarningGuard::run(
-                static fn(): bool => opcache_is_script_cached($path),
-            );
+        $wasOpcodeCached = is_file($path) && function_exists('opcache_is_script_cached') && WarningGuard::run(static fn(): bool => opcache_is_script_cached($path));
         $contents = "<?php\n\ndeclare(strict_types=1);\n\nreturn {$exported};\n";
         $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
-        $written = WarningGuard::run(
-            static fn(): int|false => file_put_contents($tmp, $contents, LOCK_EX),
-        );
-
-        if ($written === false) {
-            WarningGuard::run(static fn(): bool => unlink($tmp));
-            throw new InvalidConfigurationException(
-                sprintf('Failed to write DI cache temp file: %s', $tmp),
-            );
-        }
-
-        $committed = WarningGuard::run(
-            static fn(): bool => rename($tmp, $path),
-        );
-
-        if (!$committed) {
-            WarningGuard::run(static fn(): bool => unlink($tmp));
-            throw new InvalidConfigurationException(
-                sprintf('Failed to commit DI cache file: %s', $path),
-            );
-        }
-
+        $written = WarningGuard::run(static fn(): int|false => file_put_contents($tmp, $contents, LOCK_EX));
+        if ($written === false) { WarningGuard::run(static fn(): bool => unlink($tmp)); throw new InvalidConfigurationException(sprintf('Failed to write DI cache temp file: %s', $tmp)); }
+        $committed = WarningGuard::run(static fn(): bool => rename($tmp, $path));
+        if (!$committed) { WarningGuard::run(static fn(): bool => unlink($tmp)); throw new InvalidConfigurationException(sprintf('Failed to commit DI cache file: %s', $path)); }
         if (function_exists('opcache_invalidate')) {
-            $invalidated = WarningGuard::run(
-                static fn(): bool => opcache_invalidate($path, true),
-            );
-
-            if ($wasOpcodeCached && !$invalidated) {
-                throw new InvalidConfigurationException(sprintf(
-                    'DI cache "%s" was replaced, but its previous OPcache entry could not be invalidated.',
-                    $path,
-                ));
-            }
+            $invalidated = WarningGuard::run(static fn(): bool => opcache_invalidate($path, true));
+            if ($wasOpcodeCached && !$invalidated) { throw new InvalidConfigurationException(sprintf('DI cache "%s" was replaced, but its previous OPcache entry could not be invalidated.', $path)); }
         }
     }
 
@@ -96,55 +63,23 @@ final readonly class DiCacheGenerator implements DiCacheGeneratorInterface
     private function assertCompiledFactories(array $dependencies): void
     {
         $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
-        if (!is_array($factories)) {
-            throw new InvalidConfigurationException('Factories must be an array after definition compilation.');
-        }
-
-        foreach ($factories as $id => $factory) {
-            if ($factory instanceof GeneratedDefinitionCode) {
-                continue;
-            }
-
-            FactorySpecificationValidator::assertValid($id, $factory);
-        }
+        if (!is_array($factories)) { throw new InvalidConfigurationException('Factories must be an array after definition compilation.'); }
+        foreach ($factories as $id => $factory) { if ($factory instanceof GeneratedDefinitionCode) { continue; } FactorySpecificationValidator::assertValid($id, $factory); }
     }
 
-    /**
-     * @param array<string, mixed> $dependencies
-     * @return array<int, true>
-     */
+    /** @param array<string, mixed> $dependencies @return array<int, true> */
     private function trustedGeneratedCode(array $dependencies): array
     {
-        $trusted = [];
-        $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
-
-        if (!is_array($factories)) {
-            return $trusted;
-        }
-
-        foreach ($factories as $factory) {
-            if ($factory instanceof GeneratedDefinitionCode) {
-                $trusted[spl_object_id($factory)] = true;
-            }
-        }
-
+        $trusted = []; $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
+        if (!is_array($factories)) { return $trusted; }
+        foreach ($factories as $factory) { if ($factory instanceof GeneratedDefinitionCode) { $trusted[spl_object_id($factory)] = true; } }
         return $trusted;
     }
 
     private function ensureDirectory(string $dir): void
     {
-        if (is_dir($dir)) {
-            return;
-        }
-
-        $created = WarningGuard::run(
-            static fn(): bool => mkdir($dir, 0o755, recursive: true),
-        );
-
-        if (!$created && !is_dir($dir)) {
-            throw new InvalidConfigurationException(
-                sprintf('Failed to create DI cache directory: %s', $dir),
-            );
-        }
+        if (is_dir($dir)) { return; }
+        $created = WarningGuard::run(static fn(): bool => mkdir($dir, 0o755, recursive: true));
+        if (!$created && !is_dir($dir)) { throw new InvalidConfigurationException(sprintf('Failed to create DI cache directory: %s', $dir)); }
     }
 }
