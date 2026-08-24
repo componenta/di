@@ -7,7 +7,9 @@ namespace Componenta\DI\Cache;
 use Closure;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\VarExport\Config\ExportConfig;
+use Componenta\VarExport\Contract\ContextualClosureExporterInterface;
 use Componenta\VarExport\Exception\ExportException;
+use Componenta\VarExport\ExportContext;
 use Componenta\VarExport\VarExporter;
 use ReflectionClass;
 use ReflectionParameter;
@@ -38,43 +40,58 @@ final class DiCacheGraphExporter
     {
         $this->variables = [];
         $this->building = [];
-        $expression = $this->value($cache, 1);
+        $context = new ExportContext(0, baseIndent: $this->config->indent);
+        $expression = $this->value($cache, $context);
 
         return "(static function (): array {\n"
             . $this->config->indent . "return {$expression};\n"
             . '})()';
     }
 
-    private function value(mixed $value, int $depth): string
+    private function value(mixed $value, ExportContext $context): string
     {
-        if ($depth > $this->config->maxDepth) {
-            throw new ExportException(sprintf(
-                'Maximum nesting depth of %d exceeded while exporting the DI cache graph.',
-                $this->config->maxDepth,
-            ));
+        if ($context->depth > $this->config->maxDepth) {
+            throw new ExportException(
+                sprintf(
+                    'Maximum nesting depth of %d exceeded while exporting the DI cache graph at %s.',
+                    $this->config->maxDepth,
+                    $context->location(),
+                ),
+                [
+                    'max_depth' => $this->config->maxDepth,
+                    'depth' => $context->depth,
+                    'path' => $context->path,
+                ],
+            );
         }
 
         return match (true) {
-            is_array($value) => $this->array($value, $depth),
+            is_array($value) => $this->array($value, $context),
             $value instanceof Closure => $this->object(
                 $value,
-                fn(): string => $this->values->getClosureExporter()->exportWithDepth($value, $depth),
+                function () use ($value, $context): string {
+                    $exporter = $this->values->getClosureExporter();
+
+                    return $exporter instanceof ContextualClosureExporterInterface
+                        ? $exporter->exportWithContext($value, $context)
+                        : $exporter->exportWithDepth($value, $context->depth);
+                },
             ),
-            $value instanceof UnitEnum => $this->values->export($value),
+            $value instanceof UnitEnum => $this->values->exportValue($value, $context),
             $value instanceof GeneratedDefinitionCode && $this->isTrusted($value) => $this->object(
                 $value,
-                static fn(): string => $value->code,
+                fn(): string => $this->formatExpression($value->code, $context->baseIndent),
             ),
             is_object($value) => $this->object(
                 $value,
-                fn(): string => $this->readonlyObject($value, $depth),
+                fn(): string => $this->readonlyObject($value, $context),
             ),
-            default => $this->values->export($value),
+            default => $this->values->exportValue($value, $context),
         };
     }
 
     /** @param array<int|string, mixed> $values */
-    private function array(array $values, int $depth): string
+    private function array(array $values, ExportContext $context): string
     {
         if ($values === []) {
             return '[]';
@@ -87,6 +104,7 @@ final class DiCacheGraphExporter
 
         $list = array_is_list($values);
         $items = [];
+        $itemIndent = $context->baseIndent . $this->config->indent;
         foreach ($keys as $key) {
             if (\ReflectionReference::fromArrayElement($values, $key) !== null) {
                 throw new ExportException(sprintf(
@@ -95,7 +113,8 @@ final class DiCacheGraphExporter
                 ));
             }
 
-            $item = $this->value($values[$key], $depth + 1);
+            $child = $context->child($key, $itemIndent);
+            $item = $this->value($values[$key], $child);
             $items[] = $list ? $item : $this->values->export($key) . ' => ' . $item;
         }
 
@@ -103,13 +122,11 @@ final class DiCacheGraphExporter
             return '[' . implode(', ', $items) . ']';
         }
 
-        $itemIndent = str_repeat($this->config->indent, $depth);
-        $baseIndent = str_repeat($this->config->indent, $depth - 1);
         $trailing = $this->config->trailingComma ? ',' : '';
 
         return "[\n{$itemIndent}"
             . implode(",\n{$itemIndent}", $items)
-            . "{$trailing}\n{$baseIndent}]";
+            . "{$trailing}\n{$context->baseIndent}]";
     }
 
     private static function compareKeys(int|string $left, int|string $right): int
@@ -159,7 +176,7 @@ final class DiCacheGraphExporter
         return sprintf('(%s = %s)', $variable, $code);
     }
 
-    private function readonlyObject(object $object, int $depth): string
+    private function readonlyObject(object $object, ExportContext $context): string
     {
         $reflection = new ReflectionClass($object);
         $this->assertReconstructable($reflection, $object);
@@ -170,11 +187,12 @@ final class DiCacheGraphExporter
         }
 
         $arguments = [];
+        $argumentIndent = $context->baseIndent . $this->config->indent;
         foreach ($constructor->getParameters() as $parameter) {
             $property = $reflection->getProperty($parameter->getName());
             $arguments[] = $this->value(
                 $property->getValue($object),
-                $depth + 1,
+                $context->child($parameter->getName(), $argumentIndent),
             );
         }
 
@@ -307,6 +325,15 @@ final class DiCacheGraphExporter
                 $name,
             ));
         }
+    }
+
+    private function formatExpression(string $code, string $baseIndent): string
+    {
+        if ($baseIndent === '' || !str_contains($code, "\n")) {
+            return $code;
+        }
+
+        return str_replace("\n", "\n" . $baseIndent, $code);
     }
 
     private function isTrusted(GeneratedDefinitionCode $code): bool
