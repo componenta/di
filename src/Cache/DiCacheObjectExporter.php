@@ -59,13 +59,11 @@ final readonly class DiCacheObjectExporter implements ContextualObjectExporterIn
     {
         if ($this->isTrustedGeneratedCode($object)) {
             /** @var GeneratedDefinitionCode $object */
-            if ($context->depth === 0 || !str_contains($object->code, "\n")) {
+            if ($context->baseIndent === '' || !str_contains($object->code, "\n")) {
                 return $object->code;
             }
 
-            $indent = str_repeat($this->config->indent, $context->depth);
-
-            return str_replace("\n", "\n" . $indent, $object->code);
+            return str_replace("\n", "\n" . $context->baseIndent, $object->code);
         }
 
         if ($this->fallback instanceof ContextualObjectExporterInterface) {
