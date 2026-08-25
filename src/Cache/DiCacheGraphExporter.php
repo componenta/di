@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Cache;
 
 use Closure;
+use Componenta\DI\Cache\Internal\GeneratedExpressionFormatter;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\VarExport\Config\ExportConfig;
-use Componenta\VarExport\Contract\ContextualClosureExporterInterface;
 use Componenta\VarExport\Exception\ExportException;
 use Componenta\VarExport\ExportContext;
 use Componenta\VarExport\VarExporter;
@@ -69,18 +69,12 @@ final class DiCacheGraphExporter
             is_array($value) => $this->array($value, $context),
             $value instanceof Closure => $this->object(
                 $value,
-                function () use ($value, $context): string {
-                    $exporter = $this->values->getClosureExporter();
-
-                    return $exporter instanceof ContextualClosureExporterInterface
-                        ? $exporter->exportWithContext($value, $context)
-                        : $exporter->exportWithDepth($value, $context->depth);
-                },
+                fn(): string => $this->values->getClosureExporter()->exportWithContext($value, $context),
             ),
             $value instanceof UnitEnum => $this->values->exportValue($value, $context),
             $value instanceof GeneratedDefinitionCode && $this->isTrusted($value) => $this->object(
                 $value,
-                fn(): string => $this->formatExpression($value->code, $context->baseIndent),
+                fn(): string => GeneratedExpressionFormatter::indent($value->code, $context->baseIndent),
             ),
             is_object($value) => $this->object(
                 $value,
@@ -325,15 +319,6 @@ final class DiCacheGraphExporter
                 $name,
             ));
         }
-    }
-
-    private function formatExpression(string $code, string $baseIndent): string
-    {
-        if ($baseIndent === '' || !str_contains($code, "\n")) {
-            return $code;
-        }
-
-        return str_replace("\n", "\n" . $baseIndent, $code);
     }
 
     private function isTrusted(GeneratedDefinitionCode $code): bool
