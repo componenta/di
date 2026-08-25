@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Cache;
 
 use Closure;
+use Componenta\DI\Cache\Internal\GeneratedExpressionFormatter;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\VarExport\Config\ExportConfig;
 use Componenta\VarExport\Contract\ArrayExporterInterface;
@@ -59,11 +60,7 @@ final readonly class DiCacheObjectExporter implements ContextualObjectExporterIn
     {
         if ($this->isTrustedGeneratedCode($object)) {
             /** @var GeneratedDefinitionCode $object */
-            if ($context->baseIndent === '' || !str_contains($object->code, "\n")) {
-                return $object->code;
-            }
-
-            return str_replace("\n", "\n" . $context->baseIndent, $object->code);
+            return GeneratedExpressionFormatter::indent($object->code, $context->baseIndent);
         }
 
         if ($this->fallback instanceof ContextualObjectExporterInterface) {
