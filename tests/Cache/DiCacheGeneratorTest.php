@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Componenta\Config\Config;
 use Componenta\DI\Cache\DiCacheGenerator;
 use Componenta\DI\Cache\DiCacheGeneratorInterface;
+use Componenta\DI\Compile\Definition\DefinitionCompilerInterface;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerBuilder;
@@ -166,6 +167,25 @@ describe('Cache\\DiCacheGenerator', function () {
 
         expect(fn() => $generator->generate($dependencies, $this->path))
             ->toThrow(InvalidConfigurationException::class)
+            ->and(file_get_contents($this->path))->toBe($previous)
+            ->and(glob($this->path . '.tmp.*') ?: [])->toBe([]);
+    });
+
+    it('rejects syntactically invalid generated code before replacing an existing cache', function (): void {
+        $previous = '<?php return ["previous" => true];';
+        file_put_contents($this->path, $previous);
+
+        $compiler = new class implements DefinitionCompilerInterface {
+            public function compile(array $dependencies): array
+            {
+                $dependencies[ConfigKey::FACTORIES]['broken'] = new GeneratedDefinitionCode('new (');
+
+                return $dependencies;
+            }
+        };
+
+        expect(fn() => (new DiCacheGenerator($compiler))->generate([], $this->path))
+            ->toThrow(InvalidConfigurationException::class, 'syntax validation')
             ->and(file_get_contents($this->path))->toBe($previous)
             ->and(glob($this->path . '.tmp.*') ?: [])->toBe([]);
     });
