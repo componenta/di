@@ -8,7 +8,6 @@ use Closure;
 use Componenta\DI\Cache\Internal\GeneratedExpressionFormatter;
 use Componenta\DI\Compile\Definition\GeneratedDefinitionCode;
 use Componenta\VarExport\Config\ExportConfig;
-use Componenta\VarExport\Contract\ArrayExporterInterface;
 use Componenta\VarExport\Contract\ContextualObjectExporterInterface;
 use Componenta\VarExport\Contract\ContextualValueExporterInterface;
 use Componenta\VarExport\Contract\ObjectExporterInterface;
