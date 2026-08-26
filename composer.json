@@ -14,7 +14,7 @@
         "componenta/config": "^3.0@dev",
         "componenta/priority-list": "^1.0",
         "componenta/reflection": "^2.0",
-        "componenta/validation": "^1.0 || ^2.0.0",
+        "componenta/validation": "^2.0@dev",
         "componenta/var-export": "^2.0@dev",
         "psr/container": "^2.0",
         "psr/http-message": "^2.0"
