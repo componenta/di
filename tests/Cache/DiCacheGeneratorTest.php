@@ -175,7 +175,7 @@ describe('Cache\\DiCacheGenerator', function () {
         $previous = '<?php return ["previous" => true];';
         file_put_contents($this->path, $previous);
 
-        $compiler = new class implements DefinitionCompilerInterface {
+        $compiler = new class () implements DefinitionCompilerInterface {
             public function compile(array $dependencies): array
             {
                 $dependencies[ConfigKey::FACTORIES]['broken'] = new GeneratedDefinitionCode('new (');
