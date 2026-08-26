@@ -10,9 +10,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 
 final readonly class DiPortableCapturedProduct
 {
-    public function __construct(public string $value)
-    {
-    }
+    public function __construct(public string $value) {}
 }
 
 final readonly class DiUnsafeReadonlyState
