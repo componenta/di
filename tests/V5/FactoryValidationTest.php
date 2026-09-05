@@ -6,12 +6,13 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
+use Componenta\Config\Environment;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Psr\Container\ContainerInterface;
 
 abstract class AbstractFactoryTarget {}
@@ -19,6 +20,25 @@ abstract class AbstractFactoryTarget {}
 final class DefinitionMethodTarget
 {
     private function hidden(): void {}
+
+    public function callHidden(): void
+    {
+        $this->hidden();
+    }
+}
+
+final readonly class FactoryValueResult
+{
+    public function __construct(public int $value) {}
+}
+
+final readonly class StandaloneLazyResult
+{
+    /** @param array<string|int,mixed> $context */
+    public function __construct(
+        public ContainerInterface $container,
+        public array $context,
+    ) {}
 }
 
 final class StandaloneLazyServiceFactory implements LazyServiceFactoryInterface
@@ -33,10 +53,7 @@ final class StandaloneLazyServiceFactory implements LazyServiceFactoryInterface
     ): object {
         $this->seenContext = $context;
 
-        return (object) [
-            'container' => $container,
-            'context' => $context,
-        ];
+        return new StandaloneLazyResult($container, $context);
     }
 }
 
@@ -44,28 +61,38 @@ test('factory callable signatures reject arguments incompatible with the restore
     expect(fn() => (new ContainerBuilder())->addFactory(
         'bad.first',
         static fn(array $_container, array $_params): object => new \stdClass(),
-    ))->toThrow(InvalidConfigurationException::class);
+    )->build())->toThrow(InvalidConfigurationException::class);
 
     expect(fn() => (new ContainerBuilder())->addFactory(
         'bad.second',
         static fn(ContainerValue $_container, string $_params): object => new \stdClass(),
-    ))->toThrow(InvalidConfigurationException::class);
+    )->build())->toThrow(InvalidConfigurationException::class);
 });
 
 test('factory callable signatures accept ContainerValue or ContainerInterface plus array params', function (): void {
     $container = (new ContainerBuilder())
         ->addFactory(
             'value.factory',
-            static fn(ContainerValue $_container, array $params): object => (object) $params,
+            static fn(ContainerValue $_container, array $params): object => new FactoryValueResult(
+                is_int($params['value'] ?? null) ? $params['value'] : 0,
+            ),
         )
         ->addFactory(
             'interface.factory',
-            static fn(ContainerInterface $_container, array $params): object => (object) $params,
+            static fn(ContainerInterface $_container, array $params): object => new FactoryValueResult(
+                is_int($params['value'] ?? null) ? $params['value'] : 0,
+            ),
         )
         ->build();
 
-    expect($container->make('value.factory', ['value' => 1])->value)->toBe(1)
-        ->and($container->make('interface.factory', ['value' => 2])->value)->toBe(2);
+    $valueResult = $container->make('value.factory', ['value' => 1]);
+    $interfaceResult = $container->make('interface.factory', ['value' => 2]);
+    if (!$valueResult instanceof FactoryValueResult || !$interfaceResult instanceof FactoryValueResult) {
+        throw new \LogicException('The factory ABI fixture returned an unexpected type.');
+    }
+
+    expect($valueResult->value)->toBe(1)
+        ->and($interfaceResult->value)->toBe(2);
 });
 
 test('standalone lazy service factories do not need to be callable', function (): void {
@@ -78,21 +105,29 @@ test('standalone lazy service factories do not need to be callable', function ()
 
     $fluentResult = $fluentContainer->make('lazy.fluent', ['source' => 'fluent']);
     $bulkResult = $fluentContainer->make('lazy.bulk', ['source' => 'bulk']);
+    if (!$fluentResult instanceof StandaloneLazyResult || !$bulkResult instanceof StandaloneLazyResult) {
+        throw new \LogicException('The configured lazy factory returned an unexpected type.');
+    }
 
     $direct = new StandaloneLazyServiceFactory();
-    $directContainer = ContainerBuilder::configure(new Config([
-        ConfigKey::DEPENDENCIES => [
+    $directContainer = ContainerBuilder::configureWithDependencies(
+        new Config([], new Environment([])),
+        [
             ConfigKey::FACTORIES => [
                 'lazy.direct' => $direct,
             ],
         ],
-    ]))->build();
+    )->build();
 
     $directResult = $directContainer->make('lazy.direct', ['source' => 'direct']);
+    if (!$directResult instanceof StandaloneLazyResult) {
+        throw new \LogicException('The direct lazy factory returned an unexpected type.');
+    }
 
     $deferred = new StandaloneLazyServiceFactory();
-    $deferredContainer = ContainerBuilder::configure(new Config([
-        ConfigKey::DEPENDENCIES => [
+    $deferredContainer = ContainerBuilder::configureWithDependencies(
+        new Config([], new Environment([])),
+        [
             ConfigKey::SERVICES => [
                 'lazy.factory' => $deferred,
             ],
@@ -100,9 +135,12 @@ test('standalone lazy service factories do not need to be callable', function ()
                 'lazy.deferred' => 'lazy.factory',
             ],
         ],
-    ]))->build();
+    )->build();
 
     $deferredResult = $deferredContainer->make('lazy.deferred', ['source' => 'service']);
+    if (!$deferredResult instanceof StandaloneLazyResult) {
+        throw new \LogicException('The deferred lazy factory returned an unexpected type.');
+    }
 
     expect($fluentResult->container)->toBeInstanceOf(ContainerValue::class)
         ->and($fluentResult->context)->toBe(['source' => 'fluent'])
@@ -131,10 +169,10 @@ test('ClassDefinition validates target eligibility and configured method visibil
     expect(fn() => (new ContainerBuilder())->addDefinition(
         'abstract.target',
         ClassDefinition::create(AbstractFactoryTarget::class),
-    ))->toThrow(InvalidConfigurationException::class);
+    )->build())->toThrow(InvalidConfigurationException::class);
 
     expect(fn() => (new ContainerBuilder())->addDefinition(
         'hidden.method',
         ClassDefinition::create(DefinitionMethodTarget::class)->method('hidden'),
-    ))->toThrow(InvalidConfigurationException::class);
+    )->build())->toThrow(InvalidConfigurationException::class);
 });

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 test('a reflection miss does not hide a class provided by a later autoloader', function (): void {
     $short = 'AuditLateLoaded_' . bin2hex(random_bytes(5));
@@ -23,8 +23,12 @@ test('a reflection miss does not hide a class provided by a later autoloader', f
     spl_autoload_register($loader);
 
     try {
-        expect($container->has($class))->toBeTrue()
-            ->and($container->make($class))->toBeInstanceOf($class);
+        expect($container->has($class))->toBeTrue();
+        if (!class_exists($class)) {
+            throw new \LogicException('The late autoloader did not define the requested class.');
+        }
+
+        expect($container->make($class))->toBeInstanceOf($class);
     } finally {
         spl_autoload_unregister($loader);
     }

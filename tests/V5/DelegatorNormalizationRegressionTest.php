@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 function auditDelegatorFirst(string $entry): string
 {
@@ -27,8 +28,9 @@ final class AuditDeferredDelegatorService
 }
 
 test('a two-string delegator config value remains a list of two delegators', function (): void {
-    $container = ContainerBuilder::configure(new Config([
-        ConfigKey::DEPENDENCIES => [
+    $container = ContainerBuilder::configureWithDependencies(
+        new Config([], new Environment([])),
+        [
             ConfigKey::SERVICES => [
                 'audit.service' => 'base',
             ],
@@ -39,14 +41,15 @@ test('a two-string delegator config value remains a list of two delegators', fun
                 ],
             ],
         ],
-    ]))->build();
+    )->build();
 
     expect($container->get('audit.service'))->toBe('base:first:second');
 });
 
 test('a deferred service-method delegator remains available as a nested list item', function (): void {
-    $container = ContainerBuilder::configure(new Config([
-        ConfigKey::DEPENDENCIES => [
+    $container = ContainerBuilder::configureWithDependencies(
+        new Config([], new Environment([])),
+        [
             ConfigKey::SERVICES => [
                 'audit.service' => 'base',
                 'audit.delegator' => new AuditDeferredDelegatorService(),
@@ -57,7 +60,7 @@ test('a deferred service-method delegator remains available as a nested list ite
                 ],
             ],
         ],
-    ]))->build();
+    )->build();
 
     expect($container->get('audit.service'))->toBe('base:deferred');
 });

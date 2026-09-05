@@ -17,6 +17,8 @@ use ReflectionFunction;
 use ReflectionParameter;
 use Throwable;
 
+use function Componenta\DI\Internal\is_magic_closure_trampoline;
+
 /** DI-aware callable executor. */
 final class CallableExecutor implements CallableExecutorInterface
 {
@@ -73,6 +75,9 @@ final class CallableExecutor implements CallableExecutorInterface
             // reference and keeps closure captures alive. Closures are prepared
             // per invocation; stable named/method callables remain cacheable.
             $reflection = new ReflectionFunction($callable);
+            if (is_magic_closure_trampoline($reflection)) {
+                return null;
+            }
             /** @var list<ReflectionParameter> $parameters */
             $parameters = array_values($reflection->getParameters());
             return $this->parameters->prepare($parameters);

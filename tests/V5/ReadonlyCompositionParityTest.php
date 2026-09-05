@@ -7,15 +7,15 @@ namespace Componenta\DI\Tests\V5;
 use Attribute;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
-use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use ReflectionProperty;
 use Reflector;
@@ -43,9 +43,14 @@ final class ReadonlyTransformHandler implements AttributeHandlerInterface
         }
 
         if ($context->propertyClaimed($target)) {
+            $current = $context->readProperty($target);
+            if (!is_string($current)) {
+                throw new \LogicException('Expected the readonly transformer fixture to read a string.');
+            }
+
             $context->writeProperty(
                 $target,
-                (string) $context->readProperty($target) . ':next',
+                $current . ':next',
             );
             return;
         }
@@ -54,63 +59,53 @@ final class ReadonlyTransformHandler implements AttributeHandlerInterface
             return;
         }
 
-        $context->writeProperty(
-            $target,
-            (string) ($context->parameters[$target->getName()] ?? 'initial'),
-        );
+        $initial = $context->parameters[$target->getName()] ?? 'initial';
+        if (!is_string($initial)) {
+            throw new \LogicException('Expected the readonly transformer fixture to receive a string.');
+        }
+
+        $context->writeProperty($target, $initial);
     }
 }
+
+/** @return non-empty-string */
+function multipleReadonlyTransformersTarget(): string
+{
+    $class = __NAMESPACE__ . '\\MultipleReadonlyTransformersTarget';
+
+    if (!class_exists($class, false)) {
+        eval(<<<'PHP'
+namespace Componenta\DI\Tests\V5;
 
 final class MultipleReadonlyTransformersTarget
 {
     #[ReadonlyTransformA, ReadonlyTransformB]
     public readonly string $value;
 }
+PHP);
+    }
 
-function cleanupReadonlyCompositionDirectory(string $directory): void
-{
-    foreach (glob($directory . '/*') ?: [] as $file) {
-        if (is_file($file)) {
-            @unlink($file);
-        }
+    if (!class_exists($class, false)) {
+        throw new \LogicException('Failed to define the readonly transformer fixture.');
     }
-    if (is_dir($directory)) {
-        @rmdir($directory);
-    }
+
+    return $class;
 }
 
-test('promoted readonly values compose through constructor parameters in development and AOT', function (): void {
-    $directory = sys_get_temp_dir()
-        . '/componenta-di-readonly-composition-'
-        . bin2hex(random_bytes(5));
-    $config = new Config(['raw' => '  composed  ']);
-    $builder = ContainerBuilder::configure($config)
-        ->addService(CasterProviderInterface::class, new TestCasterProvider());
-    $development = $builder->build();
+test('promoted readonly values compose identically for every container build', function (): void {
+    $config = new Config(['raw' => '  composed  '], new Environment([]));
+    $containers = [
+        ContainerBuilder::configure($config)
+            ->addService(CasterProviderInterface::class, new TestCasterProvider())
+            ->build(),
+        ContainerBuilder::configure($config)
+            ->addService(CasterProviderInterface::class, new TestCasterProvider())
+            ->build(),
+    ];
 
-    try {
-        $compiled = $builder->compileFactories(
-            [PromotedReadonlyConfigCastTarget::class],
-            $directory,
-        );
-        $dependencies = $builder->toArray()[ConfigKey::DEPENDENCIES];
-        $dependencies[ConfigKey::FACTORIES] = array_replace(
-            $dependencies[ConfigKey::FACTORIES] ?? [],
-            $compiled,
-        );
-        $production = ContainerBuilder::configureFromCache(
-            $config,
-            [
-                'version' => ContainerBuilder::CACHE_VERSION,
-                ConfigKey::DEPENDENCIES => $dependencies,
-            ],
-            $directory,
-        )->build();
-
-        expect($development->make(PromotedReadonlyConfigCastTarget::class)->value)->toBe('composed')
-            ->and($production->make(PromotedReadonlyConfigCastTarget::class)->value)->toBe('composed');
-    } finally {
-        cleanupReadonlyCompositionDirectory($directory);
+    foreach ($containers as $container) {
+        expect($container->make(PromotedReadonlyConfigCastTarget::class)->value)
+            ->toBe('composed');
     }
 });
 
@@ -129,6 +124,6 @@ test('multiple transformers on a non-promoted readonly property fail composition
         ))
         ->build();
 
-    expect(fn() => $container->make(MultipleReadonlyTransformersTarget::class, ['value' => 'seed']))
+    expect(fn() => $container->make(multipleReadonlyTransformersTarget(), ['value' => 'seed']))
         ->toThrow(AttributeCompositionException::class, 'multiple value transformers');
 });

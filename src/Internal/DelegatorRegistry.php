@@ -25,6 +25,8 @@ final class DelegatorRegistry
     private array $raw = [];
     /** @var array<string, list<callable>> */
     private array $callables = [];
+    /** @var array<string, int> */
+    private array $revisions = [];
     /** @var array<string, array<string, true>> */
     private array $dependents = [];
 
@@ -39,24 +41,25 @@ final class DelegatorRegistry
             $this->dependents[$dependencyId][$id] = true;
         }
 
-        unset($this->callables[$id]);
+        $this->invalidate($id);
     }
 
     public function invalidate(string $id): void
     {
         unset($this->callables[$id]);
+        $this->revisions[$id] = ($this->revisions[$id] ?? 0) + 1;
     }
 
     /** @return list<string> */
     public function entryIds(): array
     {
-        return array_keys($this->raw);
+        return array_map('strval', array_keys($this->raw));
     }
 
     /** @return list<string> */
     public function deferredDependencies(): array
     {
-        return array_keys($this->dependents);
+        return array_map('strval', array_keys($this->dependents));
     }
 
     /**
@@ -94,9 +97,10 @@ final class DelegatorRegistry
             $visited[$dependencyId] = true;
 
             foreach ($this->dependents[$dependencyId] ?? [] as $entry => $_) {
+                $entry = (string) $entry;
                 if (!isset($entries[$entry])) {
                     $entries[$entry] = true;
-                    unset($this->callables[$entry]);
+                    $this->invalidate($entry);
                 }
 
                 if (!isset($queued[$entry])) {
@@ -106,7 +110,7 @@ final class DelegatorRegistry
             }
         }
 
-        return array_keys($entries);
+        return array_map('strval', array_keys($entries));
     }
 
     /** @throws DelegatorException */
@@ -116,7 +120,14 @@ final class DelegatorRegistry
             return $entry;
         }
 
-        $callables = $this->callables[$id] ??= $this->resolveChain($id);
+        $callables = $this->callables[$id] ?? null;
+        if ($callables === null) {
+            $revision = $this->revisions[$id] ?? 0;
+            $callables = $this->resolveChain($id);
+            if (($this->revisions[$id] ?? 0) === $revision) {
+                $this->callables[$id] = $callables;
+            }
+        }
         foreach ($callables as $callable) {
             try {
                 $entry = $callable($entry, $container);
@@ -182,7 +193,7 @@ final class DelegatorRegistry
                     }
                 }
             }
-            return array_keys($ids);
+            return array_map('strval', array_keys($ids));
         }
 
         if (is_array($delegator)

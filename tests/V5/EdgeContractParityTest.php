@@ -7,8 +7,8 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\CallableResolver;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use Nyholm\Psr7\ServerRequest;
@@ -36,9 +36,11 @@ final readonly class TransientValidationDto
     public function __construct(public string $value) {}
 }
 
+/** @param array<string,mixed> $entries */
 function callableParityContainer(array $entries): ContainerInterface
 {
     return new class ($entries) implements ContainerInterface {
+        /** @param array<string,mixed> $entries */
         public function __construct(private readonly array $entries) {}
 
         public function get(string $id): mixed

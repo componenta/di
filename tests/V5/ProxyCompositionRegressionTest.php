@@ -7,22 +7,29 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\Caster\CasterInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Proxy;
-use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
-final class ProxyCompositionValue {}
-
-final class ProxyCompositionIdentityCaster implements CasterInterface
+final class ProxyCompositionValue
 {
-    public string $name { get => 'identity-object'; }
+    public function __construct(public string $label = 'source') {}
+}
+
+final class ProxyCompositionSuffixCaster implements CasterInterface
+{
+    public string $name { get => 'suffix-object'; }
 
     public function cast(mixed $value): mixed
     {
-        return $value;
+        if (!$value instanceof ProxyCompositionValue) {
+            throw new \LogicException('The suffix caster requires the supplied proxy value.');
+        }
+
+        return new ProxyCompositionValue($value->label . ':cast');
     }
 }
 
@@ -30,8 +37,8 @@ final readonly class ProxyCompositionCasterProvider implements CasterProviderInt
 {
     public function provide(string $name): ?CasterInterface
     {
-        return $name === 'identity-object'
-            ? new ProxyCompositionIdentityCaster()
+        return $name === 'suffix-object'
+            ? new ProxyCompositionSuffixCaster()
             : null;
     }
 }
@@ -39,7 +46,7 @@ final readonly class ProxyCompositionCasterProvider implements CasterProviderInt
 final readonly class ProxyCastParameterTarget
 {
     public function __construct(
-        #[Cast('identity-object'), Proxy]
+        #[Cast('suffix-object'), Proxy]
         public ProxyCompositionValue $value,
     ) {}
 }
@@ -52,71 +59,66 @@ final readonly class ProxyConflictingSourceTarget
     ) {}
 }
 
+/** @return non-empty-string */
+function proxyReadonlyTransformerTarget(): string
+{
+    $class = __NAMESPACE__ . '\\ProxyReadonlyTransformerTarget';
+
+    if (!class_exists($class, false)) {
+        eval(<<<'PHP'
+namespace Componenta\DI\Tests\V5;
+
 final class ProxyReadonlyTransformerTarget
 {
-    #[Proxy, Cast('identity-object')]
+    #[\Componenta\DI\Attribute\Proxy, \Componenta\DI\Attribute\Cast('suffix-object')]
     public readonly ProxyCompositionValue $value;
-}
 
-/** @return array{0:\Componenta\DI\Container,1:\Componenta\DI\Container,2:string} */
-function proxyCompositionParityContainers(): array
-{
-    $suffix = bin2hex(random_bytes(5));
-    $directory = sys_get_temp_dir() . '/componenta-di-proxy-composition-' . $suffix;
-    $namespace = 'Componenta\\DI\\Tests\\Generated\\ProxyComposition' . $suffix;
-    $builder = (new ContainerBuilder())
-        ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider());
-    $development = $builder->build();
-    $factories = $builder->compileFactories(
-        [ProxyCastParameterTarget::class],
-        $directory,
-        namespace: $namespace,
-    );
-    $dependencies = $builder->toArray()[ConfigKey::DEPENDENCIES] ?? [];
-    $dependencies[ConfigKey::FACTORIES] = array_replace(
-        $dependencies[ConfigKey::FACTORIES] ?? [],
-        $factories,
-    );
-    $production = ContainerBuilder::configureFromCache(
-        new Config([]),
-        [
-            'version' => ContainerBuilder::CACHE_VERSION,
-            ConfigKey::DEPENDENCIES => $dependencies,
-        ],
-        $directory,
-    )->build();
-
-    return [$development, $production, $directory];
-}
-
-test('Proxy supplies its value before transformers regardless of declaration order in development and AOT', function (): void {
-    [$development, $production, $directory] = proxyCompositionParityContainers();
-
-    try {
-        expect($development->make(ProxyCastParameterTarget::class)->value)
-            ->toBeInstanceOf(ProxyCompositionValue::class)
-            ->and($production->make(ProxyCastParameterTarget::class)->value)
-            ->toBeInstanceOf(ProxyCompositionValue::class);
-    } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
+    public function __construct(\Closure $onConstruct)
+    {
+        $onConstruct();
     }
-});
+}
+PHP);
+    }
 
-test('Proxy cannot compete with another value source on one injection point', function (): void {
-    $container = ContainerBuilder::configure(new Config(['value' => new ProxyCompositionValue()]))->build();
+    if (!class_exists($class, false)) {
+        throw new \LogicException('Failed to define the readonly proxy fixture.');
+    }
 
-    expect(fn() => $container->make(ProxyConflictingSourceTarget::class))
-        ->toThrow(AttributeCompositionException::class, 'cannot be combined with value provider');
-});
+    return $class;
+}
 
-test('Proxy plus a transformer is rejected on readonly properties before object creation', function (): void {
+test('Proxy supplies its value before Cast transforms it', function (): void {
     $container = (new ContainerBuilder())
         ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
         ->build();
 
-    expect(fn() => $container->make(ProxyReadonlyTransformerTarget::class))
+    $target = $container->make(ProxyCastParameterTarget::class);
+
+    expect($target->value->label)->toBe('source:cast');
+});
+
+test('Proxy cannot compete with another value source on one injection point', function (): void {
+    $container = ContainerBuilder::configure(new Config(
+        ['value' => new ProxyCompositionValue()],
+        new Environment([]),
+    ))->build();
+
+    expect(fn() => $container->make(ProxyConflictingSourceTarget::class))
+        ->toThrow(AttributeCompositionException::class, 'multiple parameter source handlers');
+});
+
+test('Proxy plus a transformer is rejected on readonly properties before the constructor runs', function (): void {
+    $constructorCalls = 0;
+    $onConstruct = static function () use (&$constructorCalls): void {
+        ++$constructorCalls;
+    };
+    $container = (new ContainerBuilder())
+        ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
+        ->build();
+
+    expect(fn() => $container->make(proxyReadonlyTransformerTarget(), ['onConstruct' => $onConstruct]))
         ->toThrow(AttributeCompositionException::class, 'cannot be combined with a value transformer');
+
+    expect($constructorCalls)->toBe(0);
 });

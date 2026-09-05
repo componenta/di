@@ -25,6 +25,10 @@ final class TrimCaster implements CasterInterface
 
     public function cast(mixed $value): mixed
     {
+        if (!is_scalar($value) && !$value instanceof \Stringable) {
+            throw new \InvalidArgumentException('The trim caster expects a scalar or stringable value.');
+        }
+
         return trim((string) $value);
     }
 }
@@ -35,6 +39,10 @@ final class IntCaster implements CasterInterface
 
     public function cast(mixed $value): mixed
     {
+        if (!is_scalar($value)) {
+            throw new \InvalidArgumentException('The int caster expects a scalar value.');
+        }
+
         return (int) $value;
     }
 }

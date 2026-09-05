@@ -8,6 +8,7 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterResolutionBoundary;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
@@ -32,6 +33,7 @@ final class ParametersResolver
     private ?WeakMap $preparedParameters = null;
 
     private int $revision = 0;
+    private int $attributeRevision = -1;
     private int $order = 0;
     private bool $sealed = false;
     private ParameterTargetFactory $targetFactory;
@@ -40,6 +42,7 @@ final class ParametersResolver
     public function __construct(
         private readonly AttributePlanBuilder $plans,
         ?ParameterTargetFactory $targetFactory = null,
+        private readonly ?BootstrapResolutionGuard $bootstrap = null,
     ) {
         $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
         $this->planOwner = new \stdClass();
@@ -143,6 +146,8 @@ final class ParametersResolver
      */
     public function prepareTargets(array $targets): PreparedParameterPlan
     {
+        $this->synchronizeAttributeRevision();
+        $revision = $this->revision;
         $prepared = [];
         foreach ($targets as $target) {
             $prepared[] = $this->prepareTarget($target);
@@ -151,7 +156,7 @@ final class ParametersResolver
         return new PreparedParameterPlan(
             $prepared,
             $targets,
-            $this->revision,
+            $revision,
             $this->planOwner,
         );
     }
@@ -196,6 +201,8 @@ final class ParametersResolver
     /** @internal */
     public function isCurrentPlan(PreparedParameterPlan $plan): bool
     {
+        $this->synchronizeAttributeRevision();
+
         return $this->sealed
             && $plan->owner === $this->planOwner
             && $plan->resolverRevision === $this->revision;
@@ -226,6 +233,7 @@ final class ParametersResolver
         ParameterResolutionContext $context,
     ): array {
         $target = $prepared->target;
+        $this->bootstrap?->recordAttributes($target->reflection);
 
         try {
             $resolvers = $this->resolverList;
@@ -233,12 +241,18 @@ final class ParametersResolver
                 $resolver = $resolvers[$slot];
                 $result = $resolver->resolveParameter($target, $context);
                 if ($result !== null) {
-                    return \Componenta\DI\Internal\validate_parameter_resolution_result(
+                    $result = \Componenta\DI\Internal\validate_parameter_resolution_result(
                         $result,
                         $resolver,
                         $target,
                         $context,
                     );
+                    if ($this->bootstrap?->isActive === true) {
+                        $prefix = array_slice($resolvers, 0, $slot);
+                        $prefix[] = $resolver;
+                        $this->bootstrap->recordParameter($target, $prefix);
+                    }
+                    return $result;
                 }
             }
         } catch (ExceptionInterface $e) {
@@ -267,6 +281,8 @@ final class ParametersResolver
             );
         }
 
+        $this->synchronizeAttributeRevision();
+
         if ($plan->resolverRevision === $this->revision) {
             return $plan;
         }
@@ -276,6 +292,8 @@ final class ParametersResolver
 
     private function prepareTarget(ParameterTarget $target): PreparedParameter
     {
+        $this->synchronizeAttributeRevision();
+
         $cacheable = $this->sealed && self::isStableTarget($target);
         if ($cacheable) {
             $cache = $this->preparedParameters ??= new WeakMap();
@@ -309,6 +327,18 @@ final class ParametersResolver
 
         $cache = $this->preparedParameters ??= new WeakMap();
         return $cache[$target] = $prepared;
+    }
+
+    private function synchronizeAttributeRevision(): void
+    {
+        $revision = $this->plans->revision;
+        if ($revision === $this->attributeRevision) {
+            return;
+        }
+
+        $this->attributeRevision = $revision;
+        $this->preparedParameters = null;
+        ++$this->revision;
     }
 
     private static function isStableTarget(ParameterTarget $target): bool

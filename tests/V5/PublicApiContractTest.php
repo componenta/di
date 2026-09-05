@@ -32,11 +32,14 @@ use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\CallableExecutor;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolverInterface;
+use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
+/** @return list<string> */
 function publicParameterNames(string $class, string $method): array
 {
     return array_map(
@@ -46,7 +49,8 @@ function publicParameterNames(string $class, string $method): array
 }
 
 test('public resolution signatures keep their named-argument contract', function (): void {
-    expect(publicParameterNames(FactoryInterface::class, 'make'))->toBe(['entry', 'params'])
+    expect(publicParameterNames(ContainerFactory::class, 'create'))->toBe(['config', 'dependencies'])
+        ->and(publicParameterNames(FactoryInterface::class, 'make'))->toBe(['entry', 'params'])
         ->and(publicParameterNames(Container::class, 'make'))->toBe(['entry', 'params'])
         ->and(publicParameterNames(CallableInvokerInterface::class, 'call'))->toBe(['callable', 'params'])
         ->and(publicParameterNames(CallableExecutor::class, 'call'))->toBe(['callable', 'params'])
@@ -57,10 +61,44 @@ test('public resolution signatures keep their named-argument contract', function
         ->toBe(['attribute', 'target', 'context']);
 });
 
+test('container factory is the sole public construction API', function (): void {
+    $factory = new \ReflectionClass(ContainerFactory::class);
+    $publicMethods = array_map(
+        static fn(\ReflectionMethod $method): string => $method->getName(),
+        $factory->getMethods(\ReflectionMethod::IS_PUBLIC),
+    );
+    $containerMethods = array_map(
+        static fn(\ReflectionMethod $method): string => $method->getName(),
+        (new \ReflectionClass(Container::class))->getMethods(\ReflectionMethod::IS_PUBLIC),
+    );
+
+    sort($publicMethods, SORT_STRING);
+
+    expect($factory->isFinal())->toBeTrue()
+        ->and($publicMethods)->toBe(['__construct', 'create'])
+        ->and(is_file(dirname(__DIR__, 2) . '/src/ContainerBuilder.php'))->toBeFalse()
+        ->and(in_array('create', $containerMethods, true))->toBeFalse();
+});
+
+test('DI config keys retain the dependency schema published by Componenta Config', function (): void {
+    $parent = (new \ReflectionClass(ConfigKey::class))->getParentClass();
+    if (!$parent instanceof \ReflectionClass) {
+        throw new \LogicException('Expected DI ConfigKey to extend Componenta Config ConfigKey.');
+    }
+
+    expect($parent->getName())->toBe(\Componenta\Config\ConfigKey::class)
+        ->and(ConfigKey::dependencyKeys())
+        ->toBe(\Componenta\Config\ConfigKey::dependencyKeys());
+});
+
 test('attribute constructors keep their named-argument contract', function (
     string $attribute,
     array $expected,
 ): void {
+    if (!class_exists($attribute)) {
+        throw new \LogicException(sprintf('Expected attribute class "%s" to exist.', $attribute));
+    }
+
     $constructor = (new \ReflectionClass($attribute))->getConstructor();
     $actual = $constructor === null
         ? []

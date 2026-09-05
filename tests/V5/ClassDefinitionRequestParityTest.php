@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\Config\Config;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\MapRequestPayload;
-use Componenta\DI\Cache\DiCacheGenerator;
-use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -69,49 +66,11 @@ test('ordinary programmatic ClassDefinition overrides are not treated as mapped 
             'token' => 'programmatic-token',
         ],
     );
+    if (!$command instanceof MappedClassDefinitionCommand) {
+        throw new \LogicException('The class definition contract resolved to an unexpected type.');
+    }
 
     expect($command)->toBeInstanceOf(MappedClassDefinitionCommand::class)
         ->and($command->value)->toBe('programmatic-value')
         ->and($command->token)->toBe('programmatic-token');
-});
-
-test('persistent ClassDefinition cache keeps mapped request source guards in the public request flow', function (): void {
-    $root = sys_get_temp_dir() . '/componenta-di-v5-mapped-class-definition-' . bin2hex(random_bytes(5));
-    $cacheFile = $root . '/container.php';
-
-    try {
-        (new DiCacheGenerator())->generate([
-            ConfigKey::FACTORIES => [
-                MappedClassDefinitionContract::class => mappedClassDefinition(),
-            ],
-        ], $cacheFile);
-
-        $cache = require $cacheFile;
-        $container = ContainerBuilder::configureFromCache(
-            new Config([]),
-            $cache,
-            $root,
-        )->build();
-        $request = (new ServerRequest('POST', '/'))
-            ->withHeader('X-Token', 'trusted-token')
-            ->withParsedBody([
-                'value' => 'payload-value',
-                'token' => 'attacker-token',
-            ]);
-
-        expect(fn() => $container->make(MappedClassDefinitionEnvelope::class, [
-            ServerRequestInterface::class => $request,
-        ]))->toThrow(RequestParameterSourceConflictException::class);
-
-        $programmatic = $container->make(MappedClassDefinitionContract::class, [
-            'value' => 'programmatic-value',
-            'token' => 'programmatic-token',
-        ]);
-
-        expect($programmatic)->toBeInstanceOf(MappedClassDefinitionCommand::class)
-            ->and($programmatic->token)->toBe('programmatic-token');
-    } finally {
-        @unlink($cacheFile);
-        @rmdir($root);
-    }
 });

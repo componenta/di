@@ -6,6 +6,7 @@ namespace Componenta\DI\Internal;
 
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
+use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
@@ -36,6 +37,7 @@ final class ProtectedServiceIds
         Config::class => Config::class,
         Environment::class => Environment::class,
         ContainerValue::class => ContainerValue::class,
+        DependencyDefinitions::class => false,
         Container::class => false,
         ContainerInterface::class => false,
         FactoryInterface::class => false,

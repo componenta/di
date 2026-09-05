@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Closure;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use WeakReference;
 
 final class AuditCallableDependency {}
@@ -37,14 +37,23 @@ final class AuditMagicCallable
         return 'private:' . $value;
     }
 
+    public function callHidden(string $value): string
+    {
+        return $this->hidden($value);
+    }
+
     protected function protectedHidden(string $value): string
     {
         return 'protected:' . $value;
     }
 
+    /** @param list<mixed> $arguments */
     public function __call(string $name, array $arguments): string
     {
-        return $name . ':' . implode(',', array_map(static fn(mixed $value): string => (string) $value, $arguments));
+        return $name . ':' . implode(',', array_map(
+            static fn(mixed $value): string => is_string($value) ? $value : get_debug_type($value),
+            $arguments,
+        ));
     }
 }
 
@@ -55,9 +64,18 @@ final class AuditStaticMagicCallable
         return 'private:' . $value;
     }
 
+    public static function callHidden(string $value): string
+    {
+        return self::hidden($value);
+    }
+
+    /** @param list<mixed> $arguments */
     public static function __callStatic(string $name, array $arguments): string
     {
-        return $name . ':' . implode(',', array_map(static fn(mixed $value): string => (string) $value, $arguments));
+        return $name . ':' . implode(',', array_map(
+            static fn(mixed $value): string => is_string($value) ? $value : get_debug_type($value),
+            $arguments,
+        ));
     }
 }
 

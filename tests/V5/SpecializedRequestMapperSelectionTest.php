@@ -43,7 +43,7 @@ function uploadedFileFixture(string $name): UploadedFileInterface
 
         public function moveTo(string $targetPath): void {}
 
-        public function getSize(): ?int
+        public function getSize(): int
         {
             return 0;
         }
@@ -53,7 +53,7 @@ function uploadedFileFixture(string $name): UploadedFileInterface
             return UPLOAD_ERR_OK;
         }
 
-        public function getClientFilename(): ?string
+        public function getClientFilename(): string
         {
             return $this->name;
         }

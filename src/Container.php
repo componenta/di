@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-use Componenta\Config\Config;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -34,6 +33,7 @@ final class Container implements
     private readonly DelegatorRegistry $delegators;
     private ?ExternalContainerRegistry $externalContainers = null;
     private readonly CycleGuard $cycleGuard;
+    private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
 
     /** @param array<array-key, mixed> $bootstrapServices */
@@ -84,18 +84,45 @@ final class Container implements
         $this->delegators = $delegators ?? new DelegatorRegistry($this);
         $this->externalContainers = $externalContainers;
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
+        $this->resolvedEntryGuard = new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
     }
 
-    public static function create(Config $config): self
-    {
-        return ContainerBuilder::configure($config)->build();
-    }
-
+    /**
+     * @template T of object
+     * @param class-string<T>|string $id
+     * @return ($id is class-string<T> ? T : mixed)
+     */
     public function get(string $id): mixed
     {
         try {
-            return $this->getInternal($id);
+            $entryId = $this->aliases->resolve($id);
+            if ($this->externalContainers !== null
+                && !ProtectedServiceIds::contains($id)
+                && !ProtectedServiceIds::contains($entryId)
+            ) {
+                $externalGuard = "\0external:" . $id;
+                $this->cycleGuard->enter($externalGuard);
+                try {
+                    $external = $this->externalContainers->findOwning($id);
+                    if ($external !== null) {
+                        return $external->get($id);
+                    }
+                } finally {
+                    $this->cycleGuard->leave($externalGuard);
+                }
+            }
+
+            if ($this->cache->tryGetResolved($id, $entry)) {
+                return $entry;
+            }
+
+            $this->resolvedEntryGuard->enterShared($id);
+            try {
+                return $this->resolveAndStore($id, $entryId);
+            } finally {
+                $this->resolvedEntryGuard->leaveShared($id);
+            }
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (NotFoundExceptionInterface $e) {
@@ -105,46 +132,33 @@ final class Container implements
         }
     }
 
-    private function getInternal(string $id): mixed
+    private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
-        $entryId = $this->aliases->resolve($id);
-        if ($this->externalContainers !== null
-            && !ProtectedServiceIds::contains($id)
-            && !ProtectedServiceIds::contains($entryId)
-        ) {
-            $externalGuard = "\0external:" . $id;
-            $this->cycleGuard->enter($externalGuard);
+        $requestedRevision = $this->cache->resolvedRevision($requestedId);
+        $canonicalRevision = $this->cache->resolvedRevision($entryId);
+        if (!$this->cache->tryGetBase($entryId, $entry)) {
+            $baseRevision = $this->cache->baseRevision($entryId);
+            // Aliases share source creation, but each requested id owns its
+            // delegator pipeline and may read another id once the source exists.
+            $this->cycleGuard->enterShared($entryId);
             try {
-                $external = $this->externalContainers->findOwning($id);
-                if ($external !== null) {
-                    return $external->get($id);
+                $entry = $this->resolver->resolve($entryId);
+                if ($this->cache->baseRevision($entryId) === $baseRevision) {
+                    $this->cache->putBase($entryId, $entry);
                 }
             } finally {
-                $this->cycleGuard->leave($externalGuard);
+                $this->cycleGuard->leaveShared($entryId);
             }
         }
 
-        if ($this->cache->tryGetResolved($id, $entry)) {
-            return $entry;
-        }
-
-        $this->cycleGuard->enterShared($entryId);
-        try {
-            return $this->resolveAndStore($id, $entryId);
-        } finally {
-            $this->cycleGuard->leaveShared($entryId);
-        }
-    }
-
-    private function resolveAndStore(string $requestedId, string $entryId): mixed
-    {
-        if (!$this->cache->tryGetBase($entryId, $entry)) {
-            $entry = $this->resolver->resolve($entryId);
-            $this->cache->putBase($entryId, $entry);
-        }
-
         $entry = $this->delegators->apply($requestedId, $entry, $this);
-        $this->cache->putResolved($requestedId, $entryId, $entry);
+        // A factory or delegator may mutate bindings, including while suspended.
+        // Its in-flight result must not repopulate an invalidated shared entry.
+        if ($this->cache->resolvedRevision($requestedId) === $requestedRevision
+            && $this->cache->resolvedRevision($entryId) === $canonicalRevision
+        ) {
+            $this->cache->putResolved($requestedId, $entryId, $entry);
+        }
 
         return $entry;
     }
@@ -202,36 +216,38 @@ final class Container implements
         $this->invalidateDeferredDelegators($affected);
     }
 
-    /** @param array<string|int, mixed> $params */
+    /**
+     * @template T of object
+     * @param class-string<T>|non-empty-string $entry
+     * @param array<string|int, mixed> $params
+     * @return ($entry is class-string<T> ? T : object)
+     */
     public function make(string $entry, array $params = []): object
     {
         try {
-            return $this->makeInternal($entry, $params);
+            $resolved = $this->aliases->resolve($entry);
+            $this->cycleGuard->enter($resolved);
+
+            try {
+                $instance = $this->resolver->resolve(
+                    $resolved,
+                    EntryResolverContext::for($this->resolver, $params),
+                );
+
+                if (!is_object($instance)) {
+                    throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
+                }
+
+                return $instance;
+            } finally {
+                $this->cycleGuard->leave($resolved);
+            }
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (NotFoundExceptionInterface $e) {
             throw NotFoundException::forService($entry, $e);
         } catch (Throwable $e) {
             throw ResolutionException::forService($entry, $e);
-        }
-    }
-
-    /** @param array<string|int, mixed> $params */
-    private function makeInternal(string $entry, array $params): object
-    {
-        $resolved = $this->aliases->resolve($entry);
-        $this->cycleGuard->enter($resolved);
-        try {
-            $instance = $this->resolver->resolve(
-                $resolved,
-                EntryResolverContext::for($this->resolver, $params),
-            );
-            if (!is_object($instance)) {
-                throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
-            }
-            return $instance;
-        } finally {
-            $this->cycleGuard->leave($resolved);
         }
     }
 
@@ -288,7 +304,7 @@ final class Container implements
 
         // Validate the complete candidate graph before mutating the live alias
         // resolver. Runtime alias changes must preserve the same protected-core
-        // invariant enforced by ContainerBuilder for declarative configuration.
+        // Declarative bindings are validated by ContainerFactory before construction.
         $candidate = clone $this->aliases;
         $candidate->set($alias, $target);
         foreach ($this->delegators->entryIds() as $delegatorId) {
@@ -309,6 +325,7 @@ final class Container implements
 
         $changed = [];
         foreach ($before as $dependencyId => $previousTarget) {
+            $dependencyId = (string) $dependencyId;
             try {
                 $currentTarget = $this->aliases->resolve($dependencyId);
             } catch (Throwable) {

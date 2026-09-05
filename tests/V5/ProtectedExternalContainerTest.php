@@ -6,7 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Psr\Container\ContainerInterface;
 
 final readonly class ExternalLookupValue

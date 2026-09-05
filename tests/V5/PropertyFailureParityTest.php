@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\Inject;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final readonly class StaticInjectedDependency {}
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Closure;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Object\CreationStrategy;
@@ -21,20 +22,36 @@ final class ObjectCreationContext
     public private(set) ?object $entry = null;
 
     /** @var array<string|int,mixed> */
-    public readonly array $parameters;
+    public array $parameters {
+        get {
+            $parameters = $this->parameterValues;
+            if ($parameters instanceof Closure) {
+                $parameters = $parameters();
+                $this->parameterValues = $parameters;
+            }
+
+            return $parameters;
+        }
+    }
+
+    /** @var array<string|int,mixed>|Closure():array<string|int,mixed> */
+    private array|Closure $parameterValues;
 
     /** @var array<string,true> */
     private array $claimedProperties = [];
 
+    /** @var array<string,array{value?:mixed}> */
+    private array $pendingPropertyWrites = [];
+
     /**
      * @param ReflectionClass<object> $class
-     * @param array<string|int,mixed> $parameters Caller-visible parameters only.
+     * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters Caller-visible parameters only.
      */
     public function __construct(
         public readonly ReflectionClass $class,
-        array $parameters = [],
+        array|Closure $parameters = [],
     ) {
-        $this->parameters = $parameters;
+        $this->parameterValues = $parameters;
     }
 
     public function disableConstructor(): void
@@ -61,11 +78,16 @@ final class ObjectCreationContext
         }
     }
 
-    public function freshAttempt(): self
+    /** @param array<string|int,mixed>|(Closure():array<string|int,mixed>)|null $parameters */
+    public function freshAttempt(array|Closure|null $parameters = null): self
     {
         $attempt = clone $this;
+        if ($parameters !== null) {
+            $attempt->parameterValues = $parameters;
+        }
         $attempt->entry = null;
         $attempt->claimedProperties = [];
+        $attempt->pendingPropertyWrites = [];
         return $attempt;
     }
 
@@ -114,7 +136,7 @@ final class ObjectCreationContext
             );
         }
 
-        if ((!$allowPromoted && $property->isPromoted())
+        if ((!$allowPromoted && $property->isPromoted() && $this->constructorEnabled)
             || ($property->isReadOnly() && $property->isInitialized($this->entry))
         ) {
             return false;
@@ -134,6 +156,28 @@ final class ObjectCreationContext
         return isset($this->claimedProperties[self::propertyKey($property)]);
     }
 
+    /**
+     * Keeps intermediate values outside the typed property until its handlers succeed.
+     *
+     * @param Closure():void $resolve
+     */
+    public function resolveProperty(ReflectionProperty $property, Closure $resolve): void
+    {
+        $key = self::propertyKey($property);
+        $this->pendingPropertyWrites[$key] = [];
+
+        try {
+            $resolve();
+            $pending = $this->pendingPropertyWrites[$key];
+        } finally {
+            unset($this->pendingPropertyWrites[$key]);
+        }
+
+        if (array_key_exists('value', $pending)) {
+            $this->writeProperty($property, $pending['value']);
+        }
+    }
+
     public function readProperty(ReflectionProperty $property): mixed
     {
         $entry = $this->entry ?? throw new LogicException(sprintf(
@@ -141,6 +185,11 @@ final class ObjectCreationContext
             $property->getName(),
             $this->class->getName(),
         ));
+
+        $pending = $this->pendingPropertyWrites[self::propertyKey($property)] ?? [];
+        if (array_key_exists('value', $pending)) {
+            return $pending['value'];
+        }
 
         if ($property->isVirtual() && !$property->hasHook(PropertyHookType::Get)) {
             throw ResolutionException::forProperty(
@@ -169,6 +218,12 @@ final class ObjectCreationContext
             $property->getName(),
             $this->class->getName(),
         ));
+
+        $key = self::propertyKey($property);
+        if (isset($this->pendingPropertyWrites[$key])) {
+            $this->pendingPropertyWrites[$key]['value'] = $value;
+            return;
+        }
 
         try {
             $property->setValue($entry, $value);

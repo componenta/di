@@ -8,8 +8,8 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionFunction;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]

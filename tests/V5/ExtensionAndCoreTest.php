@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\ContainerValue;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class CoreService {}
 
@@ -64,6 +64,9 @@ test('user factories receive the restored array parameter ABI', function (): voi
         ->build();
 
     $product = $container->make('factory.product', ['explicit' => 2]);
+    if (!$product instanceof FactoryProduct) {
+        throw new \LogicException('The configured factory returned an unexpected type.');
+    }
 
     expect($product->params)->toBe(['explicit' => 2]);
 });

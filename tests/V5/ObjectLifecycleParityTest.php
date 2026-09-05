@@ -8,9 +8,9 @@ use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 interface LifecycleProxyContract
 {
@@ -113,6 +113,11 @@ abstract class LifecyclePrivateInjectedParent
 {
     #[Inject]
     private LifecycleInjectedDependency $dependency;
+
+    public function __construct()
+    {
+        $this->dependency = new LifecycleInjectedDependency();
+    }
 
     public function dependency(): LifecycleInjectedDependency
     {

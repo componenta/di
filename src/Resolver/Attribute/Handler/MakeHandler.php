@@ -48,8 +48,12 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
             return $value;
         }
 
-        $make = self::firstParameterAttribute($target, Make::class);
-        $proxy = self::firstParameterAttribute($target, Proxy::class);
+        $make = $attribute instanceof Make
+            ? $attribute
+            : self::firstParameterAttribute($target, Make::class);
+        $proxy = $attribute instanceof Proxy
+            ? $attribute
+            : self::firstParameterAttribute($target, Proxy::class);
         $config = self::configuration(
             $target->name,
             $target->className,

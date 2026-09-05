@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 function lateFactoryClass(string $suffix): string
 {
@@ -18,7 +19,7 @@ test('late-loaded static factories are validated against the runtime factory ABI
     $invalid = lateFactoryClass('Invalid');
     $invalidShort = substr($invalid, strrpos($invalid, '\\') + 1);
     $container = ContainerBuilder::configureWithDependencies(
-        new Config([]),
+        new Config([], new Environment([])),
         [
             ConfigKey::FACTORIES => [
                 'late.invalid' => [$invalid, 'create'],
@@ -40,7 +41,7 @@ test('late-loaded static factories with a compatible ABI remain valid', function
     $valid = lateFactoryClass('Valid');
     $validShort = substr($valid, strrpos($valid, '\\') + 1);
     $container = ContainerBuilder::configureWithDependencies(
-        new Config([]),
+        new Config([], new Environment([])),
         [
             ConfigKey::FACTORIES => [
                 'late.valid' => [$valid, 'create'],
@@ -54,5 +55,7 @@ test('late-loaded static factories with a compatible ABI remain valid', function
         $validShort,
     ));
 
-    expect($container->make('late.valid', ['value' => 'ready'])->value)->toBe('ready');
+    $result = $container->make('late.valid', ['value' => 'ready']);
+
+    expect($result)->toHaveProperty('value', 'ready');
 });

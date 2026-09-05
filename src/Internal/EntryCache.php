@@ -20,6 +20,12 @@ final class EntryCache
     /** @var array<string, array<string, true>> */
     private array $reverseIndex = [];
 
+    /** @var array<string, int> */
+    private array $baseRevisions = [];
+
+    /** @var array<string, int> */
+    private array $resolvedRevisions = [];
+
     /** @param array<string, mixed> $base */
     public function __construct(array $base = [])
     {
@@ -44,11 +50,23 @@ final class EntryCache
     public function putBase(string $id, mixed $value): void
     {
         $this->base[$id] = $value;
+        $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
+    }
+
+    public function baseRevision(string $id): int
+    {
+        return $this->baseRevisions[$id] ?? 0;
+    }
+
+    public function resolvedRevision(string $id): int
+    {
+        return $this->resolvedRevisions[$id] ?? 0;
     }
 
     public function removeBase(string $id): void
     {
         unset($this->base[$id]);
+        $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
     }
 
     public function tryGetResolved(string $id, mixed &$value): bool
@@ -77,19 +95,25 @@ final class EntryCache
 
     public function invalidate(string $requestedId, ?string $canonicalId = null): void
     {
-        unset($this->resolved[$requestedId]);
+        $this->invalidateResolved($requestedId);
 
         $canonical = $canonicalId ?? $requestedId;
 
         if ($canonical !== $requestedId) {
-            unset($this->resolved[$canonical]);
+            $this->invalidateResolved($canonical);
         }
 
         if (isset($this->reverseIndex[$canonical])) {
             foreach ($this->reverseIndex[$canonical] as $sibling => $_) {
-                unset($this->resolved[$sibling]);
+                $this->invalidateResolved((string) $sibling);
             }
             unset($this->reverseIndex[$canonical]);
         }
+    }
+
+    private function invalidateResolved(string $id): void
+    {
+        unset($this->resolved[$id]);
+        $this->resolvedRevisions[$id] = $this->resolvedRevision($id) + 1;
     }
 }

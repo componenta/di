@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
+use Componenta\DI\Attribute\CurrentRequest;
+use Componenta\DI\Attribute\CurrentUri;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\Container;
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
@@ -56,8 +58,8 @@ test('request stays in the ordinary parameter array while request resolvers cons
     $result = $container->call(
         static fn(
             #[Header('X-Token')] string $token,
-            UriInterface $uri,
-            ServerRequestInterface $resolvedRequest,
+            #[CurrentUri] UriInterface $uri,
+            #[CurrentRequest] ServerRequestInterface $resolvedRequest,
         ): array => [$token, (string) $uri, $resolvedRequest],
         [ServerRequestInterface::class => $request],
     );

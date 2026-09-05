@@ -117,15 +117,20 @@ final class MappedRequestParameterSourceGuard
 
         /** @var list<array{parameter:string,source:class-string,keys:list<string>}> $bindings */
         $bindings = [];
+        $complete = true;
         foreach ($constructor->getParameters() as $parameter) {
             /** @var list<class-string> $typeNames */
             $typeNames = TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass());
-            $source = self::declaredSource($parameter);
+            $source = self::declaredSource($parameter, $complete);
             if ($source !== null) {
                 $bindings[] = self::binding($parameter->getName(), $source, $typeNames);
             }
         }
-        return self::$sourceCache[$class] = $bindings;
+        if ($complete) {
+            self::$sourceCache[$class] = $bindings;
+        }
+
+        return $bindings;
     }
 
     /** @return array{parameter:string,source:class-string,keys:list<string>}|null */
@@ -158,11 +163,15 @@ final class MappedRequestParameterSourceGuard
     }
 
     /** @return class-string|null */
-    private static function declaredSource(ReflectionParameter $parameter): ?string
+    private static function declaredSource(ReflectionParameter $parameter, bool &$complete): ?string
     {
         foreach ($parameter->getAttributes() as $attribute) {
             /** @var class-string $attributeClass */
             $attributeClass = $attribute->getName();
+            if (!class_exists($attributeClass) && !interface_exists($attributeClass)) {
+                $complete = false;
+                continue;
+            }
             if (is_a($attributeClass, ParameterSourceAttributeInterface::class, true)) {
                 return $attributeClass;
             }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 test('deferred delegator invalidation remains cycle safe', function (): void {
     $container = (new ContainerBuilder())->build();

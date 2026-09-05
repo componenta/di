@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Entry;
 
+use Closure;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use WeakMap;
 
 /** Keeps raw internal resolution parameters outside extension-facing object contexts. @internal */
 final class ObjectResolutionParameterStore
 {
-    /** @var WeakMap<ObjectCreationContext, array<string|int, mixed>> */
+    /** @var WeakMap<ObjectCreationContext, array<string|int, mixed>|Closure():array<string|int,mixed>> */
     private WeakMap $parameters;
 
     public function __construct()
@@ -18,8 +19,8 @@ final class ObjectResolutionParameterStore
         $this->parameters = new WeakMap();
     }
 
-    /** @param array<string|int, mixed> $parameters */
-    public function attach(ObjectCreationContext $context, array $parameters): void
+    /** @param array<string|int, mixed>|Closure():array<string|int,mixed> $parameters */
+    public function attach(ObjectCreationContext $context, array|Closure $parameters): void
     {
         $this->parameters[$context] = $parameters;
     }
@@ -27,7 +28,13 @@ final class ObjectResolutionParameterStore
     /** @return array<string|int, mixed> */
     public function get(ObjectCreationContext $context): array
     {
-        return $this->parameters[$context] ?? [];
+        $parameters = $this->parameters[$context] ?? [];
+        if ($parameters instanceof Closure) {
+            $parameters = $parameters();
+            $this->parameters[$context] = $parameters;
+        }
+
+        return $parameters;
     }
 
     public function copy(ObjectCreationContext $from, ObjectCreationContext $to): void

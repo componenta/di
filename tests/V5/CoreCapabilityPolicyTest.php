@@ -9,8 +9,8 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\Capability\CreationStrategy;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class ReplacementValueSourceA {}

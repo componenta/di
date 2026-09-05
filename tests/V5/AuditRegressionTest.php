@@ -6,9 +6,9 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\MapRequestPayload;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -54,7 +54,12 @@ test('mapped request provenance stays internal when a DTO is created by a user f
             AuditMappedFactoryDto::class,
             static function (ContainerValue $_container, array $params) use (&$captured): AuditMappedFactoryDto {
                 $captured = $params;
-                return new AuditMappedFactoryDto((string) ($params['value'] ?? ''));
+                $value = $params['value'] ?? '';
+                if (!is_string($value)) {
+                    throw new \InvalidArgumentException('The mapped value must be a string.');
+                }
+
+                return new AuditMappedFactoryDto($value);
             },
         )
         ->build();
@@ -85,6 +90,11 @@ test('lazy service factories use the current ContainerValue runtime ABI', functi
         ->build();
 
     expect($container->make('audit.lazy'))->toBeInstanceOf(\stdClass::class)
-        ->and($factory->seenContainer)->toBeInstanceOf(ContainerValue::class)
-        ->and($factory->seenContainer?->value)->toBe($container);
+        ->and($factory->seenContainer)->toBeInstanceOf(ContainerValue::class);
+
+    if (!$factory->seenContainer instanceof ContainerValue) {
+        throw new \LogicException('The lazy factory did not receive ContainerValue.');
+    }
+
+    expect($factory->seenContainer->container)->toBe($container);
 });

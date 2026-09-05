@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Attribute;
-use Componenta\Config\Config;
 use Componenta\DI\Attribute\MapRequestAttributes;
-use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -22,7 +20,7 @@ final class MapActorCommandFixture extends MapRequestAttributes
 {
     protected array $attributes = [RequestActorFixtureInterface::class, 'commandId'];
 
-    protected(set) array $map = [
+    public protected(set) array $map = [
         RequestActorFixtureInterface::class => 'actor',
     ];
 }
@@ -46,39 +44,17 @@ final readonly class ActorMappedEndpointFixture
     }
 }
 
-/** @return array{0:Container,1:Container,2:string} */
+/** @return array{0:Container,1:Container} */
 function actorAliasParityContainers(): array
 {
-    $suffix = bin2hex(random_bytes(5));
-    $directory = sys_get_temp_dir() . '/componenta-di-v5-actor-alias-' . $suffix;
-    $namespace = 'Componenta\\DI\\Tests\\Generated\\ActorAlias' . $suffix;
-    $development = (new ContainerBuilder())->build();
-    $compiler = new ContainerBuilder();
-    $compiled = $compiler->compileFactories(
-        [ActorMappedCommandFixture::class, ActorMappedEndpointFixture::class],
-        $directory,
-        namespace: $namespace,
-    );
-    $data = $compiler->toArray();
-    $dependencies = $data[ConfigKey::DEPENDENCIES] ?? [];
-    $dependencies[ConfigKey::FACTORIES] = array_replace(
-        $dependencies[ConfigKey::FACTORIES] ?? [],
-        $compiled,
-    );
-    $production = ContainerBuilder::configureFromCache(
-        new Config([]),
-        [
-            'version' => ContainerBuilder::CACHE_VERSION,
-            ConfigKey::DEPENDENCIES => $dependencies,
-        ],
-        $directory,
-    )->build();
-
-    return [$development, $production, $directory];
+    return [
+        (new ContainerBuilder())->build(),
+        (new ContainerBuilder())->build(),
+    ];
 }
 
-test('request attribute aliases can populate a fresh actor-aware style message in development and AOT', function (): void {
-    [$development, $production, $directory] = actorAliasParityContainers();
+test('request attribute aliases populate fresh actor-aware messages for every build', function (): void {
+    [$first, $second] = actorAliasParityContainers();
     $actor = new RequestActorFixture();
     $request = (new ServerRequest('POST', '/commands/command-42'))
         ->withAttribute(RequestActorFixtureInterface::class, $actor)
@@ -86,20 +62,16 @@ test('request attribute aliases can populate a fresh actor-aware style message i
         ->withAttribute('private', 'must-not-be-mapped');
     $provided = [ServerRequestInterface::class => $request];
 
-    try {
-        $expected = $development->call(new ActorMappedEndpointFixture(), $provided);
-        $actual = $production->call(new ActorMappedEndpointFixture(), $provided);
-
-        expect($expected->actor)->toBe($actor)
-            ->and($expected->commandId)->toBe('command-42')
-            ->and($expected->private)->toBeNull()
-            ->and($actual->actor)->toBe($actor)
-            ->and($actual->commandId)->toBe('command-42')
-            ->and($actual->private)->toBeNull();
-    } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
+    $expected = $first->call(new ActorMappedEndpointFixture(), $provided);
+    $actual = $second->call(new ActorMappedEndpointFixture(), $provided);
+    if (!$expected instanceof ActorMappedCommandFixture || !$actual instanceof ActorMappedCommandFixture) {
+        throw new \LogicException('Expected the endpoint to return its mapped command.');
     }
+
+    expect($expected->actor)->toBe($actor)
+        ->and($expected->commandId)->toBe('command-42')
+        ->and($expected->private)->toBeNull()
+        ->and($actual->actor)->toBe($actor)
+        ->and($actual->commandId)->toBe('command-42')
+        ->and($actual->private)->toBeNull();
 });

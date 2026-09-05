@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Componenta\Config\ContainerValue;
-use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -21,6 +20,7 @@ use ReflectionParameter;
 use WeakMap;
 
 use function Componenta\DI\Internal\is_entry_class_eligible;
+use function Componenta\DI\Internal\is_magic_closure_trampoline;
 
 /**
  * Validates factory forms and their runtime `(ContainerValue, array)` ABI.
@@ -42,24 +42,6 @@ final class FactorySpecificationValidator
         if ($factory instanceof ClassDefinition) {
             self::assertClassDefinition($id, $factory);
             return;
-        }
-        if ($factory instanceof CompiledFactoryDefinition) {
-            if (CompiledFactoryDefinition::decode($factory->encode()) !== null) {
-                return;
-            }
-            throw new InvalidConfigurationException(sprintf(
-                'Compiled factory definition for "%s" is malformed.',
-                $id,
-            ));
-        }
-        if (CompiledFactoryDefinition::isEncodedValue($factory)) {
-            if (CompiledFactoryDefinition::decode($factory) !== null) {
-                return;
-            }
-            throw new InvalidConfigurationException(sprintf(
-                'Factory "%s" contains malformed compiled metadata.',
-                $id,
-            ));
         }
         if ($factory instanceof LazyServiceFactoryInterface) {
             return;
@@ -100,7 +82,7 @@ final class FactorySpecificationValidator
             return;
         }
 
-        if (self::isMagicClosureTrampoline($reflection)) {
+        if (is_magic_closure_trampoline($reflection)) {
             $validated[$reflection] = true;
             return;
         }
@@ -214,47 +196,6 @@ final class FactorySpecificationValidator
             return $reflection->getClosureScopeClass();
         }
         return null;
-    }
-
-    private static function isMagicClosureTrampoline(ReflectionFunctionAbstract $reflection): bool
-    {
-        if (!$reflection instanceof ReflectionFunction || !$reflection->isInternal()) {
-            return false;
-        }
-
-        $name = $reflection->getName();
-        $scope = $reflection->getClosureScopeClass();
-        if ($scope !== null && $scope->hasMethod($name)) {
-            $method = $scope->getMethod($name);
-            if ($method->isInternal()
-                && $method->getDeclaringClass()->getName() === $scope->getName()
-            ) {
-                return false;
-            }
-        }
-
-        $bound = $reflection->getClosureThis();
-        if ($bound !== null) {
-            $candidate = [$bound, $name];
-        } else {
-            $class = $reflection->getClosureCalledClass() ?? $scope;
-            if ($class === null) {
-                return false;
-            }
-            $candidate = [$class->getName(), $name];
-        }
-
-        if (!is_callable($candidate)) {
-            return false;
-        }
-
-        try {
-            Reflection::callable($candidate);
-        } catch (InvalidArgumentException) {
-            return true;
-        }
-
-        return false;
     }
 
     private static function containerArgument(): ContainerValue

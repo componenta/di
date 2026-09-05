@@ -7,9 +7,9 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\DI\Attribute\CurrentRequest;
 use Componenta\DI\Attribute\CurrentUri;
 use Componenta\DI\Attribute\QueryParam;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Uri;
 use Psr\Http\Message\ServerRequestInterface;
@@ -44,6 +44,9 @@ test('current request attributes share the HTTP context transport with request e
         ): array => [$currentRequest, $currentUri, $page],
         [ServerRequestInterface::class => $request],
     );
+    if (!is_array($resolved)) {
+        throw new \LogicException('The request-context callable must return an array.');
+    }
 
     expect($resolved[0])->toBe($request)
         ->and($resolved[1])->toBe($request->getUri())
@@ -67,6 +70,9 @@ test('current request attributes are authoritative over generic caller parameter
             'uri' => $otherUri,
         ],
     );
+    if (!is_array($resolved)) {
+        throw new \LogicException('The request-context callable must return an array.');
+    }
 
     expect($resolved[0])->toBe($current)
         ->and($resolved[1])->toBe($current->getUri());
@@ -112,23 +118,4 @@ test('current request and URI attributes are rejected on constructors', function
         ->toThrow(AttributeCompositionException::class, 'is invocation-only and cannot target constructor parameter')
         ->and(fn() => $container->make(CurrentUriConstructorTarget::class))
         ->toThrow(AttributeCompositionException::class, 'is invocation-only and cannot target constructor parameter');
-});
-
-test('AOT compilation rejects invocation-only constructor values with the runtime semantics', function (): void {
-    $directory = sys_get_temp_dir() . '/componenta-di-current-request-' . bin2hex(random_bytes(5));
-    $builder = new ContainerBuilder();
-
-    try {
-        expect(fn() => $builder->compileFactories([
-            CurrentRequestConstructorTarget::class,
-        ], $directory))->toThrow(
-            AttributeCompositionException::class,
-            'is invocation-only and cannot target constructor parameter',
-        );
-    } finally {
-        foreach (glob($directory . '/*') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
-    }
 });

@@ -10,8 +10,53 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\Reflection\Reflection;
 use InvalidArgumentException;
 use ReflectionClass;
+use ReflectionFunction;
+use ReflectionFunctionAbstract;
+
+/** @internal */
+function is_magic_closure_trampoline(ReflectionFunctionAbstract $reflection): bool
+{
+    if (!$reflection instanceof ReflectionFunction || !$reflection->isInternal()) {
+        return false;
+    }
+
+    $name = $reflection->getName();
+    $scope = $reflection->getClosureScopeClass();
+    if ($scope !== null && $scope->hasMethod($name)) {
+        $method = $scope->getMethod($name);
+        if ($method->isInternal()
+            && $method->getDeclaringClass()->getName() === $scope->getName()
+        ) {
+            return false;
+        }
+    }
+
+    $bound = $reflection->getClosureThis();
+    if ($bound !== null) {
+        $candidate = [$bound, $name];
+    } else {
+        $class = $reflection->getClosureCalledClass() ?? $scope;
+        if ($class === null) {
+            return false;
+        }
+        $candidate = [$class->getName(), $name];
+    }
+
+    if (!is_callable($candidate)) {
+        return false;
+    }
+
+    try {
+        Reflection::callable($candidate);
+    } catch (InvalidArgumentException) {
+        return true;
+    }
+
+    return false;
+}
 
 /** @internal */
 function normalize_env_name(string $name): string

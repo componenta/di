@@ -10,11 +10,8 @@ use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\Attribute\SetUp;
-use Componenta\DI\Cache\DiCacheGenerator;
-use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
-use Componenta\DI\Exception\CompilationException;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Error\ErrorMessageCollectorInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
@@ -35,6 +32,10 @@ final class AuditOffsetCaster implements CasterInterface
 
     public function cast(mixed $value): mixed
     {
+        if (!is_scalar($value)) {
+            throw new \InvalidArgumentException('The offset caster expects a scalar value.');
+        }
+
         return (int) $value + $this->offset;
     }
 }
@@ -70,26 +71,6 @@ final readonly class AuditSetUpMappedEnvelope
     ) {}
 }
 
-final readonly class AuditUnsafeReadonlyCacheValue
-{
-    public string $value;
-
-    public function __construct(string $value)
-    {
-        $this->value = '[' . $value . ']';
-    }
-}
-
-final readonly class AuditDerivedReadonlyCacheValue
-{
-    public string $derived;
-
-    public function __construct(public string $seed)
-    {
-        $this->derived = $seed . ':' . bin2hex(random_bytes(4));
-    }
-}
-
 test('request validation provider added after an initial miss is observed without rebuilding the container', function (): void {
     $container = (new ContainerBuilder())->build();
     $request = (new ServerRequest('POST', '/'))->withParsedBody(['value' => 'first']);
@@ -102,6 +83,7 @@ test('request validation provider added after an initial miss is observed withou
     $validator = new class () implements ValidatorInterface {
         public int $validations = 0;
 
+        /** @param iterable<array-key,mixed> $data */
         public function validate(
             iterable $data,
             ?ContextInterface $context = null,
@@ -161,39 +143,4 @@ test('mapped request provenance protects source-bound SetUp parameters', functio
     expect(fn() => $container->make(AuditSetUpMappedEnvelope::class, [
         ServerRequestInterface::class => $request,
     ]))->toThrow(RequestParameterSourceConflictException::class);
-});
-
-test('persistent cache rejects readonly objects whose constructor state cannot be round-tripped exactly', function (): void {
-    $path = sys_get_temp_dir() . '/componenta-di-unsafe-readonly-' . bin2hex(random_bytes(5)) . '.php';
-
-    try {
-        expect(fn() => (new DiCacheGenerator())->generate([
-            ConfigKey::SERVICES => [
-                'unsafe' => new AuditUnsafeReadonlyCacheValue('value'),
-            ],
-        ], $path))->toThrow(CompilationException::class, 'public promoted property');
-    } finally {
-        if (is_file($path)) {
-            unlink($path);
-        }
-    }
-});
-
-test('persistent cache rejects readonly state not represented by constructor arguments', function (): void {
-    $path = sys_get_temp_dir() . '/componenta-di-derived-readonly-' . bin2hex(random_bytes(5)) . '.php';
-
-    try {
-        expect(fn() => (new DiCacheGenerator())->generate([
-            ConfigKey::SERVICES => [
-                'derived' => new AuditDerivedReadonlyCacheValue('seed'),
-            ],
-        ], $path))->toThrow(
-            CompilationException::class,
-            'not represented by a public promoted constructor parameter',
-        );
-    } finally {
-        if (is_file($path)) {
-            unlink($path);
-        }
-    }
 });

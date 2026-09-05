@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 test('late-loaded non-static delegator owners remain invalidatable container dependencies', function (): void {
     $short = 'LateDelegatorOwner_' . bin2hex(random_bytes(5));

@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\Config\Config;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\MapRequestPayload;
-use Componenta\DI\Cache\DiCacheGenerator;
-use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Exception\CompilationException;
 use Componenta\DI\Exception\DelegatorException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -20,6 +15,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Error\ErrorMessageCollectorInterface;
 use Componenta\Validation\Exception\ValidationExceptionInterface;
@@ -91,6 +87,7 @@ final readonly class ValidationEnvelope
 
 final readonly class ThrowingValidator implements ValidatorInterface
 {
+    /** @param iterable<array-key,mixed> $data */
     public function validate(
         iterable $data,
         ?ContextInterface $context = null,
@@ -161,48 +158,22 @@ test('foreign parameter resolver failures normalize identically for make and cal
         ->and($call->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
 
-test('foreign resolver failures have the same contract in reflection and compiled mode', function (): void {
-    $suffix = bin2hex(random_bytes(5));
-    $directory = sys_get_temp_dir() . '/componenta-di-v5-exception-aot-' . $suffix;
-    $namespace = 'Componenta\\DI\\Tests\\Generated\\ExceptionContract' . $suffix;
-    $builder = (new ContainerBuilder())
-        ->addParameterResolver(new ThrowingParameterResolver(), 2000);
-
-    try {
-        $reflection = exceptionFrom(fn() => $builder->build()->make(ExceptionResolutionTarget::class));
-        $compiled = $builder->compileFactories(
-            [ExceptionResolutionTarget::class],
-            $directory,
-            namespace: $namespace,
+test('foreign resolver failures have the same contract for every container build', function (): void {
+    $errors = [];
+    foreach ([1, 2] as $_build) {
+        $container = (new ContainerBuilder())
+            ->addParameterResolver(new ThrowingParameterResolver(), 2000)
+            ->build();
+        $errors[] = exceptionFrom(
+            fn() => $container->make(ExceptionResolutionTarget::class),
         );
-
-        $data = $builder->toArray();
-        $dependencies = $data[ConfigKey::DEPENDENCIES] ?? [];
-        $dependencies[ConfigKey::FACTORIES] = array_replace(
-            $dependencies[ConfigKey::FACTORIES] ?? [],
-            $compiled,
-        );
-        $production = ContainerBuilder::configureFromCache(
-            new Config([]),
-            [
-                'version' => ContainerBuilder::CACHE_VERSION,
-                ConfigKey::DEPENDENCIES => $dependencies,
-            ],
-            $directory,
-        )->build();
-        $aot = exceptionFrom(fn() => $production->make(ExceptionResolutionTarget::class));
-
-        expect($reflection)->toBeInstanceOf(ResolutionException::class)
-            ->and($aot)->toBeInstanceOf(ResolutionException::class)
-            ->and($aot::class)->toBe($reflection::class)
-            ->and($reflection->getPrevious())->toBeInstanceOf(ForeignDiFailure::class)
-            ->and($aot->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
-    } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
     }
+
+    expect($errors[0])->toBeInstanceOf(ResolutionException::class)
+        ->and($errors[1])->toBeInstanceOf(ResolutionException::class)
+        ->and($errors[1]::class)->toBe($errors[0]::class)
+        ->and($errors[0]->getPrevious())->toBeInstanceOf(ForeignDiFailure::class)
+        ->and($errors[1]->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
 
 test('exceptions thrown by the explicit user callable body propagate unchanged', function (): void {
@@ -272,6 +243,9 @@ test('foreign PSR not found errors retain PSR semantics through Componenta NotFo
     $container->addContainer(new ForeignExternalContainer(notFound: true));
 
     $error = exceptionFrom(fn() => $container->get('foreign-missing'));
+    if (!$error instanceof NotFoundException) {
+        throw new RuntimeException('Expected a Componenta NotFoundException.');
+    }
 
     expect($error)->toBeInstanceOf(NotFoundException::class)
         ->and($error)->toBeInstanceOf(NotFoundExceptionInterface::class)
@@ -295,13 +269,16 @@ test('request validation failures are preserved as the cause of a parameter Reso
     $error = exceptionFrom(fn() => $container->make(ValidationEnvelope::class, [
         ServerRequestInterface::class => $request,
     ]));
+    if (!$error instanceof ResolutionException) {
+        throw new RuntimeException('Expected a parameter ResolutionException.');
+    }
 
     expect($error)->toBeInstanceOf(ResolutionException::class)
         ->and($error->parameter?->getName())->toBe('dto')
         ->and($error->getPrevious())->toBeInstanceOf(SyntheticValidationFailure::class);
 });
 
-test('builder extension factory failures are configuration failures with the original cause', function (): void {
+test('extension factory failures are configuration failures with the original cause', function (): void {
     $builder = (new ContainerBuilder())->addParameterResolver(
         static function (ContainerInterface $_container): object {
             throw new ForeignDiFailure('extension factory failure');
@@ -315,7 +292,7 @@ test('builder extension factory failures are configuration failures with the ori
         ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
 
-test('build reclassifies runtime DI exceptions from extension factories as configuration failures', function (): void {
+test('container factory reclassifies runtime DI extension failures as configuration failures', function (): void {
     $cause = new ResolutionException('extension resolution failure');
     $builder = (new ContainerBuilder())->addParameterResolver(
         static function (ContainerInterface $_container) use ($cause): object {
@@ -331,12 +308,11 @@ test('build reclassifies runtime DI exceptions from extension factories as confi
 });
 
 test('attribute composition failures are a specialized configuration failure', function (): void {
-    expect(is_subclass_of(AttributeCompositionException::class, InvalidConfigurationException::class))->toBeTrue();
-});
+    $parent = (new \ReflectionClass(AttributeCompositionException::class))->getParentClass();
 
-test('cache artifact filesystem failures use CompilationException', function (): void {
-    $error = exceptionFrom(fn() => (new DiCacheGenerator())->generate([], '/dev/null/componenta-di-cache.php'));
+    if (!$parent instanceof \ReflectionClass) {
+        throw new RuntimeException('Expected AttributeCompositionException to have a parent class.');
+    }
 
-    expect($error)->toBeInstanceOf(CompilationException::class)
-        ->and($error)->toBeInstanceOf(ExceptionInterface::class);
+    expect($parent->getName())->toBe(InvalidConfigurationException::class);
 });

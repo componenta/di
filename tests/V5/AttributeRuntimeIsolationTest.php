@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Attribute;
+use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use ReflectionClass;
 use Reflector;
@@ -68,6 +70,35 @@ final class AuditStatefulObjectHandler implements AttributeHandlerInterface
     }
 }
 
+#[Attribute(Attribute::TARGET_CLASS)]
+final class AuditConstructorLifecycleAttribute
+{
+    public static int $constructions = 0;
+
+    public function __construct(public readonly string $label)
+    {
+        ++self::$constructions;
+    }
+}
+
+#[AuditConstructorLifecycleAttribute('declared')]
+final class AuditConstructorLifecycleTarget {}
+
+final class AuditConstructorLifecycleHandler implements AttributeHandlerInterface
+{
+    /** @var list<string> */
+    public array $labels = [];
+
+    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+    {
+        if (!$attribute instanceof AuditConstructorLifecycleAttribute || !$target instanceof ReflectionClass) {
+            throw new LogicException('Unexpected attribute invocation.');
+        }
+
+        $this->labels[] = $attribute->label;
+    }
+}
+
 test('parameter attribute runtime instances are isolated between calls', function (): void {
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
@@ -94,3 +125,29 @@ test('object attribute runtime instances are isolated between object creations',
     expect($container->make(AuditStatefulObjectTarget::class))->toBeInstanceOf(AuditStatefulObjectTarget::class)
         ->and($container->make(AuditStatefulObjectTarget::class))->toBeInstanceOf(AuditStatefulObjectTarget::class);
 });
+
+test('attribute constructors run once per actual handler invocation and never for plan metadata in every environment', function (string $environment): void {
+    AuditConstructorLifecycleAttribute::$constructions = 0;
+    $handler = new AuditConstructorLifecycleHandler();
+    $container = ContainerBuilder::configure(new Config([], new Environment([
+        'APP_ENV' => $environment,
+    ])))
+        ->addAttributeDefinition(new AttributeDefinition(
+            AuditConstructorLifecycleAttribute::class,
+            $handler,
+        ))
+        ->build();
+
+    $first = $container->make(AuditConstructorLifecycleTarget::class);
+
+    expect($first)->toBeInstanceOf(AuditConstructorLifecycleTarget::class)
+        ->and(AuditConstructorLifecycleAttribute::$constructions)->toBe(1)
+        ->and($handler->labels)->toBe(['declared']);
+
+    $second = $container->make(AuditConstructorLifecycleTarget::class);
+
+    expect($second)->toBeInstanceOf(AuditConstructorLifecycleTarget::class)
+        ->and($second)->not->toBe($first)
+        ->and(AuditConstructorLifecycleAttribute::$constructions)->toBe(2)
+        ->and($handler->labels)->toBe(['declared', 'declared']);
+})->with(['development', 'production']);

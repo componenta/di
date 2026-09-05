@@ -109,7 +109,7 @@ class CallableResolver implements CallableResolverInterface
     /** @param array<mixed> $callable */
     protected function resolveArray(array $callable): callable
     {
-        if (count($callable) !== 2) {
+        if (count($callable) !== 2 || !array_key_exists(0, $callable) || !array_key_exists(1, $callable)) {
             throw InvalidCallableException::forValue($callable);
         }
 

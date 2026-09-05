@@ -10,32 +10,11 @@ use Reflector;
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
 final readonly class AttributePlan
 {
-    /** @var array<class-string<AttributeCapabilityInterface>, list<AttributeUsage>> */
-    private array $byCapability;
-
-    /** @var array<class-string, list<AttributeUsage>> */
-    private array $byAttribute;
-
     /** @param list<AttributeUsage> $usages */
     public function __construct(
         public Reflector $target,
         public array $usages,
-    ) {
-        /** @var array<class-string<AttributeCapabilityInterface>, list<AttributeUsage>> $byCapability */
-        $byCapability = [];
-        /** @var array<class-string, list<AttributeUsage>> $byAttribute */
-        $byAttribute = [];
-
-        foreach ($usages as $usage) {
-            $byAttribute[$usage->attribute::class][] = $usage;
-            foreach ($usage->definition->capabilities as $capability) {
-                $byCapability[$capability][] = $usage;
-            }
-        }
-
-        $this->byCapability = $byCapability;
-        $this->byAttribute = $byAttribute;
-    }
+    ) {}
 
     /**
      * @param class-string<AttributeCapabilityInterface> $capability
@@ -44,23 +23,11 @@ final readonly class AttributePlan
     public function all(string $capability): array
     {
         $matches = [];
-        $seen = [];
-
-        foreach ($this->byCapability as $registered => $usages) {
-            if (!is_a($registered, $capability, true)) {
-                continue;
-            }
-
-            foreach ($usages as $usage) {
-                $id = spl_object_id($usage);
-                if (isset($seen[$id])) {
-                    continue;
-                }
-                $seen[$id] = true;
+        foreach ($this->usages as $usage) {
+            if ($usage->hasCapability($capability)) {
                 $matches[] = $usage;
             }
         }
-
         return $matches;
     }
 
@@ -91,11 +58,8 @@ final readonly class AttributePlan
     public function attributes(string $attributeClass): array
     {
         $matches = [];
-        foreach ($this->byAttribute as $class => $usages) {
-            if (!is_a($class, $attributeClass, true)) {
-                continue;
-            }
-            foreach ($usages as $usage) {
+        foreach ($this->usages as $usage) {
+            if (is_a($usage->attributeClass, $attributeClass, true)) {
                 $matches[] = $usage;
             }
         }

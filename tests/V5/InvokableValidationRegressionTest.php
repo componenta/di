@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class AuditInvokableWithRequiredDependency
 {
@@ -17,14 +18,15 @@ final class AuditInvokableWithRequiredDependency
 
 abstract class AuditAbstractInvokable {}
 
-test('config rejects unavailable invokable classes during build', function (): void {
-    $config = new Config([
-        ConfigKey::DEPENDENCIES => [
+test('dependency definitions reject unavailable invokable classes during build', function (): void {
+    $builder = ContainerBuilder::configureWithDependencies(
+        new Config([], new Environment([])),
+        [
             ConfigKey::INVOKABLES => ['Componenta\\DI\\Tests\\V5\\MissingAuditInvokable'],
         ],
-    ]);
+    );
 
-    expect(fn() => ContainerBuilder::configure($config)->build())
+    expect(fn() => $builder->build())
         ->toThrow(InvalidConfigurationException::class, 'does not exist');
 });
 

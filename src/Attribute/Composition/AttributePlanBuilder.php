@@ -20,8 +20,6 @@ use Throwable;
 /** Builds, validates, orders and memoizes the semantic attribute plan for stable targets. */
 final class AttributePlanBuilder
 {
-    public const int FORMAT_VERSION = 6;
-
     /** @var array<string, AttributePlan> */
     private array $namedPlans = [];
     /** @var array<class-string,int> */
@@ -29,6 +27,11 @@ final class AttributePlanBuilder
     private int $registryRevision = -1;
 
     public function __construct(private readonly AttributeDefinitionRegistry $registry) {}
+
+    /** @internal */
+    public int $revision {
+        get => $this->registry->revision;
+    }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function build(
@@ -63,10 +66,7 @@ final class AttributePlanBuilder
             }
 
             $usages[] = new AttributeUsage(
-                $this->instantiate(
-                    $reflectionAttribute,
-                    sprintf('attribute "%s" on %s', $attributeClass, self::targetName($target)),
-                ),
+                $reflectionAttribute,
                 $definition,
                 $target,
                 $index,
@@ -94,12 +94,13 @@ final class AttributePlanBuilder
 
     private function synchronizeRegistryRevision(): void
     {
-        if ($this->registryRevision === $this->registry->revision) {
+        $revision = $this->registry->revision;
+        if ($this->registryRevision === $revision) {
             return;
         }
 
         $this->namedPlans = [];
-        $this->registryRevision = $this->registry->revision;
+        $this->registryRevision = $revision;
     }
 
     /**
@@ -215,13 +216,8 @@ final class AttributePlanBuilder
 
             $members = [];
             foreach ($usages as $usage) {
-                foreach ($usage->definition->capabilities as $capability) {
-                    if (!is_a($capability, $policy->capability, true)) {
-                        continue;
-                    }
-
+                if ($usage->hasCapability($policy->capability)) {
                     $members[] = $usage;
-                    break;
                 }
             }
 
@@ -235,7 +231,7 @@ final class AttributePlanBuilder
                 $policy->maxPerTarget,
                 $policy->capability,
                 implode(', ', array_map(
-                    static fn(AttributeUsage $usage): string => '#[' . $usage->attribute::class . ']',
+                    static fn(AttributeUsage $usage): string => '#[' . $usage->attributeClass . ']',
                     $members,
                 )),
             ));
@@ -255,11 +251,9 @@ final class AttributePlanBuilder
     ): void {
         $invocationOnly = null;
         foreach ($usages as $usage) {
-            foreach ($usage->definition->capabilities as $capability) {
-                if (is_a($capability, InvocationOnlyValueProvider::class, true)) {
-                    $invocationOnly = $usage;
-                    break 2;
-                }
+            if ($usage->hasCapability(InvocationOnlyValueProvider::class)) {
+                $invocationOnly = $usage;
+                break;
             }
         }
 
@@ -270,7 +264,7 @@ final class AttributePlanBuilder
         if (!$target instanceof ReflectionParameter) {
             throw new AttributeCompositionException(sprintf(
                 '#[%s] is invocation-only and can target callable parameters only; got %s.',
-                $invocationOnly->attribute::class,
+                $invocationOnly->attributeClass,
                 self::targetName($target),
             ));
         }
@@ -279,7 +273,7 @@ final class AttributePlanBuilder
         if ($function instanceof ReflectionMethod && $function->isConstructor()) {
             throw new AttributeCompositionException(sprintf(
                 '#[%s] is invocation-only and cannot target constructor parameter $%s of %s::__construct().',
-                $invocationOnly->attribute::class,
+                $invocationOnly->attributeClass,
                 $target->getName(),
                 $function->getDeclaringClass()->getName(),
             ));
@@ -313,12 +307,8 @@ final class AttributePlanBuilder
         $provider = false;
         $transformers = 0;
         foreach ($usages as $usage) {
-            $isTransformer = false;
-            foreach ($usage->definition->capabilities as $capability) {
-                $provider = $provider || is_a($capability, ValueProvider::class, true);
-                $isTransformer = $isTransformer || is_a($capability, ValueTransformer::class, true);
-            }
-            if ($isTransformer) {
+            $provider = $provider || $usage->hasCapability(ValueProvider::class);
+            if ($usage->hasCapability(ValueTransformer::class)) {
                 ++$transformers;
             }
         }
@@ -362,14 +352,7 @@ final class AttributePlanBuilder
                 continue;
             }
 
-            $transformer = false;
-            foreach ($usage->definition->capabilities as $capability) {
-                if (is_a($capability, ValueTransformer::class, true)) {
-                    $transformer = true;
-                    break;
-                }
-            }
-            if ($transformer) {
+            if ($usage->hasCapability(ValueTransformer::class)) {
                 continue;
             }
 
@@ -407,7 +390,7 @@ final class AttributePlanBuilder
                     '%s requires %s because of #[%s].',
                     self::targetName($target),
                     $selector,
-                    $usage->attribute::class,
+                    $usage->attributeClass,
                 ));
             }
 
@@ -419,7 +402,7 @@ final class AttributePlanBuilder
                     '%s forbids %s together with #[%s].',
                     self::targetName($target),
                     $selector,
-                    $usage->attribute::class,
+                    $usage->attributeClass,
                 ));
             }
         }
@@ -444,7 +427,7 @@ final class AttributePlanBuilder
                         sprintf(
                             'Attribute composition rule "%s" failed for #[%s]: %s',
                             $rule::class,
-                            $usage->attribute::class,
+                            $usage->attributeClass,
                             $e->getMessage(),
                         ),
                         previous: $e,
@@ -554,16 +537,7 @@ final class AttributePlanBuilder
     /** @param class-string $selector */
     private function matches(string $selector, AttributeUsage $usage): bool
     {
-        if (is_a($selector, AttributeCapabilityInterface::class, true)) {
-            foreach ($usage->definition->capabilities as $capability) {
-                if (is_a($capability, $selector, true)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        return is_a($usage->attribute::class, $selector, true);
+        return $usage->matches($selector);
     }
 
     /**

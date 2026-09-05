@@ -7,29 +7,9 @@ namespace Componenta\DI\Tests\V5;
 use Attribute;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionClass;
-
-final class InvalidParameterInjectTarget
-{
-    public function __construct(
-        #[Inject]
-        \stdClass $value,
-    ) {
-        unset($value);
-    }
-}
-
-final class InvalidParameterInitTarget
-{
-    public function __construct(
-        #[Init('time')]
-        int $value,
-    ) {
-        unset($value);
-    }
-}
 
 test('Inject and Init are declared for properties only', function (): void {
     $inject = (new ReflectionClass(Inject::class))->getAttributes(Attribute::class)[0]->newInstance();
@@ -41,9 +21,16 @@ test('Inject and Init are declared for properties only', function (): void {
 
 test('property-only value attributes are rejected on constructor parameters', function (): void {
     $container = (new ContainerBuilder())->build();
+    $injectTarget = __NAMESPACE__ . '\\InvalidParameterInjectTarget';
+    $initTarget = __NAMESPACE__ . '\\InvalidParameterInitTarget';
 
-    expect(fn() => $container->make(InvalidParameterInjectTarget::class))
+    if (!class_exists($injectTarget, false)) {
+        eval('namespace ' . __NAMESPACE__ . '; final class InvalidParameterInjectTarget { public function __construct(#[\\Componenta\\DI\\Attribute\\Inject] \\stdClass $value) {} }');
+        eval('namespace ' . __NAMESPACE__ . '; final class InvalidParameterInitTarget { public function __construct(#[\\Componenta\\DI\\Attribute\\Init("time")] int $value) {} }');
+    }
+
+    expect(fn() => $container->make($injectTarget))
         ->toThrow(AttributeCompositionException::class, 'cannot target parameter')
-        ->and(fn() => $container->make(InvalidParameterInitTarget::class))
+        ->and(fn() => $container->make($initTarget))
         ->toThrow(AttributeCompositionException::class, 'cannot target parameter');
 });

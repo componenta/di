@@ -20,6 +20,9 @@ final class AttributeDefinitionRegistry
     /** @var array<class-string<AttributeCapabilityInterface>, CapabilityPolicy> */
     private array $policies = [];
 
+    /** @var array<class-string,true> */
+    private array $unavailableAttributes = [];
+
     private bool $sealed = false;
     private int $generation = 0;
 
@@ -30,8 +33,18 @@ final class AttributeDefinitionRegistry
         }
     }
 
+    /** Also changes when a previously unavailable attribute class becomes loadable. */
     public int $revision {
-        get => $this->generation;
+        get {
+            foreach ($this->unavailableAttributes as $attribute => $_) {
+                if (class_exists($attribute) || interface_exists($attribute)) {
+                    unset($this->unavailableAttributes[$attribute]);
+                    ++$this->generation;
+                }
+            }
+
+            return $this->generation;
+        }
     }
 
     public function register(AttributeDefinition $definition): void
@@ -96,6 +109,10 @@ final class AttributeDefinitionRegistry
         }
 
         if ($matches === []) {
+            if (!class_exists($attributeClass, false) && !interface_exists($attributeClass, false)) {
+                $this->unavailableAttributes[$attributeClass] = true;
+            }
+
             return null;
         }
         if (count($matches) === 1) {

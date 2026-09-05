@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\ConcurrentResolutionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
@@ -16,6 +16,16 @@ use WeakReference;
 function v5DeferredDelegatorNative(string $entry, ContainerInterface $container): string
 {
     return $entry . ':native';
+}
+
+function appendDeferredResult(callable $entry, string $value, string $suffix): string
+{
+    $result = $entry($value);
+    if (!is_string($result)) {
+        throw new RuntimeException('The deferred delegator must return a string.');
+    }
+
+    return $result . $suffix;
 }
 
 final readonly class RuntimeDefinitionOwnershipValue
@@ -33,8 +43,16 @@ test('shared resolution distinguishes concurrent Fiber ownership from dependency
         })
         ->build();
 
-    $first = new Fiber(static fn(): object => $container->get('fiber.shared'));
-    $second = new Fiber(static fn(): object => $container->get('fiber.shared'));
+    $operation = static function () use ($container): object {
+        $entry = $container->get('fiber.shared');
+        if (!is_object($entry)) {
+            throw new RuntimeException('The Fiber factory must return an object.');
+        }
+
+        return $entry;
+    };
+    $first = new Fiber($operation);
+    $second = new Fiber($operation);
 
     expect($first->start())->toBe('factory-suspended')
         ->and(fn() => $second->start())
@@ -59,7 +77,14 @@ test('abandoned suspended Fiber releases shared resolution ownership', function 
         })
         ->build();
 
-    $fiber = new Fiber(static fn(): object => $container->get('fiber.abandoned'));
+    $fiber = new Fiber(static function () use ($container): object {
+        $entry = $container->get('fiber.abandoned');
+        if (!is_object($entry)) {
+            throw new RuntimeException('The Fiber factory must return an object.');
+        }
+
+        return $entry;
+    });
     $reference = WeakReference::create($fiber);
 
     expect($fiber->start())->toBe('factory-suspended');
@@ -94,7 +119,7 @@ test('deferred delegator invalidation propagates through the complete dependency
     $container->set(
         'handler.inner',
         static fn(callable $entry): callable =>
-            static fn(string $value): string => $entry($value) . ':inner-1',
+            static fn(string $value): string => appendDeferredResult($entry, $value, ':inner-1'),
     );
     $container->set(
         'handler.outer',
@@ -109,7 +134,7 @@ test('deferred delegator invalidation propagates through the complete dependency
     $container->set(
         'handler.inner',
         static fn(callable $entry): callable =>
-            static fn(string $value): string => $entry($value) . ':inner-2',
+            static fn(string $value): string => appendDeferredResult($entry, $value, ':inner-2'),
     );
 
     expect($container->get('service.transitive'))->toBe('base:outer:inner-2');
@@ -121,12 +146,12 @@ test('transitive deferred dependencies follow alias retargeting', function (): v
     $container->set(
         'handler.inner.first',
         static fn(callable $entry): callable =>
-            static fn(string $value): string => $entry($value) . ':first',
+            static fn(string $value): string => appendDeferredResult($entry, $value, ':first'),
     );
     $container->set(
         'handler.inner.second',
         static fn(callable $entry): callable =>
-            static fn(string $value): string => $entry($value) . ':second',
+            static fn(string $value): string => appendDeferredResult($entry, $value, ':second'),
     );
     $container->alias('handler.inner.alias', 'handler.inner.first');
     $container->set('handler.alias.outer', static fn(string $value): string => $value . ':outer');
@@ -198,7 +223,7 @@ test('external takeover invalidates transitive deferred callable dependents', fu
     $container->set(
         'external.inner',
         static fn(callable $entry): callable =>
-            static fn(string $value): string => $entry($value) . ':local',
+            static fn(string $value): string => appendDeferredResult($entry, $value, ':local'),
     );
     $container->set('external.outer', static fn(string $value): string => $value . ':outer');
     $container->delegator('external.outer', 'external.inner');
@@ -215,7 +240,7 @@ test('external takeover invalidates transitive deferred callable dependents', fu
             }
 
             return static fn(callable $entry): callable =>
-                static fn(string $value): string => $entry($value) . ':external';
+                static fn(string $value): string => appendDeferredResult($entry, $value, ':external');
         }
 
         public function has(string $id): bool
@@ -254,8 +279,18 @@ test('external containers own shared get while fresh make keeps the local runtim
 
     $external->hasCalls = 0;
 
-    expect($container->has('runtime.owned'))->toBeTrue()
-        ->and($external->hasCalls)->toBe(1)
-        ->and($container->get('runtime.owned')->source)->toBe('external')
-        ->and($container->make('runtime.owned')->source)->toBe('local');
+    $has = $container->has('runtime.owned');
+    $hasCalls = $external->hasCalls;
+    $shared = $container->get('runtime.owned');
+    $fresh = $container->make('runtime.owned');
+    if (!$shared instanceof RuntimeDefinitionOwnershipValue
+        || !$fresh instanceof RuntimeDefinitionOwnershipValue
+    ) {
+        throw new RuntimeException('The runtime definition resolved to an unexpected type.');
+    }
+
+    expect($has)->toBeTrue()
+        ->and($hasCalls)->toBe(1)
+        ->and($shared->source)->toBe('external')
+        ->and($fresh->source)->toBe('local');
 });

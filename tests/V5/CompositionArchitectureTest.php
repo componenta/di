@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
@@ -13,6 +14,7 @@ use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionMethod;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -40,8 +42,54 @@ final class RuleTarget
 interface AttributeFamilyOne {}
 interface AttributeFamilyTwo {}
 
+interface AuditDeclaredAttributeFamily {}
+interface AuditSelectorParentCapability extends AttributeCapabilityInterface {}
+interface AuditSelectorCapability extends AuditSelectorParentCapability {}
+interface AuditOtherSelectorCapability extends AttributeCapabilityInterface {}
+
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class AmbiguousFamilyAttribute implements AttributeFamilyOne, AttributeFamilyTwo {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class AuditDeclaredUsageAttribute implements AuditDeclaredAttributeFamily
+{
+    public static int $constructions = 0;
+
+    public function __construct(
+        public readonly string $name,
+        public readonly int $limit = 1,
+    ) {
+        ++self::$constructions;
+    }
+}
+
+final class AuditDeclaredUsageRule implements AttributeCompositionRuleInterface
+{
+    /** @var array<string, mixed>|null */
+    public ?array $observation = null;
+
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void
+    {
+        $this->observation = [
+            'class' => $attribute->attributeClass,
+            'arguments' => $attribute->arguments,
+            'is_attribute' => $attribute->is(AuditDeclaredUsageAttribute::class),
+            'is_family' => $attribute->is(AuditDeclaredAttributeFamily::class),
+            'is_other_attribute' => $attribute->is(RuleB::class),
+            'has_capability' => $attribute->hasCapability(AuditSelectorCapability::class),
+            'has_parent_capability' => $attribute->hasCapability(AuditSelectorParentCapability::class),
+            'has_other_capability' => $attribute->hasCapability(AuditOtherSelectorCapability::class),
+            'matches_attribute' => $attribute->matches(AuditDeclaredUsageAttribute::class),
+            'matches_family' => $attribute->matches(AuditDeclaredAttributeFamily::class),
+            'matches_other_attribute' => $attribute->matches(RuleB::class),
+            'matches_capability' => $attribute->matches(AuditSelectorCapability::class),
+            'matches_parent_capability' => $attribute->matches(AuditSelectorParentCapability::class),
+            'matches_other_capability' => $attribute->matches(AuditOtherSelectorCapability::class),
+            'set_returns_same_usage' => $set->one(AuditSelectorCapability::class) === $attribute,
+            'set_has_other' => $set->has(AuditOtherSelectorCapability::class),
+        ];
+    }
+}
 
 test('custom composition rules see the complete attribute set before execution', function (): void {
     $registry = new AttributeDefinitionRegistry();
@@ -81,4 +129,44 @@ test('inherited semantic definitions never resolve by registration order when eq
 
     expect(fn() => $registry->definition(AmbiguousFamilyAttribute::class))
         ->toThrow(InvalidConfigurationException::class, 'multiple equally specific');
+});
+
+test('composition rules inspect declared metadata without constructing runtime attributes', function (): void {
+    AuditDeclaredUsageAttribute::$constructions = 0;
+    $rule = new AuditDeclaredUsageRule();
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(
+            AuditDeclaredUsageAttribute::class,
+            capabilities: [AuditSelectorCapability::class],
+            rules: [$rule],
+        ))
+        ->build();
+
+    $result = $container->call(
+        static fn(
+            #[AuditDeclaredUsageAttribute(name: 'declared', limit: 3)] string $value,
+        ): string => $value,
+        ['value' => 'resolved'],
+    );
+
+    expect($result)->toBe('resolved')
+        ->and(AuditDeclaredUsageAttribute::$constructions)->toBe(0)
+        ->and($rule->observation)->toBe([
+            'class' => AuditDeclaredUsageAttribute::class,
+            'arguments' => ['name' => 'declared', 'limit' => 3],
+            'is_attribute' => true,
+            'is_family' => true,
+            'is_other_attribute' => false,
+            'has_capability' => true,
+            'has_parent_capability' => true,
+            'has_other_capability' => false,
+            'matches_attribute' => true,
+            'matches_family' => true,
+            'matches_other_attribute' => false,
+            'matches_capability' => true,
+            'matches_parent_capability' => true,
+            'matches_other_capability' => false,
+            'set_returns_same_usage' => true,
+            'set_has_other' => false,
+        ]);
 });

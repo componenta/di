@@ -56,15 +56,6 @@ final readonly class AttributeSet
     /** @param class-string $selector */
     private function matches(string $selector, AttributeUsage $usage): bool
     {
-        if (is_a($selector, AttributeCapabilityInterface::class, true)) {
-            foreach ($usage->definition->capabilities as $capability) {
-                if (is_a($capability, $selector, true)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        return is_a($usage->attribute::class, $selector, true);
+        return $usage->matches($selector);
     }
 }

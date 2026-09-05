@@ -1,6 +1,6 @@
 {
     "name": "componenta/di",
-    "description": "PSR-11 dependency injection container for PHP 8.4+ with composable attribute semantics, autowiring, lazy objects and AOT entry shards",
+    "description": "PSR-11 dependency injection container for PHP 8.4+ with composable attribute semantics, autowiring and lazy objects",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -26,7 +26,6 @@
         "componenta/config": "^3.0",
         "componenta/reflection": "^2.0",
         "componenta/validation": "^2.0.1",
-        "componenta/var-export": "^1.0",
         "psr/container": "^2.0",
         "psr/http-message": "^2.0"
     },
@@ -50,11 +49,12 @@
     },
     "scripts": {
         "test": "pest",
-        "test-coverage": "pest --coverage-html coverage",
-        "phpstan": "phpstan analyse src --level=max",
+        "test-coverage": "pest --coverage --min=80",
+        "test-mutation": "pest --mutate --path=src --everything --min=80 --compact",
+        "phpstan": "phpstan analyse src tests --level=max",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
         "cs-fix": "php-cs-fixer fix",
-        "check": ["@cs-check", "@phpstan", "@test"]
+        "check": ["@cs-check", "@phpstan", "@test", "@test-coverage", "@test-mutation"]
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

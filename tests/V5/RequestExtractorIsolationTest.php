@@ -10,10 +10,10 @@ use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\QueryParam;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 

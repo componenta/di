@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\NoConstructor;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class ClassDefinitionParityDependency {}
 
@@ -71,6 +71,9 @@ test('ClassDefinition runtime overrides normalize by constructor signature', fun
         ClassDefinitionParityDependency::class => $runtimeDependency,
         'unrelated' => 'ignored',
     ]);
+    if (!$entry instanceof ClassDefinitionParityTarget) {
+        throw new \LogicException('The class definition resolved to an unexpected type.');
+    }
 
     expect($entry->first)->toBe('configured-first')
         ->and($entry->second)->toBe('runtime-second')
@@ -89,6 +92,9 @@ test('ClassDefinition positional runtime values override named configured values
     );
 
     $entry = $container->make('class.definition.position', [0 => 'runtime-first']);
+    if (!$entry instanceof ClassDefinitionParityTarget) {
+        throw new \LogicException('The class definition resolved to an unexpected type.');
+    }
 
     expect($entry->first)->toBe('runtime-first')
         ->and($entry->second)->toBe('configured-second');
@@ -116,6 +122,9 @@ test('ClassDefinition honors constructor policies from the shared object pipelin
         ->build();
 
     $entry = $container->make('class.definition.constructor-policy');
+    if (!$entry instanceof ClassDefinitionConstructorPolicyTarget) {
+        throw new \LogicException('The constructor policy resolved to an unexpected type.');
+    }
 
     expect($entry)->toBeInstanceOf(ClassDefinitionConstructorPolicyTarget::class)
         ->and($entry->constructorRan)->toBeFalse();
@@ -144,10 +153,16 @@ test('ClassDefinition typed union overrides match the concrete type key exactly'
             ->constructor(['dependency' => $configured]),
     );
 
-    expect($container->make('class.definition.union', [
+    $left = $container->make('class.definition.union', [
         ClassDefinitionUnionLeft::class => $runtime,
-    ])->dependency)->toBe($configured)
-        ->and($container->make('class.definition.union', [
+    ]);
+    $right = $container->make('class.definition.union', [
             ClassDefinitionUnionRight::class => $runtime,
-        ])->dependency)->toBe($runtime);
+        ]);
+    if (!$left instanceof ClassDefinitionUnionTarget || !$right instanceof ClassDefinitionUnionTarget) {
+        throw new \LogicException('The union class definition resolved to an unexpected type.');
+    }
+
+    expect($left->dependency)->toBe($configured)
+        ->and($right->dependency)->toBe($runtime);
 });

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\Config\EnvironmentEntry;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
@@ -12,8 +13,9 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class SetUpDependency {}
 
@@ -84,21 +86,26 @@ test('SetUp resolves current config v3 and DI value descriptors with target type
 });
 
 test('dependency normalization rejects factory ids made unreachable by aliases', function (): void {
-    expect(fn() => ContainerBuilder::normalizeDependencies([
-        ConfigKey::FACTORIES => [
-            'service.alias' => static fn(): object => new \stdClass(),
-        ],
-        ConfigKey::ALIASES => [
-            'service.alias' => \stdClass::class,
-        ],
-    ]))->toThrow(InvalidConfigurationException::class, 'unreachable after canonicalization');
+    expect(fn() => (new ContainerFactory())->create(
+        new Config([], new Environment([])),
+        new DependencyDefinitions([
+            ConfigKey::FACTORIES => [
+                'service.alias' => static fn(): object => new \stdClass(),
+            ],
+            ConfigKey::ALIASES => [
+                'service.alias' => \stdClass::class,
+            ],
+        ]),
+    ))->toThrow(InvalidConfigurationException::class, 'unreachable after canonicalization');
 });
 
 test('the internal config alias cannot be replaced or decorated', function (): void {
-    expect(fn() => (new ContainerBuilder())->addAlias(ConfigAttribute::KEY, \stdClass::class))
+    expect(fn() => (new ContainerBuilder())
+        ->addAlias(ConfigAttribute::KEY, \stdClass::class)
+        ->build())
         ->toThrow(InvalidConfigurationException::class, 'protected DI id')
         ->and(fn() => (new ContainerBuilder())->addDelegator(
             ConfigAttribute::KEY,
             static fn(object $entry): object => $entry,
-        ))->toThrow(InvalidConfigurationException::class, 'protected DI id');
+        )->build())->toThrow(InvalidConfigurationException::class, 'protected DI id');
 });

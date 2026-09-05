@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
 use ReflectionMethod;
@@ -18,6 +19,8 @@ use Throwable;
 
 /**
  * Executes composed class/property/method attribute handlers.
+ * Before instantiation, class policies precede property and method handlers.
+ * After instantiation, properties are initialized before class and method hooks.
  * Parameter plans are validated by the same composition model but executed
  * exclusively through AttributeParameterResolver. Runtime handlers receive
  * isolated attribute instances so mutable attribute state cannot leak between
@@ -31,7 +34,26 @@ final class AttributeProcessor
     public function __construct(
         private readonly AttributeDefinitionRegistry $registry,
         private readonly AttributePlanBuilder $plans,
+        private readonly ?BootstrapResolutionGuard $bootstrap = null,
     ) {}
+
+    /**
+     * @internal
+     * @param ReflectionClass<object> $class
+     */
+    public function recordBootstrapUse(ReflectionClass $class): void
+    {
+        if ($this->bootstrap?->isActive !== true) {
+            return;
+        }
+        $this->bootstrap->recordAttributes($class);
+        foreach (self::properties($class) as $property) {
+            $this->bootstrap->recordAttributes($property);
+        }
+        foreach (self::methods($class) as $method) {
+            $this->bootstrap->recordAttributes($method);
+        }
+    }
 
     /** @param ReflectionClass<object> $class */
     public function prepare(ReflectionClass $class): void
@@ -63,23 +85,45 @@ final class AttributeProcessor
             ? $plan['before']
             : $plan['after'];
 
-        foreach ($usages as $usage) {
-            $handler = $usage->definition->handler;
-            if (!$handler instanceof AttributeHandlerInterface) {
+        $count = count($usages);
+        for ($index = 0; $index < $count; ++$index) {
+            $usage = $usages[$index];
+            if (!$usage->target instanceof ReflectionProperty) {
+                $this->processUsage($class, $usage, $context);
                 continue;
             }
 
-            try {
-                $handler->handle($usage->newInstance(), $usage->target, $context);
-            } catch (ExceptionInterface $e) {
-                throw $e;
-            } catch (Throwable $e) {
-                if ($usage->target instanceof ReflectionProperty) {
-                    throw ResolutionException::forProperty($usage->target, previous: $e);
-                }
-
-                throw ResolutionException::forService($class->getName(), $e);
+            $propertyUsages = [$usage];
+            while ($index + 1 < $count && $usages[$index + 1]->target === $usage->target) {
+                $propertyUsages[] = $usages[++$index];
             }
+
+            $context->resolveProperty($usage->target, function () use ($class, $propertyUsages, $context): void {
+                foreach ($propertyUsages as $propertyUsage) {
+                    $this->processUsage($class, $propertyUsage, $context);
+                }
+            });
+        }
+    }
+
+    /** @param ReflectionClass<object> $class */
+    private function processUsage(ReflectionClass $class, AttributeUsage $usage, ObjectCreationContext $context): void
+    {
+        $handler = $usage->definition->handler;
+        if (!$handler instanceof AttributeHandlerInterface) {
+            return;
+        }
+
+        try {
+            $handler->handle($usage->newInstance(), $usage->target, $context);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            if ($usage->target instanceof ReflectionProperty) {
+                throw ResolutionException::forProperty($usage->target, previous: $e);
+            }
+
+            throw ResolutionException::forService($class->getName(), $e);
         }
     }
 
@@ -98,11 +142,13 @@ final class AttributeProcessor
 
         $before = [];
         $after = [];
+        $classAfter = [];
 
-        $this->collect($this->plans->build($class)->usages, $before, $after);
+        $this->collect($this->plans->build($class)->usages, $before, $classAfter);
         foreach (self::properties($class) as $property) {
             $this->collect($this->plans->build($property)->usages, $before, $after);
         }
+        $after = [...$after, ...$classAfter];
         foreach (self::methods($class) as $method) {
             $this->collect($this->plans->build($method)->usages, $before, $after);
         }

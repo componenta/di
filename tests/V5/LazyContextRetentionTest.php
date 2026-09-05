@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\Lazy;
-use Componenta\DI\ContainerBuilder;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use WeakReference;

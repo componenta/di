@@ -10,17 +10,18 @@ namespace Componenta\DI\Attribute;
  * Uses ReflectionClass::newInstanceWithoutConstructor() to create
  * a raw instance. The normal reflection pipeline still runs property
  * injection and SetUp methods after allocation when they are configured.
+ * Promoted properties with property-injection attributes are initialized by
+ * those handlers because the constructor does not assign their values.
  *
  * Useful for legacy classes or special instantiation requirements.
  *
  * @example
  * ```php
- * #[NoConstructor]
+ * #[NoConstructor, SetUp('initialize')]
  * class LegacyService {
  *     #[Inject]
  *     private DatabaseConnection $db;
  *
- *     #[SetUp('initialize')]
  *     public function initialize(): void {
  *         // Manual initialization
  *     }

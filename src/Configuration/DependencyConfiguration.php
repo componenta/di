@@ -6,7 +6,6 @@ namespace Componenta\DI\Configuration;
 
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
-use Componenta\DI\Compile\Factory\CompiledFactoryDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
@@ -101,50 +100,6 @@ final class DependencyConfiguration
         ], static fn(mixed $value): bool => $value !== [] && $value !== false);
 
         return $normalized;
-    }
-
-    /**
-     * @param array<string,mixed> $cache
-     * @return DependencyShape
-     */
-    public static function dependenciesFromCache(array $cache, int $expectedVersion): array
-    {
-        $allowed = ['version' => true, ConfigKey::DEPENDENCIES => true];
-        foreach ($cache as $key => $_value) {
-            if (!is_string($key) || !isset($allowed[$key])) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Unsupported container cache envelope key "%s".',
-                    (string) $key,
-                ));
-            }
-        }
-
-        if (($cache['version'] ?? null) !== $expectedVersion) {
-            throw new InvalidConfigurationException(sprintf(
-                'Unsupported container cache version; expected %d.',
-                $expectedVersion,
-            ));
-        }
-
-        $dependencies = $cache[ConfigKey::DEPENDENCIES] ?? [];
-        if (!is_array($dependencies)) {
-            throw new InvalidConfigurationException('Container cache dependencies must be an array.');
-        }
-
-        /** @var array<array-key,mixed> $dependencies */
-        $factories = $dependencies[ConfigKey::FACTORIES] ?? [];
-        if (is_array($factories)) {
-            foreach ($factories as $id => $factory) {
-                if ($factory instanceof CompiledFactoryDefinition) {
-                    $factories[$id] = $factory->encode();
-                }
-            }
-            $dependencies[ConfigKey::FACTORIES] = $factories;
-        }
-
-        self::assertShape($dependencies);
-        /** @var DependencyShape $dependencies */
-        return $dependencies;
     }
 
     /**
@@ -255,7 +210,6 @@ final class DependencyConfiguration
                 $factory = $factory->value;
             } elseif (!$factory instanceof DefinitionInterface
                 || $factory instanceof ClassDefinition
-                || $factory instanceof CompiledFactoryDefinition
             ) {
                 FactorySpecificationValidator::assertValid($id, $factory);
             }
@@ -345,9 +299,7 @@ final class DependencyConfiguration
     /** @return list<callable|string|array{object|string,string}> */
     public static function normalizeDelegatorList(mixed $value, string $id): array
     {
-        $items = self::callablePair($value)
-            ? [$value]
-            : (is_array($value) && array_is_list($value) ? $value : [$value]);
+        $items = is_array($value) && array_is_list($value) ? $value : [$value];
 
         $normalized = [];
         foreach ($items as $item) {

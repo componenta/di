@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class AuditPreparedValueResolver implements ParameterResolverInterface
 {

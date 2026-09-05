@@ -16,12 +16,12 @@ use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Proxy;
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class ConflictingSourcesDto
 {

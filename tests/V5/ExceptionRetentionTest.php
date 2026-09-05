@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\V5;
 
-use Componenta\DI\ContainerBuilder;
 use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use WeakReference;
@@ -59,10 +59,14 @@ test('failed parameter resolution does not persist closure or request state in t
     };
     $closureReference = WeakReference::create($closure);
 
+    $error = null;
     try {
         $container->call($closure, [ServerRequestInterface::class => $request]);
-        test()->fail('Expected parameter resolution to fail.');
-    } catch (ResolutionException $error) {
+    } catch (ResolutionException $exception) {
+        $error = $exception;
+    }
+    if (!$error instanceof ResolutionException) {
+        throw new \LogicException('Expected parameter resolution to fail.');
     }
 
     $diagnostic = [
@@ -73,7 +77,7 @@ test('failed parameter resolution does not persist closure or request state in t
         $error->providedParameterTypes,
     ];
 
-    unset($error, $closure, $request, $captured);
+    unset($error, $exception, $closure, $request, $captured);
     gc_collect_cycles();
 
     expect($probe->declaringContext)->toBe('Closure')
@@ -97,14 +101,18 @@ test('failed callable resolution does not persist rejected objects in the contai
     $reference = WeakReference::create($captured);
     $probe = new AuditInvalidCallableProbe($captured);
 
+    $error = null;
     try {
         $container->resolve($probe);
-        test()->fail('Expected callable resolution to fail.');
-    } catch (InvalidCallableException $error) {
+    } catch (InvalidCallableException $exception) {
+        $error = $exception;
+    }
+    if (!$error instanceof InvalidCallableException) {
+        throw new \LogicException('Expected callable resolution to fail.');
     }
 
     $diagnostic = [$error->callableType, $error->callableDescription];
-    unset($error, $probe, $captured);
+    unset($error, $exception, $probe, $captured);
     gc_collect_cycles();
 
     expect($reference->get())->toBeNull()

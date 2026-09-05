@@ -10,8 +10,8 @@ use Throwable;
 /**
  * Root marker for failures owned or normalized by Componenta DI.
  *
- * Every failure produced while Componenta DI resolves, creates, configures,
- * compiles or decorates an entry is surfaced through this interface. Foreign
+ * Every failure produced while Componenta DI resolves, creates, configures or
+ * decorates an entry is surfaced through this interface. Foreign
  * throwables are retained as the previous exception of an appropriate DI
  * exception.
  *

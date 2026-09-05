@@ -23,14 +23,14 @@ final readonly class ProxyCompositionRule implements AttributeCompositionRuleInt
             || $attribute->target instanceof ReflectionProperty
         ) {
             foreach ($set->all(ValueProvider::class) as $provider) {
-                if ($provider->attribute instanceof Make) {
+                if ($provider->is(Make::class)) {
                     continue;
                 }
 
                 throw new AttributeCompositionException(sprintf(
                     '#[%s] cannot be combined with value provider #[%s] on the same target.',
-                    $attribute->attribute::class,
-                    $provider->attribute::class,
+                    $attribute->attributeClass,
+                    $provider->attributeClass,
                 ));
             }
         }
@@ -42,7 +42,7 @@ final readonly class ProxyCompositionRule implements AttributeCompositionRuleInt
         ) {
             throw new AttributeCompositionException(sprintf(
                 '#[%s] cannot be combined with a value transformer on readonly property %s::$%s.',
-                $attribute->attribute::class,
+                $attribute->attributeClass,
                 $attribute->target->getDeclaringClass()->getName(),
                 $attribute->target->getName(),
             ));

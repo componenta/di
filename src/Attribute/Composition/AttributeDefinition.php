@@ -36,7 +36,6 @@ final readonly class AttributeDefinition
         public array $before = [],
         public array $after = [],
         public array $rules = [],
-        public int $version = 1,
         public AttributePhase $phase = AttributePhase::AfterInstantiation,
     ) {
         if (!class_exists($attribute) && !interface_exists($attribute)) {
@@ -44,9 +43,6 @@ final readonly class AttributeDefinition
                 'Attribute definition target "%s" is not available.',
                 $attribute,
             ));
-        }
-        if ($version < 1) {
-            throw new InvalidConfigurationException('Attribute definition version must be at least 1.');
         }
 
         foreach ($capabilities as $capability) {

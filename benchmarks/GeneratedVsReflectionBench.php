@@ -30,10 +30,14 @@ namespace {
     $loader->setPsr4('Componenta\\DI\\', rtrim($source, '/\\') . '/');
 }
 
-namespace Componenta\DI\Benchmarks\Generated {
+namespace Componenta\DI\Benchmarks\FactoryVsReflection {
     use Componenta\Config\Config;
+    use Componenta\Config\ContainerValue;
+    use Componenta\Config\DependencyDefinitions;
+    use Componenta\Config\Environment;
     use Componenta\DI\ConfigKey;
-    use Componenta\DI\ContainerBuilder;
+    use Componenta\DI\Container;
+    use Componenta\DI\ContainerFactory;
 
     final readonly class BenchmarkDependency {}
 
@@ -44,6 +48,21 @@ namespace Componenta\DI\Benchmarks\Generated {
             public int $number = 1,
             public string $name = 'default',
         ) {}
+    }
+
+    /** @param array<string,mixed> $sections */
+    function createContainer(array $sections = []): Container
+    {
+        $container = (new ContainerFactory())->create(
+            new Config([], new Environment([])),
+            new DependencyDefinitions($sections),
+        )->container;
+
+        if (!$container instanceof Container) {
+            throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
+        }
+
+        return $container;
     }
 
     /** @return array{nanoseconds: float, operations: float} */
@@ -70,61 +89,53 @@ namespace Componenta\DI\Benchmarks\Generated {
     }
 
     $iterations = max(10_000, (int) ($_SERVER['DI_BENCH_ITERATIONS'] ?? 100_000));
-    $directory = sys_get_temp_dir() . '/componenta-di-benchmark-' . bin2hex(random_bytes(5));
     $override = ['number' => 42];
 
-    try {
-        $compileStarted = hrtime(true);
-        $compiler = new ContainerBuilder();
-        $factories = $compiler->compileFactories([BenchmarkEntry::class], $directory);
-        $compileMilliseconds = (hrtime(true) - $compileStarted) / 1_000_000;
+    $reflectionBuildStarted = hrtime(true);
+    $reflection = createContainer();
+    $reflectionBuildMilliseconds = (hrtime(true) - $reflectionBuildStarted) / 1_000_000;
 
-        $reflectionBuildStarted = hrtime(true);
-        $reflection = (new ContainerBuilder())->build();
-        $reflectionBuildMilliseconds = (hrtime(true) - $reflectionBuildStarted) / 1_000_000;
+    $factoryBuildStarted = hrtime(true);
+    $factory = createContainer([
+        ConfigKey::FACTORIES => [
+            BenchmarkEntry::class => static function (
+                ContainerValue $value,
+                array $params,
+            ): BenchmarkEntry {
+                return new BenchmarkEntry(
+                    $value->container->get(BenchmarkDependency::class),
+                    $params['number'] ?? 1,
+                    $params['name'] ?? 'default',
+                );
+            },
+        ],
+    ]);
+    $factoryBuildMilliseconds = (hrtime(true) - $factoryBuildStarted) / 1_000_000;
 
-        $compiledBuildStarted = hrtime(true);
-        $compiled = ContainerBuilder::configureFromCache(
-            new Config([]),
-            [
-                'version' => ContainerBuilder::CACHE_VERSION,
-                ConfigKey::DEPENDENCIES => [ConfigKey::FACTORIES => $factories],
-            ],
-            $directory,
-        )->build();
-        $compiledBuildMilliseconds = (hrtime(true) - $compiledBuildStarted) / 1_000_000;
+    $reflectionDefault = benchmark(
+        static fn(): object => $reflection->make(BenchmarkEntry::class),
+        $iterations,
+    );
+    $factoryDefault = benchmark(
+        static fn(): object => $factory->make(BenchmarkEntry::class),
+        $iterations,
+    );
+    $reflectionOverride = benchmark(
+        static fn(): object => $reflection->make(BenchmarkEntry::class, $override),
+        $iterations,
+    );
+    $factoryOverride = benchmark(
+        static fn(): object => $factory->make(BenchmarkEntry::class, $override),
+        $iterations,
+    );
 
-        $reflectionDefault = benchmark(
-            static fn(): object => $reflection->make(BenchmarkEntry::class),
-            $iterations,
-        );
-        $compiledDefault = benchmark(
-            static fn(): object => $compiled->make(BenchmarkEntry::class),
-            $iterations,
-        );
-        $reflectionOverride = benchmark(
-            static fn(): object => $reflection->make(BenchmarkEntry::class, $override),
-            $iterations,
-        );
-        $compiledOverride = benchmark(
-            static fn(): object => $compiled->make(BenchmarkEntry::class, $override),
-            $iterations,
-        );
-
-        printf("PHP %s, iterations %d\n", PHP_VERSION, $iterations);
-        printf("factory compilation: %.3f ms, shards: %d\n", $compileMilliseconds, count(glob($directory . '/container.factories.*.php') ?: []));
-        printf("container build reflection: %.3f ms\n", $reflectionBuildMilliseconds);
-        printf("container build compiled:   %.3f ms\n", $compiledBuildMilliseconds);
-        printf("%-22s %10.1f ns %12.0f ops/s\n", 'reflection/default', $reflectionDefault['nanoseconds'], $reflectionDefault['operations']);
-        printf("%-22s %10.1f ns %12.0f ops/s\n", 'compiled/default', $compiledDefault['nanoseconds'], $compiledDefault['operations']);
-        printf("%-22s %10.1f ns %12.0f ops/s\n", 'reflection/override', $reflectionOverride['nanoseconds'], $reflectionOverride['operations']);
-        printf("%-22s %10.1f ns %12.0f ops/s\n", 'compiled/override', $compiledOverride['nanoseconds'], $compiledOverride['operations']);
-        printf("compiled/reflection default ratio: %.2fx\n", $compiledDefault['nanoseconds'] / $reflectionDefault['nanoseconds']);
-        printf("compiled/reflection override ratio: %.2fx\n", $compiledOverride['nanoseconds'] / $reflectionOverride['nanoseconds']);
-    } finally {
-        foreach (glob($directory . '/container.factories.*.php') ?: [] as $file) {
-            @unlink($file);
-        }
-        @rmdir($directory);
-    }
+    printf("PHP %s, iterations %d\n", PHP_VERSION, $iterations);
+    printf("container build reflection: %.3f ms\n", $reflectionBuildMilliseconds);
+    printf("container build factory:    %.3f ms\n", $factoryBuildMilliseconds);
+    printf("%-22s %10.1f ns %12.0f ops/s\n", 'reflection/default', $reflectionDefault['nanoseconds'], $reflectionDefault['operations']);
+    printf("%-22s %10.1f ns %12.0f ops/s\n", 'factory/default', $factoryDefault['nanoseconds'], $factoryDefault['operations']);
+    printf("%-22s %10.1f ns %12.0f ops/s\n", 'reflection/override', $reflectionOverride['nanoseconds'], $reflectionOverride['operations']);
+    printf("%-22s %10.1f ns %12.0f ops/s\n", 'factory/override', $factoryOverride['nanoseconds'], $factoryOverride['operations']);
+    printf("factory/reflection default ratio: %.2fx\n", $factoryDefault['nanoseconds'] / $reflectionDefault['nanoseconds']);
+    printf("factory/reflection override ratio: %.2fx\n", $factoryOverride['nanoseconds'] / $reflectionOverride['nanoseconds']);
 }

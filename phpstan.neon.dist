@@ -2,4 +2,7 @@ parameters:
     level: max
     paths:
         - src
+        - tests
+    bootstrapFiles:
+        - tests/bootstrap.php
     treatPhpDocTypesAsCertain: false
