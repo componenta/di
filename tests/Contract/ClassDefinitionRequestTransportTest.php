@@ -36,7 +36,7 @@ final readonly class ServiceRequestSourceTarget
     ) {}
 }
 
-test('ClassDefinition keeps request transport separate from configured and service sources', function (
+test('ClassDefinition fallback uses container services while request attributes stay inactive', function (
     bool $attributeSource,
 ): void {
     $class = $attributeSource ? ConfiguredRequestSourceTarget::class : ServiceRequestSourceTarget::class;
@@ -47,7 +47,7 @@ test('ClassDefinition keeps request transport separate from configured and servi
         new DependencyDefinitions([
             'services' => [ServerRequestInterface::class => $selected],
             'factories' => [
-                $class => ClassDefinition::create($class)->constructor(['label' => 'configured']),
+                $class => ClassDefinition::create($class)->autowire()->constructor(['context' => 'explicit-context', 'label' => 'configured']),
             ],
         ]),
     )->container;
@@ -58,7 +58,7 @@ test('ClassDefinition keeps request transport separate from configured and servi
     $target = $container->make($class, [ServerRequestInterface::class => $current]);
 
     expect($target->request)->toBe($selected)
-        ->and($target->context)->toBe('current-context')
+        ->and($target->context)->toBe('explicit-context')
         ->and($target->label)->toBe('configured');
 })->with([
     'Config attribute' => [true],
@@ -76,7 +76,7 @@ test('ClassDefinition still accepts explicit request arguments by name or positi
         new DependencyDefinitions([
             'factories' => [
                 ConfiguredRequestSourceTarget::class => ClassDefinition::create(ConfiguredRequestSourceTarget::class)
-                    ->constructor(['label' => 'configured']),
+                    ->constructor(['context' => 'explicit-context', 'label' => 'configured']),
             ],
         ]),
     )->container;
@@ -90,7 +90,7 @@ test('ClassDefinition still accepts explicit request arguments by name or positi
     ]);
 
     expect($target->request)->toBe($explicit)
-        ->and($target->context)->toBe('current-context');
+        ->and($target->context)->toBe('explicit-context');
 })->with([
     'name' => ['request'],
     'position' => [0],

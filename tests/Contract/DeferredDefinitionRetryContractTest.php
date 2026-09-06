@@ -36,7 +36,7 @@ final class RetryLazyDefinition extends RetryDefinitionState {}
 #[Proxy]
 final class RetryProxyDefinition extends RetryDefinitionState {}
 
-test('failed deferred initialization retries constructor references against the current container', function (
+test('failed creation retries dependencies at the selected construction boundary', function (
     string $class,
     bool $definition,
 ): void {
@@ -52,6 +52,16 @@ test('failed deferred initialization retries constructor references against the 
         ]));
     }
     $container = $builder->build();
+    if ($definition) {
+        expect(fn() => $container->get($class))->toThrow(ResolutionException::class, 'Dependency must be replaced.');
+        $replacement = new RetryDefinitionDependency('good');
+        $container->set(RetryDefinitionDependency::class, $replacement);
+        $entry = $container->get($class);
+        expect($entry->value)->toBe('good')
+            ->and($container->get($class))->toBe($entry)
+            ->and($container->get(RetryDefinitionDependency::class))->toBe($replacement);
+        return;
+    }
     $entry = $container->get($class);
 
     expect(fn() => $entry->value)->toThrow(ResolutionException::class, 'Dependency must be replaced.');
@@ -148,7 +158,7 @@ final class RetrySnapshotObserver implements \Componenta\DI\Resolver\Attribute\A
     }
 }
 
-test('each deferred initialization attempt shares one parameter snapshot with its object handlers', function (string $class): void {
+test('ClassDefinition resolves fresh references without executing deferred strategy or observer attributes', function (string $class): void {
     if (!is_a($class, RetrySnapshotState::class, true)) {
         throw new \LogicException('Expected a retry snapshot fixture class.');
     }
@@ -169,22 +179,17 @@ test('each deferred initialization attempt shares one parameter snapshot with it
 
     $entry = $container->make($class);
 
-    expect($observer->before)->toBe([1])
-        ->and($external->calls)->toBe(1);
+    expect($observer->before)->toBe([])
+        ->and($observer->after)->toBe([])
+        ->and($external->calls)->toBe(1)
+        ->and($entry->dependency->generation)->toBe(1);
 
-    try {
-        throw new \LogicException('Expected an initialization failure, got: ' . $entry->dependency->generation);
-    } catch (ResolutionException $exception) {
-        expect($exception->getPrevious())->toBe($observer->failure)
-            ->and($observer->after)->toBe([[1, 1]]);
-    }
-
-    expect($entry->dependency->generation)->toBe(2)
-        ->and($observer->before)->toBe([1])
-        ->and($observer->after)->toBe([[1, 1], [2, 2]])
+    $fresh = $container->make($class);
+    expect($fresh->dependency->generation)->toBe(2)
+        ->and($entry->dependency->generation)->toBe(1)
         ->and($external->calls)->toBe(2)
-        ->and($entry->dependency->generation)->toBe(2)
-        ->and($external->calls)->toBe(2);
+        ->and($observer->before)->toBe([])
+        ->and($observer->after)->toBe([]);
 })->with([
     'lazy' => [RetrySnapshotLazy::class],
     'proxy' => [RetrySnapshotProxy::class],

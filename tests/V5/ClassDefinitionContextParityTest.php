@@ -68,7 +68,7 @@ test('ClassDefinition runtime overrides normalize by constructor signature', fun
 
     $entry = $container->make('class.definition.context', [
         1 => 'runtime-second',
-        ClassDefinitionParityDependency::class => $runtimeDependency,
+        'dependency' => $runtimeDependency,
         'unrelated' => 'ignored',
     ]);
     if (!$entry instanceof ClassDefinitionParityTarget) {
@@ -113,36 +113,19 @@ test('ClassDefinition target without constructor ignores unrelated make context'
     ))->toBeInstanceOf(ClassDefinitionParityNoConstructorTarget::class);
 });
 
-test('ClassDefinition honors constructor policies from the shared object pipeline', function (): void {
-    $container = (new ContainerBuilder())
-        ->addDefinition(
-            'class.definition.constructor-policy',
-            ClassDefinition::create(ClassDefinitionConstructorPolicyTarget::class),
-        )
-        ->build();
-
-    $entry = $container->make('class.definition.constructor-policy');
-    if (!$entry instanceof ClassDefinitionConstructorPolicyTarget) {
-        throw new \LogicException('The constructor policy resolved to an unexpected type.');
-    }
-
-    expect($entry)->toBeInstanceOf(ClassDefinitionConstructorPolicyTarget::class)
-        ->and($entry->constructorRan)->toBeFalse();
+test('ClassDefinition rejects private constructors even with NoConstructor', function (): void {
+    expect(fn() => (new ContainerBuilder())
+        ->addDefinition('class.definition.constructor-policy', ClassDefinition::create(ClassDefinitionConstructorPolicyTarget::class))
+        ->build())->toThrow(InvalidConfigurationException::class, 'runtime-ineligible');
 });
 
-test('ClassDefinition without a constructor policy is rejected by the shared object pipeline', function (): void {
-    $container = (new ContainerBuilder())
-        ->addDefinition(
-            'class.definition.private-constructor',
-            ClassDefinition::create(ClassDefinitionPrivateConstructorTarget::class),
-        )
-        ->build();
-
-    expect(fn() => $container->make('class.definition.private-constructor'))
-        ->toThrow(InvalidConfigurationException::class, 'cannot be created by the current object pipeline');
+test('ClassDefinition rejects private constructors during registration', function (): void {
+    expect(fn() => (new ContainerBuilder())
+        ->addDefinition('class.definition.private-constructor', ClassDefinition::create(ClassDefinitionPrivateConstructorTarget::class))
+        ->build())->toThrow(InvalidConfigurationException::class, 'runtime-ineligible');
 });
 
-test('ClassDefinition typed union overrides match the concrete type key exactly', function (): void {
+test('ClassDefinition accepts named union overrides instead of type keys', function (): void {
     $configured = new ClassDefinitionUnionLeftValue();
     $runtime = new ClassDefinitionUnionRightValue();
     $container = (new ContainerBuilder())->build();
@@ -164,5 +147,11 @@ test('ClassDefinition typed union overrides match the concrete type key exactly'
     }
 
     expect($left->dependency)->toBe($configured)
-        ->and($right->dependency)->toBe($runtime);
+        ->and($right->dependency)->toBe($configured);
+
+    $named = $container->make('class.definition.union', ['dependency' => $runtime]);
+    if (!$named instanceof ClassDefinitionUnionTarget) {
+        throw new \LogicException('Expected the configured union target.');
+    }
+    expect($named->dependency)->toBe($runtime);
 });

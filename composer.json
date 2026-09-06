@@ -50,16 +50,19 @@
     "scripts": {
         "test": "pest",
         "test-coverage": "pest --coverage --min=80",
-        "test-mutation": "pest --mutate --path=src --everything --min=80 --compact",
+        "test-mutation": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -d opcache.enable_cli=0 tests/mutate.php --mutate --path=src --everything --min=80 --compact"
+        ],
         "phpstan": "phpstan analyse src tests --level=max",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
         "cs-fix": "php-cs-fixer fix",
-        "check": ["@cs-check", "@phpstan", "@test", "@test-coverage", "@test-mutation"]
+        "check": ["@cs-check", "@phpstan", "@test"]
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "provide": {"psr/container-implementation": "2.0"},
     "extra": {
-        "branch-alias": {"dev-v5": "5.x-dev"}
+        "branch-alias": {"dev-main": "5.x-dev", "dev-v5": "5.x-dev"}
     }
 }

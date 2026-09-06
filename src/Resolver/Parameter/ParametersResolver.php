@@ -9,6 +9,7 @@ use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\BootstrapResolutionGuard;
+use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterResolutionBoundary;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
@@ -190,11 +191,23 @@ final class ParametersResolver
             ParameterResolutionBoundary::publicParameters($plan, $providedParameters),
         );
 
-        foreach ($plan->parameters as $prepared) {
-            [$position, $value] = $this->resolvePreparedParameter($prepared, $state);
+        $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
+
+        foreach (array_keys($plan->parameters) as $index) {
+            [$position, $value] = $this->resolvePreparedParameter($plan->parameters[$index], $state, $completed);
+
+            // Dependencies and handlers can load source attributes, including on the current parameter.
+            $current = $this->refreshPlan($plan);
+            if ($current !== $plan) {
+                $plan = $current;
+                ParameterResolutionBoundary::publicParameters($plan, $providedParameters);
+                $completed->assertUnchanged();
+            }
+
             $state->resolve($position, $value);
         }
 
+        $completed->assertUnchanged();
         return $state->resolved;
     }
 
@@ -213,7 +226,10 @@ final class ParametersResolver
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): array {
-        return $this->resolvePreparedParameter($this->prepareTarget($target), $context);
+        $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
+        $result = $this->resolvePreparedParameter($this->prepareTarget($target), $context, $completed);
+        $completed->assertUnchanged();
+        return $result;
     }
 
     /** @return list<int> */
@@ -231,15 +247,21 @@ final class ParametersResolver
     private function resolvePreparedParameter(
         PreparedParameter $prepared,
         ParameterResolutionContext $context,
+        CompletedAttributeGuard $completed,
     ): array {
         $target = $prepared->target;
-        $this->bootstrap?->recordAttributes($target->reflection);
+        $attributePlan = $this->plans->build($target->reflection);
 
         try {
             $resolvers = $this->resolverList;
             foreach ($prepared->resolverSlots as $slot) {
                 $resolver = $resolvers[$slot];
                 $result = $resolver->resolveParameter($target, $context);
+                if ($resolver instanceof AttributeParameterResolver) {
+                    // The attribute bridge refreshes and consumes its plan during resolution.
+                    // Other resolvers do not execute newly available attribute handlers.
+                    $attributePlan = $this->plans->build($target->reflection);
+                }
                 if ($result !== null) {
                     $result = \Componenta\DI\Internal\validate_parameter_resolution_result(
                         $result,
@@ -247,7 +269,9 @@ final class ParametersResolver
                         $target,
                         $context,
                     );
+                    $completed->record($target->reflection, $attributePlan);
                     if ($this->bootstrap?->isActive === true) {
+                        $this->bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
                         $prefix = array_slice($resolvers, 0, $slot);
                         $prefix[] = $resolver;
                         $this->bootstrap->recordParameter($target, $prefix);

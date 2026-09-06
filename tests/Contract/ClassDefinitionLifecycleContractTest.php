@@ -64,18 +64,17 @@ final class LazyDefinitionLifecycle extends DefinitionLifecycleState {}
 #[Proxy, SetUp('initialize')]
 final class ProxyDefinitionLifecycle extends DefinitionLifecycleState {}
 
-test('ClassDefinition methods and their dependencies join object initialization after attributes', function (
+test('ClassDefinition calls run eagerly after the constructor without attribute hooks', function (
     string $class,
-    bool $deferred,
 ): void {
     if (!is_a($class, DefinitionLifecycleState::class, true)) {
         throw new \LogicException('Expected a definition lifecycle fixture class.');
     }
 
     $events = new DefinitionLifecycleEvents();
-    $definition = ClassDefinition::create($class)
-        ->method('configure', ['events' => Definition::reference('method.events'), 'step' => 'first'])
-        ->method('configure', ['events' => Definition::reference('method.events'), 'step' => 'second']);
+    $definition = ClassDefinition::create($class)->constructor(['events' => Definition::reference(DefinitionLifecycleEvents::class)])
+        ->call('configure', ['events' => Definition::reference('method.events'), 'step' => 'first'])
+        ->call('configure', ['events' => Definition::reference('method.events'), 'step' => 'second']);
     $container = (new ContainerBuilder())
         ->addService(DefinitionLifecycleEvents::class, $events)
         ->addFactory('method.events', static function () use ($events): DefinitionLifecycleEvents {
@@ -87,18 +86,18 @@ test('ClassDefinition methods and their dependencies join object initialization 
 
     $target = $container->make($class);
 
-    expect($events->steps)->toBe($deferred ? [] : ['constructor', 'attribute', 'method dependency', 'first', 'second'])
-        ->and($target->state)->toBe('initialized')
-        ->and($events->steps)->toBe(['constructor', 'attribute', 'method dependency', 'first', 'second'])
-        ->and($target->state)->toBe('initialized')
-        ->and($events->steps)->toBe(['constructor', 'attribute', 'method dependency', 'first', 'second']);
+    expect($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second'])
+        ->and($target->state)->toBe('constructed')
+        ->and($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second'])
+        ->and($target->state)->toBe('constructed')
+        ->and($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second']);
 })->with([
-    'eager' => [EagerDefinitionLifecycle::class, false],
-    'lazy' => [LazyDefinitionLifecycle::class, true],
-    'proxy' => [ProxyDefinitionLifecycle::class, true],
+    'eager' => [EagerDefinitionLifecycle::class],
+    'lazy' => [LazyDefinitionLifecycle::class],
+    'proxy' => [ProxyDefinitionLifecycle::class],
 ]);
 
-test('failed deferred ClassDefinition methods stop the attempt and can initialize on retry', function (string $class): void {
+test('failed ClassDefinition calls stop creation and a later get creates a fresh result', function (string $class): void {
     if (!is_a($class, DefinitionLifecycleState::class, true)) {
         throw new \LogicException('Expected a definition lifecycle fixture class.');
     }
@@ -106,23 +105,23 @@ test('failed deferred ClassDefinition methods stop the attempt and can initializ
     $events = new DefinitionLifecycleEvents();
     $container = (new ContainerBuilder())
         ->addService(DefinitionLifecycleEvents::class, $events)
-        ->addDefinition($class, ClassDefinition::create($class)
-            ->method('rejectOnce')
-            ->method('configure', ['step' => 'finished']))
+        ->addDefinition($class, ClassDefinition::create($class)->autowire()
+            ->call('rejectOnce')
+            ->call('configure', ['step' => 'finished']))
         ->build();
-    $target = $container->make($class);
-
     expect($events->steps)->toBe([]);
 
     try {
-        throw new \LogicException('Expected deferred initialization to fail, got: ' . $target->state);
+        $container->get($class);
+        throw new \LogicException('Expected the configured call to fail.');
     } catch (\Componenta\DI\Exception\ResolutionException $exception) {
         expect($exception->getPrevious())->toBe($events->failure)
-            ->and($events->steps)->toBe(['constructor', 'attribute', 'configure']);
+            ->and($events->steps)->toBe(['constructor', 'configure']);
     }
 
-    expect($target->state)->toBe('initialized')
-        ->and($events->steps)->toBe(['constructor', 'attribute', 'configure', 'constructor', 'attribute', 'configure', 'finished']);
+    $target = $container->get($class);
+    expect($target->state)->toBe('constructed')
+        ->and($events->steps)->toBe(['constructor', 'configure', 'constructor', 'configure', 'finished']);
 })->with([
     'lazy' => [LazyDefinitionLifecycle::class],
     'proxy' => [ProxyDefinitionLifecycle::class],

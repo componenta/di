@@ -8,7 +8,6 @@ use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
-use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Exception\AttributeCompositionException;
 use ReflectionParameter;
@@ -33,19 +32,6 @@ final readonly class ProxyCompositionRule implements AttributeCompositionRuleInt
                     $provider->attributeClass,
                 ));
             }
-        }
-
-        if ($attribute->target instanceof ReflectionProperty
-            && !$attribute->target->isPromoted()
-            && $attribute->target->isReadOnly()
-            && $set->has(ValueTransformer::class)
-        ) {
-            throw new AttributeCompositionException(sprintf(
-                '#[%s] cannot be combined with a value transformer on readonly property %s::$%s.',
-                $attribute->attributeClass,
-                $attribute->target->getDeclaringClass()->getName(),
-                $attribute->target->getName(),
-            ));
         }
     }
 }

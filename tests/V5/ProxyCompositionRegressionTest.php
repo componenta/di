@@ -108,7 +108,7 @@ test('Proxy cannot compete with another value source on one injection point', fu
         ->toThrow(AttributeCompositionException::class, 'multiple parameter source handlers');
 });
 
-test('Proxy plus a transformer is rejected on readonly properties before the constructor runs', function (): void {
+test('Proxy values can be transformed before initializing a readonly property', function (): void {
     $constructorCalls = 0;
     $onConstruct = static function () use (&$constructorCalls): void {
         ++$constructorCalls;
@@ -117,8 +117,11 @@ test('Proxy plus a transformer is rejected on readonly properties before the con
         ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
         ->build();
 
-    expect(fn() => $container->make(proxyReadonlyTransformerTarget(), ['onConstruct' => $onConstruct]))
-        ->toThrow(AttributeCompositionException::class, 'cannot be combined with a value transformer');
+    $entry = $container->make(proxyReadonlyTransformerTarget(), ['onConstruct' => $onConstruct]);
 
-    expect($constructorCalls)->toBe(0);
+    if (!property_exists($entry, 'value') || !$entry->value instanceof ProxyCompositionValue) {
+        throw new \LogicException('Expected the transformed proxy value.');
+    }
+    expect($entry->value->label)->toBe('source:cast')
+        ->and($constructorCalls)->toBe(1);
 });

@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
-use Closure;
 use Componenta\Config\ContainerValue;
-use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\FactoryDefinition;
@@ -17,11 +15,15 @@ use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
-use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\LazyServiceFactoryInterface;
-use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Psr\Container\ContainerInterface;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
 use Throwable;
 
 /** Resolves configured factories and class definitions. */
@@ -30,14 +32,18 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     /** @var array<string,true> */
     private array $validateResolvedFactories = [];
 
+    private readonly AutowireByTypeResolver $autowire;
+    private readonly ParameterTargetFactory $targets;
+
     /** @param array<string,mixed> $factories */
     public function __construct(
         private array $factories,
         private readonly ContainerInterface $container,
         private readonly ProxyFactoryInterface $proxyFactory,
-        private readonly ObjectPipeline $objects,
-        private readonly CallableExecutorInterface $executor,
     ) {
+        $this->autowire = new AutowireByTypeResolver($container);
+        $this->targets = new ParameterTargetFactory();
+
         foreach ($this->factories as $id => $factory) {
             if (!is_string($id) || $id === '') {
                 throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
@@ -72,7 +78,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         try {
             $definition = $this->factories[$id];
             if ($definition instanceof ClassDefinition) {
-                return $this->classDefinition($id, $definition, $params);
+                return $this->classDefinition($definition, $params);
             }
 
             $factory = $this->resolveFactory($id);
@@ -94,97 +100,103 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     }
 
     /** @param array<string|int, mixed> $params */
-    private function classDefinition(string $id, ClassDefinition $definition, array $params): object
+    private function classDefinition(ClassDefinition $definition, array $params): object
     {
-        if (!$this->objects->canCreate($definition->value)) {
-            throw new InvalidConfigurationException(sprintf(
-                'ClassDefinition target "%s" cannot be created by the current object pipeline.',
-                $definition->value,
-            ));
+        $class = $definition->value;
+        $reflection = new ReflectionClass($class);
+        $constructor = $reflection->getConstructor();
+        $arguments = $this->arguments($constructor, $definition->constructorParams, MappedRequestContext::strip($params), $definition->autowire);
+        $entry = new $class(...$arguments);
+
+        foreach ($definition->methodCalls as $call) {
+            $method = $reflection->hasMethod($call['method']) ? $reflection->getMethod($call['method']) : null;
+            $methodParams = $method?->isPublic() === true
+                ? $this->arguments($method, $call['params'], [], $definition->autowire)
+                : $this->resolveDefinitionValue($call['params']);
+            if (!is_array($methodParams)) {
+                throw new InvalidConfigurationException('ClassDefinition method parameters must resolve to an array.');
+            }
+            $entry->{$call['method']}(...$methodParams);
         }
 
-        $configure = $definition->methodCalls === [] ? null : function (object $entry) use ($id, $definition): void {
-            try {
-                foreach ($definition->methodCalls as $call) {
-                    $methodParams = $this->resolveDefinitionValue($call['params']);
-                    if (!is_array($methodParams)) {
-                        throw new InvalidConfigurationException('ClassDefinition method parameters must resolve to an array.');
-                    }
-
-                    /** @var array<string|int,mixed> $methodParams */
-                    $this->executor->call([$entry, $call['method']], $methodParams);
-                }
-            } catch (ExceptionInterface $e) {
-                throw $e;
-            } catch (Throwable $e) {
-                throw ResolutionException::forService($id, $e);
-            }
-        };
-
-        [$constructorParams, $resolveParameters] = $this->constructorParameters($definition, $params);
-
-        return $this->objects->create(
-            $definition->value,
-            $constructorParams,
-            $configure,
-            $resolveParameters,
-        );
+        return $entry;
     }
 
     /**
+     * @param array<string|int,mixed> $configured
      * @param array<string|int,mixed> $runtime
-     * @return array{array<string|int,mixed>, (Closure():array<string|int,mixed>)|null}
+     * @return array<string|int,mixed>
      */
-    private function constructorParameters(ClassDefinition $definition, array $runtime): array
+    private function arguments(?ReflectionMethod $method, array $configured, array $runtime, bool $autowire): array
     {
-        $configured = $definition->constructorParams;
-        if ($configured === []) {
-            return [$runtime, null];
-        }
-
-        $provided = $runtime;
-        if ($runtime !== []) {
-            foreach ($this->objects->constructorTargets($definition->value) as $target) {
-                if (array_key_exists($target->name, $runtime)) {
-                    $provided[$target->name] = $runtime[$target->name];
-                } elseif (array_key_exists($target->position, $runtime)) {
-                    $provided[$target->name] = $runtime[$target->position];
-                } else {
-                    foreach ($target->typeNames as $typeName) {
-                        if (RequestParameter::isTransportType($typeName)) {
-                            continue;
-                        }
-                        if (!array_key_exists($typeName, $runtime)) {
-                            continue;
-                        }
-
-                        $value = $runtime[$typeName];
-                        if (is_object($value)
-                            && $value instanceof $typeName
-                            && $target->accepts($value)
-                        ) {
-                            $provided[$target->name] = $value;
-                            break;
-                        }
-                    }
-                }
-
-                if (array_key_exists($target->name, $provided)) {
-                    unset($configured[$target->name], $configured[$target->position]);
+        $arguments = [];
+        $context = new ParameterResolutionContext(array_replace($configured, $runtime));
+        $parameters = $method?->getParameters() ?? [];
+        foreach ($parameters as $parameter) {
+            if ($parameter->isVariadic()) {
+                return $this->variadicArguments($parameters, $arguments, $configured, $runtime);
+            }
+            $name = $parameter->getName();
+            $position = $parameter->getPosition();
+            if (array_key_exists($name, $runtime)) {
+                $arguments[$name] = $runtime[$name];
+            } elseif (array_key_exists($position, $runtime)) {
+                $arguments[$name] = $runtime[$position];
+            } elseif (array_key_exists($name, $configured)) {
+                $arguments[$name] = $this->resolveDefinitionValue($configured[$name]);
+            } elseif (array_key_exists($position, $configured)) {
+                $arguments[$name] = $this->resolveDefinitionValue($configured[$position]);
+            } elseif ($autowire) {
+                $resolved = $this->autowire->resolveParameter($this->targets->create($parameter), $context);
+                if ($resolved !== null) {
+                    $arguments[$name] = $resolved[1];
                 }
             }
+            unset($configured[$name], $configured[$position], $runtime[$name], $runtime[$position]);
+        }
+        return $arguments;
+    }
+
+    /**
+     * @param list<ReflectionParameter> $parameters
+     * @param array<string,mixed> $arguments
+     * @param array<string|int,mixed> $configured
+     * @param array<string|int,mixed> $runtime
+     * @return array<string|int,mixed>
+     */
+    private function variadicArguments(array $parameters, array $arguments, array $configured, array $runtime): array
+    {
+        $positional = [];
+        $named = [];
+        foreach (array_replace($configured, $runtime) as $key => $value) {
+            $value = array_key_exists($key, $runtime) ? $value : $this->resolveDefinitionValue($value);
+            if (is_int($key)) {
+                $positional[] = $value;
+            } else {
+                $named[$key] = $value;
+            }
+        }
+        if ($positional === []) {
+            return $arguments + $named;
         }
 
-        $configured = array_diff_key($configured, $provided);
-        $resolveParameters = $configured === [] ? null : function () use ($configured, $provided): array {
-            foreach ($configured as $key => $value) {
-                $configured[$key] = $this->resolveDefinitionValue($value);
+        // Positional variadic values require the preceding arguments to occupy
+        // their native positions. Evaluate omitted defaults only for this call.
+        $fixed = [];
+        foreach ($parameters as $parameter) {
+            if ($parameter->isVariadic()) {
+                break;
             }
-
-            return array_replace($configured, $provided);
-        };
-
-        return [array_replace($configured, $provided), $resolveParameters];
+            $name = $parameter->getName();
+            if (array_key_exists($name, $arguments)) {
+                $fixed[] = $arguments[$name];
+            } elseif ($parameter->isDefaultValueAvailable()) {
+                $fixed[] = $parameter->getDefaultValue();
+            } else {
+                throw ResolutionException::forParameter($parameter, reason: 'Required argument was not supplied.');
+            }
+        }
+        return [...$fixed, ...$positional, ...$named];
     }
 
     private function resolveDefinitionValue(mixed $value): mixed

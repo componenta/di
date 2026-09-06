@@ -69,7 +69,7 @@ final readonly class LazyReadonlyPromotedTarget extends ReadonlyPromotedProperty
 #[NoConstructor, Proxy]
 final readonly class ProxyReadonlyPromotedTarget extends ReadonlyPromotedPropertyState {}
 
-test('disabled constructors allow injection into promoted properties', function (
+test('promoted properties follow attribute injection or explicit ClassDefinition construction', function (
     string $class,
     bool $useDefinition,
 ): void {
@@ -87,7 +87,7 @@ test('disabled constructors allow injection into promoted properties', function 
                 PromotedPropertyDependency::class => $dependency,
                 PromotedPropertyEvents::class => $events,
             ],
-            'factories' => $useDefinition ? [$class => ClassDefinition::create($class)] : [],
+            'factories' => $useDefinition ? [$class => ClassDefinition::create($class)->constructor(['label' => 'explicit', 'dependency' => $dependency, 'events' => $events])] : [],
         ]),
     )->container;
     if (!$container instanceof Container) {
@@ -96,10 +96,10 @@ test('disabled constructors allow injection into promoted properties', function 
 
     $target = $container->make($class);
 
-    expect($target->label)->toBe('configured')
+    expect($target->label)->toBe($useDefinition ? 'explicit' : 'configured')
         ->and($target->dependency)->toBe($dependency)
         ->and($target->events)->toBe($events)
-        ->and($events->constructions)->toBe(0);
+        ->and($events->constructions)->toBe($useDefinition ? 1 : 0);
 })->with([
     'mutable' => [SkippedMutablePromotedTarget::class],
     'mutable lazy' => [LazyMutablePromotedTarget::class],

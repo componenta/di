@@ -12,7 +12,6 @@ use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
-use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -109,7 +108,7 @@ test('promoted readonly values compose identically for every container build', f
     }
 });
 
-test('multiple transformers on a non-promoted readonly property fail composition before writes', function (): void {
+test('multiple transformers compose before a readonly property is initialized', function (): void {
     $handler = new ReadonlyTransformHandler();
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
@@ -124,6 +123,10 @@ test('multiple transformers on a non-promoted readonly property fail composition
         ))
         ->build();
 
-    expect(fn() => $container->make(multipleReadonlyTransformersTarget(), ['value' => 'seed']))
-        ->toThrow(AttributeCompositionException::class, 'multiple value transformers');
+    $entry = $container->make(multipleReadonlyTransformersTarget(), ['value' => 'seed']);
+
+    if (!property_exists($entry, 'value')) {
+        throw new \LogicException('Expected the public readonly value.');
+    }
+    expect($entry->value)->toBe('seed:next');
 });

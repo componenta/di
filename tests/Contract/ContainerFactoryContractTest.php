@@ -11,8 +11,10 @@ use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
+use Componenta\DI\Tests\Support\AutoloadFailureTarget;
 
 test('container factory preserves the configuration boundary by identity', function (): void {
     $environment = new Environment(['APP_ENV' => 'production']);
@@ -71,3 +73,29 @@ test('dependency definitions cannot be registered declaratively as a service', f
         ]),
     ))->toThrow(InvalidConfigurationException::class);
 });
+
+it('normalizes autoload failures during container construction and preserves their cause', function (bool $classDefinition): void {
+    $class = AutoloadFailureTarget::class;
+    $cause = new \RuntimeException('Autoload failed.');
+    $loader = static function (string $requested) use ($class, $cause): void {
+        if ($requested === $class) {
+            throw $cause;
+        }
+    };
+    $dependencies = new DependencyDefinitions($classDefinition
+        ? [ConfigKey::FACTORIES => ['target' => ClassDefinition::create($class)]]
+        : [ConfigKey::INVOKABLES => [$class]]);
+    spl_autoload_register($loader, prepend: true);
+
+    $failure = null;
+    try {
+        (new ContainerFactory())->create(new Config([], new Environment([])), $dependencies);
+    } catch (\Throwable $exception) {
+        $failure = $exception;
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+
+    expect($failure)->toBeInstanceOf(InvalidConfigurationException::class)
+        ->and($failure?->getPrevious())->toBe($cause);
+})->with(['ClassDefinition' => true, 'invokable' => false]);

@@ -7,9 +7,10 @@ namespace Componenta\DI\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
 /**
- * Class instantiation with constructor params and ordered method calls.
+ * Declarative factory with explicit constructor arguments and ordered method calls.
  *
- * Immutable builder-style definition: `constructor()` and `method()` return
+ * Target attributes are never executed. Type-based fallback is opt-in.
+ * Fluent constructor(), call() and autowire() methods return
  * a new definition instance with the requested change applied. Repeated calls
  * to the same method are preserved and executed in registration order.
  *
@@ -17,7 +18,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
  * ```php
  * ClassDefinition::create(UserService::class)
  *     ->constructor(['timeout' => 30])
- *     ->method('setLogger', [Definition::reference(LoggerInterface::class)])
+ *     ->call('setLogger', [Definition::reference(LoggerInterface::class)])
  * ```
  */
 final readonly class ClassDefinition implements DefinitionInterface
@@ -34,6 +35,7 @@ final readonly class ClassDefinition implements DefinitionInterface
         public string $value,
         public array $constructorParams = [],
         public array $methodCalls = [],
+        public bool $autowire = false,
     ) {}
 
     /**
@@ -49,14 +51,14 @@ final readonly class ClassDefinition implements DefinitionInterface
      */
     public function constructor(array $params): self
     {
-        return new self($this->value, $params, $this->methodCalls);
+        return new self($this->value, $params, $this->methodCalls, $this->autowire);
     }
 
     /**
      * @param non-empty-string $method
      * @param array<string|int, mixed> $params
      */
-    public function method(string $method, array $params = []): self
+    public function call(string $method, array $params = []): self
     {
         if ($method === '') {
             throw new InvalidConfigurationException(
@@ -70,6 +72,12 @@ final readonly class ClassDefinition implements DefinitionInterface
             'params' => $params,
         ];
 
-        return new self($this->value, $this->constructorParams, $methodCalls);
+        return new self($this->value, $this->constructorParams, $methodCalls, $this->autowire);
+    }
+
+    /** Enables type-based DI fallback for arguments absent from the definition and runtime input. */
+    public function autowire(bool $enabled = true): self
+    {
+        return new self($this->value, $this->constructorParams, $this->methodCalls, $enabled);
     }
 }

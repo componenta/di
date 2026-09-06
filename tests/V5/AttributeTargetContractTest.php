@@ -34,3 +34,13 @@ test('property-only value attributes are rejected on constructor parameters', fu
         ->and(fn() => $container->make($initTarget))
         ->toThrow(AttributeCompositionException::class, 'cannot target parameter');
 });
+
+test('promotion rejects attributes that allow neither parameters nor properties', function (): void {
+    $class = __NAMESPACE__ . '\\InvalidPromotedLazyTarget';
+    if (!class_exists($class, false)) {
+        eval('namespace ' . __NAMESPACE__ . '; final class InvalidPromotedLazyTarget { public function __construct(#[\\Componenta\\DI\\Attribute\\Lazy] public int $value = 1) {} }');
+    }
+
+    expect(fn() => (new ContainerBuilder())->build()->make($class))
+        ->toThrow(AttributeCompositionException::class, 'cannot target parameter');
+});

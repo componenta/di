@@ -37,11 +37,11 @@ test('ClassDefinition resolves explicit entry references for constructors and or
             'dependency' => Definition::reference('definition.dependency'),
             'label' => 'configured',
         ])
-        ->method('append', [
+        ->call('append', [
             'dependency' => Definition::reference('definition.dependency'),
             'suffix' => ':first',
         ])
-        ->method('append', [
+        ->call('append', [
             'dependency' => Definition::reference('definition.dependency'),
             'suffix' => ':second',
         ]);
@@ -62,7 +62,7 @@ test('ClassDefinition resolves explicit entry references for constructors and or
 
 test('Definition factories reject empty reference ids and method names before registration', function (): void {
     $definition = ClassDefinition::create(DefinitionContractTarget::class);
-    $method = new \ReflectionMethod($definition, 'method');
+    $method = new \ReflectionMethod($definition, 'call');
 
     expect(fn() => Definition::reference(''))
         ->toThrow(InvalidConfigurationException::class, 'entry id must be non-empty')

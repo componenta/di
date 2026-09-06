@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
 use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
@@ -20,7 +21,6 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
-use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionProperty;
 use Reflector;
@@ -32,6 +32,7 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
     public function __construct(
         private readonly FactoryInterface $factory,
         private readonly ProxyFactoryInterface $proxyFactory,
+        private readonly AttributePlanBuilder $plans,
     ) {}
 
     public function resolveParameter(
@@ -50,10 +51,10 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
         $make = $attribute instanceof Make
             ? $attribute
-            : self::firstParameterAttribute($target, Make::class);
+            : self::firstAttribute($plan, Make::class);
         $proxy = $attribute instanceof Proxy
             ? $attribute
-            : self::firstParameterAttribute($target, Proxy::class);
+            : self::firstAttribute($plan, Proxy::class);
         $config = self::configuration(
             $target->name,
             $target->className,
@@ -106,12 +107,13 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
             return;
         }
 
+        $plan = $this->plans->build($target);
         $make = $attribute instanceof Make
             ? $attribute
-            : self::firstPropertyAttribute($target, Make::class);
+            : self::firstAttribute($plan, Make::class);
         $proxy = $attribute instanceof Proxy
             ? $attribute
-            : self::firstPropertyAttribute($target, Proxy::class);
+            : self::firstAttribute($plan, Proxy::class);
 
         $config = self::configuration(
             $target->getName(),
@@ -200,22 +202,11 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
      * @param class-string<T> $attributeClass
      * @return T|null
      */
-    private static function firstParameterAttribute(ParameterTarget $target, string $attributeClass): ?object
+    private static function firstAttribute(AttributePlan $plan, string $attributeClass): ?object
     {
-        $attribute = $target->firstAttribute($attributeClass);
+        $usage = $plan->attributes($attributeClass)[0] ?? null;
+        $attribute = $usage?->newInstance();
         return $attribute instanceof $attributeClass ? $attribute : null;
-    }
-
-    /**
-     * @template T of object
-     * @param class-string<T> $attributeClass
-     * @return T|null
-     */
-    private static function firstPropertyAttribute(ReflectionProperty $property, string $attributeClass): ?object
-    {
-        /** @var ReflectionAttribute<T>|null $reflector */
-        $reflector = $property->getAttributes($attributeClass, ReflectionAttribute::IS_INSTANCEOF)[0] ?? null;
-        return $reflector?->newInstance();
     }
 
     /** @param array{entry:non-empty-string,params:array<string|int,mixed>,proxyClass:class-string<object>|null} $config */

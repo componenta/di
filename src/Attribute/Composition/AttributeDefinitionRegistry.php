@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use ReflectionClass;
 
 /** Mutable composition-time registry, sealed before the container becomes usable. */
 final class AttributeDefinitionRegistry
@@ -50,7 +51,8 @@ final class AttributeDefinitionRegistry
     public function register(AttributeDefinition $definition): void
     {
         $this->assertMutable();
-        if (isset($this->definitions[$definition->attribute])) {
+        $attribute = new ReflectionClass($definition->attribute)->getName();
+        if (isset($this->definitions[$attribute])) {
             throw new InvalidConfigurationException(sprintf(
                 'Attribute "%s" already has a semantic definition.',
                 $definition->attribute,
@@ -65,25 +67,27 @@ final class AttributeDefinitionRegistry
                     AttributeCapabilityInterface::class,
                 ));
             }
+            $capability = new ReflectionClass($capability)->getName();
             $this->policies[$capability] ??= new CapabilityPolicy($capability);
         }
 
-        $this->definitions[$definition->attribute] = $definition;
+        $this->definitions[$attribute] = $definition;
         ++$this->generation;
     }
 
     public function defineCapability(CapabilityPolicy $policy): void
     {
         $this->assertMutable();
-        $existing = $this->policies[$policy->capability] ?? null;
-        if ($existing !== null && $existing != $policy) {
+        $capability = new ReflectionClass($policy->capability)->getName();
+        $existing = $this->policies[$capability] ?? null;
+        if ($existing !== null && $existing->maxPerTarget !== $policy->maxPerTarget) {
             throw new InvalidConfigurationException(sprintf(
                 'Capability "%s" already has a different composition policy.',
                 $policy->capability,
             ));
         }
         if ($existing === null) {
-            $this->policies[$policy->capability] = $policy;
+            $this->policies[$capability] = $policy;
             ++$this->generation;
         }
     }
@@ -145,6 +149,7 @@ final class AttributeDefinitionRegistry
     /** @param class-string<AttributeCapabilityInterface> $capability */
     public function policy(string $capability): CapabilityPolicy
     {
+        $capability = new ReflectionClass($capability)->getName();
         return $this->policies[$capability] ?? new CapabilityPolicy($capability);
     }
 

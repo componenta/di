@@ -224,7 +224,7 @@ final class FactorySpecificationValidator
         /** @var class-string $className */
         /** @var ReflectionClass<object> $class */
         $class = new ReflectionClass($className);
-        if (!is_entry_class_eligible($class)) {
+        if (!is_entry_class_eligible($class) || !$class->isInstantiable()) {
             throw new InvalidConfigurationException(sprintf(
                 'ClassDefinition for "%s" targets runtime-ineligible class "%s".',
                 $id,

@@ -173,3 +173,51 @@ test('composition rules read fresh argument values without retaining them in a s
         ->and($rule->argument)->not->toBeNull()
         ->and($rule->argument?->get())->toBeNull();
 });
+
+function proxyFirstAttributeArgument(
+    #[\Componenta\DI\Attribute\Proxy, \Componenta\DI\Attribute\Make(MadeAttributeArgumentTarget::class, ['argument' => new AttributeArgument()])]
+    MadeAttributeArgumentTarget $value,
+): int {
+    return $value->argument->generation;
+}
+
+function makeFirstProxyAttributeArgument(
+    #[\Componenta\DI\Attribute\Make(MadeAttributeArgumentTarget::class, ['argument' => new AttributeArgument()]), \Componenta\DI\Attribute\Proxy]
+    MadeAttributeArgumentTarget $value,
+): int {
+    return $value->argument->generation;
+}
+
+final class ProxyFirstArgumentProperty
+{
+    #[\Componenta\DI\Attribute\Proxy, \Componenta\DI\Attribute\Make(MadeAttributeArgumentTarget::class, ['argument' => new AttributeArgument()])]
+    public MadeAttributeArgumentTarget $value;
+}
+
+final class MakeFirstProxyArgumentProperty
+{
+    #[\Componenta\DI\Attribute\Make(MadeAttributeArgumentTarget::class, ['argument' => new AttributeArgument()]), \Componenta\DI\Attribute\Proxy]
+    public MadeAttributeArgumentTarget $value;
+}
+
+test('Make with Proxy evaluates fresh arguments once per resolution in either declaration order', function (
+    bool $proxyFirst,
+    bool $property,
+): void {
+    AttributeArgument::$constructions = 0;
+    AttributeArgument::$references = [];
+    $container = \Componenta\DI\Tests\Support\container();
+    $resolve = $property
+        ? static fn(): int => $container->make($proxyFirst ? ProxyFirstArgumentProperty::class : MakeFirstProxyArgumentProperty::class)->value->argument->generation
+        : static fn(): mixed => $container->call(__NAMESPACE__ . ($proxyFirst ? '\\proxyFirstAttributeArgument' : '\\makeFirstProxyAttributeArgument'));
+
+    expect($resolve())->toBe(1)
+        ->and($resolve())->toBe(2)
+        ->and(AttributeArgument::$constructions)->toBe(2);
+
+    gc_collect_cycles();
+    expect(array_filter(
+        AttributeArgument::$references,
+        static fn(WeakReference $reference): bool => $reference->get() !== null,
+    ))->toBe([]);
+})->with(['Proxy first' => true, 'Make first' => false])->with(['property' => true, 'parameter' => false]);

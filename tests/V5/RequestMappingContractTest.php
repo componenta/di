@@ -111,13 +111,12 @@ final readonly class UnknownCasterMappingTarget
     ) {}
 }
 
-test('MapRequest maps casts defaults sorts and excludes fields', function (): void {
+test('MapRequest maps casts defaults and sorts DTO fields', function (): void {
     $request = (new ServerRequest('GET', '/items'))
         ->withQueryParams([
             'raw' => '42',
             'sort' => 'newest',
             'order' => 'desc',
-            'drop' => 'remove-me',
         ]);
     $container = (new ContainerBuilder())
         ->addService(CasterProviderInterface::class, new TestCasterProvider())
@@ -128,7 +127,6 @@ test('MapRequest maps casts defaults sorts and excludes fields', function (): vo
             #[MapRequest(
                 sources: [RequestDataSource::Query],
                 map: ['raw' => 'value'],
-                exclude: ['drop'],
                 defaults: ['mode' => 'fallback'],
                 cast: ['value' => 'int'],
                 sortMap: ['newest' => ['createdAt' => 'DESC']],
@@ -144,6 +142,22 @@ test('MapRequest maps casts defaults sorts and excludes fields', function (): vo
     expect($dto->value)->toBe(42)
         ->and($dto->mode)->toBe('fallback')
         ->and($dto->orderBy)->toBe(['createdAt' => 'DESC']);
+});
+
+test('MapRequest excludes fields from the mapped result', function (): void {
+    $request = (new ServerRequest('GET', '/items'))
+        ->withQueryParams(['keep' => 'value', 'drop' => 'remove-me']);
+    $container = (new ContainerBuilder())->build();
+
+    $data = $container->call(
+        static fn(
+            #[MapRequest(sources: [RequestDataSource::Query], exclude: ['drop'])]
+            array $data,
+        ): array => $data,
+        [ServerRequestInterface::class => $request],
+    );
+
+    expect($data)->toBe(['keep' => 'value']);
 });
 
 test('MapRequest can merge selected request attributes without exposing all attributes', function (): void {
@@ -239,6 +253,39 @@ test('MapRequest applies optional renames and atomic key swaps', function (): vo
     )->data;
 
     expect($data)->toBe(['right' => 'L', 'left' => 'R']);
+});
+
+test('MapRequest renames an optional field when it is present', function (): void {
+    $request = (new ServerRequest('GET', '/items'))->withQueryParams(['legacy' => 'value']);
+    $container = (new ContainerBuilder())->build();
+
+    $data = $container->call(
+        static fn(
+            #[MapRequest(sources: [RequestDataSource::Query], map: ['?legacy' => 'current'])]
+            array $data,
+        ): array => $data,
+        [ServerRequestInterface::class => $request],
+    );
+
+    expect($data)->toBe(['current' => 'value']);
+});
+
+test('MapRequest continues mapping after a missing optional field', function (): void {
+    $request = (new ServerRequest('GET', '/items'))->withQueryParams(['present' => 'value']);
+    $container = (new ContainerBuilder())->build();
+
+    $data = $container->call(
+        static fn(
+            #[MapRequest(
+                sources: [RequestDataSource::Query],
+                map: ['?missing' => 'ignored', 'present' => 'renamed'],
+            )]
+            array $data,
+        ): array => $data,
+        [ServerRequestInterface::class => $request],
+    );
+
+    expect($data)->toBe(['renamed' => 'value']);
 });
 
 test('MapRequest emits a null order when sort aliases are configured but absent', function (): void {

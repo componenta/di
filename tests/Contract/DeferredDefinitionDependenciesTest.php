@@ -25,9 +25,8 @@ final class LazyDefinitionDependencyTarget extends DeferredDefinitionState {}
 #[Proxy]
 final class ProxyDefinitionDependencyTarget extends DeferredDefinitionState {}
 
-test('ClassDefinition resolves constructor references when object initialization starts', function (
+test('ClassDefinition resolves constructor references eagerly even with deferred attributes', function (
     string $class,
-    bool $deferred,
 ): void {
     if (!is_a($class, DeferredDefinitionState::class, true)) {
         throw new \LogicException('Expected a definition dependency fixture class.');
@@ -47,15 +46,15 @@ test('ClassDefinition resolves constructor references when object initialization
 
     $target = $container->get($class);
 
-    expect($created)->toBe($deferred ? 0 : 1)
+    expect($created)->toBe(1)
         ->and($target->dependency)->toBe($dependency)
         ->and($created)->toBe(1)
         ->and($target->dependency)->toBe($dependency)
         ->and($created)->toBe(1);
 })->with([
-    'eager' => [EagerDefinitionDependencyTarget::class, false],
-    'lazy' => [LazyDefinitionDependencyTarget::class, true],
-    'proxy' => [ProxyDefinitionDependencyTarget::class, true],
+    'eager' => [EagerDefinitionDependencyTarget::class],
+    'lazy' => [LazyDefinitionDependencyTarget::class],
+    'proxy' => [ProxyDefinitionDependencyTarget::class],
 ]);
 
 abstract class DeferredDefinitionOwner
@@ -74,7 +73,7 @@ final class DeferredDefinitionBackReference
     public function __construct(public DeferredDefinitionOwner $owner) {}
 }
 
-test('deferred ClassDefinition constructor references can point back to the shared owner', function (string $class): void {
+test('ClassDefinition detects explicit dependency cycles without enabling deferred attributes', function (string $class): void {
     if (!is_a($class, DeferredDefinitionOwner::class, true)) {
         throw new \LogicException('Expected a deferred definition owner.');
     }
@@ -86,16 +85,14 @@ test('deferred ClassDefinition constructor references can point back to the shar
         ]))
         ->build();
 
-    $owner = $container->get($class);
-
-    expect($owner->dependency->owner)->toBe($owner)
-        ->and($container->get($class))->toBe($owner);
+    expect(fn() => $container->get($class))->toThrow(\Componenta\DI\Exception\CircularDependencyException::class)
+        ->and(fn() => $container->get($class))->toThrow(\Componenta\DI\Exception\CircularDependencyException::class);
 })->with([
     'lazy' => [LazyDefinitionOwner::class],
     'proxy' => [ProxyDefinitionOwner::class],
 ]);
 
-test('failed deferred constructor references can resolve on the next initialization attempt', function (string $class): void {
+test('failed ClassDefinition constructor references can resolve on the next get', function (string $class): void {
     if (!is_a($class, DeferredDefinitionState::class, true)) {
         throw new \LogicException('Expected a definition dependency fixture class.');
     }
@@ -115,18 +112,20 @@ test('failed deferred constructor references can resolve on the next initializat
         ]))
         ->build();
 
-    $target = $container->get($class);
     expect($attempts)->toBe(0);
 
     try {
-        throw new \LogicException('Expected dependency failure, got: ' . $target->dependency::class);
+        $container->get($class);
+        throw new \LogicException('Expected dependency resolution to fail.');
     } catch (\Componenta\DI\Exception\ResolutionException $exception) {
         expect($exception->getPrevious())->toBe($failure)
             ->and($attempts)->toBe(1);
     }
 
+    $target = $container->get($class);
     expect($target->dependency)->toBe($dependency)
-        ->and($attempts)->toBe(2);
+        ->and($attempts)->toBe(2)
+        ->and($container->get($class))->toBe($target);
 })->with([
     'lazy' => [LazyDefinitionDependencyTarget::class],
     'proxy' => [ProxyDefinitionDependencyTarget::class],
@@ -136,7 +135,14 @@ test('failed deferred constructor references can resolve on the next initializat
 final class DeferredDefinitionParameterInspection {}
 
 #[Lazy, DeferredDefinitionParameterInspection]
-final class InspectedDefinitionTarget extends DeferredDefinitionState {}
+final class InspectedDefinitionTarget extends DeferredDefinitionState
+{
+    /** @param array<string,mixed> $options */
+    public function __construct(DeferredDefinitionDependency $dependency, public array $options = [])
+    {
+        parent::__construct($dependency);
+    }
+}
 
 final class DeferredDefinitionParameterObserver implements \Componenta\DI\Resolver\Attribute\AttributeHandlerInterface
 {
@@ -152,7 +158,7 @@ final class DeferredDefinitionParameterObserver implements \Componenta\DI\Resolv
     }
 }
 
-test('deferred definition handlers receive resolved parameters and literal runtime overrides', function (): void {
+test('ClassDefinition resolves references and preserves literal overrides without invoking object handlers', function (): void {
     $observer = new DeferredDefinitionParameterObserver();
     $dependency = new DeferredDefinitionDependency();
     $literal = Definition::reference('runtime.literal');
@@ -172,8 +178,6 @@ test('deferred definition handlers receive resolved parameters and literal runti
 
     expect($observer->parameters)->toBe([])
         ->and($target->dependency)->toBe($dependency)
-        ->and($observer->parameters)->toBe([
-            'dependency' => $dependency,
-            'options' => ['nested' => $literal],
-        ]);
+        ->and($target->options)->toBe(['nested' => $literal])
+        ->and($observer->parameters)->toBe([]);
 });

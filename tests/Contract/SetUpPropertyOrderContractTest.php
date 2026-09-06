@@ -76,7 +76,7 @@ final class FailedSetUpPropertyTarget
     }
 }
 
-test('setup sees injected properties and preserves repeated setup order', function (
+test('property injection and setup run only for attribute-driven creation', function (
     string $class,
     bool $deferred,
     bool $useDefinition,
@@ -98,9 +98,9 @@ test('setup sees injected properties and preserves repeated setup order', functi
 
     $target = $container->make($class);
 
-    expect($events->steps)->toBe($deferred ? [] : ['initialize', 'finish'])
-        ->and($target->observed)->toBe('dependency:configured:finished')
-        ->and($events->steps)->toBe(['initialize', 'finish']);
+    expect($events->steps)->toBe($useDefinition || $deferred ? [] : ['initialize', 'finish'])
+        ->and($target->observed)->toBe($useDefinition ? 'raw' : 'dependency:configured:finished')
+        ->and($events->steps)->toBe($useDefinition ? [] : ['initialize', 'finish']);
 })->with([
     'eager' => [EagerSetUpPropertyTarget::class, false],
     'lazy' => [LazySetUpPropertyTarget::class, true],

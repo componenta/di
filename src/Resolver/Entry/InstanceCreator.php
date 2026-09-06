@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
@@ -45,6 +46,7 @@ final readonly class InstanceCreator
      * @template T of object
      * @param ReflectionClass<T> $class
      * @param array<string|int, mixed> $params
+     * @param Closure():void|null $beforeConstructor
      * @return T
      */
     public function createPrepared(
@@ -52,8 +54,10 @@ final readonly class InstanceCreator
         ?ReflectionMethod $constructor,
         PreparedParameterPlan $plan,
         array $params = [],
+        ?Closure $beforeConstructor = null,
     ): object {
         if ($constructor === null) {
+            $beforeConstructor?->__invoke();
             try {
                 return $class->newInstance();
             } catch (ExceptionInterface $e) {
@@ -64,6 +68,7 @@ final readonly class InstanceCreator
         }
 
         $arguments = $this->parameters->resolvePrepared($plan, $params);
+        $beforeConstructor?->__invoke();
 
         try {
             return $class->newInstanceArgs($arguments);
@@ -90,18 +95,23 @@ final readonly class InstanceCreator
         );
     }
 
-    /** @param array<string|int, mixed> $params */
+    /**
+     * @param array<string|int, mixed> $params
+     * @param Closure():void|null $beforeConstructor
+     */
     public function initializePrepared(
         object $entry,
         ?ReflectionMethod $constructor,
         PreparedParameterPlan $plan,
         array $params = [],
+        ?Closure $beforeConstructor = null,
     ): void {
         if ($constructor === null) {
             return;
         }
 
         $arguments = $this->parameters->resolvePrepared($plan, $params);
+        $beforeConstructor?->__invoke();
 
         try {
             $constructor->invokeArgs($entry, $arguments);

@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  USE_CONFIG_V3_WORKSPACE: ${{ github.ref == 'refs/heads/v5' || github.base_ref == 'v5' }}
+  USE_CONFIG_V3_WORKSPACE: ${{ github.ref == 'refs/heads/v5' || github.base_ref == 'v5' || github.ref == 'refs/heads/main' || github.base_ref == 'main' }}
 
 jobs:
   check:
@@ -210,6 +210,7 @@ jobs:
         with:
           php-version: '8.4'
           coverage: pcov
+          ini-values: memory_limit=1G
           tools: composer:v2
 
       - name: Validate Composer metadata
@@ -236,8 +237,11 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Generate Clover coverage
-        run: ./vendor/bin/pest --coverage-clover coverage.xml
+      - name: Enforce coverage and generate Clover report
+        run: composer test-coverage -- --coverage-clover coverage.xml
+
+      - name: Check mutation score
+        run: composer test-mutation -- --parallel
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

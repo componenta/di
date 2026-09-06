@@ -32,5 +32,21 @@ if (!$usingLocalAutoload) {
 
     $loader->setPsr4('Componenta\\Config\\', $packagesDirectory . '/config/src');
     require $packagesDirectory . '/config/src/functions.php';
-    require $packageDirectory . '/src/Internal/functions.php';
+}
+
+require_once $packageDirectory . '/src/Internal/functions.php';
+
+if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
+    $pestContainer = \Pest\Support\Container::getInstance();
+    /** @var \Pest\Mutate\Tester\MutationTestRunner $mutationRunner */
+    $mutationRunner = $pestContainer->get(\Pest\Mutate\Contracts\MutationTestRunner::class);
+    if ($mutationRunner->isEnabled()) {
+        /** @var \Pest\Mutate\Repositories\ConfigurationRepository $mutationConfiguration */
+        $mutationConfiguration = $pestContainer->get(\Pest\Mutate\Repositories\ConfigurationRepository::class);
+        /** @var list<string> $arguments */
+        $arguments = COMPONENTA_DI_MUTATION_ARGUMENTS;
+        $arguments = $mutationConfiguration->cliConfiguration->fromArguments($arguments);
+        array_shift($arguments);
+        $mutationRunner->setOriginalArguments([PHP_BINARY, '-d', 'opcache.enable_cli=0', __DIR__ . '/mutate.php', ...$arguments]);
+    }
 }

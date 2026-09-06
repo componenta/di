@@ -109,6 +109,70 @@ test('custom composition rules see the complete attribute set before execution',
         ->and($plans->build($complete)->usages)->toHaveCount(2);
 });
 
+test('declarative requirements reject a missing companion attribute', function (bool $capability): void {
+    $selector = $capability ? AuditSelectorCapability::class : RuleB::class;
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(RuleA::class, requires: [$selector]))
+        ->addAttributeDefinition(new AttributeDefinition(RuleB::class, capabilities: [AuditSelectorCapability::class]))
+        ->build();
+
+    expect(fn() => $container->call(
+        static fn(#[RuleA] string $value): string => $value,
+        ['value' => 'provided'],
+    ))->toThrow(AttributeCompositionException::class, 'requires ' . $selector);
+})->with([
+    'attribute class' => false,
+    'capability' => true,
+]);
+
+test('declarative requirements accept a matching companion attribute', function (bool $capability): void {
+    $selector = $capability ? AuditSelectorCapability::class : RuleB::class;
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(RuleA::class, requires: [$selector]))
+        ->addAttributeDefinition(new AttributeDefinition(RuleB::class, capabilities: [AuditSelectorCapability::class]))
+        ->build();
+
+    expect($container->call(
+        static fn(#[RuleA, RuleB] string $value): string => $value,
+        ['value' => 'provided'],
+    ))->toBe('provided');
+})->with([
+    'attribute class' => false,
+    'capability' => true,
+]);
+
+test('declarative prohibitions reject a matching companion attribute', function (bool $capability): void {
+    $selector = $capability ? AuditSelectorCapability::class : RuleB::class;
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(RuleA::class, forbids: [$selector]))
+        ->addAttributeDefinition(new AttributeDefinition(RuleB::class, capabilities: [AuditSelectorCapability::class]))
+        ->build();
+
+    expect(fn() => $container->call(
+        static fn(#[RuleA, RuleB] string $value): string => $value,
+        ['value' => 'provided'],
+    ))->toThrow(AttributeCompositionException::class, 'forbids ' . $selector);
+})->with([
+    'attribute class' => false,
+    'capability' => true,
+]);
+
+test('declarative prohibitions allow calls without the forbidden companion', function (bool $capability): void {
+    $selector = $capability ? AuditSelectorCapability::class : RuleB::class;
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(RuleA::class, forbids: [$selector]))
+        ->addAttributeDefinition(new AttributeDefinition(RuleB::class, capabilities: [AuditSelectorCapability::class]))
+        ->build();
+
+    expect($container->call(
+        static fn(#[RuleA] string $value): string => $value,
+        ['value' => 'provided'],
+    ))->toBe('provided');
+})->with([
+    'attribute class' => false,
+    'capability' => true,
+]);
+
 test('plan memoization invalidates when registry semantics change', function (): void {
     $registry = new AttributeDefinitionRegistry();
     $registry->register(new AttributeDefinition(RuleA::class));

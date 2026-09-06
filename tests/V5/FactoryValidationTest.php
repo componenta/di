@@ -173,6 +173,6 @@ test('ClassDefinition validates target eligibility and configured method visibil
 
     expect(fn() => (new ContainerBuilder())->addDefinition(
         'hidden.method',
-        ClassDefinition::create(DefinitionMethodTarget::class)->method('hidden'),
+        ClassDefinition::create(DefinitionMethodTarget::class)->call('hidden'),
     )->build())->toThrow(InvalidConfigurationException::class);
 });

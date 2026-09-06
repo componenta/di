@@ -143,10 +143,19 @@ final class ContainerFactory
         Config $config,
         DependencyDefinitions $dependencies,
     ): ContainerValue {
-        $factory = self::configured($config, $dependencies);
-        $container = $factory->build();
+        try {
+            $factory = self::configured($config, $dependencies);
+            $container = $factory->buildContainer();
 
-        return new ContainerValue($container, $config);
+            return new ContainerValue($container, $config);
+        } catch (InvalidConfigurationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new InvalidConfigurationException(
+                sprintf('Failed to build DI container: %s', $e->getMessage()),
+                previous: $e,
+            );
+        }
     }
 
     private static function configured(
@@ -176,20 +185,6 @@ final class ContainerFactory
         $factory->config = $config;
 
         return $factory;
-    }
-
-    private function build(): Container
-    {
-        try {
-            return $this->buildContainer();
-        } catch (InvalidConfigurationException $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw new InvalidConfigurationException(
-                sprintf('Failed to build DI container: %s', $e->getMessage()),
-                previous: $e,
-            );
-        }
     }
 
     private function buildContainer(): Container
@@ -266,11 +261,10 @@ final class ContainerFactory
             $container,
             $proxyFactory,
             $objects,
-            $executor,
         );
         $bootstrap->initialize($entryResolver, $executor);
 
-        $handlers = $this->sharedAttributeHandlers($container, $proxyFactory);
+        $handlers = $this->sharedAttributeHandlers($container, $proxyFactory, $plans);
 
         if (!$this->replaceAttributeDefinitions) {
             $this->registerBuiltInAttributes(
@@ -318,15 +312,12 @@ final class ContainerFactory
         ContainerInterface $container,
         ProxyFactoryInterface $proxyFactory,
         ObjectPipeline $objects,
-        CallableExecutorInterface $executor,
     ): EntryResolverInterface {
         return new CompositeResolver(
             new EntryFactoryResolver(
                 $this->factories,
                 $container,
                 $proxyFactory,
-                $objects,
-                $executor,
             ),
             new InvokableResolver($this->invokables),
             new ReflectionResolver($objects, [\Componenta\Config\DependencyDefinitions::class]),
@@ -432,6 +423,7 @@ final class ContainerFactory
             $make,
             [CreationStrategy::class],
             before: [ValueTransformer::class],
+            after: [Make::class],
             rules: [new ProxyCompositionRule()],
             phase: AttributePhase::Both,
         ));
@@ -460,13 +452,14 @@ final class ContainerFactory
     private function sharedAttributeHandlers(
         Container $container,
         ProxyFactoryInterface $proxyFactory,
+        AttributePlanBuilder $plans,
     ): array {
         return [
             CastHandler::class => new CastHandler($container),
             ConfigHandler::class => new ConfigHandler($container),
             EntryIdHandler::class => new EntryIdHandler($container),
             EnvHandler::class => new EnvHandler($container),
-            MakeHandler::class => new MakeHandler($container, $proxyFactory),
+            MakeHandler::class => new MakeHandler($container, $proxyFactory, $plans),
             RequestAttributeHandler::class => new RequestAttributeHandler(
                 new LazyFactory($container),
                 new LazyCasterProvider($container),

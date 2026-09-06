@@ -6,9 +6,10 @@ namespace Componenta\DI\Attribute\Composition;
 
 use Attribute;
 use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
-use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -54,7 +55,9 @@ final class AttributePlanBuilder
             }
 
             if (!$this->supportsTarget($attributeClass, $target)) {
-                if (self::isPromotedDuplicateTarget($target)) {
+                if (self::isPromotedDuplicateTarget($target)
+                    && ($this->attributeTargetFlags($attributeClass) & (Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)) !== 0
+                ) {
                     continue;
                 }
 
@@ -62,6 +65,16 @@ final class AttributePlanBuilder
                     'Attribute "%s" cannot target %s.',
                     $attributeClass,
                     self::targetKind($target),
+                ));
+            }
+
+            if ($reflectionAttribute->isRepeated()
+                && ($this->attributeTargetFlags($attributeClass) & Attribute::IS_REPEATABLE) === 0
+            ) {
+                throw new AttributeCompositionException(sprintf(
+                    'Attribute "%s" must not be repeated on %s.',
+                    $attributeClass,
+                    self::targetName($target),
                 ));
             }
 
@@ -75,7 +88,6 @@ final class AttributePlanBuilder
 
         $this->assertCapabilityCardinality($target, $usages);
         $this->assertInvocationOnlyComposition($target, $usages);
-        $this->assertReadonlyPropertyComposition($target, $usages);
         $this->assertParameterHandlerComposition($target, $usages);
         $this->assertDependencies($target, $usages);
         $this->assertCustomRules($usages);
@@ -281,54 +293,6 @@ final class AttributePlanBuilder
     }
 
     /**
-     * Non-promoted readonly properties can be written only once by the object
-     * handler pipeline. Promoted readonly state is initialized through the
-     * constructor-parameter pipeline; post-instantiation handlers cannot claim
-     * an already initialized promoted readonly property.
-     *
-     * A source followed by a transformer, or more than one transformer, would
-     * require multiple property writes and therefore cannot be represented by
-     * the property-handler contract.
-     *
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     * @param list<AttributeUsage> $usages
-     */
-    private function assertReadonlyPropertyComposition(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-        array $usages,
-    ): void {
-        if (!$target instanceof ReflectionProperty
-            || !$target->isReadOnly()
-            || $target->isPromoted()
-        ) {
-            return;
-        }
-
-        $provider = false;
-        $transformers = 0;
-        foreach ($usages as $usage) {
-            $provider = $provider || $usage->hasCapability(ValueProvider::class);
-            if ($usage->hasCapability(ValueTransformer::class)) {
-                ++$transformers;
-            }
-        }
-
-        if ($provider && $transformers > 0) {
-            throw new AttributeCompositionException(sprintf(
-                '%s cannot combine a value source with a transformer because readonly properties can be written only once.',
-                self::targetName($target),
-            ));
-        }
-
-        if ($transformers > 1) {
-            throw new AttributeCompositionException(sprintf(
-                '%s cannot combine multiple value transformers because readonly properties can be written only once.',
-                self::targetName($target),
-            ));
-        }
-    }
-
-    /**
      * A parameter may have one source-handler and any number of transformer
      * handlers. Multiple definitions may intentionally share one source-handler
      * (for example #[Make] + #[Proxy]).
@@ -468,6 +432,8 @@ final class AttributePlanBuilder
             }
         }
 
+        $this->assertPhaseOrder($target, $usages, $edges);
+
         /** @var array<int, true> $remaining */
         $remaining = array_fill_keys(array_keys($usages), true);
         $ordered = [];
@@ -500,6 +466,58 @@ final class AttributePlanBuilder
         }
 
         return $ordered;
+    }
+
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     * @param array<int, array<int, true>> $edges
+     */
+    private function assertPhaseOrder(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+        array $edges,
+    ): void {
+        if ($target instanceof ReflectionParameter) {
+            return;
+        }
+
+        foreach ($usages as $from => $before) {
+            if (!$before->definition->handler instanceof AttributeHandlerInterface
+                || $before->definition->phase !== AttributePhase::AfterInstantiation
+            ) {
+                continue;
+            }
+
+            $pending = array_keys($edges[$from] ?? []);
+            $visited = [];
+            while ($pending !== []) {
+                $index = array_pop($pending);
+                if (isset($visited[$index])) {
+                    continue;
+                }
+                $visited[$index] = true;
+                $after = $usages[$index];
+
+                if ($after->definition->handler instanceof AttributeHandlerInterface) {
+                    if ($after->definition->phase === AttributePhase::BeforeInstantiation) {
+                        throw new AttributeCompositionException(sprintf(
+                            'Attribute ordering for %s requires #[%s] before #[%s], which contradicts their execution phases.',
+                            self::targetName($target),
+                            $before->attributeClass,
+                            $after->attributeClass,
+                        ));
+                    }
+
+                    // Both has separate invocations in each phase; only metadata is transparent here.
+                    continue;
+                }
+
+                foreach (array_keys($edges[$index] ?? []) as $next) {
+                    $pending[] = $next;
+                }
+            }
+        }
     }
 
     /**

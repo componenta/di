@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal;
 
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
@@ -24,7 +25,7 @@ final class BootstrapResolutionGuard
 {
     private bool $active = true;
 
-    /** @var list<array{target:ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,usages:list<array{AttributeDefinition,class-string,int}>}> */
+    /** @var list<array{target:ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>}> */
     private array $attributeUses = [];
 
     /** @var list<array{target:ParameterTarget,prefix:non-empty-list<ParameterResolverInterface>}> */
@@ -39,6 +40,8 @@ final class BootstrapResolutionGuard
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function recordAttributes(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        ?AttributePhase $phase = null,
+        ?AttributePlan $plan = null,
     ): void {
         if (!$this->active || $target->getAttributes() === []) {
             return;
@@ -46,7 +49,8 @@ final class BootstrapResolutionGuard
 
         $this->attributeUses[] = [
             'target' => $target,
-            'usages' => self::semantics($this->plans->build($target)->usages),
+            'phase' => $phase,
+            'usages' => CompletedAttributeGuard::semantics($plan ?? $this->plans->build($target), $phase),
         ];
     }
 
@@ -64,7 +68,7 @@ final class BootstrapResolutionGuard
         $this->active = false;
         try {
             foreach ($this->attributeUses as $use) {
-                $current = self::semantics($this->plans->build($use['target'])->usages);
+                $current = CompletedAttributeGuard::semantics($this->plans->build($use['target']), $use['phase']);
                 if ($current !== $use['usages']) {
                     throw new InvalidConfigurationException(sprintf(
                         'DI bootstrap used %s before its required attribute extensions were registered. Register these extensions before factories that resolve this dependency.',
@@ -92,22 +96,6 @@ final class BootstrapResolutionGuard
             $this->attributeUses = [];
             $this->parameterUses = [];
         }
-    }
-
-    /**
-     * @param list<AttributeUsage> $usages
-     * @return list<array{AttributeDefinition,class-string,int}>
-     */
-    private static function semantics(array $usages): array
-    {
-        return array_map(
-            static fn(AttributeUsage $usage): array => [
-                $usage->definition,
-                $usage->attributeClass,
-                $usage->declarationOrder,
-            ],
-            $usages,
-        );
     }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */

@@ -45,16 +45,17 @@ function referenceOverrideContainer(array $factories): Container
     return $container;
 }
 
-test('runtime constructor overrides do not instantiate replaced references', function (
+test('only named and positional runtime arguments replace configured references', function (
     string|int $configuredKey,
     string|int $runtimeKey,
 ): void {
     $calls = 0;
+    $configured = new OverrideDependency();
     $container = referenceOverrideContainer([
-        'configured.dependency' => static function () use (&$calls): OverrideDependency {
+        'configured.dependency' => static function () use (&$calls, $configured): OverrideDependency {
             ++$calls;
 
-            return new OverrideDependency();
+            return $configured;
         },
         ReferenceOverrideTarget::class => ClassDefinition::create(ReferenceOverrideTarget::class)
             ->constructor([$configuredKey => Definition::reference('configured.dependency')]),
@@ -63,8 +64,8 @@ test('runtime constructor overrides do not instantiate replaced references', fun
 
     $target = $container->make(ReferenceOverrideTarget::class, [$runtimeKey => $replacement]);
 
-    expect($target->dependency)->toBe($replacement)
-        ->and($calls)->toBe(0);
+    expect($target->dependency)->toBe($runtimeKey === OverrideDependency::class ? $configured : $replacement)
+        ->and($calls)->toBe($runtimeKey === OverrideDependency::class ? 1 : 0);
 })->with([
     'name replaces name' => ['dependency', 'dependency'],
     'position replaces name' => ['dependency', 0],
@@ -97,6 +98,7 @@ test('replacing a configured array skips nested references and keeps runtime val
     $container = referenceOverrideContainer([
         ReferenceOverrideTarget::class => ClassDefinition::create(ReferenceOverrideTarget::class)
             ->constructor([
+                'dependency' => new OverrideDependency(),
                 'options' => ['nested' => [Definition::reference('missing.nested')]],
             ]),
     ]);
@@ -118,7 +120,7 @@ test('constructor overrides preserve references used by other parameters and met
                 'dependency' => Definition::reference('configured.dependency'),
                 'options' => ['nested' => [Definition::reference('configured.dependency')]],
             ])
-            ->method('configure', [Definition::reference('configured.dependency')]),
+            ->call('configure', [Definition::reference('configured.dependency')]),
     ]);
 
     $target = $container->make(ReferenceOverrideTarget::class, ['dependency' => $replacement]);

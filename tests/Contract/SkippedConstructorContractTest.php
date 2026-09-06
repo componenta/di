@@ -67,13 +67,20 @@ final class ProxySkippedVariadicConstructor extends SkippedVariadicConstructor {
 #[NoConstructor, Proxy, SetUp('initialize')]
 final class ProxySkippedReferenceConstructor extends SkippedReferenceConstructor {}
 
-test('disabled constructor signatures do not prevent property injection and setup', function (
+test('NoConstructor bypasses private signatures only during attribute-driven creation', function (
     string $class,
     bool $deferred,
     bool $useDefinition,
 ): void {
     if (!is_a($class, SkippedConstructorState::class, true)) {
         throw new \LogicException('Expected a skipped constructor fixture class.');
+    }
+    if ($useDefinition) {
+        expect(fn() => (new ContainerFactory())->create(
+            new Config([], new Environment([])),
+            new DependencyDefinitions(['factories' => [$class => ClassDefinition::create($class)]]),
+        ))->toThrow(\Componenta\DI\Exception\InvalidConfigurationException::class, 'runtime-ineligible');
+        return;
     }
     $dependency = new SkippedConstructorDependency();
     $events = new SkippedConstructorEvents();
@@ -84,9 +91,7 @@ test('disabled constructor signatures do not prevent property injection and setu
                 SkippedConstructorDependency::class => $dependency,
                 SkippedConstructorEvents::class => $events,
             ],
-            'factories' => $useDefinition
-                ? [$class => ClassDefinition::create($class)->constructor(['context' => 'preserved'])]
-                : [],
+
         ]),
     )->container;
     if (!$container instanceof Container) {

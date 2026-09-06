@@ -24,14 +24,28 @@ final readonly class AuditForeignCompositionRule implements AttributeComposition
     }
 }
 
-test('readonly properties reject source plus transformer composition before execution', function (): void {
+test('readonly properties receive the final transformed source value', function (): void {
     $target = __NAMESPACE__ . '\\AuditReadonlyTransformTarget';
     if (!class_exists($target, false)) {
-        eval('namespace ' . __NAMESPACE__ . '; final class AuditReadonlyTransformTarget { #[\\Componenta\\DI\\Attribute\\Config("audit.value")] #[\\Componenta\\DI\\Attribute\\Cast("int")] public readonly int $value; }');
+        // The fixture deliberately initializes readonly state outside its constructor.
+        eval('namespace ' . __NAMESPACE__ . '; final class AuditReadonlyTransformTarget { #[\\Componenta\\DI\\Attribute\\Config("audit.value"), \\Componenta\\DI\\Attribute\\Cast("int")] public readonly int $value; }');
+    }
+    if (!class_exists($target)) {
+        throw new \LogicException('Expected the readonly transformation target.');
+    }
+    $container = ContainerBuilder::configure(new \Componenta\Config\Config(
+        ['audit.value' => '42'],
+        new \Componenta\Config\Environment([]),
+    ))
+        ->addService(\Componenta\Caster\CasterProviderInterface::class, new \Componenta\DI\Tests\Support\TestCasterProvider())
+        ->build();
+
+    $entry = $container->make($target);
+    if (!property_exists($entry, 'value')) {
+        throw new \LogicException('Expected the public readonly value.');
     }
 
-    expect(fn() => (new ContainerBuilder())->build()->make($target))
-        ->toThrow(AttributeCompositionException::class, 'readonly properties can be written only once');
+    expect($entry->value)->toBe(42);
 });
 
 test('composition rules always expose AttributeCompositionException at the composition boundary', function (): void {

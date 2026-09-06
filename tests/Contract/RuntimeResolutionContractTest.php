@@ -118,7 +118,7 @@ test('class definitions invokables aliases and delegators share one ordered reso
         ConfigKey::FACTORIES => [
             'configured.product' => ClassDefinition::create(RuntimeConfiguredProduct::class)
                 ->constructor(['prefix' => 'base'])
-                ->method('append', ['suffix' => ':method']),
+                ->call('append', ['suffix' => ':method']),
         ],
         ConfigKey::INVOKABLES => [
             'invokable.alias' => RuntimeInvokableProduct::class,

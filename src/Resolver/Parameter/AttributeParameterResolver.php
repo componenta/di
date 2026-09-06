@@ -7,6 +7,8 @@ namespace Componenta\DI\Resolver\Parameter;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
+use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -38,21 +40,56 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             return null;
         }
 
-        $value = $this->initialValue($target, $context, $plan);
+        $value = ParameterAttributeValue::unresolved();
 
-        foreach ($plan->usages as $usage) {
-            $handler = $usage->definition->handler;
-            if (!$handler instanceof ParameterAttributeHandlerInterface) {
-                continue;
+        $authoritative = false;
+        $processed = [];
+        $pendingAttributes = [];
+        while (true) {
+            $revision = $this->plans->revision;
+            $plan = $this->plans->build($target->reflection);
+            AttributeExecutionOrder::assertPrefix($plan, $processed);
+
+            $requiresAuthoritative = $plan->has(AuthoritativeValueProvider::class);
+            if ($processed === []) {
+                $authoritative = $requiresAuthoritative;
+                $value = $this->initialValue($target, $context, $plan);
+            } elseif ($authoritative !== $requiresAuthoritative) {
+                throw new AttributeCompositionException(sprintf(
+                    'Parameter $%s input policy changed after an attribute handler was already executed. Load its value sources before execution.',
+                    $target->name,
+                ));
             }
 
-            $value = $handler->resolveParameter(
-                $usage->newInstance(),
-                $target,
-                $context,
-                $plan,
-                $value,
-            );
+            foreach ($plan->usages as $usage) {
+                $handler = $usage->definition->handler;
+                if (isset($processed[$usage->declarationOrder])
+                    || !$handler instanceof ParameterAttributeHandlerInterface
+                ) {
+                    continue;
+                }
+
+                $attribute = $pendingAttributes[$usage->declarationOrder] ??= $usage->newInstance();
+                if ($this->plans->revision !== $revision) {
+                    // A constructor can reveal a predecessor or a different input
+                    // policy. Recompose before dispatch without reconstructing it.
+                    continue 2;
+                }
+                $processed[$usage->declarationOrder] = $usage;
+                $value = $handler->resolveParameter(
+                    $attribute,
+                    $target,
+                    $context,
+                    $plan,
+                    $value,
+                );
+                unset($pendingAttributes[$usage->declarationOrder], $attribute);
+                if ($this->plans->revision !== $revision) {
+                    // Keep the resolved source and refresh only the remaining handlers.
+                    continue 2;
+                }
+            }
+            break;
         }
 
         return $value->resolved
