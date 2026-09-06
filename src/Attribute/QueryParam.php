@@ -6,12 +6,11 @@ namespace Componenta\DI\Attribute;
 
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
-use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
-use Componenta\DI\Resolver\Parameter\Request\RequestResolver;
+use Componenta\DI\Resolver\Parameter\Request\ParameterNameAwareExtractorInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
-readonly class QueryParam implements ExtractorInterface, CastableInterface
+readonly class QueryParam implements ParameterNameAwareExtractorInterface, CastableInterface
 {
     public function __construct(
         public ?string $name = null,
@@ -21,26 +20,29 @@ readonly class QueryParam implements ExtractorInterface, CastableInterface
 
     public function extract(ServerRequestInterface $request): mixed
     {
-        $name = $this->name ?? $request->getAttribute(RequestResolver::PARAMETER_NAME_ATTRIBUTE);
+        return $this->extractNamed($request, $this->name);
+    }
 
+    public function extractForParameter(
+        ServerRequestInterface $request,
+        string $parameterName,
+    ): mixed {
+        return $this->extractNamed($request, $this->name ?? $parameterName);
+    }
+
+    private function extractNamed(ServerRequestInterface $request, ?string $name): mixed
+    {
         if (!is_string($name) || $name === '') {
             throw new \LogicException('Query parameter name must be a non-empty string');
         }
 
         $params = $request->getQueryParams();
-
-        // array_key_exists (rather than ??) keeps absent vs null distinct -
-        // matches RequestAttribute / PayloadParam semantics.
         if (!array_key_exists($name, $params)) {
             if ($this->default === DefaultValue::None) {
-                throw new \RuntimeException(
-                    sprintf('Required query parameter "%s" is missing', $name),
-                );
+                throw new \RuntimeException(sprintf('Required query parameter "%s" is missing', $name));
             }
-
             return $this->default;
         }
-
         return $params[$name];
     }
 }

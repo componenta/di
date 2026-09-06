@@ -4,40 +4,24 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-use Componenta\DI\Exception\CallableExceptionInterface;
 use Componenta\DI\Exception\ExceptionInterface;
 
 /**
  * Invokes a callable with a caller-supplied parameter list.
  *
- * Whether parameters are autowired or used as-is is implementation-defined:
- *
- *  - {@see CallableExecutor} (the {@see Container}-backed executor) resolves
- *    each parameter through the DI parameter chain, with `$params` providing
- *    overrides by name or position.
- *  - {@see CallableInvoker} is a thin wrapper that calls
- *    {@see call_user_func_array()} verbatim - no resolution, no DI. Useful
- *    for hot paths or non-DI callers (CQRS handlers, tests).
- *
- * Failures to resolve or normalize a callable surface as DI-container
- * exceptions. Once target invocation begins, throwables raised by PHP or by
- * the target callable propagate unchanged so callers keep the original error
- * type and stack trace.
+ * DI-aware implementations normalize failures that happen while resolving the
+ * callable or its arguments to {@see ExceptionInterface}. Once control enters
+ * the target callable body, throwables raised by that callable propagate
+ * unchanged.
  */
 interface CallableInvokerInterface
 {
     /**
-     * Invokes a callable with the given parameters.
-     *
-     * @param mixed $callable The callable to invoke.
-     * @param array<string|int, mixed> $params Parameters passed to the callable.
-     *                                         Resolution semantics depend on
-     *                                         the implementation (see class docblock).
-     *
-     * @return mixed The result of the callable execution.
-     *
-     * @throws CallableExceptionInterface If the callable cannot be resolved or normalized.
-     * @throws ExceptionInterface         If a parameter cannot be resolved (DI implementations only).
+     * @param mixed $callable
+     * @param array<string|int, mixed> $params
+     * @return mixed
+     * @throws ExceptionInterface If callable preparation or DI argument resolution fails.
+     * @throws \Throwable Anything thrown by the target callable after invocation begins.
      */
     public function call(mixed $callable, array $params = []): mixed;
 }

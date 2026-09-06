@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Tests\V5;
+
+use Componenta\DI\Attribute\CurrentRequest;
+use Componenta\DI\Attribute\CurrentUri;
+use Componenta\DI\Attribute\Header;
+use Componenta\DI\CallableExecutorInterface;
+use Componenta\DI\CallableInvokerInterface;
+use Componenta\DI\Container;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use Nyholm\Psr7\ServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UriInterface;
+
+final class CallableDependency {}
+
+test('CallableExecutor exposes the DI-aware call API', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $executor = $container->get(CallableExecutorInterface::class);
+
+    expect($executor)->toBeInstanceOf(CallableInvokerInterface::class)
+        ->and($executor->call(
+            static fn(CallableDependency $dependency): CallableDependency => $dependency,
+        ))->toBeInstanceOf(CallableDependency::class)
+        ->and($executor->call(
+            static fn(int $left, int $right): int => $left - $right,
+            ['left' => 10, 'right' => 3],
+        ))->toBe(7);
+});
+
+test('reflected zero-argument callables ignore unrelated provided parameters', function (): void {
+    $container = (new ContainerBuilder())->build();
+
+    expect($container->call(
+        static fn(): string => 'ok',
+        ['unused' => 'value'],
+    ))->toBe('ok');
+});
+
+test('container CallableInvokerInterface remains DI-aware', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $invoker = $container->get(CallableInvokerInterface::class);
+
+    expect($invoker)->toBe($container)
+        ->and($container)->toBeInstanceOf(Container::class)
+        ->and($invoker->call(
+            static fn(CallableDependency $dependency): CallableDependency => $dependency,
+        ))->toBeInstanceOf(CallableDependency::class);
+});
+
+test('request stays in the ordinary parameter array while request resolvers consume it', function (): void {
+    $request = (new ServerRequest('GET', '/orders/17'))->withHeader('X-Token', 'request-token');
+    $container = (new ContainerBuilder())->build();
+
+    $result = $container->call(
+        static fn(
+            #[Header('X-Token')] string $token,
+            #[CurrentUri] UriInterface $uri,
+            #[CurrentRequest] ServerRequestInterface $resolvedRequest,
+        ): array => [$token, (string) $uri, $resolvedRequest],
+        [ServerRequestInterface::class => $request],
+    );
+
+    expect($result)->toBe(['request-token', '/orders/17', $request]);
+});

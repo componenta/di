@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute;
 
 /**
- * Specifies a method to call after object instantiation.
+ * Specifies a method to call after object instantiation and property injection.
  *
  * This attribute can be applied multiple times to define
  * a sequence of initialization steps. Methods are called

@@ -1,14 +1,13 @@
 # Componenta DI
 
-PSR-11 dependency injection container for PHP 8.4+ with reflection autowiring, explicit factories and invokables, aliases, delegators, external-container fallback, attribute-based injection, PSR-7 request mapping, native lazy objects and build-time compiled factories.
+Componenta DI is a PSR-11 dependency injection container for PHP 8.4+. It provides reflection autowiring, explicit factories and services, ordered delegators, callable invocation, lazy objects, request mapping, and composable PHP attributes.
 
-**[English](README.md)** | **[Русский](README.ru.md)**
+The package owns container construction and dependency-resolution semantics. [`componenta/config`](../config/README.md) owns provider execution and produces two separate values:
 
-## Package boundary
+- `Config`, which contains application configuration only;
+- `DependencyDefinitions`, which is consumed once by `ContainerFactory` and is not published as a container service.
 
-`componenta/di` owns runtime dependency resolution. Application scanning, configuration-provider discovery, deployment cache orchestration and entry-point bootstrapping belong to the application layer, normally `componenta/app`.
-
-Property injection is attribute-driven. Ahead-of-time compilation creates ordinary factory definitions; reflection remains the runtime fallback for dynamic classes.
+There is one runtime construction path in every environment. Componenta DI does not compile factories or persist a serialized dependency graph.
 
 ## Installation
 
@@ -16,231 +15,254 @@ Property injection is attribute-driven. Ahead-of-time compilation creates ordina
 composer require componenta/di
 ```
 
-PHP 8.4 or newer is required.
+The package requires PHP 8.4+, Componenta Config 3.x, Componenta Caster, Componenta Reflection, Componenta Validation, PSR-11 2.x, and PSR-7 message interfaces.
 
-## Core API
+## Core flow
 
-```php
-use App\Logging\FileLogger;
-use App\Logging\LoggerInterface;
-use App\Service\UserService;
-use Componenta\DI\ContainerBuilder;
-
-$container = (new ContainerBuilder())
-    ->addService(LoggerInterface::class, new FileLogger('/var/log/app.log'))
-    ->addAlias('logger', LoggerInterface::class)
-    ->build();
-
-$logger = $container->get('logger');
-$first = $container->make(UserService::class, ['userId' => 7]);
-$second = $container->make(UserService::class, ['userId' => 7]);
-
-assert($first !== $second);
+```text
+Environment + ordered providers
+    -> ConfigFactory::create()
+    -> ConfigComposition { Config, DependencyDefinitions }
+    -> ContainerFactory::create()
+    -> ContainerValue { container, the same Config }
 ```
 
-- `get(string $id)` first gives registered external containers the original requested id; when none owns it, local shared resolution runs and caches its base/decorated result.
-- `make(string $entry, array $params = [])` creates a fresh object and skips runtime entry caches, external containers and delegators.
-- `call(mixed $callable, array $params = [])` normalizes a callable, resolves missing arguments and invokes it.
-- Constructor and callable arguments may be supplied by name or position.
-- Ordinary public properties are never filled from `$params`; property injection is performed only by attribute handlers.
+`ContainerFactory` is the only public container-construction API. It preserves the exact `Config` and `Environment` instances supplied by the application.
 
-When an id has no explicit binding, the reflection resolver may autowire an eligible class whose dependencies are resolvable.
-
-## Public contracts
-
-Parameter names are part of the public API because PHP named arguments may use them.
-
-| Contract | Purpose |
-|---|---|
-| `Psr\Container\ContainerInterface` | Shared `get()` / `has()` lookup. |
-| `FactoryInterface` | Fresh `make()` object creation. |
-| `CallableInvokerInterface` | Callable invocation capability. |
-| `CallableResolverInterface` | Callable normalization. |
-| `CallableExecutorInterface` | Callable normalization plus DI-aware invocation. |
-| `LazyObjectFactoryInterface` | Native lazy ghost creation. |
-| `VirtualProxyFactoryInterface` | Native virtual proxy creation. |
-| `ProxyFactoryInterface` | Combined lazy/proxy factory contract. |
-
-The concrete `Container` additionally exposes `set()`, `alias()`, `delegator()` and `addContainer()` for bootstrap/runtime configuration.
-
-## Resolution lifecycle
-
-`Container::get($id)` resolves entries in this order:
-
-1. Ask registered external PSR-11 containers for the original requested id.
-2. If none owns it, return an already cached local decorated result for that requested id.
-3. Resolve local aliases to the canonical id.
-4. Return a locally cached base entry when present.
-5. Otherwise run the local resolver chain and cache the base result.
-6. Apply local delegators and cache the decorated result.
-
-External lookup happens exactly once and always uses the original requested id. Local aliases are not forwarded to external containers, and an external entry is returned directly without local aliasing, local caches or local delegators. This means an external container also takes precedence over an already materialized local value for `get()`/`has()`.
-
-The external-container registry itself is lazy internal state: it remains `null` when no external containers are registered and is allocated by the first `addContainer()` call. Lookup paths use null-safe access and therefore pay no registry allocation cost in the common no-external-container case.
-
-`make()` resolves aliases but deliberately skips shared caches, external containers and delegators. Fresh-resolution dependency cycles are detected by the same cycle guard used by shared resolution.
-
-Cycle tracking is local to each execution context. If `get()` starts resolving a shared canonical id while the same id is still being resolved by another Fiber, it throws `ConcurrentResolutionException`; retry after the owning Fiber has completed. The container never resumes a foreign Fiber.
-
-## ContainerBuilder
-
-`ContainerBuilder` is the supported assembly API. Its main methods are:
-
-- `addFactory()` / `addFactories()`
-- `addInvokable()` / `addInvokables()`
-- `addAlias()` / `addAliases()`
-- `addDelegator()` / `addDelegators()`
-- `addService()` / `addServices()`
-- `addParameterResolver()` / `replaceParameterResolvers()`
-- `addAttributeHandler()` / `replaceAttributeHandlers()`
-- `compileFactories()`
-- `toArray()`
-- `build()`
-
-`addService()` and `ConfigKey::SERVICES` register prebuilt shared values verbatim. An object that implements `DefinitionInterface` is still a stored service value on this builder path. Resolver definitions are configuration: compatible definition objects may be supplied directly in the factory/invokable configuration sections or through `Container::set($id, $definition)`. Definition objects and the corresponding section shorthand configure the same resolver state.
-
-A delegator method reference may use a class, interface or opaque service id, for example `[DecoratorInterface::class, 'decorate']` or `['decorator.service', 'decorate']`. In bulk/config input, an opaque service-method delegator must be nested as `[['decorator.service', 'decorate']]`; the flat `['first', 'second']` form means two string delegators unless it is an actual class/interface method reference.
-
-Parameter resolvers and attribute handlers may be supplied as instances, service ids, callable factories or `[service-id, 'method']` factories. The builder seals both extension registries after assembly.
-
-A normal service factory receives `Componenta\Config\ContainerValue` and the current resolution context:
+## Quick start
 
 ```php
-$builder->addFactory(
-    MailerInterface::class,
-    static fn (ContainerValue $container, array $context): MailerInterface =>
-        new SmtpMailer($container->get(SmtpConfig::class)),
+use Componenta\Config\ConfigFactory;
+use Componenta\Config\ConfigProvider;
+use Componenta\Config\ContainerValue;
+use Componenta\Config\Environment;
+use Componenta\DI\ContainerFactory;
+
+final readonly class Greeting
+{
+    public function __construct(public string $message) {}
+}
+
+final class AppConfigProvider extends ConfigProvider
+{
+    protected function getConfig(): array
+    {
+        return ['greeting.prefix' => 'Hello'];
+    }
+
+    protected function getFactories(): array
+    {
+        return [
+            Greeting::class => static fn(
+                ContainerValue $context,
+                array $params,
+            ): Greeting => new Greeting(
+                ($params['prefix'] ?? $context->config->string('greeting.prefix')) . '!',
+            ),
+        ];
+    }
+}
+
+$environment = new Environment([]);
+$composition = (new ConfigFactory())->create(
+    $environment,
+    new AppConfigProvider(),
 );
+$containerValue = (new ContainerFactory())->create(
+    $composition->config,
+    $composition->dependencies,
+);
+$container = $containerValue->container;
+
+$shared = $container->get(Greeting::class);
+$fresh = $container->make(Greeting::class, ['prefix' => 'Welcome']);
+
+assert($shared->message === 'Hello!');
+assert($fresh->message === 'Welcome!');
+assert($containerValue->config === $composition->config);
+assert($container->get(Environment::class) === $environment);
 ```
 
-## Definitions
+## Provider composition
 
-`Definition` provides compact immutable factory, reference and invokable definitions. Use `ClassDefinition` to configure class constructor arguments or setup calls:
+`ConfigFactory` calls providers in argument order and merges their dependency sections before DI sees them. The relevant rules are:
+
+- factories, aliases, services, and parameter resolvers are keyed registries; a later value replaces an earlier value with the same key;
+- numeric invokables are appended, while keyed invokables are replaced by key;
+- delegator pipelines, attribute definitions, and attribute capabilities are appended in provider order;
+- resolver and attribute-definition replacement flags use the last explicitly supplied Boolean value.
+
+DI validates and normalizes the merged `DependencyDefinitions` once during `ContainerFactory::create()`. It does not invoke providers and does not copy definitions into `Config`.
+
+`ConfigProvider` exposes these protected hooks:
+
+```text
+getConfig()
+getFactories()
+getInvokables()
+getAliases()
+getDelegators()
+getServices()
+getParameterResolvers()
+shouldReplaceParameterResolvers()
+getAttributeDefinitions()
+shouldReplaceAttributeDefinitions()
+getAttributeCapabilities()
+```
+
+## Dependency definitions
+
+### Services
+
+Services are runtime values and retain their state and identity. Objects, closures, resources, `null`, and `false` are valid values.
+
+```php
+protected function getServices(): array
+{
+    return [
+        ClockInterface::class => new SystemClock(),
+        'feature.enabled' => false,
+    ];
+}
+```
+
+### Factories
+
+The complete runtime factory ABI is `(ContainerValue $context, array $params)`. A callable may declare a compatible prefix of these arguments. Invalid signatures are rejected while the container is built.
+
+```php
+protected function getFactories(): array
+{
+    return [
+        Client::class => static fn(ContainerValue $context, array $params): Client =>
+            new Client(
+                $context->config->string('api.endpoint'),
+                $params['timeout'] ?? 10,
+            ),
+    ];
+}
+```
+
+A factory owns the complete creation of its result. The container does not apply that result's DI attributes after the factory returns it.
+
+`ClassDefinition` is a declarative factory. It invokes a public constructor immediately and then executes explicit `call()` instructions in registration order, including repeated calls to the same method:
 
 ```php
 use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\Definition;
 
-$container->set(
-    ReportService::class,
-    ClassDefinition::create(ReportService::class)
-        ->constructor(['format' => 'pdf'])
-        ->method('boot'),
-);
+$definition = ClassDefinition::create(Client::class)
+    ->constructor(['endpoint' => 'https://api.example.test', 'timeout' => 10])
+    ->call('setLogger', [Definition::reference(LoggerInterface::class)]);
 ```
 
-Definitions are resolver configuration, not a separate runtime overlay. `FactoryDefinition`, `ClassDefinition` and `CompiledFactoryDefinition` are accepted directly in `ConfigKey::FACTORIES`; `InvokableDefinition` is accepted in `ConfigKey::INVOKABLES` and is normalized to the same class-string form used by declarative invokable shorthand. The same forms work when dependency sections come from a `ConfigProvider`.
+By default, arguments come only from the definition, constructor overrides supplied to `make()`, and PHP parameter defaults. `make()` overrides match constructor parameter names or positions; a name takes precedence over a position. Type-name keys are not constructor arguments. Replaced references are not resolved, and runtime values remain literal. `ReferenceDefinition` looks up a dependency through the existing container; that dependency follows its own registration and lifecycle.
 
-Declarative definitions and runtime definitions share the same definition types but have different lifecycles. Definitions held by `ContainerBuilder`/configuration participate in normalization and persistent-cache compilation. `FactoryDefinition` is reduced to its factory callable, `InvokableDefinition` to its class-string, and `ClassDefinition` is compiled by a `DefinitionCodeGeneratorInterface` into an ordinary factory closure before the cache file is written. A definition supplied later through `Container::set()` mutates only the already-built resolver state; it is not copied back into the builder, compiled or persisted.
+Call `autowire()` or `autowire(true)` to enable type-based DI fallback for missing constructor and method arguments. Explicit arguments, including `null`, take precedence. If no service is available for the declared class/interface type, PHP defaults still apply; a required argument without a value fails. `autowire(false)` disables this fallback. The flag does not enable parameter attributes or custom parameter resolvers.
 
-`Container::set($id, $definition)` reconfigures the supporting resolver and removes a materialized local base entry for that id so the new definition can be resolved. `Container::set($id, $value)` only replaces the shared local value; it does not remove or roll back resolver configuration, so `make($id)` continues to use the configured resolver binding.
+`ClassDefinition` never executes DI attributes on its target class, properties, constructor parameters, or configured methods. This includes `SetUp`, `Inject`, `Lazy`, `Proxy`, and `NoConstructor`, even when autowiring fallback is enabled. A failed constructor or explicit method call aborts creation; the failed result is not shared. A later `get()` or `make()` starts a new creation attempt.
 
-Available `Definition` helpers are `factory()`, `reference()` and `invokable()`. `ReferenceDefinition` represents a container entry reference inside class-definition arguments. During `ClassDefinition` code generation, references are emitted as container lookups inside the generated factory. `InvokableDefinition` enforces the same non-empty class-string shape as invokable shorthand.
+`constructor()`, `call()`, and `autowire()` return new immutable definitions. `call()` replaces the former `method()` API. `DefinitionInterface` is a marker; it imposes no shared `value` property on concrete definitions.
 
-Definition code generation is extensible through `DefinitionCodeGeneratorInterface` and `DefinitionCodeGeneratorRegistry`. The generator contract accepts `DefinitionInterface`; the registry selects the concrete generator by definition class/interface, so custom definition types do not require changing the compiler.
-
-## Configuration
-
-`Container::create(Config $config)` and `ContainerBuilder::configure(Config $config)` read `ConfigKey::DEPENDENCIES`.
-
-Supported dependency keys are:
-
-- `ConfigKey::FACTORIES`
-- `ConfigKey::INVOKABLES`
-- `ConfigKey::ALIASES`
-- `ConfigKey::DELEGATORS`
-- `ConfigKey::SERVICES`
-- `ConfigKey::PARAMETER_RESOLVERS`
-- `ConfigKey::PARAMETER_RESOLVERS_REPLACE`
-- `ConfigKey::ATTRIBUTE_HANDLERS`
-- `ConfigKey::ATTRIBUTE_HANDLERS_REPLACE`
-
-Unknown keys and malformed shapes throw `InvalidConfigurationException`.
-
-`configureFromCache()` accepts only the versioned persistent-cache envelope:
+### Invokables and aliases
 
 ```php
-[
-    'version' => ContainerBuilder::CACHE_VERSION,
-    ConfigKey::DEPENDENCIES => $dependencies,
-]
+protected function getInvokables(): array
+{
+    return [
+        Logger::class,
+        LoggerInterface::class => Logger::class,
+    ];
+}
+
+protected function getAliases(): array
+{
+    return [
+        CacheInterface::class => RedisCache::class,
+    ];
+}
 ```
 
-Raw dependency arrays are rejected. The former `validated: true` marker is accepted only as a deprecated, ignored compatibility field for older application-level cache producers; it never skips validation or makes compiled factories trusted. New producers must omit it. When `$baseDir` is supplied, relative compiled-factory paths are confined to that base directory.
+A keyed invokable registers both the concrete class and an alias. Invokables use a direct zero-argument constructor call, including PHP defaults, without processing DI attributes.
 
-Cache envelope versions are strict. Version 10 rejects v9 and earlier artifacts because mapped-request provenance is now enforced against the actual constructor target, including persistent `ClassDefinition` closures. Regenerate the persistent cache and all compiled-factory shards during deployment instead of reusing or editing older artifacts.
+### Delegators
 
-## Attributes
-
-Built-in attribute behavior includes:
-
-| Attribute | Behavior |
-|---|---|
-| `#[Inject]` | Inject a property by declared class/interface type. |
-| `#[EntryId('id')]` | Resolve an explicit entry id for a parameter/property. |
-| `#[Config('path')]` | Read application configuration. |
-| `#[Env('NAME')]` | Read an environment value. |
-| `#[Make(Service::class)]` | Create a fresh object. |
-| `#[Init(callable, params)]` | Initialize a property from a callable. Mutable promoted properties are supported. |
-| `#[Cast(...)]` | Cast a resolved value. |
-| `#[CurrentUser]` | Inject the current user when its provider is configured. |
-| `#[SetUp('method', params)]` | Run a setup method after construction; repeatable. |
-| `#[NoConstructor]` | Allocate a class without calling its constructor. |
-| `#[Lazy]` | Use a native lazy ghost. Mutually exclusive with class-level `#[Proxy]`. |
-| `#[Proxy(?ConcreteClass::class)]` | Use a virtual proxy. Class-level use is mutually exclusive with `#[Lazy]`. |
-
-Built-in DI property handlers reject static properties instead of silently ignoring their attributes. Initialized readonly promoted properties remain constructor-owned and are not overwritten by property handlers.
-
-Scalar PSR-7 extraction attributes are `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]` and `#[UploadedFile]`.
-
-Request mappers are `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]` and `#[MapUploadedFiles]`. They may return arrays or create class-typed DTOs through `FactoryInterface::make()`.
-
-Class-typed HTTP DTO mapping accepts only named top-level string keys, both before validation and after mapper transformation. Integer keys, including numeric JSON object keys decoded as integers by PHP, are rejected instead of being interpreted as constructor positions. This restriction is limited to HTTP DTO mapping; trusted programmatic `Container::make()` calls continue to accept arguments by name or position.
-
-Parameter attributes that implement `ParameterSourceAttributeInterface` declare an explicit value source during HTTP DTO mapping. After mapper transformation, mapped data may not provide the source-bound parameter name or any of its declared class/interface type keys; such input throws `RequestParameterSourceConflictException` instead of becoming an explicit DI override. Mapped-key provenance follows the nested `make()` operation through aliases to the actual constructor target and is checked before any built-in or custom parameter resolver runs, so resolver priority cannot bypass the source boundary. Runtime and persistent `ClassDefinition` construction apply the same mapped-input guard while ordinary programmatic constructor parameters keep their existing override semantics. The exact `ServerRequestInterface` and `UriInterface` types are also treated as implicit trusted sources. Their subtypes are not reserved implicitly unless a source attribute marks the parameter, because the runtime request resolvers do not source arbitrary PSR-7 subtypes.
-
-When validation is available for a DTO, extracted raw transport data is validated before mapper transformation. This is intentional: mapping, defaults, casts and exclusions must not hide malformed request input.
-
-When multiple request sources provide different values for one key, the default policy throws `RequestDataConflictException`. `RequestDataConflictPolicy::FirstWins` must be selected explicitly when source precedence is part of the endpoint contract.
-
-## Callable invocation
-
-`call()` accepts closures, global functions, `"Class::method"`, callable service ids, `[object, 'method']` and `[class/interface/service-id, 'method']` references. Explicit parameters win over resolver output by name or position.
-
-Failures while resolving/normalizing a callable use DI exceptions. Once target invocation begins, PHP engine errors and throwables raised by the target callable propagate unchanged so the original error type and stack trace are preserved.
-
-## Lazy objects, proxies and invokables
-
-`makeLazy()` creates a native lazy ghost whose initializer mutates the uninitialized instance. `makeProxy()` creates a native virtual proxy whose factory returns the real backing object.
-
-Factory-bound services are eager unless their factory implements `LazyServiceFactoryInterface`. Class-level `#[Lazy]` and `#[Proxy]` participate in reflection autowiring and cannot be combined on the same class. Explicit invokable entries intentionally use a plain zero-argument `new` path and do not run the attribute lifecycle or consume `make()` context.
-
-For an interface-typed or opaque service-id injection point, `#[Proxy(ConcreteClass::class)]` must provide a concrete proxy class.
-
-## Production compiled factories
-
-Known autowiring roots can be compiled into ordinary `ConfigKey::FACTORIES` entries:
+Delegators receive the current entry and may optionally accept the container. They run in provider and registration order.
 
 ```php
-use Componenta\DI\Compile\Autowire\AutowireEntry;
-
-$compiled = $builder->compileFactories(
-    entries: [new AutowireEntry(CreateOrder::class)],
-    directory: __DIR__ . '/var/cache/build',
-);
+protected function getDelegators(): array
+{
+    return [
+        Client::class => [
+            static fn(Client $client): Client => $client->withMetrics(),
+            ['tracing.decorator', 'decorate'],
+        ],
+    ];
+}
 ```
 
-The compiler follows statically knowable concrete constructor, `#[Inject]` and `#[SetUp]` dependencies. Existing services, explicit factories and invokables retain ownership and are never replaced by this autowiring compiler. Declarative `ClassDefinition` factories are handled separately by the definition compiler when persistent cache is generated; they become ordinary closure factories and therefore do not enter the autowiring compilation graph.
+A deferred service-method pair such as `['tracing.decorator', 'decorate']` must be nested inside the pipeline list. This distinguishes it from a pipeline containing two string delegators.
 
-Each `CompiledFactoryDefinition` stores a relative shard file, generated class and method. Shards use content-addressed names and are loaded on first use. Untrusted relative paths are resolved inside the configured cache base directory; traversal and out-of-root symlinks are rejected. Dynamic classes continue through reflection autowiring.
+## Container API
 
-Before loading an untrusted shard, the runtime verifies that its bytes match the digest encoded in its filename. Every generated shard also embeds the parameter-resolver/attribute-handler pipeline fingerprint. Generated parameter code enforces mapped-source provenance before resolver fragments, and the fingerprint format changes when this compiler invariant changes; a runtime mismatch is rejected and requires recompilation. Deploy generated artifacts in a directory that is immutable to the request process: integrity checks complement, but do not replace, filesystem permissions.
+`Container` implements `Psr\Container\ContainerInterface`, `FactoryInterface`, `CallableExecutorInterface`, and `ProxyFactoryInterface`.
 
-Application-level root discovery normally belongs to `componenta/app`; this package only compiles the roots it is given.
+```php
+$shared = $container->get(Service::class);                 // shared result
+$exists = $container->has(Service::class);                 // never throws
+$fresh = $container->make(Service::class, ['id' => 42]);   // fresh object
+$result = $container->call([$controller, 'show'], ['id' => 42]);
+```
 
-`DiCacheGeneratorInterface::generate()` normalizes the supplied dependency configuration, runs declarative definition compilation and atomically writes the resulting PHP cache. It does not discover application classes or run `compileFactories()` for autowiring roots.
+Reflection autowiring is used for a concrete class when no explicit binding exists. An explicit factory takes precedence.
 
-Persistent-cache export preserves repeated identity for supported readonly objects and closures, including closures nested in arrays. When an existing cache file was present in OPcache, replacement must also invalidate that cached script or generation fails explicitly.
+The runtime mutation methods `set()`, `alias()`, `delegator()`, and `addContainer()` remain available. They invalidate affected shared entries and delegator results without rebuilding the whole container. Core DI services, `Config`, `Environment`, `ContainerValue`, and `DependencyDefinitions` cannot be replaced or shadowed.
+
+If a factory or delegator changes a binding while an earlier `get()` is running (including a suspended Fiber), that call may finish with its earlier value. Later lookups observe the changed binding; the in-flight result cannot restore invalidated cache entries.
+
+## Attributes and request mapping
+
+Built-in object and parameter attributes include:
+
+```text
+#[Config] #[Env] #[EntryId] #[Inject] #[Make]
+#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast]
+#[CurrentRequest] #[CurrentUri]
+#[Header] #[Cookie] #[QueryParam] #[PayloadParam]
+#[RequestAttribute] #[ServerParam] #[UploadedFile]
+#[MapRequest] #[MapQueryString] #[MapRequestPayload]
+#[MapHeaders] #[MapCookies] #[MapRequestAttributes]
+#[MapServerParams] #[MapUploadedFiles]
+```
+
+`#[CurrentRequest]` and `#[CurrentUri]` are explicit invocation-only sources. A bare PSR-7 request or URI type does not imply current-request semantics, and invocation-only values cannot be stored through constructor injection.
+
+Request mapping reads explicitly selected PSR-7 sources, detects source conflicts, applies configured casting and validation, and creates DTOs through the same `FactoryInterface::make()` pipeline.
+
+## Extension points
+
+Custom parameter resolvers implement `ParameterResolverInterface` and are registered with an integer priority. Custom attributes use `AttributeDefinition`; `CapabilityPolicy` can define composition cardinality and ordering rules. These extensions must be supplied in `DependencyDefinitions` before the container is built because the parameter and attribute pipelines are sealed after construction.
+
+Extension factories may resolve ordinary dependencies from the existing container. Attribute definitions are materialized in registration order, followed by parameter resolvers. Register any required attribute extension before the factory that consumes it. If bootstrap used a dependency before its attribute semantics were complete, or a later resolver could intercept an already resolved parameter ahead of the selected resolver, `ContainerFactory::create()` throws `InvalidConfigurationException`. The check uses attribute metadata and resolver `supports()` classification; it does not replay constructors, handlers, or value resolution. Unrelated extensions and lower-priority resolvers remain allowed. A dependency that needs a custom parameter resolver can be resolved by a later resolver factory, or deferred until container creation has completed.
+
+`AttributePlan::all()` and `attributes()` preserve the order of the composed plan, including inherited capabilities and interleaved repeated attribute classes.
+
+Composition rules receive read-only `AttributeUsage` metadata: the declared attribute class and arguments, its semantic definition, target, and declaration order. Reading `arguments` evaluates the declared expressions on each access; object arguments are not stored in the shared plan. A `new` expression can therefore run a constructor when a rule explicitly reads the arguments. Rules validate declaration constraints; checks that depend on changing runtime state belong in handlers. A fresh attribute instance is created when execution reaches its handler; shared plans never retain that runtime instance.
+
+If construction makes another declared attribute available, the execution order is recomputed without reconstructing the pending instance. Newly discovered handlers must preserve the already executed order across the current object phase. A late change to parameter input policy or to a completed property composition throws `AttributeCompositionException`; constructors and handlers are not replayed. Completed parameter compositions remain checked while subsequent parameters resolve, so an incompatible late source cannot reach the callable body. Object creation also checks the completed before-instantiation phase before invoking the constructor and before returning the object. If the constructor or a lifecycle hook itself reveals an incompatible policy, its already completed side effects are not rolled back and the object is not returned as a successfully resolved service. Loading unrelated attributes is allowed.
+
+Lazy objects and virtual proxies retain the policies selected during their initial before-instantiation phase. If those policies later become incompatible, initialization fails without replaying that phase. A fresh `make()` uses the now-available attributes; an existing deferred object is not reconfigured.
+
+External PSR-11 containers may be registered with `Container::addContainer()`. External entries participate in cycle protection and cannot shadow protected core services.
+
+## Runtime behavior
+
+`get()` caches a shared result, including the result of its delegator pipeline. `make()` creates a fresh object and accepts runtime parameters. Reflection metadata, prepared parameter plans, alias paths, and resolver ownership are cached only in memory inside one container.
+
+Development and production use the same `ContainerFactory`, normalization, validation, and resolver chain. Runtime dependency values are never exported, so non-serializable values have the same behavior in both environments.
 
 ## Exceptions
 
-Package exceptions implement `Componenta\DI\Exception\ExceptionInterface`. Main exceptions are `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException`, `RequestDataConflictException` and `RequestParameterSourceConflictException`.
+Package-owned failures implement `Componenta\DI\Exception\ExceptionInterface`, which also extends the PSR-11 container exception contract. Common concrete exceptions include `InvalidConfigurationException`, `NotFoundException`, `ResolutionException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException`, and `AttributeCompositionException`.
+
+After DI resolves an explicitly invoked callable and enters its body, exceptions thrown by that callable propagate unchanged.

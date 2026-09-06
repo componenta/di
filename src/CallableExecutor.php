@@ -5,112 +5,111 @@ declare(strict_types=1);
 namespace Componenta\DI;
 
 use Closure;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
-use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\Reflection\Reflection;
+use InvalidArgumentException;
 use LogicException;
 use ReflectionFunction;
-use WeakMap;
+use ReflectionParameter;
+use Throwable;
 
-/**
- * Executes callables with dependency injection.
- *
- * Resolves callable representations and invokes them with auto-wired parameters.
- * Parameters can be provided explicitly or resolved from container.
- */
-class CallableExecutor implements CallableExecutorInterface
+use function Componenta\DI\Internal\is_magic_closure_trampoline;
+
+/** DI-aware callable executor. */
+final class CallableExecutor implements CallableExecutorInterface
 {
-    /** @var WeakMap<Closure, list<ParameterTarget>>|null */
-    private ?WeakMap $closureTargets = null;
-
-    /** @var array<string, list<ParameterTarget>> */
-    private array $closureSignatures = [];
-
-    /** @var array<string, list<ParameterTarget>> */
-    private array $callableTargets = [];
-
-    private readonly CallableInvoker $invoker;
+    /** @var array<string, PreparedParameterPlan|null> */
+    private array $callablePlans = [];
 
     public function __construct(
-        protected readonly CallableResolverInterface $callableResolver,
-        protected readonly ParametersResolver $parametersResolver,
-    ) {
-        $this->invoker = new CallableInvoker();
+        private readonly CallableResolverInterface $callableResolver,
+        private readonly ParametersResolver $parameters,
+    ) {}
+
+    /** @param array<string|int, mixed> $params */
+    public function call(mixed $callable, array $params = []): mixed
+    {
+        try {
+            $resolved = $this->callableResolver->resolve($callable);
+            $plan = $this->plan($resolved);
+            $arguments = $plan === null
+                ? ResolutionMetadata::publicParameters($params)
+                : $this->parameters->resolvePrepared($plan, $params);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw InvalidCallableException::forValue($callable, $e);
+        }
+
+        // Deliberately outside the normalization boundary: once control enters
+        // the explicit user callable, its throwables belong to application code.
+        return call_user_func_array($resolved, $arguments);
+    }
+
+    public function resolve(mixed $callable): callable
+    {
+        try {
+            return $this->callableResolver->resolve($callable);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw InvalidCallableException::forValue($callable, $e);
+        }
     }
 
     /**
-     * @throws InvalidCallableException If the callable cannot be resolved or invoked.
-     * @throws ResolutionException      If a parameter cannot be resolved.
+     * null denotes a native callable whose concrete signature is unavailable
+     * because PHP dispatches it through magic method handling. An empty plan
+     * denotes a reflected callable that genuinely takes no arguments.
      */
-    public function call(mixed $callable, array $params = []): mixed
-    {
-        $resolved = $this->callableResolver->resolve($callable);
-        $targets = $this->targets($resolved);
-        $arguments = $targets === []
-            ? $params
-            : $this->parametersResolver->resolveTargets($targets, $params);
-
-        return $this->invoker->call($resolved, $arguments);
-    }
-
-    /** @return list<ParameterTarget> */
-    private function targets(callable $callable): array
+    private function plan(callable $callable): ?PreparedParameterPlan
     {
         if ($callable instanceof Closure) {
-            $closureTargets = $this->closureTargets ??= new WeakMap();
-
-            if (isset($closureTargets[$callable])) {
-                return $closureTargets[$callable];
-            }
-
+            // Prepared targets retain ReflectionParameter instances and those
+            // reflectors retain their declaring Closure. Caching such a plan,
+            // even behind a WeakMap key, therefore creates a value -> key strong
+            // reference and keeps closure captures alive. Closures are prepared
+            // per invocation; stable named/method callables remain cacheable.
             $reflection = new ReflectionFunction($callable);
-            $signature = self::closureSignature($reflection);
-
-            return $closureTargets[$callable]
-                = $this->closureSignatures[$signature]
-                    ??= $this->parametersResolver->targets($reflection->getParameters());
-        }
-
-        if (self::isDynamicMethodCallable($callable)) {
-            return [];
+            if (is_magic_closure_trampoline($reflection)) {
+                return null;
+            }
+            /** @var list<ReflectionParameter> $parameters */
+            $parameters = array_values($reflection->getParameters());
+            return $this->parameters->prepare($parameters);
         }
 
         $key = self::cacheKey($callable);
-
-        return $this->callableTargets[$key] ??= $this->parametersResolver->targets(
-            Reflection::callable($callable)->getParameters(),
-        );
-    }
-
-    private static function closureSignature(ReflectionFunction $reflection): string
-    {
-        return implode("\0", [
-            $reflection->getClosureScopeClass()?->getName() ?? '',
-            $reflection->getClosureCalledClass()?->getName() ?? '',
-            (string) $reflection,
-        ]);
-    }
-
-    private static function isDynamicMethodCallable(callable $callable): bool
-    {
-        if (is_array($callable) && count($callable) === 2) {
-            [$owner, $method] = $callable;
-            $class = is_object($owner) ? $owner::class : $owner;
-
-            return !method_exists($class, $method);
+        if (array_key_exists($key, $this->callablePlans)) {
+            $cached = $this->callablePlans[$key];
+            if ($cached === null || $this->parameters->isCurrentPlan($cached)) {
+                return $cached;
+            }
+            unset($this->callablePlans[$key]);
         }
 
-        if (is_string($callable) && str_contains($callable, '::')) {
-            [$class, $method] = explode('::', $callable, 2);
-
-            return $class !== ''
-                && $method !== ''
-                && !method_exists($class, $method);
+        try {
+            $reflection = Reflection::callable($callable);
+        } catch (InvalidArgumentException) {
+            // CallableResolver has already established native callability. If
+            // reflection cannot expose a concrete method, PHP is dispatching
+            // through __call()/__callStatic(); preserve native argument binding.
+            return $this->callablePlans[$key] = null;
         }
 
-        return false;
+        /** @var list<ReflectionParameter> $parameters */
+        $parameters = array_values($reflection->getParameters());
+        $plan = $this->parameters->prepare($parameters);
+
+        if ($this->parameters->isSealed) {
+            $this->callablePlans[$key] = $plan;
+        }
+
+        return $plan;
     }
 
     private static function cacheKey(callable $callable): string
@@ -118,23 +117,14 @@ class CallableExecutor implements CallableExecutorInterface
         if (is_string($callable)) {
             return 'function:' . strtolower($callable);
         }
-
         if (is_array($callable)) {
             [$owner, $method] = $callable;
             $class = is_object($owner) ? $owner::class : $owner;
-
             return 'method:' . $class . '::' . strtolower((string) $method);
         }
-
         if (!is_object($callable)) {
             throw new LogicException('Resolved callable must be a function, method or invokable object.');
         }
-
         return 'invoke:' . $callable::class;
-    }
-
-    public function resolve(mixed $callable): callable
-    {
-        return $this->callableResolver->resolve($callable);
     }
 }

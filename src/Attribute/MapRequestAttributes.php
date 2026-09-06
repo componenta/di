@@ -7,7 +7,6 @@ namespace Componenta\DI\Attribute;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-/** Exposes the complete request attribute bag and configured extra sources. */
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
 class MapRequestAttributes extends RequestMapper implements RequestDataExtractorInterface
 {
@@ -15,9 +14,12 @@ class MapRequestAttributes extends RequestMapper implements RequestDataExtractor
 
     public function extract(ServerRequestInterface $request): array
     {
-        return $this->mergeRequestData([
-            ...$this->extractSharedSources($request),
-            'request attributes' => $request->getAttributes(),
-        ]);
+        $sources = $this->extractSharedSources($request);
+
+        if ($this->attributes === []) {
+            $sources['request attributes'] = $request->getAttributes();
+        }
+
+        return $this->mergeRequestData($sources);
     }
 }

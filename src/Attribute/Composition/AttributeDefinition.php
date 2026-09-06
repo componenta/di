@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Attribute\Composition;
+
+use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+
+/** Immutable semantic definition of one DI attribute class. */
+final readonly class AttributeDefinition
+{
+    /**
+     * Selectors in requires/forbids/before/after may reference either another
+     * attribute class or an AttributeCapabilityInterface class.
+     *
+     * A handler may support object targets, parameter targets, or both by
+     * implementing the corresponding execution contract(s).
+     *
+     * @param class-string $attribute
+     * @param list<class-string<AttributeCapabilityInterface>> $capabilities
+     * @param list<class-string> $requires
+     * @param list<class-string> $forbids
+     * @param list<class-string> $before
+     * @param list<class-string> $after
+     * @param list<AttributeCompositionRuleInterface> $rules
+     */
+    public function __construct(
+        public string $attribute,
+        public AttributeHandlerInterface|ParameterAttributeHandlerInterface|null $handler = null,
+        public array $capabilities = [],
+        public array $requires = [],
+        public array $forbids = [],
+        public array $before = [],
+        public array $after = [],
+        public array $rules = [],
+        public AttributePhase $phase = AttributePhase::AfterInstantiation,
+    ) {
+        if (!class_exists($attribute) && !interface_exists($attribute)) {
+            throw new InvalidConfigurationException(sprintf(
+                'Attribute definition target "%s" is not available.',
+                $attribute,
+            ));
+        }
+
+        foreach ($capabilities as $capability) {
+            if (!is_a($capability, AttributeCapabilityInterface::class, true)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Capability "%s" for attribute "%s" must implement %s.',
+                    $capability,
+                    $attribute,
+                    AttributeCapabilityInterface::class,
+                ));
+            }
+        }
+
+        foreach ($rules as $rule) {
+            if (!$rule instanceof AttributeCompositionRuleInterface) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Composition rule for attribute "%s" must implement %s; got %s.',
+                    $attribute,
+                    AttributeCompositionRuleInterface::class,
+                    get_debug_type($rule),
+                ));
+            }
+        }
+
+        self::assertSelectors($requires, 'requires');
+        self::assertSelectors($forbids, 'forbids');
+        self::assertSelectors($before, 'before');
+        self::assertSelectors($after, 'after');
+    }
+
+    /** @param list<class-string> $selectors */
+    private static function assertSelectors(array $selectors, string $kind): void
+    {
+        foreach ($selectors as $selector) {
+            if (!class_exists($selector) && !interface_exists($selector)) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Attribute composition selector "%s" in %s is not available.',
+                    $selector,
+                    $kind,
+                ));
+            }
+        }
+    }
+}

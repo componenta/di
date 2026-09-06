@@ -3,13 +3,19 @@ name: CI
 on:
   push:
     branches:
-      - dev
+      - v5
       - main
-      - v2
   pull_request:
+    branches:
+      - v5
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  USE_CONFIG_V3_WORKSPACE: ${{ github.ref == 'refs/heads/v5' || github.base_ref == 'v5' || github.ref == 'refs/heads/main' || github.base_ref == 'main' }}
 
 jobs:
   check:
@@ -24,17 +30,349 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Checkout config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ matrix.php }}
           coverage: none
           tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Use config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Audit dependencies
+        if: matrix.php == '8.4'
+        run: composer audit --no-interaction
+
+      - name: Run checks
+        run: composer check
+
+      - name: Smoke benchmark harness
+        env:
+          DI_BENCH_ITERATIONS: '10000'
+          DI_BUILD_ITERATIONS: '1000'
+        run: |
+          export COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php"
+          export COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src"
+          php benchmarks/RuntimeBench.php >/dev/null
+          php benchmarks/GeneratedVsReflectionBench.php >/dev/null
+          php benchmarks/BuildPhasesBench.php >/dev/null
+          php benchmarks/ParameterPlanBench.php >/dev/null
+
+  windows:
+    name: Windows PHP 8.4
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Checkout config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Use config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Run checks
         run: composer check
+
+  coverage:
+    name: Coverage PHP 8.4
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Checkout config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: pcov
+          ini-values: memory_limit=1G
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Use config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Enforce coverage and generate Clover report
+        run: composer test-coverage -- --coverage-clover coverage.xml
+
+      - name: Check mutation score
+        run: composer test-mutation -- --parallel
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-php-8.4
+          path: coverage.xml
+          if-no-files-found: error
+
+  benchmark:
+    name: v4.0.10 vs v5 benchmark
+    if: github.event_name == 'workflow_dispatch'
+    needs:
+      - check
+      - windows
+      - coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout v5
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Checkout config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/config
+          ref: main
+          path: .ci/config
+
+      - name: Checkout validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/validation
+          ref: main
+          path: .ci/validation
+
+      - name: Checkout reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: componenta/reflection
+          ref: main
+          path: .ci/reflection
+
+      - name: Checkout v4.0.10 baseline
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: 5d0e7d7c2e804dd113df5e0f732c2fff882b3bd1
+          path: .benchmark/v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Use config v3 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-config
+          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
+
+      - name: Use validation workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-validation
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"2.0.1"}}}'
+
+      - name: Use reflection v2 workspace
+        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
+        run: >-
+          composer config repositories.componenta-reflection
+          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.0"}}}'
+
+      - name: Install v5 dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Install v4.0.10 dependencies
+        working-directory: .benchmark/v4
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Compare runtime and generated paths
+        env:
+          DI_BENCH_ITERATIONS: '100000'
+          DI_BUILD_ITERATIONS: '5000'
+        run: |
+          echo '=== v4.0.10 runtime ==='
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/.benchmark/v4/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" \
+          php benchmarks/RuntimeBench.php | tee /tmp/runtime-v4.txt
+
+          echo '=== v5 runtime ==='
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" \
+          php benchmarks/RuntimeBench.php | tee /tmp/runtime-v5.txt
+
+          echo '=== v4.0.10 generated vs reflection ==='
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/.benchmark/v4/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" \
+          php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v4.txt
+
+          echo '=== v5 generated vs reflection ==='
+          COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php" \
+          COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" \
+          php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v5.txt
+
+          {
+            echo '## v4.0.10 vs v5 benchmark'
+            echo
+            echo '### v4.0.10 runtime'
+            echo '```text'
+            cat /tmp/runtime-v4.txt
+            echo '```'
+            echo
+            echo '### v5 runtime'
+            echo '```text'
+            cat /tmp/runtime-v5.txt
+            echo '```'
+            echo
+            echo '### v4.0.10 generated vs reflection'
+            echo '```text'
+            cat /tmp/generated-v4.txt
+            echo '```'
+            echo
+            echo '### v5 generated vs reflection'
+            echo '```text'
+            cat /tmp/generated-v5.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

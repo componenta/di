@@ -9,10 +9,7 @@ use InvalidArgumentException;
 /** Raised when mapped request data tries to bind a source-bound DTO parameter. */
 final class RequestParameterSourceConflictException extends InvalidArgumentException implements ExceptionInterface
 {
-    /**
-     * @param class-string $dtoClass
-     * @param class-string $source
-     */
+    /** @param class-string $dtoClass @param class-string $source */
     public function __construct(
         public readonly string $dtoClass,
         public readonly string $key,

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Attribute\CurrentUser;
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
 /** Resolves an explicit object registered under its declared class/interface type. */
@@ -12,10 +12,7 @@ final class ArrayTypedResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        // #[CurrentUser] is authoritative and must not be replaced by an
-        // object supplied under its declared class/interface key.
-        return $target->typeNames !== []
-            && !$target->hasAttribute(CurrentUser::class);
+        return $target->typeNames !== [];
     }
 
     public function resolveParameter(
@@ -23,13 +20,20 @@ final class ArrayTypedResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         foreach ($target->typeNames as $typeName) {
-            if (!array_key_exists($typeName, $context->provided)) {
+            if (RequestParameter::isTransportType($typeName)) {
+                continue;
+            }
+
+            if (!isset($context->provided[$typeName]) || !array_key_exists($typeName, $context->provided)) {
                 continue;
             }
 
             $value = $context->provided[$typeName];
 
-            if (is_object($value) && $target->accepts($value)) {
+            if (is_object($value)
+                && $value instanceof $typeName
+                && $target->accepts($value)
+            ) {
                 return [$target->position, $value];
             }
         }

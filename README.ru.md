@@ -1,8 +1,13 @@
 # Componenta DI
 
-PSR-11-контейнер внедрения зависимостей для PHP 8.4+ с autowiring, фабриками, invokable-классами, alias, delegator, внешними контейнерами, атрибутами, PSR-7 request mapping, lazy objects, proxy и AOT-фабриками.
+Componenta DI — контейнер внедрения зависимостей для PHP 8.4+, совместимый с PSR-11. Пакет поддерживает автосвязывание через reflection, явные фабрики и сервисы, упорядоченные делегаторы, вызов функций с разрешением аргументов, ленивые объекты, отображение HTTP-запросов и композицию PHP-атрибутов.
 
-**[English](README.md)** | **[Русский](README.ru.md)**
+Пакет отвечает за создание контейнера и семантику разрешения зависимостей. [`componenta/config`](../config/README.ru.md) вызывает провайдеры и создаёт два раздельных значения:
+
+- `Config` содержит только конфигурацию приложения;
+- `DependencyDefinitions` передаётся один раз в `ContainerFactory` и не публикуется как сервис контейнера.
+
+Во всех окружениях действует один путь создания контейнера. Componenta DI не компилирует фабрики и не сохраняет сериализованный граф зависимостей.
 
 ## Установка
 
@@ -10,145 +15,231 @@ PSR-11-контейнер внедрения зависимостей для PHP
 composer require componenta/di
 ```
 
-Требуется PHP 8.4+.
+Требуются PHP 8.4+, Componenta Config 3.x, Componenta Caster, Componenta Reflection, Componenta Validation, интерфейсы PSR-11 2.x и PSR-7.
 
-## Основной API
+## Основной поток
 
-```php
-$container = (new ContainerBuilder())
-    ->addService(LoggerInterface::class, new FileLogger())
-    ->addAlias('logger', LoggerInterface::class)
-    ->build();
-
-$logger = $container->get('logger');
-$fresh = $container->make(UserService::class, ['userId' => 7]);
-$result = $container->call($callable, ['id' => 7]);
+```text
+Environment + упорядоченные провайдеры
+    -> ConfigFactory::create()
+    -> ConfigComposition { Config, DependencyDefinitions }
+    -> ContainerFactory::create()
+    -> ContainerValue { container, тот же Config }
 ```
 
-- `get()` сначала передаёт исходный запрошенный id зарегистрированным внешним контейнерам; если ни один из них им не владеет, выполняется локальное shared-resolution с кешированием.
-- `make()` создаёт новый объект и не использует shared cache, внешние контейнеры и delegators.
-- `call()` нормализует callable, разрешает недостающие аргументы и вызывает его.
-- `$params` передаются параметрам конструктора/callable по имени или позиции; обычные публичные свойства из `$params` не заполняются.
+`ContainerFactory` — единственная публичная фабрика контейнера. Она сохраняет переданные экземпляры `Config` и `Environment` без копирования.
 
-Если нет явной привязки, reflection resolver может собрать подходящий класс.
-
-## Публичные контракты
-
-`Container` реализует `Psr\Container\ContainerInterface`, `FactoryInterface`, `CallableInvokerInterface` и `ProxyFactoryInterface`. Отдельно доступны `CallableResolverInterface`, `CallableExecutorInterface`, `LazyObjectFactoryInterface` и `VirtualProxyFactoryInterface`.
-
-Конкретный `Container` также предоставляет `set()`, `alias()`, `delegator()` и `addContainer()` для bootstrap/runtime-конфигурации.
-
-## Порядок `get()`
-
-1. Внешние PSR-11-контейнеры проверяются по исходному запрошенному id.
-2. Если ни один внешний контейнер им не владеет, проверяется локальный decorated cache для requested id.
-3. Разрешается локальный alias в canonical id.
-4. Проверяется локальный base cache.
-5. Если значения нет, запускается локальная resolver-chain и результат попадает в base cache.
-6. Применяются локальные delegators и сохраняется decorated cache.
-
-Внешний lookup выполняется ровно один раз и только по исходному id. Локальный alias никогда не отправляется во внешний контейнер вторым запросом. Если внешний контейнер владеет исходным id, его значение возвращается напрямую — без локального alias, локальных cache и локальных delegators. Поэтому внешний контейнер имеет приоритет даже над уже материализованным локальным значением при `get()`/`has()`.
-
-Реестр внешних контейнеров — ленивое внутреннее состояние: пока внешние контейнеры не зарегистрированы, поле остаётся `null` и объект реестра не создаётся. Первый `addContainer()` создаёт `ExternalContainerRegistry`; lookup использует null-safe доступ, поэтому в обычном случае без внешних контейнеров лишнего объекта нет.
-
-`make()` разрешает alias, но намеренно пропускает shared cache, внешние контейнеры и delegators. Циклы fresh-resolution обнаруживаются тем же `CycleGuard`, что и циклы shared resolution.
-
-Отслеживание циклов локально для каждого execution context. Если `get()` начинает разрешать shared canonical id, который ещё разрешается в другом Fiber, выбрасывается `ConcurrentResolutionException`; вызов нужно повторить после завершения Fiber-владельца. Контейнер никогда сам не возобновляет чужой Fiber.
-
-## ContainerBuilder
-
-Основные методы: `addFactory()`, `addInvokable()`, `addAlias()`, `addDelegator()`, `addService()`, их bulk-варианты, `addParameterResolver()`, `addAttributeHandler()`, `compileFactories()`, `toArray()` и `build()`.
-
-`addService()` и `ConfigKey::SERVICES` регистрируют готовые shared values без переинтерпретации. Объект, реализующий `DefinitionInterface`, в секции services остаётся обычным значением. Definition — это конфигурация resolver-а: совместимый объект definition можно передать непосредственно в секции factories/invokables либо через `Container::set($id, $definition)`. Definition и соответствующий shorthand конфигурируют одно и то же состояние resolver-а.
-
-Delegator может быть callable, class/interface method reference или ссылкой на произвольный service id. В bulk/config input opaque method reference записывается вложенно: `[['decorator.service', 'decorate']]`; плоская пара строк означает два строковых delegator, если она не является реальной ссылкой на class/interface method.
-
-Parameter resolvers и attribute handlers можно передавать экземплярами, service id и callable-фабриками. После `build()` extension registries закрываются от изменений.
-
-## Дефиниции
-
-`Definition` содержит helpers `factory()`, `reference()` и `invokable()`. Для настройки конструктора и setup-вызовов используется `ClassDefinition`:
+## Быстрый старт
 
 ```php
-use Componenta\DI\Definition\ClassDefinition;
+use Componenta\Config\ConfigFactory;
+use Componenta\Config\ConfigProvider;
+use Componenta\Config\ContainerValue;
+use Componenta\Config\Environment;
+use Componenta\DI\ContainerFactory;
 
-$container->set(
-    ReportService::class,
-    ClassDefinition::create(ReportService::class)
-        ->constructor(['format' => 'pdf'])
-        ->method('boot'),
+final readonly class Greeting
+{
+    public function __construct(public string $message) {}
+}
+
+final class AppConfigProvider extends ConfigProvider
+{
+    protected function getConfig(): array
+    {
+        return ['greeting.prefix' => 'Привет'];
+    }
+
+    protected function getFactories(): array
+    {
+        return [
+            Greeting::class => static fn(
+                ContainerValue $context,
+                array $params,
+            ): Greeting => new Greeting(
+                ($params['prefix'] ?? $context->config->string('greeting.prefix')) . '!',
+            ),
+        ];
+    }
+}
+
+$environment = new Environment([]);
+$composition = (new ConfigFactory())->create(
+    $environment,
+    new AppConfigProvider(),
 );
+$containerValue = (new ContainerFactory())->create(
+    $composition->config,
+    $composition->dependencies,
+);
+$container = $containerValue->container;
+
+$shared = $container->get(Greeting::class);
+$fresh = $container->make(Greeting::class, ['prefix' => 'Добро пожаловать']);
+
+assert($shared->message === 'Привет!');
+assert($fresh->message === 'Добро пожаловать!');
+assert($containerValue->config === $composition->config);
+assert($container->get(Environment::class) === $environment);
 ```
 
-Definitions — это конфигурация resolver-ов, а не отдельный runtime-overlay. `FactoryDefinition`, `ClassDefinition` и `CompiledFactoryDefinition` можно передавать прямо в `ConfigKey::FACTORIES`; `InvokableDefinition` принимается в `ConfigKey::INVOKABLES` и нормализуется в ту же class-string форму, что и обычный invokable shorthand. Те же формы работают, когда dependency sections приходят из `ConfigProvider`.
+## Слияние провайдеров
 
-Конфигурационные и runtime definitions используют одни и те же типы definitions, но имеют разный жизненный цикл. Definitions, находящиеся в `ContainerBuilder`/конфигурации, участвуют в нормализации и компиляции persistent cache. `FactoryDefinition` сворачивается в содержащийся в ней factory callable, `InvokableDefinition` — в class-string, а `ClassDefinition` через `DefinitionCodeGeneratorInterface` компилируется в обычную factory closure до записи cache-файла. Definition, переданная позже через `Container::set()`, изменяет только resolver уже построенного контейнера: она не записывается обратно в builder, не компилируется и не сохраняется в persistent cache.
+`ConfigFactory` вызывает провайдеры в порядке аргументов и объединяет секции зависимостей до передачи результата в DI:
 
-`Container::set($id, $definition)` переконфигурирует подходящий resolver и удаляет уже материализованный локальный base entry для этого id, чтобы новая definition могла разрешиться. `Container::set($id, $value)` заменяет только локальное shared value и не удаляет/не откатывает конфигурацию resolver-а, поэтому `make($id)` продолжает использовать настроенный resolver binding.
+- factories, aliases, services и parameter resolvers являются реестрами по ключу; позднее значение заменяет раннее с тем же ключом;
+- numeric invokables дописываются, а keyed invokables заменяются по ключу;
+- цепочки delegators, attribute definitions и attribute capabilities дописываются в порядке провайдеров;
+- флаги замены resolver-ов и определений атрибутов используют последнее явно переданное логическое значение.
 
-`ReferenceDefinition` представляет ссылку на container entry внутри аргументов class-definition. При генерации кода `ClassDefinition` такая ссылка превращается в lookup контейнера внутри сгенерированной фабрики. `InvokableDefinition` проверяет тот же базовый shape, что и invokable shorthand: class-string не может быть пустым.
+DI один раз проверяет и нормализует объединённый `DependencyDefinitions` внутри `ContainerFactory::create()`. Пакет не вызывает провайдеры и не копирует определения зависимостей в `Config`.
 
-Генерация кода definitions расширяется через `DefinitionCodeGeneratorInterface` и `DefinitionCodeGeneratorRegistry`. Контракт генератора принимает `DefinitionInterface`, а registry выбирает конкретный генератор по классу/интерфейсу definition, поэтому для пользовательских типов definitions не требуется изменять compiler.
+`ConfigProvider` предоставляет защищённые методы:
 
-## Конфигурация
+```text
+getConfig()
+getFactories()
+getInvokables()
+getAliases()
+getDelegators()
+getServices()
+getParameterResolvers()
+shouldReplaceParameterResolvers()
+getAttributeDefinitions()
+shouldReplaceAttributeDefinitions()
+getAttributeCapabilities()
+```
 
-`Container::create()` и `ContainerBuilder::configure()` читают `ConfigKey::DEPENDENCIES`. Поддерживаются factories, invokables, aliases, delegators, services, parameter resolvers и attribute handlers. Неизвестные ключи/форматы приводят к `InvalidConfigurationException`.
+## Определения зависимостей
 
-Persistent cache загружается только из versioned envelope:
+### Сервисы
+
+Готовые сервисы являются значениями времени выполнения и сохраняют состояние и идентичность. Допустимы объекты, замыкания, ресурсы, `null` и `false`.
 
 ```php
-[
-    'version' => ContainerBuilder::CACHE_VERSION,
-    ConfigKey::DEPENDENCIES => $dependencies,
-]
+protected function getServices(): array
+{
+    return [
+        ClockInterface::class => new SystemClock(),
+        'feature.enabled' => false,
+    ];
+}
 ```
 
-Старый raw dependency cache не поддерживается. Прежний маркер `validated: true` принимается только как deprecated и полностью игнорируемое поле совместимости для старых application-level генераторов: он не отключает проверки и не делает compiled factories доверенными. Новые генераторы должны его пропускать. Relative compiled-factory paths при заданном `$baseDir` ограничиваются этим каталогом.
+### Фабрики
 
-Версия cache envelope проверяется строго. Версия 10 отклоняет артефакты v9 и более ранние, поскольку provenance mapped request теперь проверяется на фактическом constructor target, включая persistent closures из `ClassDefinition`. При деплое нужно заново собрать persistent cache и все compiled-factory shards, а не переносить или редактировать старые артефакты.
+Полная сигнатура фабрики времени выполнения — `(ContainerValue $context, array $params)`. Функция может объявить совместимый префикс этих аргументов. Ошибочная сигнатура отклоняется во время построения контейнера.
 
-## Атрибуты и request mapping
+```php
+protected function getFactories(): array
+{
+    return [
+        Client::class => static fn(ContainerValue $context, array $params): Client =>
+            new Client(
+                $context->config->string('api.endpoint'),
+                $params['timeout'] ?? 10,
+            ),
+    ];
+}
+```
 
-Основные атрибуты: `#[Inject]`, `#[EntryId]`, `#[Config]`, `#[Env]`, `#[Make]`, `#[Init]`, `#[Cast]`, `#[CurrentUser]`, `#[SetUp]`, `#[NoConstructor]`, `#[Lazy]`, `#[Proxy]`.
+`ClassDefinition` описывает аргументы конструктора, значения свойств и вызовы методов настройки, когда обычной функции недостаточно.
 
-`#[Lazy]` и class-level `#[Proxy]` нельзя одновременно применять к одному классу. Mutable promoted property может быть явно переинициализирована через property-only `#[Init]`; initialized readonly promoted property остаётся constructor-owned. Built-in DI property handlers отклоняют static properties вместо молчаливого игнорирования атрибута.
+### Invokables и aliases
 
-PSR-7 extraction: `#[QueryParam]`, `#[PayloadParam]`, `#[Header]`, `#[Cookie]`, `#[RequestAttribute]`, `#[ServerParam]`, `#[UploadedFile]`.
+```php
+protected function getInvokables(): array
+{
+    return [
+        Logger::class,
+        LoggerInterface::class => Logger::class,
+    ];
+}
 
-Mappers: `#[MapQueryString]`, `#[MapRequestPayload]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]`, `#[MapUploadedFiles]`.
+protected function getAliases(): array
+{
+    return [
+        CacheInterface::class => RedisCache::class,
+    ];
+}
+```
 
-Для class-typed HTTP DTO разрешены только именованные строковые ключи верхнего уровня — как до валидации, так и после mapper transform. Целочисленные ключи, включая числовые ключи JSON-объекта, которые PHP декодировал как integer, отклоняются и не интерпретируются как позиции конструктора. Ограничение относится только к HTTP DTO mapping; доверенные программные вызовы `Container::make()` по-прежнему принимают аргументы по имени и позиции.
+Invokable с ключом регистрирует конкретный класс и alias.
 
-Атрибут параметра, реализующий `ParameterSourceAttributeInterface`, объявляет явный источник значения при HTTP DTO mapping. После mapper transform mapped data не могут содержать имя такого параметра или любой из ключей его объявленных class/interface types; такой input приводит к `RequestParameterSourceConflictException`, а не становится explicit DI override. Provenance mapped-ключей передаётся вместе с вложенным `make()` через alias до фактического constructor target и проверяется до запуска любого встроенного или пользовательского parameter resolver, поэтому priority resolver-а не может обойти границу источника. Runtime и persistent `ClassDefinition` применяют ту же защиту mapped input, при этом обычные программные constructor parameters сохраняют прежнюю семантику explicit override. Точные типы `ServerRequestInterface` и `UriInterface` также считаются неявными доверенными источниками. Их подтипы автоматически не резервируются, если параметр не отмечен source-атрибутом, поскольку runtime request resolvers не разрешают произвольные PSR-7 subtypes как текущий request/URI.
+### Delegators
 
-Если DTO валидируется, сначала проверяются исходные transport-data, затем выполняется mapper transform. Это не позволяет casts/defaults/exclusions скрыть некорректный input. Конфликт разных значений одного ключа по умолчанию приводит к `RequestDataConflictException`; `FirstWins` включается явно.
+Делегатор получает текущее значение сервиса и при необходимости контейнер. Делегаторы выполняются в порядке провайдеров и регистрации.
 
-## Callable
+```php
+protected function getDelegators(): array
+{
+    return [
+        Client::class => [
+            static fn(Client $client): Client => $client->withMetrics(),
+            ['tracing.decorator', 'decorate'],
+        ],
+    ];
+}
+```
 
-`call()` поддерживает closures, функции, `"Class::method"`, callable service id, `[object, 'method']`, `[class/interface/service-id, 'method']`.
+Отложенная пара «сервис–метод», например `['tracing.decorator', 'decorate']`, должна быть вложена в список цепочки. Это отличает её от цепочки из двух строковых делегаторов.
 
-Ошибки разрешения/нормализации представлены DI-исключениями. После начала целевого вызова PHP engine errors и исключения самого callable проходят без обёртки с исходным типом и stack trace.
+## API контейнера
 
-## Lazy, proxy и invokable
+`Container` реализует `Psr\Container\ContainerInterface`, `FactoryInterface`, `CallableExecutorInterface` и `ProxyFactoryInterface`.
 
-`makeLazy()` создаёт native lazy ghost, `makeProxy()` — native virtual proxy. Class-level `#[Lazy]`/`#[Proxy]` участвуют в reflection autowiring и взаимно исключаются.
+```php
+$shared = $container->get(Service::class);                 // общий результат
+$exists = $container->has(Service::class);                 // не выбрасывает исключение
+$fresh = $container->make(Service::class, ['id' => 42]);   // новый объект
+$result = $container->call([$controller, 'show'], ['id' => 42]);
+```
 
-Явный invokable намеренно создаётся обычным zero-argument `new`: attribute lifecycle и context из `make()` для него не выполняются.
+Если явная привязка отсутствует, конкретный класс создаётся через reflection. Явная фабрика имеет приоритет.
 
-Для interface/opaque-id proxy injection в `#[Proxy(ConcreteClass::class)]` указывается concrete class.
+Методы изменения контейнера во время выполнения `set()`, `alias()`, `delegator()` и `addContainer()` сохраняются. Они инвалидируют затронутые общие значения и результаты делегаторов без полного перестроения контейнера. Нельзя заменить или затенить основные сервисы DI, `Config`, `Environment`, `ContainerValue` и `DependencyDefinitions`.
 
-## Compiled factories
+Если фабрика или делегатор меняет привязку во время уже начатого `get()` (в том числе при приостановленном Fiber), этот вызов может завершиться с прежним значением. Последующие обращения используют изменённую привязку: старый вызов не восстанавливает инвалидированные записи кеша.
 
-`compileFactories()` компилирует известные autowiring roots и статически известные concrete dependencies (`constructor`, `#[Inject]`, `#[SetUp]`) в обычные factory definitions. Явные services/factories/invokables сохраняют ownership и не заменяются этим autowiring compiler. Конфигурационные `ClassDefinition` обрабатываются отдельно definition compiler при генерации persistent cache: они превращаются в обычные closure factories и поэтому не попадают в autowiring compilation graph.
+## Атрибуты и отображение запросов
 
-Shard-файлы имеют content-addressed имена и загружаются по требованию. Недоверенные пути ограничиваются cache base directory; traversal и symlink за пределы корня отклоняются. Динамические классы продолжают разрешаться через reflection.
+Встроенные атрибуты объектов и параметров:
 
-Перед загрузкой недоверенного shard runtime проверяет, что его байты соответствуют digest в имени файла. Каждый generated shard также содержит fingerprint parameter-resolver/attribute-handler pipeline. Сгенерированный parameter code проверяет mapped provenance до resolver fragments, а версия формата fingerprint меняется при изменении этого compiler invariant; несовпадение отклоняется и требует перекомпиляции. Сгенерированные артефакты нужно размещать в каталоге, недоступном для записи request-процессу: integrity-проверки дополняют, но не заменяют filesystem permissions.
+```text
+#[Config] #[Env] #[EntryId] #[Inject] #[Make]
+#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast]
+#[CurrentRequest] #[CurrentUri]
+#[Header] #[Cookie] #[QueryParam] #[PayloadParam]
+#[RequestAttribute] #[ServerParam] #[UploadedFile]
+#[MapRequest] #[MapQueryString] #[MapRequestPayload]
+#[MapHeaders] #[MapCookies] #[MapRequestAttributes]
+#[MapServerParams] #[MapUploadedFiles]
+```
 
-`DiCacheGeneratorInterface::generate()` нормализует переданную dependency-конфигурацию, запускает компиляцию declarative definitions и атомарно записывает полученный PHP cache. Он не выполняет discovery классов приложения и не запускает `compileFactories()` для autowiring roots.
+`#[CurrentRequest]` и `#[CurrentUri]` — явные источники, допустимые только во время вызова. Тип PSR-7 request или URI сам по себе не означает «текущий запрос», а такое значение нельзя сохранить через аргумент конструктора.
 
-Экспорт persistent cache сохраняет повторную идентичность поддерживаемых readonly-объектов и closures, в том числе closures внутри массивов. Если существующий cache-файл был загружен в OPcache, его замена должна также успешно инвалидировать закэшированный script, иначе генерация завершается явной ошибкой.
+Отображение запроса читает явно выбранные источники PSR-7, обнаруживает конфликты, применяет настроенные преобразования и проверку данных, затем создаёт DTO через тот же `FactoryInterface::make()`.
+
+## Точки расширения
+
+Пользовательские resolver-ы параметров реализуют `ParameterResolverInterface` и регистрируются с целочисленным приоритетом. Пользовательские атрибуты описываются через `AttributeDefinition`; `CapabilityPolicy` задаёт ограничения количества и порядок композиции. Расширения передаются в `DependencyDefinitions` до построения контейнера: после этого цепочки параметров и атрибутов фиксируются.
+
+Фабрики расширений могут получать обычные зависимости из существующего контейнера. Сначала в порядке регистрации создаются определения атрибутов, затем резолверы параметров. Необходимое расширение атрибута должно быть зарегистрировано раньше фабрики, которая его использует. Если зависимость уже создана с неполной семантикой атрибутов или поздний резолвер мог бы перехватить разрешённый параметр раньше выбранного резолвера, `ContainerFactory::create()` выбрасывает `InvalidConfigurationException`. Проверка использует метаданные атрибутов и классификацию `supports()`, не повторяя конструкторы, обработчики и получение значений. Несвязанные расширения и резолверы с более низким приоритетом допустимы. Зависимость, которой нужен пользовательский резолвер параметров, можно получать в фабрике следующего резолвера либо отложить её получение до завершения создания контейнера.
+
+Выборки `AttributePlan::all()` и `attributes()` сохраняют порядок общего плана, включая наследуемые capabilities и чередование повторяющихся классов атрибутов.
+
+Правила композиции получают метаданные `AttributeUsage`, доступные только для чтения: объявленный класс и аргументы атрибута, его семантическое определение, место применения и порядок объявления. При каждом чтении `arguments` объявленные выражения вычисляются заново; объектные аргументы не сохраняются в общем плане. Поэтому выражение `new` может вызвать конструктор, когда правило явно читает аргументы. Правила проверяют ограничения объявления; проверки, зависящие от изменяющегося состояния приложения, выполняются в обработчиках. Фреймворк создаёт новый экземпляр атрибута только перед фактическим вызовом обработчика.
+
+Внешний PSR-11 контейнер можно добавить через `Container::addContainer()`. Внешние сервисы участвуют в защите от циклов и не могут затенять защищённые основные сервисы.
+
+## Поведение во время выполнения
+
+`get()` кеширует общий результат вместе с результатом цепочки делегаторов. `make()` создаёт новый объект и принимает параметры времени выполнения. Метаданные reflection, подготовленные планы параметров, пути aliases и выбранные resolver-ы кешируются только в памяти одного контейнера.
+
+Разработка и боевое окружение используют один `ContainerFactory`, одну нормализацию, проверку и цепочку разрешения. Значения зависимостей времени выполнения не экспортируются, поэтому несериализуемые значения ведут себя одинаково в обоих окружениях.
 
 ## Исключения
 
-Все исключения реализуют `Componenta\DI\Exception\ExceptionInterface`. Основные: `NotFoundException`, `CircularDependencyException`, `ConcurrentResolutionException`, `ResolutionException`, `InvalidConfigurationException`, `InvalidCallableException`, `DelegatorException`, `RequestDataConflictException`, `RequestParameterSourceConflictException`.
+Ошибки пакета реализуют `Componenta\DI\Exception\ExceptionInterface`, который также расширяет контракт исключений контейнера PSR-11. Основные типы: `InvalidConfigurationException`, `NotFoundException`, `ResolutionException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException` и `AttributeCompositionException`.
+
+После того как DI разрешил явно переданную функцию и передал ей управление, исключения из тела этой функции распространяются без изменения.

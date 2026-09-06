@@ -4,21 +4,26 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Exception;
 
+use Closure;
 use RuntimeException;
 use Throwable;
 
 /** Raised when a value cannot be normalized or resolved into a callable. */
-final class InvalidCallableException extends RuntimeException implements CallableExceptionInterface
+final class InvalidCallableException extends RuntimeException implements ExceptionInterface
 {
+    public readonly string $callableType;
+    public readonly string $callableDescription;
+
     public function __construct(
-        public readonly mixed $callable,
+        mixed $callable,
         string $message = '',
         ?Throwable $previous = null,
     ) {
+        $this->callableType = get_debug_type($callable);
+        $this->callableDescription = self::describe($callable);
         parent::__construct($message, 0, $previous);
     }
 
-    /** Value is not a valid callable and cannot be resolved into one. */
     public static function forValue(mixed $callable, ?Throwable $previous = null): self
     {
         return new self(
@@ -31,7 +36,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         );
     }
 
-    /** Method does not exist on the given class. */
     public static function forMethod(string $class, string $method): self
     {
         return new self(
@@ -40,7 +44,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         );
     }
 
-    /** Class is not invokable (no __invoke method). */
     public static function forNonInvokable(string $class): self
     {
         return new self(
@@ -49,7 +52,6 @@ final class InvalidCallableException extends RuntimeException implements Callabl
         );
     }
 
-    /** Service required to build the callable is not in the container. */
     public static function forMissingService(string $id, ?Throwable $previous = null): self
     {
         return new self(
@@ -57,5 +59,29 @@ final class InvalidCallableException extends RuntimeException implements Callabl
             sprintf('Service "%s" is not defined in the container.', $id),
             previous: $previous,
         );
+    }
+
+    private static function describe(mixed $callable): string
+    {
+        if ($callable instanceof Closure) {
+            return 'Closure';
+        }
+
+        if (is_string($callable)) {
+            return $callable;
+        }
+
+        if (is_array($callable) && array_keys($callable) === [0, 1] && is_string($callable[1])) {
+            $owner = is_object($callable[0])
+                ? $callable[0]::class
+                : (is_string($callable[0]) ? $callable[0] : get_debug_type($callable[0]));
+            return $owner . '::' . $callable[1];
+        }
+
+        if (is_object($callable)) {
+            return 'object ' . $callable::class;
+        }
+
+        return get_debug_type($callable);
     }
 }

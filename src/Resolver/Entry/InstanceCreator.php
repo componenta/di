@@ -4,53 +4,130 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Closure;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
+use ReflectionMethod;
+use Throwable;
 
-/** Creates or initializes an object through the standard parameter pipeline. */
+/** Creates or initializes an object through the parameter resolver chain. */
 final readonly class InstanceCreator
 {
-    public function __construct(
-        private ParametersResolver $parametersResolver,
-    ) {}
+    public function __construct(private ParametersResolver $parameters) {}
 
-    /**
-     * @template T of object
-     * @param ReflectionClass<T> $reflector
-     * @param array<string|int, mixed> $context
-     * @return T
-     */
-    public function create(ReflectionClass $reflector, array $context = []): object
+    public function parameters(): ParametersResolver
     {
-        $constructor = $reflector->getConstructor();
-
-        if ($constructor === null) {
-            return $reflector->newInstance();
-        }
-
-        $params = $this->parametersResolver->resolve($constructor->getParameters(), $context);
-
-        return $reflector->newInstanceArgs($params);
+        return $this->parameters;
     }
 
     /**
-     * Calls the constructor on an already-allocated lazy ghost.
-     *
-     * Reflection invocation is intentional: it preserves the constructor's
-     * declared visibility while initializing the already allocated instance.
-     *
-     * @param ReflectionClass<object> $reflector
-     * @param array<string|int, mixed> $context
+     * @template T of object
+     * @param ReflectionClass<T> $class
+     * @param array<string|int, mixed> $params
+     * @return T
      */
-    public function initialize(object $entry, ReflectionClass $reflector, array $context = []): void
+    public function create(ReflectionClass $class, array $params = []): object
     {
-        $constructor = $reflector->getConstructor();
+        $constructor = $class->getConstructor();
+        $targets = $constructor === null ? [] : $this->targets($constructor);
+        return $this->createPrepared(
+            $class,
+            $constructor,
+            $this->parameters->prepareTargets($targets),
+            $params,
+        );
+    }
 
+    /**
+     * @template T of object
+     * @param ReflectionClass<T> $class
+     * @param array<string|int, mixed> $params
+     * @param Closure():void|null $beforeConstructor
+     * @return T
+     */
+    public function createPrepared(
+        ReflectionClass $class,
+        ?ReflectionMethod $constructor,
+        PreparedParameterPlan $plan,
+        array $params = [],
+        ?Closure $beforeConstructor = null,
+    ): object {
+        if ($constructor === null) {
+            $beforeConstructor?->__invoke();
+            try {
+                return $class->newInstance();
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw ResolutionException::forService($class->getName(), $e);
+            }
+        }
+
+        $arguments = $this->parameters->resolvePrepared($plan, $params);
+        $beforeConstructor?->__invoke();
+
+        try {
+            return $class->newInstanceArgs($arguments);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forService($class->getName(), $e);
+        }
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     * @param array<string|int, mixed> $params
+     */
+    public function initialize(object $entry, ReflectionClass $class, array $params = []): void
+    {
+        $constructor = $class->getConstructor();
+        $targets = $constructor === null ? [] : $this->targets($constructor);
+        $this->initializePrepared(
+            $entry,
+            $constructor,
+            $this->parameters->prepareTargets($targets),
+            $params,
+        );
+    }
+
+    /**
+     * @param array<string|int, mixed> $params
+     * @param Closure():void|null $beforeConstructor
+     */
+    public function initializePrepared(
+        object $entry,
+        ?ReflectionMethod $constructor,
+        PreparedParameterPlan $plan,
+        array $params = [],
+        ?Closure $beforeConstructor = null,
+    ): void {
         if ($constructor === null) {
             return;
         }
 
-        $params = $this->parametersResolver->resolve($constructor->getParameters(), $context);
-        $constructor->invokeArgs($entry, $params);
+        $arguments = $this->parameters->resolvePrepared($plan, $params);
+        $beforeConstructor?->__invoke();
+
+        try {
+            $constructor->invokeArgs($entry, $arguments);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forService(
+                $constructor->getDeclaringClass()->getName(),
+                $e,
+            );
+        }
+    }
+
+    /** @return list<ParameterTarget> */
+    public function targets(ReflectionMethod $constructor): array
+    {
+        return $this->parameters->targets($constructor->getParameters());
     }
 }

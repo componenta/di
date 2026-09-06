@@ -21,17 +21,12 @@ readonly class Cookie implements ExtractorInterface, CastableInterface
     public function extract(ServerRequestInterface $request): mixed
     {
         $cookies = $request->getCookieParams();
-
         if (!array_key_exists($this->name, $cookies)) {
             if ($this->default === DefaultValue::None) {
-                throw new \RuntimeException(
-                    sprintf('Required cookie "%s" is missing', $this->name),
-                );
+                throw new \RuntimeException(sprintf('Required cookie "%s" is missing', $this->name));
             }
-
             return $this->default;
         }
-
         return $cookies[$this->name];
     }
 }

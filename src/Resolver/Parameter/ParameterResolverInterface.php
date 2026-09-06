@@ -7,21 +7,23 @@ namespace Componenta\DI\Resolver\Parameter;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Resolves one callable parameter from an immutable target and call context. */
+/**
+ * Resolves one constructor/callable parameter.
+ *
+ * Implementations should throw {@see ResolutionException} for expected
+ * resolver failures. Any foreign throwable is normalized by
+ * {@see ParametersResolver} before it can leave the DI parameter pipeline.
+ */
 interface ParameterResolverInterface
 {
     /**
-     * Whether the resolver can potentially handle this target.
-     *
-     * This is immutable metadata classification: implementations must be pure
-     * and stable for the lifetime of the resolver. Returning true does not
-     * guarantee a value in a particular call; resolveParameter() may still
-     * return null based on the call context.
+     * Immutable target classification. Implementations must not mutate the
+     * resolver chain or retain per-resolution state from this method.
      */
     public function supports(ParameterTarget $target): bool;
 
     /**
-     * @return array{0: int, 1: mixed}|null
+     * @return array{0: int, 1: mixed}|null Null continues the resolver chain.
      * @throws ResolutionException
      */
     public function resolveParameter(

@@ -1,36 +1,68 @@
 {
     "name": "componenta/di",
-    "description": "PSR-11 compatible dependency injection container for PHP 8.4+ with autowiring, lazy objects, and attribute-based configuration",
+    "description": "PSR-11 dependency injection container for PHP 8.4+ with composable attribute semantics, autowiring and lazy objects",
     "type": "library",
     "license": "MIT",
-    "keywords": ["di", "dependency-injection", "container", "ioc", "psr-11", "autowiring", "lazy-objects", "php84", "attributes"],
+    "keywords": [
+        "di",
+        "dependency-injection",
+        "container",
+        "ioc",
+        "psr-11",
+        "autowiring",
+        "lazy-objects",
+        "php84",
+        "attributes"
+    ],
     "authors": [{"name": "Componenta"}],
     "homepage": "https://github.com/Componenta/di",
-    "support": {"issues": "https://github.com/Componenta/di/issues", "source": "https://github.com/Componenta/di"},
+    "support": {
+        "issues": "https://github.com/Componenta/di/issues",
+        "source": "https://github.com/Componenta/di"
+    },
     "require": {
         "php": "^8.4",
-        "componenta/array": "^1.0",
         "componenta/caster": "^1.0",
-        "componenta/config": "^3.0@dev",
-        "componenta/priority-list": "^1.0",
+        "componenta/config": "^3.0",
         "componenta/reflection": "^2.0",
-        "componenta/validation": "^2.0@dev",
-        "componenta/var-export": "^2.0@dev",
+        "componenta/validation": "^2.0.1",
         "psr/container": "^2.0",
         "psr/http-message": "^2.0"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.0",
+        "nyholm/psr7": "^1.8",
         "pestphp/pest": "^4.0",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0"
     },
-    "autoload": {"psr-4": {"Componenta\\DI\\": "src/"}},
-    "autoload-dev": {"psr-4": {"Componenta\\DI\\Tests\\Fixture\\": "tests/Fixture/"}},
-    "config": {"allow-plugins": {"pestphp/pest-plugin": true}, "sort-packages": true, "preferred-install": "dist", "optimize-autoloader": true},
-    "scripts": {"test": "pest", "test-coverage": "pest --coverage-html coverage", "phpstan": "phpstan analyse src --level=max", "cs-check": "php-cs-fixer fix --dry-run --diff", "cs-fix": "php-cs-fixer fix", "check": ["@cs-check", "@phpstan", "@test"]},
+    "autoload": {
+        "psr-4": {"Componenta\\DI\\": "src/"},
+        "files": ["src/Internal/functions.php"]
+    },
+    "autoload-dev": {"psr-4": {"Componenta\\DI\\Tests\\Support\\": "tests/Support/"}},
+    "config": {
+        "allow-plugins": {"pestphp/pest-plugin": true},
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "optimize-autoloader": true
+    },
+    "scripts": {
+        "test": "pest",
+        "test-coverage": "pest --coverage --min=80",
+        "test-mutation": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -d opcache.enable_cli=0 tests/mutate.php --mutate --path=src --everything --min=80 --compact"
+        ],
+        "phpstan": "phpstan analyse src tests --level=max",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "check": ["@cs-check", "@phpstan", "@test"]
+    },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "provide": {"psr/container-implementation": "2.0"},
-    "extra": {"branch-alias": {"dev-main": "4.x-dev"}, "componenta": {"config-providers": ["Componenta\\DI\\ConfigProvider"]}}
+    "extra": {
+        "branch-alias": {"dev-main": "5.x-dev", "dev-v5": "5.x-dev"}
+    }
 }

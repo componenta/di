@@ -20,20 +20,13 @@ readonly class Header implements ExtractorInterface, CastableInterface
 
     public function extract(ServerRequestInterface $request): mixed
     {
-        $value = $request->hasHeader($this->name)
-            ? $request->getHeaderLine($this->name)
-            : null;
-
+        $value = $request->hasHeader($this->name) ? $request->getHeaderLine($this->name) : null;
         if ($value === null) {
             if ($this->default === DefaultValue::None) {
-                throw new \RuntimeException(
-                    sprintf('Required header "%s" is missing', $this->name),
-                );
+                throw new \RuntimeException(sprintf('Required header "%s" is missing', $this->name));
             }
-
             return $this->default;
         }
-
         return $value;
     }
 }

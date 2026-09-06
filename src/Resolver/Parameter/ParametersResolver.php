@@ -4,93 +4,119 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
+use Componenta\DI\Internal\BootstrapResolutionGuard;
+use Componenta\DI\Internal\CompletedAttributeGuard;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterResolutionBoundary;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
+use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
-use Componenta\Stdlib\PriorityList;
 use ReflectionParameter;
+use Throwable;
 use WeakMap;
 
-/** Aggregates parameter resolvers in their exact runtime order. */
-class ParametersResolver
+/** Orchestrates the ordered ParameterResolverInterface chain. */
+final class ParametersResolver
 {
-    /** @var PriorityList<ParameterResolverInterface> */
-    private PriorityList $items;
-
-    /** @var array<int, true> */
-    private array $registered = [];
-
+    /** @var list<array{resolver:ParameterResolverInterface,priority:int,order:int}> */
+    private array $registrations = [];
+    /** @var list<array{resolver:ParameterResolverInterface,priority:int,order:int}>|null */
+    private ?array $orderedRegistrations = null;
     /** @var list<ParameterResolverInterface>|null */
     private ?array $ordered = null;
+    /** @var array<int,true> */
+    private array $registered = [];
+    /** @var WeakMap<ParameterTarget,PreparedParameter>|null */
+    private ?WeakMap $preparedParameters = null;
 
     private int $revision = 0;
-
+    private int $attributeRevision = -1;
+    private int $order = 0;
     private bool $sealed = false;
+    private ParameterTargetFactory $targetFactory;
+    private readonly object $planOwner;
 
-    private ?ParameterTargetFactory $targetFactory = null;
-
-    /** @var WeakMap<ParameterTarget, list<int>>|null */
-    private ?WeakMap $supportedSlots = null;
-
-    /** @var list<ParameterResolverInterface> */
-    public array $resolverList {
-        get => $this->ordered ??= iterator_to_array($this->items, false);
+    public function __construct(
+        private readonly AttributePlanBuilder $plans,
+        ?ParameterTargetFactory $targetFactory = null,
+        private readonly ?BootstrapResolutionGuard $bootstrap = null,
+    ) {
+        $this->targetFactory = $targetFactory ?? new ParameterTargetFactory();
+        $this->planOwner = new \stdClass();
     }
 
-    public function __construct(ParameterResolverInterface ...$resolvers)
-    {
-        $this->items = new PriorityList();
-
-        foreach ($resolvers as $resolver) {
-            $this->add($resolver);
-        }
+    public bool $isSealed {
+        get => $this->sealed;
     }
 
     /** Higher priorities run first; equal priorities preserve insertion order. */
     public function add(ParameterResolverInterface $resolver, int $priority = 0): void
     {
         if ($this->sealed) {
-            throw new \LogicException(
+            throw new InvalidConfigurationException(
                 'Parameter resolver pipeline is sealed and cannot be changed.',
             );
         }
 
         $objectId = spl_object_id($resolver);
         if (isset($this->registered[$objectId])) {
-            throw new \InvalidArgumentException(sprintf(
+            throw new InvalidConfigurationException(sprintf(
                 'Parameter resolver %s is already registered.',
                 $resolver::class,
             ));
         }
 
-        $this->items->insert($resolver, $priority);
+        $this->registrations[] = [
+            'resolver' => $resolver,
+            'priority' => $priority,
+            'order' => $this->order++,
+        ];
         $this->registered[$objectId] = true;
+        $this->orderedRegistrations = null;
         $this->ordered = null;
-        $this->supportedSlots = null;
+        $this->preparedParameters = null;
         ++$this->revision;
     }
 
-    /** Prevents runtime drift after the container composition is complete. */
     public function seal(): void
     {
         $this->registered = [];
+        $this->preparedParameters = null;
         $this->sealed = true;
+    }
+
+    /** @var list<ParameterResolverInterface> */
+    public array $resolverList {
+        get => $this->ordered ??= array_map(
+            static fn(array $registration): ParameterResolverInterface => $registration['resolver'],
+            $this->registrationsInOrder(),
+        );
+    }
+
+    /** @return list<array{resolver:ParameterResolverInterface,priority:int}> */
+    public function semanticRegistrations(): array
+    {
+        return array_map(
+            static fn(array $registration): array => [
+                'resolver' => $registration['resolver'],
+                'priority' => $registration['priority'],
+            ],
+            $this->registrationsInOrder(),
+        );
     }
 
     /**
      * @param list<ReflectionParameter> $parameters
-     * @param array<string|int, mixed> $providedParameters
-     * @return array<int, mixed>
+     * @param array<string|int,mixed> $providedParameters
+     * @return array<int,mixed>
      */
-    public function resolve(
-        array $parameters,
-        array $providedParameters = [],
-    ): array {
-        return $this->resolveTargets(
-            $this->targets($parameters),
-            $providedParameters,
-        );
+    public function resolve(array $parameters, array $providedParameters = []): array
+    {
+        return $this->resolveTargets($this->targets($parameters), $providedParameters);
     }
 
     /**
@@ -100,72 +126,168 @@ class ParametersResolver
     public function targets(array $parameters): array
     {
         $targets = [];
-
         foreach ($parameters as $parameter) {
             $targets[] = $this->target($parameter);
         }
-
         return $targets;
     }
 
     /**
-     * @param list<ParameterTarget> $targets
-     * @param array<string|int, mixed> $providedParameters
-     * @return array<int, mixed>
+     * @internal
+     * @param list<ReflectionParameter> $parameters
      */
-    public function resolveTargets(
-        array $targets,
-        array $providedParameters = [],
-    ): array {
-        $context = new ParameterResolutionContext($providedParameters);
-
-        foreach ($targets as $target) {
-            [$position, $value] = $this->resolveParameter($target, $context);
-            $context->resolve($position, $value);
-        }
-
-        return $context->resolved;
+    public function prepare(array $parameters): PreparedParameterPlan
+    {
+        return $this->prepareTargets($this->targets($parameters));
     }
 
-    /** @return array{0: int, 1: mixed} */
+    /**
+     * @internal
+     * @param list<ParameterTarget> $targets
+     */
+    public function prepareTargets(array $targets): PreparedParameterPlan
+    {
+        $this->synchronizeAttributeRevision();
+        $revision = $this->revision;
+        $prepared = [];
+        foreach ($targets as $target) {
+            $prepared[] = $this->prepareTarget($target);
+        }
+
+        return new PreparedParameterPlan(
+            $prepared,
+            $targets,
+            $revision,
+            $this->planOwner,
+        );
+    }
+
+    /**
+     * @param list<ParameterTarget> $targets
+     * @param array<string|int,mixed> $providedParameters
+     * @return array<int,mixed>
+     */
+    public function resolveTargets(array $targets, array $providedParameters = []): array
+    {
+        return $this->resolvePrepared(
+            $this->prepareTargets($targets),
+            $providedParameters,
+        );
+    }
+
+    /**
+     * Resolves a prepared plan while keeping DI-owned metadata outside the public context.
+     *
+     * @internal
+     * @param array<string|int,mixed> $providedParameters
+     * @return array<int,mixed>
+     */
+    public function resolvePrepared(
+        PreparedParameterPlan $plan,
+        array $providedParameters = [],
+    ): array {
+        $plan = $this->refreshPlan($plan);
+        $state = new ParameterResolutionContext(
+            ParameterResolutionBoundary::publicParameters($plan, $providedParameters),
+        );
+
+        $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
+
+        foreach (array_keys($plan->parameters) as $index) {
+            [$position, $value] = $this->resolvePreparedParameter($plan->parameters[$index], $state, $completed);
+
+            // Dependencies and handlers can load source attributes, including on the current parameter.
+            $current = $this->refreshPlan($plan);
+            if ($current !== $plan) {
+                $plan = $current;
+                ParameterResolutionBoundary::publicParameters($plan, $providedParameters);
+                $completed->assertUnchanged();
+            }
+
+            $state->resolve($position, $value);
+        }
+
+        $completed->assertUnchanged();
+        return $state->resolved;
+    }
+
+    /** @internal */
+    public function isCurrentPlan(PreparedParameterPlan $plan): bool
+    {
+        $this->synchronizeAttributeRevision();
+
+        return $this->sealed
+            && $plan->owner === $this->planOwner
+            && $plan->resolverRevision === $this->revision;
+    }
+
+    /** @return array{0:int,1:mixed} */
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): array {
-        $unsupportedReason = match (true) {
-            $target->variadic
-                => 'Variadic parameters are not supported by the DI resolver contract.',
-            $target->byReference
-                => 'By-reference parameters are not supported by the DI resolver contract.',
-            default => null,
-        };
+        $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
+        $result = $this->resolvePreparedParameter($this->prepareTarget($target), $context, $completed);
+        $completed->assertUnchanged();
+        return $result;
+    }
 
-        if ($unsupportedReason !== null) {
+    /** @return list<int> */
+    public function resolverSlotsFor(ParameterTarget $target): array
+    {
+        return $this->prepareTarget($target)->resolverSlots;
+    }
+
+    public function target(ReflectionParameter $parameter): ParameterTarget
+    {
+        return $this->targetFactory->create($parameter);
+    }
+
+    /** @return array{0:int,1:mixed} */
+    private function resolvePreparedParameter(
+        PreparedParameter $prepared,
+        ParameterResolutionContext $context,
+        CompletedAttributeGuard $completed,
+    ): array {
+        $target = $prepared->target;
+        $attributePlan = $this->plans->build($target->reflection);
+
+        try {
+            $resolvers = $this->resolverList;
+            foreach ($prepared->resolverSlots as $slot) {
+                $resolver = $resolvers[$slot];
+                $result = $resolver->resolveParameter($target, $context);
+                if ($resolver instanceof AttributeParameterResolver) {
+                    // The attribute bridge refreshes and consumes its plan during resolution.
+                    // Other resolvers do not execute newly available attribute handlers.
+                    $attributePlan = $this->plans->build($target->reflection);
+                }
+                if ($result !== null) {
+                    $result = \Componenta\DI\Internal\validate_parameter_resolution_result(
+                        $result,
+                        $resolver,
+                        $target,
+                        $context,
+                    );
+                    $completed->record($target->reflection, $attributePlan);
+                    if ($this->bootstrap?->isActive === true) {
+                        $this->bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
+                        $prefix = array_slice($resolvers, 0, $slot);
+                        $prefix[] = $resolver;
+                        $this->bootstrap->recordParameter($target, $prefix);
+                    }
+                    return $result;
+                }
+            }
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
             throw ResolutionException::forParameter(
                 $target->reflection,
-                reason: $unsupportedReason,
+                previous: $e,
                 providedParameters: $context->provided,
                 resolvedParameters: $context->resolved,
             );
-        }
-
-        MappedRequestParameterSourceGuard::assertTargetContextNoConflicts(
-            $target,
-            $context,
-        );
-
-        foreach ($this->resolverSlotsFor($target) as $slot) {
-            $resolver = $this->resolverList[$slot];
-            $result = $resolver->resolveParameter($target, $context);
-
-            if ($result !== null) {
-                return ParameterResolutionResult::validate(
-                    $result,
-                    $resolver,
-                    $target,
-                    $context,
-                );
-            }
         }
 
         throw ResolutionException::forParameter(
@@ -175,43 +297,132 @@ class ParametersResolver
         );
     }
 
-    public function target(ReflectionParameter $parameter): ParameterTarget
+    private function refreshPlan(PreparedParameterPlan $plan): PreparedParameterPlan
     {
-        return ($this->targetFactory ??= new ParameterTargetFactory())
-            ->create($parameter);
-    }
-
-    /**
-     * Returns the exact runtime resolver slots applicable to this target.
-     * Generated factories consume this method rather than duplicating
-     * supports() checks or reconstructing resolver order.
-     *
-     * @return list<int>
-     */
-    public function resolverSlotsFor(ParameterTarget $target): array
-    {
-        $cache = $this->supportedSlots ??= new WeakMap();
-
-        if (isset($cache[$target])) {
-            return $cache[$target];
+        if ($plan->owner !== $this->planOwner) {
+            throw new InvalidConfigurationException(
+                'Prepared parameter plan belongs to another resolver pipeline.',
+            );
         }
 
-        $slots = [];
-        $revision = $this->revision;
-        $resolvers = $this->resolverList;
+        $this->synchronizeAttributeRevision();
 
-        foreach ($resolvers as $slot => $resolver) {
-            if ($resolver->supports($target)) {
-                $slots[] = $slot;
+        if ($plan->resolverRevision === $this->revision) {
+            return $plan;
+        }
+
+        return $this->prepareTargets($plan->targets);
+    }
+
+    private function prepareTarget(ParameterTarget $target): PreparedParameter
+    {
+        $this->synchronizeAttributeRevision();
+
+        $cacheable = $this->sealed && self::isStableTarget($target);
+        if ($cacheable) {
+            $cache = $this->preparedParameters ??= new WeakMap();
+            if (isset($cache[$target])) {
+                return $cache[$target];
             }
         }
 
+        $unsupportedReason = match (true) {
+            $target->variadic => 'Variadic parameters are not supported by the DI resolver contract.',
+            $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
+            default => null,
+        };
+
+        if ($unsupportedReason !== null) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: $unsupportedReason,
+            );
+        }
+
+        $this->plans->build($target->reflection);
+        $prepared = new PreparedParameter(
+            $target,
+            $this->classifyResolverSlots($target),
+        );
+
+        if (!$cacheable) {
+            return $prepared;
+        }
+
+        $cache = $this->preparedParameters ??= new WeakMap();
+        return $cache[$target] = $prepared;
+    }
+
+    private function synchronizeAttributeRevision(): void
+    {
+        $revision = $this->plans->revision;
+        if ($revision === $this->attributeRevision) {
+            return;
+        }
+
+        $this->attributeRevision = $revision;
+        $this->preparedParameters = null;
+        ++$this->revision;
+    }
+
+    private static function isStableTarget(ParameterTarget $target): bool
+    {
+        $function = $target->reflection->getDeclaringFunction();
+
+        // ReflectionParameter may expose a closure scoped to a method through
+        // ReflectionMethod. isClosure() is therefore the semantic distinction:
+        // PreparedParameter retains its target, and caching any closure-owned
+        // target would retain the declaring Closure and its captures.
+        return !$function->isClosure();
+    }
+
+    /** @return list<int> */
+    private function classifyResolverSlots(ParameterTarget $target): array
+    {
+        /** @var list<int> $slots */
+        $slots = [];
+        $revision = $this->revision;
+
+        try {
+            foreach ($this->resolverList as $slot => $resolver) {
+                if ($resolver->supports($target)) {
+                    $slots[] = $slot;
+                }
+            }
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forParameter(
+                $target->reflection,
+                reason: 'parameter resolver classification failed',
+                previous: $e,
+            );
+        }
+
         if ($revision !== $this->revision) {
-            throw new \LogicException(
+            throw new InvalidConfigurationException(
                 'Parameter resolver supports() must not mutate the resolver chain.',
             );
         }
 
-        return $cache[$target] = $slots;
+        return $slots;
+    }
+
+    /** @return list<array{resolver:ParameterResolverInterface,priority:int,order:int}> */
+    private function registrationsInOrder(): array
+    {
+        if ($this->orderedRegistrations !== null) {
+            return $this->orderedRegistrations;
+        }
+
+        $registrations = $this->registrations;
+        usort(
+            $registrations,
+            static fn(array $left, array $right): int =>
+                $right['priority'] <=> $left['priority']
+                ?: $left['order'] <=> $right['order'],
+        );
+
+        return $this->orderedRegistrations = $registrations;
     }
 }

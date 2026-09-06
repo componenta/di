@@ -9,72 +9,61 @@ use Componenta\Config\DefaultValue;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Resolver\EnvNameNormalizer;
 use Psr\Container\ContainerInterface;
+use ReflectionNamedType;
+use ReflectionParameter;
 
-/**
- * Unwraps {@see Env} value-objects inside SetUp params by reading the variable
- * from the {@see Environment} attached to the container's {@see Config}.
- *
- * Falls back to {@see Env::$default} when the environment is unavailable or
- * the variable is undefined. Throws a container-typed exception if neither
- * the environment nor a default is available.
- */
+use function Componenta\DI\Internal\normalize_env_name;
+
+/** Resolves #[Env] descriptors used as #[SetUp] parameter values. */
 final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
 {
-    public function __construct(
-        private ContainerInterface $container,
-    ) {}
+    public function __construct(private ContainerInterface $container) {}
 
     public function supports(mixed $value): bool
     {
         return $value instanceof Env;
     }
 
-    public function unwrap(mixed $value, string $key): mixed
-    {
+    public function unwrap(
+        mixed $value,
+        string $key,
+        ?ReflectionParameter $parameter = null,
+    ): mixed {
         /** @var Env $value */
-        $environment = $this->getEnvironment();
+        $config = $this->container->get(Config::class);
+        if (!$config instanceof Config) {
+            return $this->defaultOrFail($value, $key, 'configuration is unavailable');
+        }
 
-        if ($environment === null) {
+        $name = $value->name ?? normalize_env_name($key);
+        if (!$config->environment->has($name)) {
             return $this->defaultOrFail(
                 $value,
                 $key,
-                'environment is not available in Config',
+                sprintf('environment variable "%s" is not defined', $name),
             );
         }
 
-        $envName = $value->name ?? EnvNameNormalizer::toEnvName($key);
-
-        if (!$environment->has($envName)) {
-            return $this->defaultOrFail(
-                $value,
-                $key,
-                sprintf('environment variable "%s" is not defined', $envName),
-            );
-        }
-
-        return $environment->get($envName);
+        return self::read($config->environment, $name, $parameter);
     }
 
-    /**
-     * Safely resolves the Environment instance from Config. Returns null when
-     * Config is not registered or doesn't carry an Environment - callers fall
-     * back to the attribute's default.
-     */
-    private function getEnvironment(): ?Environment
-    {
-        if (!$this->container->has(Config::class)) {
-            return null;
-        }
+    private static function read(
+        Environment $environment,
+        string $name,
+        ?ReflectionParameter $parameter,
+    ): mixed {
+        $type = $parameter?->getType();
+        $typeName = $type instanceof ReflectionNamedType ? $type->getName() : null;
 
-        $config = $this->container->get(Config::class);
-
-        if (!$config instanceof Config) {
-            return null;
-        }
-
-        return $config->environment;
+        return match ($typeName) {
+            'string' => $environment->string($name),
+            'int' => $environment->int($name),
+            'float' => $environment->float($name),
+            'bool' => $environment->bool($name),
+            'array' => $environment->array($name),
+            default => $environment->get($name),
+        };
     }
 
     private function defaultOrFail(Env $env, string $key, string $reason): mixed
@@ -83,12 +72,10 @@ final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
             return $env->default;
         }
 
-        throw new ResolutionException(
-            sprintf(
-                'Cannot unwrap #[SetUp] param "%s" (#[Env] attribute): %s.',
-                $key,
-                $reason,
-            ),
-        );
+        throw new ResolutionException(sprintf(
+            'Cannot unwrap #[SetUp] param "%s" (#[Env]): %s.',
+            $key,
+            $reason,
+        ));
     }
 }

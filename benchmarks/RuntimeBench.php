@@ -25,7 +25,11 @@ namespace {
 }
 
 namespace Componenta\DI\Benchmarks\Runtime {
-    use Componenta\DI\ContainerBuilder;
+    use Componenta\Config\Config;
+    use Componenta\Config\DependencyDefinitions;
+    use Componenta\Config\Environment;
+    use Componenta\DI\Container;
+    use Componenta\DI\ContainerFactory;
 
     final class Dependency {}
 
@@ -42,6 +46,20 @@ namespace Componenta\DI\Benchmarks\Runtime {
         {
             return $dependency;
         }
+    }
+
+    function createContainer(): Container
+    {
+        $container = (new ContainerFactory())->create(
+            new Config([], new Environment([])),
+            new DependencyDefinitions([]),
+        )->container;
+
+        if (!$container instanceof Container) {
+            throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
+        }
+
+        return $container;
     }
 
     /** @return array{nanoseconds: float, operations: float} */
@@ -75,13 +93,13 @@ namespace Componenta\DI\Benchmarks\Runtime {
 
     $iterations = max(10_000, (int) ($_SERVER['DI_BENCH_ITERATIONS'] ?? 100_000));
     $buildIterations = max(100, (int) ($_SERVER['DI_BUILD_ITERATIONS'] ?? 2_000));
-    $container = (new ContainerBuilder())->build();
+    $container = createContainer();
     $closure = static fn(Dependency $dependency): Dependency => $dependency;
     $method = [new MethodTarget(), 'execute'];
 
     $cases = [
         'build/default' => [
-            static fn(): object => (new ContainerBuilder())->build(),
+            static fn(): object => createContainer(),
             $buildIterations,
         ],
         'make/no-arguments' => [

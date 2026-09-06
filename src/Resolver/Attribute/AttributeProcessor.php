@@ -4,22 +4,93 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute;
 
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\BootstrapResolutionGuard;
+use Componenta\DI\Internal\CompletedAttributeGuard;
+use Componenta\DI\Internal\ObjectAttributeSequence;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
-use LogicException;
-use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Throwable;
 
-/** Binds class/property/method attributes to the exact owning handlers. */
+/**
+ * Executes composed class/property/method attribute handlers.
+ * Before instantiation, class policies precede property and method handlers.
+ * After instantiation, properties are initialized before class and method hooks.
+ * Parameter plans are validated by the same composition model but executed
+ * exclusively through AttributeParameterResolver. Runtime handlers receive
+ * isolated attribute instances so mutable attribute state cannot leak between
+ * object creations or concurrent execution contexts.
+ */
 final class AttributeProcessor
 {
-    /** @var array<class-string, array{version: int, plan: AttributeExecutionPlan}> */
+    /**
+     * @var array<class-string,array{
+     *     revision:int,
+     *     hasHandlers:bool,
+     *     before:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>,
+     *     after:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>
+     * }>
+     */
     private array $cache = [];
 
     public function __construct(
-        public readonly AttributeHandlerRegistry $registry,
+        private readonly AttributeDefinitionRegistry $registry,
+        private readonly AttributePlanBuilder $plans,
+        private readonly ?BootstrapResolutionGuard $bootstrap = null,
     ) {}
+
+    /**
+     * @internal
+     * @param ReflectionClass<object> $class
+     */
+    public function recordBootstrapUse(ReflectionClass $class, AttributePhase $phase): void
+    {
+        if ($this->bootstrap?->isActive !== true) {
+            return;
+        }
+        $this->bootstrap->recordAttributes($class, $phase);
+        foreach (self::properties($class) as $property) {
+            $this->bootstrap->recordAttributes($property, $phase);
+        }
+        foreach (self::methods($class) as $method) {
+            $this->bootstrap->recordAttributes($method, $phase);
+        }
+    }
+
+    /**
+     * Records the empty before phase used by the no-handler fast path.
+     * @internal
+     * @param ReflectionClass<object> $class
+     */
+    public function skippedBeforePhase(ReflectionClass $class): CompletedAttributeGuard
+    {
+        $guard = new CompletedAttributeGuard($this->plans);
+        foreach ($this->executionPlan($class)['before'] as $target) {
+            $guard->record($target, new AttributePlan($target, []), AttributePhase::BeforeInstantiation);
+        }
+        return $guard;
+    }
+
+    /** @param ReflectionClass<object> $class */
+    public function prepare(ReflectionClass $class): void
+    {
+        $this->executionPlan($class);
+    }
+
+    /** @param ReflectionClass<object> $class */
+    public function hasHandlers(ReflectionClass $class): bool
+    {
+        $plan = $this->executionPlan($class);
+        return $plan['hasHandlers'];
+    }
 
     /** @param ReflectionClass<object> $class */
     public function process(
@@ -27,97 +98,132 @@ final class AttributeProcessor
         AttributePhase $phase,
         ObjectCreationContext $context,
     ): void {
-        $this->processPlan($this->plan($class), $phase, $context);
+        $this->processTracked($class, $phase, $context);
     }
 
-    public function processPlan(
-        AttributeExecutionPlan $plan,
+    /**
+     * @internal
+     * @param ReflectionClass<object> $class
+     */
+    public function processTracked(
+        ReflectionClass $class,
         AttributePhase $phase,
         ObjectCreationContext $context,
-    ): void {
-        foreach ($plan->forPhase($phase) as $invocation) {
-            $invocation->handler->handle(
-                $invocation->newAttribute(),
-                $invocation->target,
-                $context,
+    ): CompletedAttributeGuard {
+        if ($phase === AttributePhase::Both) {
+            throw new InvalidConfigurationException(
+                'AttributeProcessor::process() requires a concrete runtime phase.',
             );
+        }
+
+        $plan = $this->executionPlan($class);
+        $targets = $phase === AttributePhase::BeforeInstantiation
+            ? $plan['before']
+            : $plan['after'];
+
+        $sequence = new ObjectAttributeSequence($this->plans, $targets, $phase);
+        $completedProperties = [];
+        while (($usage = $sequence->next()) !== null) {
+            $target = $sequence->target($usage);
+            if ($target instanceof ReflectionProperty) {
+                $key = spl_object_id($target);
+                if (isset($completedProperties[$key])) {
+                    throw new AttributeCompositionException(sprintf(
+                        'Attribute composition for "%s::$%s" changed after its property handlers completed. Load its attributes before execution.',
+                        $target->getDeclaringClass()->getName(),
+                        $target->getName(),
+                    ));
+                }
+                $completed = $sequence->completed;
+                $context->resolveProperty($target, function () use ($class, $target, $sequence, $context): void {
+                    $this->processTarget($class, $target, $sequence, $context);
+                });
+                if ($sequence->completed > $completed) {
+                    $completedProperties[$key] = true;
+                }
+            } else {
+                $this->processTarget($class, $target, $sequence, $context);
+            }
+        }
+        $sequence->recordBootstrapUse($this->bootstrap);
+        return $sequence->completionGuard();
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     * @param ReflectionClass<object>|ReflectionProperty|ReflectionMethod $target
+     */
+    private function processTarget(
+        ReflectionClass $class,
+        ReflectionClass|ReflectionProperty|ReflectionMethod $target,
+        ObjectAttributeSequence $sequence,
+        ObjectCreationContext $context,
+    ): void {
+        while (($usage = $sequence->next()) !== null && $sequence->target($usage) === $target) {
+            $handler = $usage->definition->handler;
+            if (!$handler instanceof AttributeHandlerInterface) {
+                throw new InvalidConfigurationException('Object attribute sequence requires an object handler.');
+            }
+            try {
+                $attribute = $sequence->instance($usage);
+                if (!$sequence->isCurrent()) {
+                    // The next usage can now belong to an earlier target. Return
+                    // there before dispatching this handler, retaining its instance.
+                    continue;
+                }
+
+                $sequence->dispatch($usage);
+                $handler->handle($attribute, $target, $context);
+                unset($attribute);
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                if ($target instanceof ReflectionProperty) {
+                    throw ResolutionException::forProperty($target, previous: $e);
+                }
+                throw ResolutionException::forService($class->getName(), $e);
+            }
         }
     }
 
     /**
      * @param ReflectionClass<object> $class
-     * @return array{before: list<AttributeInvocation>, after: list<AttributeInvocation>}
+     * @return array{
+     *     revision:int,
+     *     hasHandlers:bool,
+     *     before:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>,
+     *     after:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>
+     * }
      */
-    public function invocations(ReflectionClass $class): array
+    private function executionPlan(ReflectionClass $class): array
     {
-        $plan = $this->plan($class);
+        $name = $class->getName();
+        $revision = $this->registry->revision;
+        $cached = $this->cache[$name] ?? null;
+        if ($cached !== null && $cached['revision'] === $revision) {
+            return $cached;
+        }
 
-        return [
-            'before' => $plan->before,
-            'after' => $plan->after,
+        $properties = self::properties($class);
+        $methods = self::methods($class);
+        $hasAttributes = static fn(ReflectionClass|ReflectionProperty|ReflectionMethod $target): bool => $target->getAttributes() !== [];
+        $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
+        $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
+        $hasHandlers = false;
+        foreach ($before as $target) {
+            foreach ($this->plans->build($target)->usages as $usage) {
+                if ($usage->definition->handler instanceof AttributeHandlerInterface) {
+                    $hasHandlers = true;
+                }
+            }
+        }
+
+        return $this->cache[$name] = [
+            'revision' => $revision,
+            'hasHandlers' => $hasHandlers,
+            'before' => $before,
+            'after' => $after,
         ];
-    }
-
-    /** @param ReflectionClass<object> $class */
-    public function plan(ReflectionClass $class): AttributeExecutionPlan
-    {
-        $className = $class->getName();
-        $version = $this->registry->version;
-        $cached = $this->cache[$className] ?? null;
-
-        if ($cached !== null && $cached['version'] === $version) {
-            return $cached['plan'];
-        }
-
-        $before = [];
-        $after = [];
-        $declarationOrder = 0;
-        $registrations = $this->registry->registrations();
-
-        $this->collect(
-            $class,
-            $registrations,
-            $before,
-            $after,
-            $declarationOrder,
-        );
-
-        foreach (self::properties($class) as $property) {
-            $this->collect(
-                $property,
-                $registrations,
-                $before,
-                $after,
-                $declarationOrder,
-            );
-        }
-
-        foreach (self::methods($class) as $method) {
-            $this->collect(
-                $method,
-                $registrations,
-                $before,
-                $after,
-                $declarationOrder,
-            );
-        }
-
-        self::sort($before);
-        self::sort($after);
-
-        if ($version !== $this->registry->version) {
-            throw new LogicException(
-                'Attribute handler supportsAttribute() must not mutate the handler registry.',
-            );
-        }
-
-        $plan = new AttributeExecutionPlan($before, $after);
-        $this->cache[$className] = [
-            'version' => $version,
-            'plan' => $plan,
-        ];
-
-        return $plan;
     }
 
     /**
@@ -126,8 +232,8 @@ final class AttributeProcessor
      */
     private static function properties(ReflectionClass $class): array
     {
-        $properties = $class->getProperties();
-
+        /** @var list<ReflectionProperty> $properties */
+        $properties = array_values($class->getProperties());
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
             foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
                 if ($property->getDeclaringClass()->getName() === $parent->getName()) {
@@ -135,7 +241,6 @@ final class AttributeProcessor
                 }
             }
         }
-
         return $properties;
     }
 
@@ -145,8 +250,8 @@ final class AttributeProcessor
      */
     private static function methods(ReflectionClass $class): array
     {
-        $methods = $class->getMethods();
-
+        /** @var list<ReflectionMethod> $methods */
+        $methods = array_values($class->getMethods());
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
             foreach ($parent->getMethods(ReflectionMethod::IS_PRIVATE) as $method) {
                 if ($method->getDeclaringClass()->getName() === $parent->getName()) {
@@ -154,66 +259,6 @@ final class AttributeProcessor
                 }
             }
         }
-
         return $methods;
-    }
-
-    /**
-     * @param ReflectionClass<object>|ReflectionProperty|ReflectionMethod $target
-     * @param list<array{handler: AttributeHandlerInterface, order: int, phase: AttributePhase, priority: int}> $registrations
-     * @param list<AttributeInvocation> $before
-     * @param list<AttributeInvocation> $after
-     */
-    private function collect(
-        ReflectionClass|ReflectionProperty|ReflectionMethod $target,
-        array $registrations,
-        array &$before,
-        array &$after,
-        int &$declarationOrder,
-    ): void {
-        /** @var ReflectionAttribute<object> $reflectionAttribute */
-        foreach ($target->getAttributes() as $attributeIndex => $reflectionAttribute) {
-            /** @var class-string $attributeClass */
-            $attributeClass = $reflectionAttribute->getName();
-
-            foreach ($registrations as $handlerSlot => $registration) {
-                $handler = $registration['handler'];
-                if (!$handler->supportsAttribute($attributeClass, $target)) {
-                    continue;
-                }
-
-                $invocation = new AttributeInvocation(
-                    handler: $handler,
-                    handlerSlot: $handlerSlot,
-                    reflectionAttribute: $reflectionAttribute,
-                    attributeClass: $attributeClass,
-                    attributeIndex: $attributeIndex,
-                    target: $target,
-                    priority: $registration['priority'],
-                    declarationOrder: $declarationOrder++,
-                );
-
-                if ($registration['phase'] === AttributePhase::BeforeInstantiation) {
-                    $before[] = $invocation;
-                } else {
-                    $after[] = $invocation;
-                }
-
-                continue 2;
-            }
-
-            ++$declarationOrder;
-        }
-    }
-
-    /** @param list<AttributeInvocation> $invocations */
-    private static function sort(array &$invocations): void
-    {
-        usort(
-            $invocations,
-            static fn(AttributeInvocation $left, AttributeInvocation $right): int =>
-                $right->priority <=> $left->priority
-                ?: $left->declarationOrder <=> $right->declarationOrder,
-        );
     }
 }

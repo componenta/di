@@ -4,37 +4,25 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Target;
 
-use Closure;
-use ReflectionFunction;
 use ReflectionParameter;
-use WeakMap;
 
-/** Creates and reuses immutable parameter targets for native reflectors. */
+/** Creates and reuses immutable parameter targets for stable named reflectors. */
 final class ParameterTargetFactory
 {
     /** @var array<string, ParameterTarget> */
     private array $namedTargets = [];
 
-    /** @var WeakMap<Closure, array<int, ParameterTarget>> */
-    private WeakMap $closureTargets;
-
-    public function __construct()
-    {
-        $this->closureTargets = new WeakMap();
-    }
-
     public function create(ReflectionParameter $parameter): ParameterTarget
     {
         $function = $parameter->getDeclaringFunction();
 
-        if ($function instanceof ReflectionFunction && $function->isClosure()) {
-            $closure = $function->getClosure();
-            $targets = $this->closureTargets[$closure] ?? [];
-            $position = $parameter->getPosition();
-            $target = $targets[$position] ??= new ParameterTarget($parameter);
-            $this->closureTargets[$closure] = $targets;
-
-            return $target;
+        if ($function->isClosure()) {
+            // ReflectionParameter may expose a method-scoped closure through
+            // ReflectionMethod rather than ReflectionFunction. isClosure() is
+            // the semantic check that works for both representations.
+            // ParameterTarget keeps its ReflectionParameter, and the reflector
+            // keeps its declaring Closure, so closure targets are never cached.
+            return new ParameterTarget($parameter);
         }
 
         $class = $parameter->getDeclaringClass()?->getName();

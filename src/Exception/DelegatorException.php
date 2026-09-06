@@ -10,19 +10,14 @@ use Throwable;
 /**
  * Raised when a delegator (decorator callable) attached to an entry fails.
  *
- * Container-typed and PSR-11 failures surface unchanged through the delegator
- * chain; only foreign exceptions are wrapped by this type so callers can tell
- * "the delegator itself misbehaved" apart from "the delegator re-raised a
- * container failure".
+ * Existing Componenta DI exceptions pass through unchanged. Any foreign
+ * throwable, including a foreign PSR-11 container exception, is preserved as
+ * the previous exception of this type.
  */
 final class DelegatorException extends RuntimeException implements ExceptionInterface
 {
     public function __construct(
         string $message,
-
-        /**
-         * Entry id whose delegator chain failed.
-         */
         public readonly ?string $entryId = null,
         ?Throwable $previous = null,
     ) {

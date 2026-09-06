@@ -6,7 +6,7 @@ namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Resolves a parameter using its declared default value. */
+/** Resolves a native PHP parameter default. */
 final class DefaultValueResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
@@ -19,7 +19,7 @@ final class DefaultValueResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         return $target->hasDefault
-            ? [$target->position, $target->default]
+            ? [$target->position, $target->reflection->getDefaultValue()]
             : null;
     }
 }

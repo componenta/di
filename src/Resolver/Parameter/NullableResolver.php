@@ -6,7 +6,7 @@ namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Resolves nullable parameters to null as the final fallback. */
+/** Final built-in resolver for nullable parameters. */
 final class NullableResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
