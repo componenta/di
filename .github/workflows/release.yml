@@ -33,6 +33,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
+          extensions: fileinfo, mbstring
           tools: composer:v2
 
       - name: Validate Composer metadata
@@ -62,6 +63,7 @@ jobs:
         with:
           php-version: '8.4'
           coverage: pcov
+          extensions: fileinfo, mbstring
           ini-values: memory_limit=1G
           tools: composer:v2
 
