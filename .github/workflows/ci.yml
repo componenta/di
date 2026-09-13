@@ -149,23 +149,25 @@ jobs:
       - name: Validate Composer metadata
         run: composer validate --strict
 
-      - name: Use config v3 workspace
+      - name: Use companion workspaces
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-config
-          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
-
-      - name: Use validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.0"}}}'
-
-      - name: Use reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-reflection
-          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.1"}}}'
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $PWD 'composer.json'
+          $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -AsHashtable
+          if (!$manifest.Contains('repositories')) { $manifest['repositories'] = [ordered]@{} }
+          $versions = [ordered]@{ config = '3.0.0'; validation = '3.0.0'; reflection = '2.0.1' }
+          foreach ($package in $versions.Keys) {
+            $manifest['repositories']["componenta-$package"] = @{
+              type = 'path'
+              url = ".ci/$package"
+              options = @{
+                symlink = $false
+                versions = @{ "componenta/$package" = $versions[$package] }
+              }
+            }
+          }
+          [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
