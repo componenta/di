@@ -32,15 +32,15 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
     /** @var list<string> */
     protected array $exclude = [];
     protected RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject;
-    /** @var array<string,string> */
+    /** @var array<string|int,string> */
     public protected(set) array $map = [];
 
-    /** @param array<string,string> $map */
+    /** @param array<string|int,string> $map */
     public function __construct(
         array $map = [],
         ?RequestDataConflictPolicy $conflictPolicy = null,
     ) {
-        $this->map = array_merge($this->map, $map);
+        $this->map = array_replace($this->map, $map);
         if ($conflictPolicy !== null) {
             $this->conflictPolicy = $conflictPolicy;
         }

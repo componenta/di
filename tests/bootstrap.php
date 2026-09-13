@@ -31,6 +31,9 @@ if (!$usingLocalAutoload) {
     }
 
     $loader->setPsr4('Componenta\\Config\\', $packagesDirectory . '/config/src');
+    if (is_dir($packagesDirectory . '/reflection/src')) {
+        $loader->setPsr4('Componenta\\Reflection\\', $packagesDirectory . '/reflection/src');
+    }
     require $packagesDirectory . '/config/src/functions.php';
 }
 
@@ -47,6 +50,29 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
         $arguments = COMPONENTA_DI_MUTATION_ARGUMENTS;
         $arguments = $mutationConfiguration->cliConfiguration->fromArguments($arguments);
         array_shift($arguments);
-        $mutationRunner->setOriginalArguments([PHP_BINARY, '-d', 'opcache.enable_cli=0', __DIR__ . '/mutate.php', ...$arguments]);
+        $php = \Componenta\DI\Tests\Support\MutationRuntime::command();
+        $mutationRunner->setOriginalArguments([...$php, __DIR__ . '/mutate.php', ...$arguments]);
+        $fallback = new \Componenta\DI\Tests\Support\MutationFallback([
+                ...$php,
+                '-d', 'xdebug.mode=off',
+                __DIR__ . '/mutate.php',
+                __DIR__,
+                '--configuration=' . $packageDirectory . '/phpunit.xml',
+                '--compact',
+                '--colors=never',
+                '--bail',
+                '--do-not-cache-result',
+            ], $packageDirectory, reportDirectory: $packageDirectory . '/.phpunit.cache/mutation-workers');
+        \Pest\Mutate\Event\Facade::instance()->registerSubscriber($fallback);
+        $coverage = new \Componenta\DI\Tests\Support\MutationCoverage($fallback);
+        \Pest\Mutate\Event\Facade::instance()->registerSubscriber($coverage);
+        $configuration = $mutationConfiguration->mergedConfiguration();
+        \Pest\Mutate\Event\Facade::instance()->registerSubscriber(
+            new \Componenta\DI\Tests\Support\MutationFallbackPreparation(
+                $fallback,
+                $coverage,
+                $configuration->parallel ? $configuration->processes : 1,
+            ),
+        );
     }
 }

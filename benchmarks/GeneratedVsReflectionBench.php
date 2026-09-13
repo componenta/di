@@ -53,10 +53,13 @@ namespace Componenta\DI\Benchmarks\FactoryVsReflection {
     /** @param array<string,mixed> $sections */
     function createContainer(array $sections = []): Container
     {
-        $container = (new ContainerFactory())->create(
-            new Config([], new Environment([])),
-            new DependencyDefinitions($sections),
-        )->container;
+        // Keep the same explicit-factory workload on the pinned v4 baseline.
+        $container = class_exists(ContainerFactory::class)
+            ? (new ContainerFactory())->create(
+                new Config([], new Environment([])),
+                new DependencyDefinitions($sections),
+            )->container
+            : \Componenta\DI\ContainerBuilder::configureWithDependencies(new Config([]), $sections)->build();
 
         if (!$container instanceof Container) {
             throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
@@ -103,7 +106,7 @@ namespace Componenta\DI\Benchmarks\FactoryVsReflection {
                 array $params,
             ): BenchmarkEntry {
                 return new BenchmarkEntry(
-                    $value->container->get(BenchmarkDependency::class),
+                    $value->get(BenchmarkDependency::class),
                     $params['number'] ?? 1,
                     $params['name'] ?? 'default',
                 );

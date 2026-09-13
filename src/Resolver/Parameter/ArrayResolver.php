@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
 /** Resolves an explicit value by parameter name or position. */
@@ -19,6 +20,10 @@ final class ArrayResolver implements ParameterResolverInterface
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
+        if ($target->variadic) {
+            return VariadicArguments::provided($target, $context);
+        }
+
         if (isset($context->provided[$target->name]) || array_key_exists($target->name, $context->provided)) {
             $value = $context->provided[$target->name];
 

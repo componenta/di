@@ -24,6 +24,7 @@ use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
+use ReflectionReference;
 use Throwable;
 
 /** Resolves configured factories and class definitions. */
@@ -154,6 +155,13 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             }
             unset($configured[$name], $configured[$position], $runtime[$name], $runtime[$position]);
         }
+        if ($configured !== []) {
+            throw new InvalidConfigurationException(sprintf(
+                'Unknown ClassDefinition arguments for %s: %s.',
+                $method === null ? 'a class without a constructor' : $method->getDeclaringClass()->getName() . '::' . $method->getName() . '()',
+                implode(', ', array_map(static fn(string|int $key): string => (string) $key, array_keys($configured))),
+            ));
+        }
         return $arguments;
     }
 
@@ -199,7 +207,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return [...$fixed, ...$positional, ...$named];
     }
 
-    private function resolveDefinitionValue(mixed $value): mixed
+    /** @param array<string,true> $references */
+    private function resolveDefinitionValue(mixed $value, array $references = []): mixed
     {
         if ($value instanceof ReferenceDefinition) {
             return $this->container->get($value->value);
@@ -210,7 +219,19 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
 
         $resolved = [];
         foreach ($value as $key => $item) {
-            $resolved[$key] = $this->resolveDefinitionValue($item);
+            $childReferences = $references;
+            $reference = ReflectionReference::fromArrayElement($value, $key);
+            if ($reference !== null) {
+                $referenceId = $reference->getId();
+                if (isset($references[$referenceId])) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'ClassDefinition arguments contain a recursive array at key "%s".',
+                        (string) $key,
+                    ));
+                }
+                $childReferences[$referenceId] = true;
+            }
+            $resolved[$key] = $this->resolveDefinitionValue($item, $childReferences);
         }
 
         return $resolved;

@@ -49,7 +49,7 @@ final class EnvHandler implements AttributeHandlerInterface, ParameterAttributeH
         try {
             return ParameterAttributeValue::resolved($this->resolveEnv(
                 envName: $attribute->name ?? normalize_env_name($target->name),
-                typeName: self::typeName($target->type),
+                typeName: $target->variadic ? 'array' : self::typeName($target->type),
                 hasDefault: $attribute->default !== DefaultValue::None,
                 default: $attribute->default,
                 declaringContext: $target->declaringContext,

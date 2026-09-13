@@ -87,19 +87,19 @@ function auditClosureWithCapture(object $capture): Closure
     };
 }
 
-test('callable executor does not retain closure captures through signature metadata', function (): void {
+test('callable executor does not retain closure captures through signature metadata', function (bool $asMethod): void {
     $container = (new ContainerBuilder())->build();
     $capture = new \stdClass();
     $reference = WeakReference::create($capture);
     $closure = auditClosureWithCapture($capture);
 
-    expect($container->call($closure))->toBe($capture);
+    expect($container->call($asMethod ? [$closure, '__invoke'] : $closure))->toBe($capture);
 
     unset($closure, $capture);
     gc_collect_cycles();
 
     expect($reference->get())->toBeNull();
-});
+})->with(['closure' => false, 'method' => true]);
 
 test('different closures resolve against their own parameter contract', function (): void {
     $container = (new ContainerBuilder())

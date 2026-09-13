@@ -38,8 +38,8 @@ readonly class PayloadParam implements ParameterNameAwareExtractorInterface, Cas
         $body = $this->parsedBody($request);
 
         if ($this->name instanceof ConfigPath) {
-            /** @var list<string> $segments */
-            $segments = array_values($this->name->toArray());
+            /** @var non-empty-list<string> $segments */
+            $segments = $this->name->toArray();
             $result = self::path($body, $segments);
             if ($result['found']) {
                 return $result['value'];
@@ -79,26 +79,18 @@ readonly class PayloadParam implements ParameterNameAwareExtractorInterface, Cas
 
     /**
      * @param array<string|int,mixed> $data
-     * @param list<string> $segments
+     * @param non-empty-list<string> $segments
      * @return array{found:bool,value:mixed}
      */
     private static function path(array $data, array $segments): array
     {
         $current = $data;
-        foreach ($segments as $index => $segment) {
-            if (!array_key_exists($segment, $current)) {
+        foreach ($segments as $segment) {
+            if (!is_array($current) || !array_key_exists($segment, $current)) {
                 return ['found' => false, 'value' => null];
             }
-            $value = $current[$segment];
-            if ($index === array_key_last($segments)) {
-                return ['found' => true, 'value' => $value];
-            }
-            if (!is_array($value)) {
-                return ['found' => false, 'value' => null];
-            }
-            /** @var array<string|int,mixed> $value */
-            $current = $value;
+            $current = $current[$segment];
         }
-        return ['found' => true, 'value' => $data];
+        return ['found' => true, 'value' => $current];
     }
 }

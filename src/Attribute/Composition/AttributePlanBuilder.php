@@ -18,6 +18,8 @@ use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
 
+use function Componenta\DI\Internal\is_closure_reflector;
+
 /** Builds, validates, orders and memoizes the semantic attribute plan for stable targets. */
 final class AttributePlanBuilder
 {
@@ -582,6 +584,7 @@ final class AttributePlanBuilder
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
+            $target instanceof ReflectionMethod && is_closure_reflector($target) => null,
             $target instanceof ReflectionMethod => sprintf(
                 'method:%s::%s()',
                 $target->getDeclaringClass()->getName(),
@@ -594,7 +597,7 @@ final class AttributePlanBuilder
     private static function parameterCacheKey(ReflectionParameter $parameter): ?string
     {
         $function = $parameter->getDeclaringFunction();
-        if ($function->isClosure()) {
+        if (is_closure_reflector($function)) {
             return null;
         }
 

@@ -87,10 +87,7 @@ test('ClassDefinition calls run eagerly after the constructor without attribute 
     $target = $container->make($class);
 
     expect($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second'])
-        ->and($target->state)->toBe('constructed')
-        ->and($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second'])
-        ->and($target->state)->toBe('constructed')
-        ->and($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second']);
+        ->and($target->state)->toBe('constructed');
 })->with([
     'eager' => [EagerDefinitionLifecycle::class],
     'lazy' => [LazyDefinitionLifecycle::class],

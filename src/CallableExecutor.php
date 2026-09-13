@@ -35,7 +35,7 @@ final class CallableExecutor implements CallableExecutorInterface
     {
         try {
             $resolved = $this->callableResolver->resolve($callable);
-            $plan = $this->plan($resolved);
+            $plan = $resolved instanceof PreparedCallable ? null : $this->plan($resolved);
             $arguments = $plan === null
                 ? ResolutionMetadata::publicParameters($params)
                 : $this->parameters->resolvePrepared($plan, $params);
@@ -68,6 +68,12 @@ final class CallableExecutor implements CallableExecutorInterface
      */
     private function plan(callable $callable): ?PreparedParameterPlan
     {
+        if (is_array($callable) && $callable[0] instanceof Closure
+            && strcasecmp((string) $callable[1], '__invoke') === 0
+        ) {
+            $callable = $callable[0];
+        }
+
         if ($callable instanceof Closure) {
             // Prepared targets retain ReflectionParameter instances and those
             // reflectors retain their declaring Closure. Caching such a plan,

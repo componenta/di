@@ -35,9 +35,10 @@ final class DelegatorRegistry
     public function register(string $id, mixed $delegator): void
     {
         $delegator = DependencyConfiguration::normalizeDelegatorSpecification($delegator, $id);
+        $dependencies = self::dependencyIds($delegator);
         $this->raw[$id][] = $delegator;
 
-        foreach (self::dependencyIds($delegator) as $dependencyId) {
+        foreach ($dependencies as $dependencyId) {
             $this->dependents[$dependencyId][$id] = true;
         }
 
@@ -184,7 +185,8 @@ final class DelegatorRegistry
                 if ($owner !== '' && $method !== '') {
                     $isKnownStatic = (class_exists($owner) || interface_exists($owner))
                         && method_exists($owner, $method)
-                        && (new ReflectionMethod($owner, $method))->isStatic();
+                        && (new ReflectionMethod($owner, $method))->isStatic()
+                        && is_callable([$owner, $method]);
                     if (!$isKnownStatic) {
                         // A class may be autoloaded only after registration. Track
                         // its owner conservatively so a later non-static method

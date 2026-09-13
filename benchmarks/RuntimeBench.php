@@ -50,10 +50,13 @@ namespace Componenta\DI\Benchmarks\Runtime {
 
     function createContainer(): Container
     {
-        $container = (new ContainerFactory())->create(
-            new Config([], new Environment([])),
-            new DependencyDefinitions([]),
-        )->container;
+        // The pinned v4 baseline uses ContainerBuilder instead of ContainerFactory.
+        $container = class_exists(ContainerFactory::class)
+            ? (new ContainerFactory())->create(
+                new Config([], new Environment([])),
+                new DependencyDefinitions([]),
+            )->container
+            : (new \Componenta\DI\ContainerBuilder())->build();
 
         if (!$container instanceof Container) {
             throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');

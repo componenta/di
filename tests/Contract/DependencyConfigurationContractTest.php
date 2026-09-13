@@ -92,3 +92,26 @@ test(
         'Attribute capability entries must be Componenta\\DI\\Attribute\\Composition\\CapabilityPolicy; got stdClass',
     ],
 ]);
+
+test('null dependency sections are rejected rather than treated as absent', function (string $section): void {
+    expect(fn() => (new ContainerFactory())->create(
+        new Config([], new Environment([])),
+        new DependencyDefinitions([$section => null]),
+    ))->toThrow(InvalidConfigurationException::class, sprintf('Container dependency "%s" must be an array; got null', $section));
+})->with([
+    ConfigKey::FACTORIES,
+    ConfigKey::INVOKABLES,
+    ConfigKey::ALIASES,
+    ConfigKey::DELEGATORS,
+    ConfigKey::SERVICES,
+    ConfigKey::PARAMETER_RESOLVERS,
+    ConfigKey::ATTRIBUTE_DEFINITIONS,
+    ConfigKey::ATTRIBUTE_CAPABILITIES,
+]);
+
+test('null replacement flags are rejected rather than treated as false', function (string $section): void {
+    expect(fn() => (new ContainerFactory())->create(
+        new Config([], new Environment([])),
+        new DependencyDefinitions([$section => null]),
+    ))->toThrow(InvalidConfigurationException::class, sprintf('Container dependency "%s" must be bool; got null', $section));
+})->with([ConfigKey::PARAMETER_RESOLVERS_REPLACE, ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE]);

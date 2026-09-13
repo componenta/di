@@ -11,14 +11,14 @@ final class NullableResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        return $target->allowsNull;
+        return !$target->variadic && $target->allowsNull;
     }
 
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        return $target->allowsNull
+        return $this->supports($target)
             ? [$target->position, null]
             : null;
     }

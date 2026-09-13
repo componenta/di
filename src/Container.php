@@ -33,6 +33,7 @@ final class Container implements
     private readonly DelegatorRegistry $delegators;
     private ?ExternalContainerRegistry $externalContainers = null;
     private readonly CycleGuard $cycleGuard;
+    private ?CycleGuard $lookupGuard = null;
     private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
 
@@ -102,14 +103,15 @@ final class Container implements
                 && !ProtectedServiceIds::contains($entryId)
             ) {
                 $externalGuard = "\0external:" . $id;
-                $this->cycleGuard->enter($externalGuard);
+                $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+                $lookupGuard->enter($externalGuard);
                 try {
                     $external = $this->externalContainers->findOwning($id);
                     if ($external !== null) {
                         return $external->get($id);
                     }
                 } finally {
-                    $this->cycleGuard->leave($externalGuard);
+                    $lookupGuard->leave($externalGuard);
                 }
             }
 
@@ -167,7 +169,8 @@ final class Container implements
     {
         try {
             $guardId = "\0has:" . $id;
-            $this->cycleGuard->enter($guardId);
+            $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+            $lookupGuard->enter($guardId);
             try {
                 $entryId = $this->aliases->resolve($id);
                 if (!ProtectedServiceIds::contains($id)
@@ -184,7 +187,7 @@ final class Container implements
                 }
                 return $this->resolver->can($entryId);
             } finally {
-                $this->cycleGuard->leave($guardId);
+                $lookupGuard->leave($guardId);
             }
         } catch (Throwable) {
             return false;

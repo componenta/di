@@ -42,6 +42,8 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
         if (!$value->resolved) {
             if ($attribute->default !== DefaultValue::None) {
                 $value = ParameterAttributeValue::resolved($attribute->default);
+            } elseif ($target->variadic) {
+                $value = ParameterAttributeValue::resolved([]);
             } elseif ($target->hasDefault) {
                 $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());
             } elseif ($target->allowsNull) {

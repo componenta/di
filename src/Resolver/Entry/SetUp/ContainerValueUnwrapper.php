@@ -47,12 +47,14 @@ final readonly class ContainerValueUnwrapper implements SetUpValueUnwrapperInter
         $environment = $this->container->config->environment;
         $value = $entry->resolve($environment);
 
-        if ($parameter === null || ($value === null && $parameter->allowsNull())) {
+        if ($parameter === null || ($value === null && $parameter->allowsNull() && !$parameter->isVariadic())) {
             return $value;
         }
 
         $type = $parameter->getType();
-        $typeName = $type instanceof ReflectionNamedType ? $type->getName() : null;
+        $typeName = $parameter->isVariadic()
+            ? 'array'
+            : ($type instanceof ReflectionNamedType ? $type->getName() : null);
         if (!in_array($typeName, ['string', 'int', 'float', 'bool', 'array'], true)) {
             return $value;
         }

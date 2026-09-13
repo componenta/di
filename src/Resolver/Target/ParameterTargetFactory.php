@@ -6,6 +6,8 @@ namespace Componenta\DI\Resolver\Target;
 
 use ReflectionParameter;
 
+use function Componenta\DI\Internal\is_closure_reflector;
+
 /** Creates and reuses immutable parameter targets for stable named reflectors. */
 final class ParameterTargetFactory
 {
@@ -16,12 +18,9 @@ final class ParameterTargetFactory
     {
         $function = $parameter->getDeclaringFunction();
 
-        if ($function->isClosure()) {
-            // ReflectionParameter may expose a method-scoped closure through
-            // ReflectionMethod rather than ReflectionFunction. isClosure() is
-            // the semantic check that works for both representations.
-            // ParameterTarget keeps its ReflectionParameter, and the reflector
-            // keeps its declaring Closure, so closure targets are never cached.
+        if (is_closure_reflector($function)) {
+            // Closure metadata belongs to an instance, not a stable method name.
+            // Retaining its parameter reflector can also retain captured objects.
             return new ParameterTarget($parameter);
         }
 

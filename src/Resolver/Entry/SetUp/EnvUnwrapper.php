@@ -54,7 +54,9 @@ final readonly class EnvUnwrapper implements SetUpValueUnwrapperInterface
         ?ReflectionParameter $parameter,
     ): mixed {
         $type = $parameter?->getType();
-        $typeName = $type instanceof ReflectionNamedType ? $type->getName() : null;
+        $typeName = $parameter?->isVariadic() === true
+            ? 'array'
+            : ($type instanceof ReflectionNamedType ? $type->getName() : null);
 
         return match ($typeName) {
             'string' => $environment->string($name),

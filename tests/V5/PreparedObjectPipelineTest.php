@@ -79,10 +79,11 @@ test('plain autowiring applies constructor defaults and explicit overrides', fun
         ->and($overrides->dependency)->toBeInstanceOf(AuditFastDependency::class);
 });
 
-test('unsupported constructor parameter shapes fail identically for every build', function (): void {
-    foreach ([(new ContainerBuilder())->build(), (new ContainerBuilder())->build()] as $container) {
-        foreach ([AuditByReferenceConstructorEntry::class, AuditVariadicConstructorEntry::class] as $entry) {
-            expect(fn() => $container->make($entry))->toThrow(ResolutionException::class);
-        }
-    }
+test('by-reference constructors remain unsupported while variadics accept explicit dependencies', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $dependency = new AuditFastDependency();
+
+    expect(fn() => $container->make(AuditByReferenceConstructorEntry::class))->toThrow(ResolutionException::class)
+        ->and($container->make(AuditVariadicConstructorEntry::class)->captured)->toBe([])
+        ->and($container->make(AuditVariadicConstructorEntry::class, ['dependencies' => [$dependency]])->captured)->toBe([$dependency]);
 });

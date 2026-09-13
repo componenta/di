@@ -50,7 +50,7 @@ final class DependencyConfiguration
 
         /** @var array<string,non-empty-string> $configuredAliases */
         $configuredAliases = self::section($dependencies, ConfigKey::ALIASES);
-        $aliases = array_merge($defaultAliases, $configuredAliases);
+        $aliases = self::assertAliasesAcyclic(array_merge($defaultAliases, $configuredAliases));
 
         /** @var list<class-string> $configuredInvokables */
         $configuredInvokables = self::section($dependencies, ConfigKey::INVOKABLES);
@@ -317,7 +317,7 @@ final class DependencyConfiguration
         if (self::deferredServiceMethod($delegator)) {
             return $delegator;
         }
-        if (self::callablePair($delegator) || is_callable($delegator)) {
+        if (is_callable($delegator)) {
             return $delegator;
         }
 
@@ -375,27 +375,6 @@ final class DependencyConfiguration
             $resolver->resolve($alias);
         }
         return $aliases;
-    }
-
-    /** @phpstan-assert-if-true array{object|string,string} $value */
-    private static function callablePair(mixed $value): bool
-    {
-        if (!is_array($value)
-            || array_keys($value) !== [0, 1]
-            || !is_string($value[1])
-            || $value[1] === ''
-        ) {
-            return false;
-        }
-
-        if (is_callable($value)) {
-            return true;
-        }
-
-        return is_string($value[0])
-            && $value[0] !== ''
-            && (class_exists($value[0]) || interface_exists($value[0]))
-            && method_exists($value[0], $value[1]);
     }
 
     /** @phpstan-assert-if-true array{non-empty-string,non-empty-string} $value */

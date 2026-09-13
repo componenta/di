@@ -50,7 +50,7 @@ final class CycleGuard
 
         if (isset($stack[$id])) {
             throw CircularDependencyException::forService([
-                ...array_keys($stack),
+                ...array_map('strval', array_keys($stack)),
                 $id,
             ]);
         }
@@ -73,7 +73,7 @@ final class CycleGuard
 
         if (isset($stack[$id])) {
             throw CircularDependencyException::forService([
-                ...array_keys($stack),
+                ...array_map('strval', array_keys($stack)),
                 $id,
             ]);
         }

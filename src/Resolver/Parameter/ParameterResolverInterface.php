@@ -23,6 +23,9 @@ interface ParameterResolverInterface
     public function supports(ParameterTarget $target): bool;
 
     /**
+     * Variadic targets resolve to an array of arguments, validated against the
+     * declared element type and expanded only when the callable is invoked.
+     *
      * @return array{0: int, 1: mixed}|null Null continues the resolver chain.
      * @throws ResolutionException
      */

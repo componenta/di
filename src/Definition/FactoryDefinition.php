@@ -12,7 +12,7 @@ namespace Componenta\DI\Definition;
  *
  * @example
  * ```php
- * new FactoryDefinition(fn(ContainerInterface $c, array $context) => new Service($c->get(Dep::class)))
+ * new FactoryDefinition(fn(ContainerValue $c, array $params) => new Service($c->container->get(Dep::class)))
  * ```
  */
 final readonly class FactoryDefinition implements DefinitionInterface

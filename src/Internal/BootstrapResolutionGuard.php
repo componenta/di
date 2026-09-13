@@ -28,7 +28,7 @@ final class BootstrapResolutionGuard
     /** @var list<array{target:ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>}> */
     private array $attributeUses = [];
 
-    /** @var list<array{target:ParameterTarget,prefix:non-empty-list<ParameterResolverInterface>}> */
+    /** @var list<array{target:ParameterTarget,prefix:list<ParameterResolverInterface>,winner:?ParameterResolverInterface}> */
     private array $parameterUses = [];
 
     public function __construct(private readonly AttributePlanBuilder $plans) {}
@@ -54,11 +54,15 @@ final class BootstrapResolutionGuard
         ];
     }
 
-    /** @param non-empty-list<ParameterResolverInterface> $prefix */
-    public function recordParameter(ParameterTarget $target, array $prefix): void
+    /** @param list<ParameterResolverInterface> $prefix */
+    public function recordParameter(ParameterTarget $target, array $prefix, bool $resolved = true): void
     {
         if ($this->active) {
-            $this->parameterUses[] = ['target' => $target, 'prefix' => $prefix];
+            $this->parameterUses[] = [
+                'target' => $target,
+                'prefix' => $prefix,
+                'winner' => $resolved && $prefix !== [] ? $prefix[array_key_last($prefix)] : null,
+            ];
         }
     }
 
@@ -77,7 +81,7 @@ final class BootstrapResolutionGuard
                 }
             }
             foreach ($this->parameterUses as $use) {
-                $winner = $use['prefix'][array_key_last($use['prefix'])];
+                $winner = $use['winner'];
                 foreach ($resolvers as $resolver) {
                     if ($resolver === $winner) {
                         break;
@@ -87,7 +91,7 @@ final class BootstrapResolutionGuard
                             'DI bootstrap resolved %s before applicable parameter resolver %s was registered ahead of %s. Register this resolver before factories that resolve this dependency.',
                             self::targetName($use['target']->reflection),
                             $resolver::class,
-                            $winner::class,
+                            $winner === null ? 'native argument omission' : $winner::class,
                         ));
                     }
                 }

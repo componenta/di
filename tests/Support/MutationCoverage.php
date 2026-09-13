@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\Support;
 
 use Pest\Mutate\Event\Events\TestSuite\StartMutationGeneration;
 use Pest\Mutate\Event\Events\TestSuite\StartMutationGenerationSubscriber;
+use Pest\Mutate\Mutation;
 use Pest\Support\Coverage;
 use RuntimeException;
 use SebastianBergmann\CodeCoverage\CodeCoverage;
@@ -13,8 +14,13 @@ use SebastianBergmann\CodeCoverage\Report\PHP;
 
 final class MutationCoverage implements StartMutationGenerationSubscriber
 {
+    /** @var array<string,array<int,list<string>|null>> */
+    private array $coveredLines = [];
+    public function __construct(private readonly MutationFallback $fallback) {}
+
     public function notify(StartMutationGeneration $event): void
     {
+        $this->fallback->verifyControl();
         $path = Coverage::getPath();
         if ($path === '') {
             throw new RuntimeException('Pest did not provide a mutation coverage path.');
@@ -40,6 +46,7 @@ final class MutationCoverage implements StartMutationGenerationSubscriber
             unset($tests);
         }
         unset($file);
+        $this->coveredLines = $lines;
         $data->setLineCoverage($lines);
         (new PHP())->process($coverage, $path);
 
@@ -47,5 +54,15 @@ final class MutationCoverage implements StartMutationGenerationSubscriber
         putenv('XDEBUG_MODE=off');
         $_SERVER['XDEBUG_MODE'] = 'off';
         $_ENV['XDEBUG_MODE'] = 'off';
+    }
+
+    public function covers(Mutation $mutation): bool
+    {
+        foreach (range($mutation->startLine, $mutation->endLine) as $line) {
+            if (($this->coveredLines[$mutation->file->getRealPath()][$line] ?? []) !== []) {
+                return true;
+            }
+        }
+        return false;
     }
 }

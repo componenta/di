@@ -26,7 +26,7 @@ final class MapRequest extends RequestMapper implements RequestDataExtractorInte
 
     /**
      * @param list<RequestDataSource> $sources
-     * @param array<string,string> $map
+     * @param array<string|int,string> $map
      * @param list<string> $exclude
      * @param array<string,mixed> $defaults
      * @param array<string,string> $cast

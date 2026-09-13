@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
+use Closure;
 use Componenta\Caster\CasterNotFoundException;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -15,6 +17,18 @@ use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
+use ReflectionMethod;
+
+/** @internal */
+function is_closure_reflector(ReflectionFunctionAbstract $reflection): bool
+{
+    // Closure::__invoke has instance-specific metadata even though PHP reports
+    // it as an internal method with isClosure() === false.
+    return $reflection->isClosure()
+        || ($reflection instanceof ReflectionMethod
+            && $reflection->getDeclaringClass()->getName() === Closure::class
+            && $reflection->getName() === '__invoke');
+}
 
 /** @internal */
 function is_magic_closure_trampoline(ReflectionFunctionAbstract $reflection): bool
@@ -109,6 +123,10 @@ function validate_parameter_resolution_result(
         );
     }
 
+    if ($target->variadic) {
+        return [$target->position, VariadicArguments::validate($target, $result[1], $context)];
+    }
+
     if (!$target->accepts($result[1])) {
         throw ResolutionException::forParameter(
             $target->reflection,
@@ -128,7 +146,7 @@ function validate_parameter_resolution_result(
 /**
  * @internal
  * @param array<string|int,mixed> $data
- * @param array<string,string> $map
+ * @param array<string|int,string> $map
  * @param array<string,mixed> $defaults
  * @param array<string,string> $cast
  * @param array<string,array<string,mixed>> $sortMap

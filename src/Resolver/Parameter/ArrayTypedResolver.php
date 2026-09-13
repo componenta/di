@@ -12,13 +12,17 @@ final class ArrayTypedResolver implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
     {
-        return $target->typeNames !== [];
+        return !$target->variadic && $target->typeNames !== [];
     }
 
     public function resolveParameter(
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
+        if ($target->variadic) {
+            return null;
+        }
+
         foreach ($target->typeNames as $typeName) {
             if (RequestParameter::isTransportType($typeName)) {
                 continue;

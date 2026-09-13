@@ -375,7 +375,6 @@ test('object initialization uses attributes loaded by dependencies without repla
         \Componenta\DI\ConfigKey::FACTORIES => [
             ...($useDefinition ? [
                 $class => \Componenta\DI\Definition\ClassDefinition::create($class)->autowire()
-                    ->constructor(['step' => 'late'])
                     ->call('initialize', ['step' => 'configured']),
             ] : []),
             LateLoadingDependency::class => static function () use ($attribute, &$dependencyCreations): LateLoadingDependency {
@@ -391,7 +390,7 @@ test('object initialization uses attributes loaded by dependencies without repla
     ]);
     expect($container->has($class))->toBeTrue()->and($events->constructions)->toBe(0);
 
-    $params = $useDefinition ? [] : ['step' => 'late'];
+    $params = ['step' => 'late'];
     $first = $container->make($class, $params);
     $second = $container->make($class, $params);
     if (!$first instanceof LateObjectState || !$second instanceof LateObjectState) {

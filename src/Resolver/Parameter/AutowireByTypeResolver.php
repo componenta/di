@@ -17,7 +17,7 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
 
     public function supports(ParameterTarget $target): bool
     {
-        return $target->className !== null;
+        return !$target->variadic && $target->className !== null;
     }
 
     public function resolveParameter(
@@ -25,7 +25,7 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
         ParameterResolutionContext $context,
     ): ?array {
         $typeName = $target->className;
-        if ($typeName === null) {
+        if ($target->variadic || $typeName === null) {
             return null;
         }
 

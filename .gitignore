@@ -3,3 +3,8 @@
 /.phpunit.cache/
 /.php-cs-fixer.cache
 /coverage/
+/.phpunit.result.cache
+/.phpstan.cache/
+vendor/
+.phpunit.cache/
+integration/composer.lock

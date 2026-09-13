@@ -19,6 +19,8 @@ use ReflectionParameter;
 use Throwable;
 use WeakMap;
 
+use function Componenta\DI\Internal\is_closure_reflector;
+
 /** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
 {
@@ -112,7 +114,7 @@ final class ParametersResolver
     /**
      * @param list<ReflectionParameter> $parameters
      * @param array<string|int,mixed> $providedParameters
-     * @return array<int,mixed>
+     * @return array<array-key,mixed>
      */
     public function resolve(array $parameters, array $providedParameters = []): array
     {
@@ -165,7 +167,7 @@ final class ParametersResolver
     /**
      * @param list<ParameterTarget> $targets
      * @param array<string|int,mixed> $providedParameters
-     * @return array<int,mixed>
+     * @return array<array-key,mixed>
      */
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
@@ -180,7 +182,7 @@ final class ParametersResolver
      *
      * @internal
      * @param array<string|int,mixed> $providedParameters
-     * @return array<int,mixed>
+     * @return array<array-key,mixed>
      */
     public function resolvePrepared(
         PreparedParameterPlan $plan,
@@ -193,8 +195,10 @@ final class ParametersResolver
 
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
 
+        $arguments = [];
+        $omitted = false;
         foreach (array_keys($plan->parameters) as $index) {
-            [$position, $value] = $this->resolvePreparedParameter($plan->parameters[$index], $state, $completed);
+            $result = $this->resolvePreparedParameter($plan->parameters[$index], $state, $completed, allowOmission: true);
 
             // Dependencies and handlers can load source attributes, including on the current parameter.
             $current = $this->refreshPlan($plan);
@@ -204,11 +208,33 @@ final class ParametersResolver
                 $completed->assertUnchanged();
             }
 
+            if ($result === null) {
+                $omitted = true;
+                continue;
+            }
+
+            [$position, $value] = $result;
+            $target = $plan->parameters[$index]->target;
             $state->resolve($position, $value);
+            // Resolver state retains one value per declaration; only the native
+            // invocation vector expands a variadic collection.
+            if ($target->variadic && is_array($value)) {
+                if ($omitted && array_any(array_keys($value), static fn(string|int $key): bool => is_int($key))) {
+                    throw ResolutionException::forParameter(
+                        $target->reflection,
+                        reason: 'Positional variadic arguments cannot follow omitted native arguments.',
+                    );
+                }
+                $arguments = [...$arguments, ...$value];
+            } elseif ($omitted) {
+                $arguments[$target->name] = $value;
+            } else {
+                $arguments[] = $value;
+            }
         }
 
         $completed->assertUnchanged();
-        return $state->resolved;
+        return $arguments;
     }
 
     /** @internal */
@@ -243,13 +269,18 @@ final class ParametersResolver
         return $this->targetFactory->create($parameter);
     }
 
-    /** @return array{0:int,1:mixed} */
+    /** @return ($allowOmission is true ? array{0:int,1:mixed}|null : array{0:int,1:mixed}) */
     private function resolvePreparedParameter(
         PreparedParameter $prepared,
         ParameterResolutionContext $context,
         CompletedAttributeGuard $completed,
-    ): array {
+        bool $allowOmission = false,
+    ): ?array {
         $target = $prepared->target;
+        $nativeOptional = $allowOmission
+            && !$target->variadic
+            && $target->reflection->isOptional()
+            && $target->reflection->getDeclaringFunction()->isInternal();
         $attributePlan = $this->plans->build($target->reflection);
 
         try {
@@ -276,8 +307,21 @@ final class ParametersResolver
                         $prefix[] = $resolver;
                         $this->bootstrap->recordParameter($target, $prefix);
                     }
-                    return $result;
+                    // Native defaults may depend on omission (e.g. array_keys()).
+                    // Keep explicit and extension-provided values, but let PHP
+                    // supply defaults instead of synthesizing argument values.
+                    return $nativeOptional && ($resolver instanceof DefaultValueResolver || $resolver instanceof NullableResolver)
+                        ? null
+                        : $result;
                 }
+            }
+            if ($nativeOptional) {
+                $completed->record($target->reflection, $attributePlan);
+                if ($this->bootstrap?->isActive === true) {
+                    $this->bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
+                    $this->bootstrap->recordParameter($target, $resolvers, resolved: false);
+                }
+                return null;
             }
         } catch (ExceptionInterface $e) {
             throw $e;
@@ -327,7 +371,6 @@ final class ParametersResolver
         }
 
         $unsupportedReason = match (true) {
-            $target->variadic => 'Variadic parameters are not supported by the DI resolver contract.',
             $target->byReference => 'By-reference parameters are not supported by the DI resolver contract.',
             default => null,
         };
@@ -369,11 +412,9 @@ final class ParametersResolver
     {
         $function = $target->reflection->getDeclaringFunction();
 
-        // ReflectionParameter may expose a closure scoped to a method through
-        // ReflectionMethod. isClosure() is therefore the semantic distinction:
-        // PreparedParameter retains its target, and caching any closure-owned
-        // target would retain the declaring Closure and its captures.
-        return !$function->isClosure();
+        // PreparedParameter retains its target; closure-owned targets must not
+        // be shared by name or kept alive through this cache.
+        return !is_closure_reflector($function);
     }
 
     /** @return list<int> */

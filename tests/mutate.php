@@ -95,7 +95,6 @@ $output = new ConsoleOutput(ConsoleOutput::VERBOSITY_NORMAL, $input->getParamete
 try {
     $kernel = Kernel::boot(TestSuite::getInstance($packageDirectory, 'tests'), $input, $output);
     require_once __DIR__ . '/Support/MutationCoverage.php';
-    \Pest\Mutate\Event\Facade::instance()->registerSubscriber(new \Componenta\DI\Tests\Support\MutationCoverage());
     if (in_array('--mutate', $arguments, true)) {
         /** @var \Pest\Mutate\Repositories\ConfigurationRepository $configuration */
         $configuration = \Pest\Support\Container::getInstance()->get(\Pest\Mutate\Repositories\ConfigurationRepository::class);

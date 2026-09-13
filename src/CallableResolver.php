@@ -82,19 +82,9 @@ class CallableResolver implements CallableResolverInterface
     {
         [$class, $method] = explode('::', $callable, 2);
 
-        if (!class_exists($class) && !interface_exists($class)) {
+        if ($method === '' || (!class_exists($class) && !interface_exists($class))) {
             throw InvalidCallableException::forValue($callable);
         }
-        if (!method_exists($class, $method)) {
-            throw InvalidCallableException::forMethod($class, $method);
-        }
-        if ($this->isStaticMethod($class, $method)) {
-            if (is_callable([$class, $method])) {
-                return [$class, $method];
-            }
-            throw InvalidCallableException::forMethod($class, $method);
-        }
-
         if ($this->container->has($class)) {
             $entry = $this->container->get($class);
             if (is_object($entry) && is_callable([$entry, $method])) {
@@ -103,6 +93,9 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forMethod($class, $method);
         }
 
+        if (!method_exists($class, $method)) {
+            throw InvalidCallableException::forMethod($class, $method);
+        }
         throw InvalidCallableException::forMissingService($class);
     }
 

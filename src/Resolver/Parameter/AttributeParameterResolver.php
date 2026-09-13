@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
+use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -115,6 +116,13 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
     ): ParameterAttributeValue {
         if ($plan->has(AuthoritativeValueProvider::class)) {
             return ParameterAttributeValue::unresolved();
+        }
+
+        if ($target->variadic) {
+            $provided = VariadicArguments::provided($target, $context);
+            return $provided === null
+                ? ParameterAttributeValue::unresolved()
+                : ParameterAttributeValue::resolved($provided[1]);
         }
 
         if (isset($context->provided[$target->name]) || array_key_exists($target->name, $context->provided)) {
