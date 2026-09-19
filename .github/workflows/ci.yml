@@ -76,7 +76,7 @@ jobs:
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
         run: >-
           composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.0"}}}'
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
 
       - name: Use reflection v2 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
@@ -228,7 +228,7 @@ jobs:
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
         run: >-
           composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.0"}}}'
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
 
       - name: Use reflection v2 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
@@ -315,7 +315,7 @@ jobs:
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
         run: >-
           composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.0"}}}'
+          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
 
       - name: Use reflection v2 workspace
         if: env.USE_CONFIG_V3_WORKSPACE == 'true'
