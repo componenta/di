@@ -156,7 +156,7 @@ jobs:
           $manifestPath = Join-Path $PWD 'composer.json'
           $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -AsHashtable
           if (!$manifest.Contains('repositories')) { $manifest['repositories'] = [ordered]@{} }
-          $versions = [ordered]@{ config = '3.0.0'; validation = '3.0.0'; reflection = '2.0.1' }
+          $versions = [ordered]@{ config = '3.0.0'; validation = '3.0.1'; reflection = '2.0.1' }
           foreach ($package in $versions.Keys) {
             $manifest['repositories']["componenta-$package"] = @{
               type = 'path'
