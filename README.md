@@ -275,7 +275,7 @@ Extension factories may resolve ordinary dependencies from the existing containe
 
 `AttributePlan::all()` and `attributes()` preserve the order of the composed plan, including inherited capabilities and interleaved repeated attribute classes.
 
-Composition rules receive read-only `AttributeUsage` metadata: the declared attribute class and arguments, its semantic definition, target, and declaration order. Reading `arguments` evaluates the declared expressions on each access; object arguments are not stored in the shared plan. A `new` expression can therefore run a constructor when a rule explicitly reads the arguments. Rules validate declaration constraints; checks that depend on changing runtime state belong in handlers. A fresh attribute instance is created when execution reaches its handler; shared plans never retain that runtime instance.
+Composition rules receive read-only `AttributeUsage` metadata: the declared attribute class and arguments, its semantic definition, target, and declaration order. Reading `arguments` evaluates the declared expressions on each access; object arguments are not stored in the shared plan. A `new` expression can therefore run a constructor when a rule explicitly reads the arguments. User composition rules are evaluated during each resolution. When such rules are registered, DI does not memoize attribute, object or prepared parameter plans, so repeated calls observe current arguments and rule state. A fresh attribute instance is created when execution reaches its handler; shared plans never retain that runtime instance.
 
 If construction makes another declared attribute available, the execution order is recomputed without reconstructing the pending instance. Newly discovered handlers must preserve the already executed order across the current object phase. A late change to parameter input policy or to a completed property composition throws `AttributeCompositionException`; constructors and handlers are not replayed. Completed parameter compositions remain checked while subsequent parameters resolve, so an incompatible late source cannot reach the callable body. Object creation also checks the completed before-instantiation phase before invoking the constructor and before returning the object. If the constructor or a lifecycle hook itself reveals an incompatible policy, its already completed side effects are not rolled back and the object is not returned as a successfully resolved service. Loading unrelated attributes is allowed.
 
@@ -285,7 +285,7 @@ External PSR-11 containers may be registered with `Container::addContainer()`. E
 
 ## Runtime behavior
 
-`get()` caches a shared result, including the result of its delegator pipeline. `make()` creates a fresh object and accepts runtime parameters. Reflection metadata, prepared parameter plans, alias paths, and resolver ownership are cached only in memory inside one container.
+`get()` caches a shared result, including the result of its delegator pipeline. `make()` creates a fresh object and accepts runtime parameters. Reflection metadata, prepared parameter plans and alias paths are cached only in memory inside one container. Resolver selection for entries without an explicit definition checks current availability on each lookup, including the current state of composition rules.
 
 Development and production use the same `ContainerFactory`, normalization, validation, and resolver chain. Runtime dependency values are never exported, so non-serializable values have the same behavior in both environments.
 

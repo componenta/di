@@ -200,7 +200,7 @@ final class AttributeProcessor
         $name = $class->getName();
         $revision = $this->registry->revision;
         $cached = $this->cache[$name] ?? null;
-        if ($cached !== null && $cached['revision'] === $revision) {
+        if ($this->plans->canCachePlans && $cached !== null && $cached['revision'] === $revision) {
             return $cached;
         }
 
@@ -218,12 +218,16 @@ final class AttributeProcessor
             }
         }
 
-        return $this->cache[$name] = [
+        $plan = [
             'revision' => $revision,
             'hasHandlers' => $hasHandlers,
             'before' => $before,
             'after' => $after,
         ];
+        if ($this->plans->canCachePlans) {
+            $this->cache[$name] = $plan;
+        }
+        return $plan;
     }
 
     /**

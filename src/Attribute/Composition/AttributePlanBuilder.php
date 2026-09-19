@@ -36,13 +36,18 @@ final class AttributePlanBuilder
         get => $this->registry->revision;
     }
 
+    /** @internal */
+    public bool $canCachePlans {
+        get => $this->registry->canCachePlans;
+    }
+
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function build(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): AttributePlan {
         $this->synchronizeRegistryRevision();
 
-        $key = self::cacheKey($target);
+        $key = $this->canCachePlans ? self::cacheKey($target) : null;
         if ($key !== null && isset($this->namedPlans[$key])) {
             return $this->namedPlans[$key];
         }
@@ -96,7 +101,8 @@ final class AttributePlanBuilder
 
         $plan = new AttributePlan($target, $this->ordered($target, $usages));
         if ($key === null) {
-            // Closure parameters are intentionally not memoized. AttributePlan
+            // User rules require fresh validation. Closure parameters also
+            // cannot be memoized: AttributePlan
             // retains its target reflector, and ReflectionParameter retains the
             // declaring Closure; caching such a plan would keep closure captures
             // alive after the public call has completed.

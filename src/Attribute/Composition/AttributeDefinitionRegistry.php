@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\Capability\CreationStrategy;
 use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
+use Componenta\DI\Attribute\Composition\Rule\ProxyCompositionRule;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
 
@@ -26,6 +27,8 @@ final class AttributeDefinitionRegistry
 
     private bool $sealed = false;
     private int $generation = 0;
+    /** User rules may evaluate native arguments or read mutable state. @internal */
+    public private(set) bool $canCachePlans = true;
 
     public function __construct()
     {
@@ -72,6 +75,11 @@ final class AttributeDefinitionRegistry
         }
 
         $this->definitions[$attribute] = $definition;
+        foreach ($definition->rules as $rule) {
+            if (!$rule instanceof ProxyCompositionRule) {
+                $this->canCachePlans = false;
+            }
+        }
         ++$this->generation;
     }
 

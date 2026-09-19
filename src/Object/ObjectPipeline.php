@@ -182,7 +182,7 @@ final class ObjectPipeline
             $name = $class instanceof ReflectionClass
                 ? $class->getName()
                 : ltrim($class, '\\');
-            if (isset($this->metadata[$name])) {
+            if ($this->plans->canCachePlans && isset($this->metadata[$name])) {
                 return $this->metadata[$name];
             }
 
@@ -208,13 +208,17 @@ final class ObjectPipeline
                 continue;
             }
 
-            return $this->metadata[$name] = new ObjectMetadata(
+            $metadata = new ObjectMetadata(
                 $reflection,
                 $classPlan,
                 $constructor,
                 $constructorTargets,
                 $hasAttributeHandlers,
             );
+            if ($this->plans->canCachePlans) {
+                $this->metadata[$name] = $metadata;
+            }
+            return $metadata;
         }
     }
 
@@ -229,7 +233,7 @@ final class ObjectPipeline
         }
 
         $plan = $parameters->prepareTargets($metadata->constructorTargets);
-        if ($parameters->isSealed) {
+        if ($parameters->canCachePlans) {
             $this->constructorPlans[$name] = $plan;
         }
 

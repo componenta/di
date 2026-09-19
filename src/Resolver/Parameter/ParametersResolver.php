@@ -55,6 +55,11 @@ final class ParametersResolver
         get => $this->sealed;
     }
 
+    /** @internal */
+    public bool $canCachePlans {
+        get => $this->sealed && $this->plans->canCachePlans;
+    }
+
     /** Higher priorities run first; equal priorities preserve insertion order. */
     public function add(ParameterResolverInterface $resolver, int $priority = 0): void
     {
@@ -242,7 +247,7 @@ final class ParametersResolver
     {
         $this->synchronizeAttributeRevision();
 
-        return $this->sealed
+        return $this->canCachePlans
             && $plan->owner === $this->planOwner
             && $plan->resolverRevision === $this->revision;
     }
@@ -351,7 +356,7 @@ final class ParametersResolver
 
         $this->synchronizeAttributeRevision();
 
-        if ($plan->resolverRevision === $this->revision) {
+        if ($this->plans->canCachePlans && $plan->resolverRevision === $this->revision) {
             return $plan;
         }
 
@@ -362,7 +367,7 @@ final class ParametersResolver
     {
         $this->synchronizeAttributeRevision();
 
-        $cacheable = $this->sealed && self::isStableTarget($target);
+        $cacheable = $this->canCachePlans && self::isStableTarget($target);
         if ($cacheable) {
             $cache = $this->preparedParameters ??= new WeakMap();
             if (isset($cache[$target])) {

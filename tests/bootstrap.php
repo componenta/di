@@ -34,7 +34,7 @@ if (!$usingLocalAutoload) {
     if (is_dir($packagesDirectory . '/reflection/src')) {
         $loader->setPsr4('Componenta\\Reflection\\', $packagesDirectory . '/reflection/src');
     }
-    require $packagesDirectory . '/config/src/functions.php';
+    require_once $packagesDirectory . '/config/src/functions.php';
 }
 
 require_once $packageDirectory . '/src/Internal/functions.php';

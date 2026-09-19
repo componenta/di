@@ -9,13 +9,11 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
 
-/** Ordered entry resolver chain with positive owner caching. */
+/** Ordered entry resolver chain. */
 final class CompositeResolver implements DefinitionAwareResolverInterface
 {
     /** @var list<EntryResolverInterface> */
     private array $resolvers;
-    /** @var array<string, EntryResolverInterface> */
-    private array $owners = [];
     /** @var array<string, DefinitionAwareResolverInterface> */
     private array $definitionOwners = [];
 
@@ -58,7 +56,6 @@ final class CompositeResolver implements DefinitionAwareResolverInterface
             }
             $resolver->setDefinition($id, $definition);
             $this->definitionOwners[$id] = $resolver;
-            $this->owners[$id] = $resolver;
             return;
         }
         throw InvalidConfigurationException::forInvalidDefinition($definition);
@@ -81,12 +78,9 @@ final class CompositeResolver implements DefinitionAwareResolverInterface
         if (isset($this->definitionOwners[$id])) {
             return $this->definitionOwners[$id];
         }
-        if (isset($this->owners[$id])) {
-            return $this->owners[$id];
-        }
         foreach ($this->resolvers as $resolver) {
             if ($resolver->can($id)) {
-                return $this->owners[$id] = $resolver;
+                return $resolver;
             }
         }
         return null;
