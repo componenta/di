@@ -203,7 +203,7 @@ The isolated companion-workspace reproduction used the actual path repositories 
 | `componenta/validation` | `8f888784bbe12069f8f9dc75703c5dd66c43e53f` | `3.0.1` |
 | `componenta/reflection` | `62aca6575934f119277236bb5dec7953063d69da` | `2.0.1` |
 
-These are local Linux results. A successful GitHub Actions run was not observed for the queried fix commit; no remote green status is claimed. Windows, coverage and mutation gates were not executed in this environment. The local static PHP binaries do not include PCOV/Xdebug. PHPStan's optional dynamically loaded accelerator could not load in the static binary, but analysis completed successfully; that warning was not a source-code analysis error.
+The table above records the original local Linux verification. The follow-up [cache parity recheck](2026-11-12-cache-parity-recheck.md) retrieved the push workflow that the original PR-only workflow lookup had not exposed: [CI for `e75aa6a`](https://github.com/componenta/di/actions/runs/43249462750) passed Linux PHP 8.4/8.5, Windows PHP 8.4, coverage (90.3%) and mutation (85.38%) gates. Those remote measurements belong to this first audit's final source, before the additional recheck fixes. The local static PHP binaries do not include PCOV/Xdebug. PHPStan's optional dynamically loaded accelerator could not load in the static binary, but analysis completed successfully; that warning was not a source-code analysis error.
 
 ### Reproduction
 
@@ -222,6 +222,6 @@ For the existing measured harnesses, set `COMPONENTA_DI_BENCH_AUTOLOAD` to the i
 
 1. Review the measured availability-polling plan and settle its explicit observability/checkpoint design gate. Preserve late-loading correctness before optimizing the hot path.
 2. Review the DI 6 callback/union specification, including the deliberately explicit first-argument and transformation-source policies. Implement its small slices only after that architecture review.
-3. Before a release, run the remaining platform/coverage/mutation gates and confirm the PHP patch floor against native trait-scope regressions.
+3. Keep platform/coverage/mutation gates mandatory for subsequent changes and confirm the PHP patch floor against native trait-scope regressions before the planned major release.
 
 The three corrective patches are already on the branch. The proposed architecture remains reviewable in the two linked plans; no feature migration or release was performed as part of this audit.

@@ -1,0 +1,1642 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-12",
+  "repository": "componenta/di",
+  "baseline_commit": "e75aa6a9373e13846c3f64af60b35d404cdbe217",
+  "validated_code_commit": "94c6ec77a78af4c7db481a3126b1898503e499d7",
+  "validated_src_tree": "3e3b9682f1f529546e1ab6ec1a77e024354e5115",
+  "scope": {
+    "production_files": 161,
+    "added_contract_files": 9,
+    "added_cases_php85": 66,
+    "reference_path": "Public no-op custom composition rule disables attribute/object/prepared plan memoization; real protected services and built-in resolver chain retained. Stable named reflection/targets and shared service caches checked separately; this is not a universal cache-disable switch."
+  },
+  "checks": {
+    "php84": {
+      "version": "8.4.23",
+      "passed": 1076,
+      "assertions": 4884,
+      "skipped": 2,
+      "reason": "PHP 8.5 inline closure attribute arguments"
+    },
+    "php85": {
+      "version": "8.5.8",
+      "passed": 1078,
+      "assertions": 4892,
+      "skipped": 0
+    },
+    "phpstan": {
+      "level": "max",
+      "scope": [
+        "src",
+        "tests"
+      ],
+      "result": "No errors",
+      "optional_turbo_extension": "Unavailable in static runtime; analysis completed without it"
+    },
+    "style": {
+      "result": "No changes required",
+      "files": 353
+    }
+  },
+  "fixes": [
+    {
+      "id": "R1",
+      "commit": "56784b07b7f9134ca9fad9465a46b6662182a5df",
+      "owner": "AttributePlanBuilder",
+      "regression": "tests/Contract/AttributeDiscoveryRevisionContractTest.php",
+      "before": {
+        "failed": 2,
+        "passed": 2,
+        "assertions": 32
+      },
+      "after": {
+        "passed": 4,
+        "assertions": 54
+      }
+    },
+    {
+      "id": "R2",
+      "commit": "7ae200e2dbe857e65df188906326d32a5aa0da41",
+      "owner": "ParametersResolver",
+      "regression": "tests/Contract/ParameterClassificationRefreshContractTest.php",
+      "before": {
+        "failed": 2,
+        "passed": 6,
+        "note": "R1 fix already present; single parameter paths fail with and without plan memoization."
+      },
+      "after": {
+        "passed": 8,
+        "assertions": 24
+      }
+    },
+    {
+      "id": "R3",
+      "commit": "54be73b4bfa848e86ea29dce2ddc4f8e9b39e88f",
+      "owners": [
+        "Container",
+        "EntryCache",
+        "AliasResolver"
+      ],
+      "regression": "tests/Contract/AliasPipelineInvalidationContractTest.php",
+      "before": {
+        "failed": 4,
+        "passed": 4
+      },
+      "after": {
+        "passed": 8,
+        "assertions": 55
+      }
+    },
+    {
+      "id": "R4",
+      "commit": "94c6ec77a78af4c7db481a3126b1898503e499d7",
+      "owner": "AttributeProcessor",
+      "regression": "tests/Contract/AttributeProcessorRevisionContractTest.php",
+      "before": {
+        "failed": 2,
+        "passed": 2,
+        "assertions": 26
+      },
+      "after": {
+        "passed": 4,
+        "assertions": 40
+      }
+    }
+  ],
+  "runtime_versions_for_red_green": [
+    "8.4.23",
+    "8.5.8"
+  ],
+  "ci": {
+    "baseline": {
+      "commit": "e75aa6a9373e13846c3f64af60b35d404cdbe217",
+      "run_id": 43249462750,
+      "url": "https://github.com/componenta/di/actions/runs/43249462750",
+      "conclusion": "success",
+      "coverage_percent": 90.3,
+      "mutation_score_percent": 85.38,
+      "mutations": {
+        "total": 3857,
+        "tested": 3269,
+        "timeout": 24,
+        "untested": 564
+      }
+    },
+    "final": {
+      "commit": "94c6ec77a78af4c7db481a3126b1898503e499d7",
+      "run_id": 43256979009,
+      "url": "https://github.com/componenta/di/actions/runs/43256979009",
+      "jobs": [
+        {
+          "id": 131317722065,
+          "name": "Coverage PHP 8.4",
+          "url": "https://github.com/componenta/di/actions/runs/43256979009/job/131317722065",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T16:17:12Z",
+          "completed_at": "2026-11-12T16:40:16Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup PHP",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate Composer metadata",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enforce coverage and generate Clover report",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check mutation score",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload coverage artifact",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 131317722628,
+          "name": "Windows PHP 8.4",
+          "url": "https://github.com/componenta/di/actions/runs/43256979009/job/131317722628",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T16:17:13Z",
+          "completed_at": "2026-11-12T16:18:50Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup PHP",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate Composer metadata",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use companion workspaces",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 131317723012,
+          "name": "PHP 8.5",
+          "url": "https://github.com/componenta/di/actions/runs/43256979009/job/131317723012",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T16:17:12Z",
+          "completed_at": "2026-11-12T16:17:48Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup PHP",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate Composer metadata",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Audit dependencies",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Run checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke benchmark harness",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 131317723047,
+          "name": "PHP 8.4",
+          "url": "https://github.com/componenta/di/actions/runs/43256979009/job/131317723047",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T16:17:13Z",
+          "completed_at": "2026-11-12T16:17:55Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup PHP",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate Composer metadata",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Use reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Audit dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke benchmark harness",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout reflection v2 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout validation workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout config v3 workspace",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 131332621359,
+          "name": "v4.0.10 vs v5 benchmark",
+          "url": "https://github.com/componenta/di/actions/runs/43256979009/job/131332621359",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-11-12T16:40:17Z",
+          "completed_at": "2026-11-12T16:40:17Z",
+          "steps": []
+        }
+      ],
+      "completed_job_log_summaries": [
+        {
+          "job_id": 131317722628,
+          "lines": [
+            "2026-11-12T16:17:47.3494741Z √ PHP Installed PHP 8.4.27 \r",
+            "2026-11-12T16:18:11.9504042Z PHP runtime: 8.4.27\r",
+            "2026-11-12T16:18:17.6245675Z Found 0 of 353 files that can be fixed in 5.586 seconds, 84.00 MB memory used\r",
+            "2026-11-12T16:18:34.4083215Z  [OK] No errors                                                                                                        \r",
+            "2026-11-12T16:18:39.3131012Z   Tests:    2 skipped, 1076 passed (4884 assertions)\r"
+          ]
+        },
+        {
+          "job_id": 131317723012,
+          "lines": [
+            "2026-11-12T16:17:19.2598021Z ✓ PHP Updated to PHP 8.5.12",
+            "2026-11-12T16:17:27.2830376Z You are running PHP CS Fixer on PHP 8.5.12, but the minimum PHP version supported by your project in composer.json is PHP 8.4. Executing PHP CS Fixer on newer PHP versions may introduce syntax or features not yet available in PHP 8.4, which could cause issues under that version. It is recommended to run PHP CS Fixer on PHP 8.4, to fit your project specifics.",
+            "2026-11-12T16:17:27.2889187Z PHP runtime: 8.5.12",
+            "2026-11-12T16:17:29.4395951Z Found 0 of 353 files that can be fixed in 2.124 seconds, 88.00 MB memory used",
+            "2026-11-12T16:17:33.8317174Z  [OK] No errors                                                                 ",
+            "2026-11-12T16:17:36.1317199Z   Tests:    1078 passed (4892 assertions)"
+          ]
+        },
+        {
+          "job_id": 131317723047,
+          "lines": [
+            "2026-11-12T16:17:20.1611155Z ✓ PHP Installed PHP 8.4.27",
+            "2026-11-12T16:17:28.9191431Z No security vulnerability advisories found.",
+            "2026-11-12T16:17:29.2864725Z PHP runtime: 8.4.27",
+            "2026-11-12T16:17:31.9669483Z Found 0 of 353 files that can be fixed in 2.654 seconds, 86.00 MB memory used",
+            "2026-11-12T16:17:37.3069923Z  [OK] No errors                                                                 ",
+            "2026-11-12T16:17:40.1689035Z   Tests:    2 skipped, 1076 passed (4884 assertions)"
+          ]
+        }
+      ],
+      "status": "completed",
+      "conclusion": "success",
+      "completed_observation_utc": "2026-11-12 16:41:33 UTC",
+      "run_updated_at": "2026-11-12T16:40:17Z",
+      "coverage_percent": 90.5,
+      "mutation_score_percent": 85.78,
+      "mutations": {
+        "total": 3875,
+        "files": 107,
+        "tested": 3293,
+        "timeout": 31,
+        "untested": 551
+      },
+      "coverage_job_log_metrics": [
+        "2026-11-12T16:17:19.5503792Z ✓ PHP Installed PHP 8.4.27",
+        "2026-11-12T16:17:36.7487836Z   Tests:    2 skipped, 1076 passed (4884 assertions)",
+        "2026-11-12T16:17:39.3093359Z                                                                  Total: 90.5 %  ",
+        "2026-11-12T16:17:45.7749916Z   Tests:    2 skipped, 1076 passed (4884 assertions)",
+        "2026-11-12T16:19:08.8822930Z   3875 Mutations for 107 Files created",
+        "2026-11-12T16:40:13.0147733Z   Mutations: 551 untested, 31 timeout, 3293 tested",
+        "2026-11-12T16:40:13.0167870Z   Score:     85.78%"
+      ],
+      "companion_revisions": [
+        {
+          "repository": "componenta/di",
+          "sha": "94c6ec77a78af4c7db481a3126b1898503e499d7"
+        },
+        {
+          "repository": "componenta/config",
+          "sha": "dcd218904f7336a61d059363ae1b336f54ad7453"
+        },
+        {
+          "repository": "componenta/validation",
+          "sha": "8f888784bbe12069f8f9dc75703c5dd66c43e53f"
+        },
+        {
+          "repository": "componenta/reflection",
+          "sha": "62aca6575934f119277236bb5dec7953063d69da"
+        }
+      ]
+    }
+  },
+  "independent_probes": {
+    "mutation_histories": {
+      "seeds": "1..120",
+      "mutation_steps_per_history": 14,
+      "ids_compared_per_final_history": 8,
+      "results": "Final values match fresh replay before and after R3 on both runtimes",
+      "limits": "Pure deterministic callbacks; no injected failures, cycles or Fibers; no identity or execution-count comparison. These are covered separately by contract tests."
+    },
+    "manual_php85_invalidation": {
+      "status": "All three passed in an inline heredoc; no saved standalone script or regression file",
+      "cases": [
+        "Factory replaces its own source during a cold alias lookup",
+        "Factory appends a canonical decorator before its own base publication while alias decorates once",
+        "Same-canonical alias retarget preserves the exact decorated instance"
+      ]
+    },
+    "config_lazy_value": {
+      "result": "Passed on PHP 8.4 and 8.5",
+      "policy": "Explicit cache false reads current value; true retains value only within its own Config context; factory runtime parameters remain current."
+    }
+  },
+  "host": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "performance": {
+    "runtime_abba": {
+      "setup": {
+        "repo": "<audit-workspace>/di",
+        "vendor": "<audit-workspace>/di/vendor",
+        "snapshots": {
+          "baseline": {
+            "commit": "e75aa6a9373e13846c3f64af60b35d404cdbe217",
+            "root": "<audit-workspace>/cache-recheck-perf/baseline",
+            "src_tree": "32524e673a97b46ea03f9b1a7140fb68b768d956",
+            "benchmark_sha256": "7c8b737413f0f28aeaa025ae0007265e54e7104d6476ba2c522fe585325874b6"
+          },
+          "fixed": {
+            "commit": "94c6ec77a78af4c7db481a3126b1898503e499d7",
+            "root": "<audit-workspace>/cache-recheck-perf/fixed",
+            "src_tree": "3e3b9682f1f529546e1ab6ec1a77e024354e5115",
+            "benchmark_sha256": "7c8b737413f0f28aeaa025ae0007265e54e7104d6476ba2c522fe585325874b6"
+          }
+        },
+        "composer_lock_sha256": "67a6a5eec8ad6527d18c798c97465b105dbcd30e2fdfaf160f3e7bdc2dfba0a1"
+      },
+      "protocol": {
+        "order_per_runtime": [
+          "baseline",
+          "fixed",
+          "fixed",
+          "baseline"
+        ],
+        "runtime_order": [
+          "84",
+          "85"
+        ],
+        "iterations": 30000,
+        "build_iterations": 1000,
+        "internal_rounds_per_case": 7,
+        "warmup_per_case": "min(2000, case iterations)",
+        "processes_per_runtime": 4,
+        "opcache_cli": true,
+        "timing": "Unmodified RuntimeBench seven-round median; aggregate is median/range of two process medians per source/runtime.",
+        "source_verification": "Override all Componenta DI classmap entries and root autoload_files, precheck Container/functions reflections, postcheck every loaded DI declaration.",
+        "wrapper_sha256": "88bb99197c83b68f8aa212a0442633a2a5dac74e0bb0bacea2a05d1760753e39"
+      },
+      "runs": [
+        {
+          "php": "84",
+          "ordinal": 1,
+          "source": "baseline",
+          "command": [
+            "<audit-workspace>/runtime/php84/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/baseline/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/baseline",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/baseline/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 16.8368558883667,
+          "case_medians_ns": {
+            "build/default": 102190.4,
+            "make/no-arguments": 6900.5,
+            "make/autowire": 16180,
+            "call/reused-closure": 19663.8,
+            "call/fresh-closure": 18330.8,
+            "call/method-array": 9879.7
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.4.23",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/baseline",
+              "container_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "1c5b3c9b68c9738875e0acf550b859f7ad4d21243c01f8c86ebab79b3fa34423"
+            }
+          },
+          "stdout": "PHP 8.4.23, source <audit-workspace>/cache-recheck-perf/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            102190.4 ns           9786\nmake/no-arguments          6900.5 ns         144917\nmake/autowire             16180.0 ns          61805\ncall/reused-closure       19663.8 ns          50855\ncall/fresh-closure        18330.8 ns          54553\ncall/method-array          9879.7 ns         101217\n",
+          "stderr_sha256": "3204e1e78fd4fff0437a3af6d9f937f60a1502d4b3cda5764dbd6c8ab88d5717"
+        },
+        {
+          "php": "84",
+          "ordinal": 2,
+          "source": "fixed",
+          "command": [
+            "<audit-workspace>/runtime/php84/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/fixed/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/fixed",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/fixed/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 17.565244674682617,
+          "case_medians_ns": {
+            "build/default": 104039.8,
+            "make/no-arguments": 7524.7,
+            "make/autowire": 14831.7,
+            "call/reused-closure": 19845.4,
+            "call/fresh-closure": 21623.8,
+            "call/method-array": 8854.3
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.4.23",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/fixed",
+              "container_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "5bb542f42e128e94327a2e95e48e662e331c2c2cee6e980dcc61f9d4532abc65"
+            }
+          },
+          "stdout": "PHP 8.4.23, source <audit-workspace>/cache-recheck-perf/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            104039.8 ns           9612\nmake/no-arguments          7524.7 ns         132895\nmake/autowire             14831.7 ns          67423\ncall/reused-closure       19845.4 ns          50390\ncall/fresh-closure        21623.8 ns          46245\ncall/method-array          8854.3 ns         112939\n",
+          "stderr_sha256": "00a41e1adc58a153c20544a5c7ef7db77ce18b33852c4d99fb6081d69cfd65a2"
+        },
+        {
+          "php": "84",
+          "ordinal": 3,
+          "source": "fixed",
+          "command": [
+            "<audit-workspace>/runtime/php84/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/fixed/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/fixed",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/fixed/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 15.943080186843872,
+          "case_medians_ns": {
+            "build/default": 97873.6,
+            "make/no-arguments": 6955.7,
+            "make/autowire": 14737.1,
+            "call/reused-closure": 19213.8,
+            "call/fresh-closure": 18823.3,
+            "call/method-array": 8499.3
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.4.23",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/fixed",
+              "container_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "5bb542f42e128e94327a2e95e48e662e331c2c2cee6e980dcc61f9d4532abc65"
+            }
+          },
+          "stdout": "PHP 8.4.23, source <audit-workspace>/cache-recheck-perf/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             97873.6 ns          10217\nmake/no-arguments          6955.7 ns         143767\nmake/autowire             14737.1 ns          67856\ncall/reused-closure       19213.8 ns          52046\ncall/fresh-closure        18823.3 ns          53126\ncall/method-array          8499.3 ns         117657\n",
+          "stderr_sha256": "00a41e1adc58a153c20544a5c7ef7db77ce18b33852c4d99fb6081d69cfd65a2"
+        },
+        {
+          "php": "84",
+          "ordinal": 4,
+          "source": "baseline",
+          "command": [
+            "<audit-workspace>/runtime/php84/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/baseline/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/baseline",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/baseline/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 15.501418352127075,
+          "case_medians_ns": {
+            "build/default": 86990,
+            "make/no-arguments": 6778.2,
+            "make/autowire": 14329.8,
+            "call/reused-closure": 18084.4,
+            "call/fresh-closure": 19196.4,
+            "call/method-array": 8338.7
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.4.23",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/baseline",
+              "container_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "1c5b3c9b68c9738875e0acf550b859f7ad4d21243c01f8c86ebab79b3fa34423"
+            }
+          },
+          "stdout": "PHP 8.4.23, source <audit-workspace>/cache-recheck-perf/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             86990.0 ns          11496\nmake/no-arguments          6778.2 ns         147532\nmake/autowire             14329.8 ns          69785\ncall/reused-closure       18084.4 ns          55296\ncall/fresh-closure        19196.4 ns          52093\ncall/method-array          8338.7 ns         119922\n",
+          "stderr_sha256": "3204e1e78fd4fff0437a3af6d9f937f60a1502d4b3cda5764dbd6c8ab88d5717"
+        },
+        {
+          "php": "85",
+          "ordinal": 1,
+          "source": "baseline",
+          "command": [
+            "<audit-workspace>/runtime/php85/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/baseline/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/baseline",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/baseline/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 15.702545166015625,
+          "case_medians_ns": {
+            "build/default": 89401.1,
+            "make/no-arguments": 6987.3,
+            "make/autowire": 14759.4,
+            "call/reused-closure": 18127.7,
+            "call/fresh-closure": 18411.5,
+            "call/method-array": 8925.4
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.5.8",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/baseline",
+              "container_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "1c5b3c9b68c9738875e0acf550b859f7ad4d21243c01f8c86ebab79b3fa34423"
+            }
+          },
+          "stdout": "PHP 8.5.8, source <audit-workspace>/cache-recheck-perf/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             89401.1 ns          11186\nmake/no-arguments          6987.3 ns         143118\nmake/autowire             14759.4 ns          67753\ncall/reused-closure       18127.7 ns          55164\ncall/fresh-closure        18411.5 ns          54314\ncall/method-array          8925.4 ns         112040\n",
+          "stderr_sha256": "7b74172544b87b6f59d1845819115c702a3c3287f14055687630ef9211f30b1b"
+        },
+        {
+          "php": "85",
+          "ordinal": 2,
+          "source": "fixed",
+          "command": [
+            "<audit-workspace>/runtime/php85/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/fixed/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/fixed",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/fixed/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 16.23855423927307,
+          "case_medians_ns": {
+            "build/default": 101748.4,
+            "make/no-arguments": 6880.6,
+            "make/autowire": 14751.8,
+            "call/reused-closure": 19169.5,
+            "call/fresh-closure": 19202.7,
+            "call/method-array": 8760.8
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.5.8",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/fixed",
+              "container_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "5bb542f42e128e94327a2e95e48e662e331c2c2cee6e980dcc61f9d4532abc65"
+            }
+          },
+          "stdout": "PHP 8.5.8, source <audit-workspace>/cache-recheck-perf/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            101748.4 ns           9828\nmake/no-arguments          6880.6 ns         145337\nmake/autowire             14751.8 ns          67788\ncall/reused-closure       19169.5 ns          52166\ncall/fresh-closure        19202.7 ns          52076\ncall/method-array          8760.8 ns         114144\n",
+          "stderr_sha256": "d15e58413ea1d45d0a21eed90ef4d188a9b691462c22ba4942994ccaa4bf58a3"
+        },
+        {
+          "php": "85",
+          "ordinal": 3,
+          "source": "fixed",
+          "command": [
+            "<audit-workspace>/runtime/php85/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/fixed/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/fixed",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/fixed/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 16.440669536590576,
+          "case_medians_ns": {
+            "build/default": 88776.7,
+            "make/no-arguments": 7274.6,
+            "make/autowire": 15636.5,
+            "call/reused-closure": 18797.1,
+            "call/fresh-closure": 18969.4,
+            "call/method-array": 8923.6
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.5.8",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/fixed",
+              "container_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/fixed/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "5bb542f42e128e94327a2e95e48e662e331c2c2cee6e980dcc61f9d4532abc65"
+            }
+          },
+          "stdout": "PHP 8.5.8, source <audit-workspace>/cache-recheck-perf/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             88776.7 ns          11264\nmake/no-arguments          7274.6 ns         137464\nmake/autowire             15636.5 ns          63953\ncall/reused-closure       18797.1 ns          53200\ncall/fresh-closure        18969.4 ns          52717\ncall/method-array          8923.6 ns         112063\n",
+          "stderr_sha256": "d15e58413ea1d45d0a21eed90ef4d188a9b691462c22ba4942994ccaa4bf58a3"
+        },
+        {
+          "php": "85",
+          "ordinal": 4,
+          "source": "baseline",
+          "command": [
+            "<audit-workspace>/runtime/php85/php",
+            "-d",
+            "opcache.enable_cli=1",
+            "<audit-workspace>/cache-recheck-perf/baseline/benchmarks/RuntimeBench.php"
+          ],
+          "environment": {
+            "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+            "DI_ABBA_SNAPSHOT": "<audit-workspace>/cache-recheck-perf/baseline",
+            "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/cache-recheck-perf/autoload-snapshot.php",
+            "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/cache-recheck-perf/baseline/src",
+            "DI_BENCH_ITERATIONS": "30000",
+            "DI_BUILD_ITERATIONS": "1000"
+          },
+          "exit_code": 0,
+          "elapsed_seconds": 20.953437566757202,
+          "case_medians_ns": {
+            "build/default": 98529.4,
+            "make/no-arguments": 7247.4,
+            "make/autowire": 15875.4,
+            "call/reused-closure": 17267.2,
+            "call/fresh-closure": 26455.1,
+            "call/method-array": 16328.2
+          },
+          "diagnostics": {
+            "precheck": {
+              "php": "8.5.8",
+              "snapshot": "<audit-workspace>/cache-recheck-perf/baseline",
+              "container_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Container.php",
+              "functions_file": "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php",
+              "remapped_classmap_entries": 168,
+              "snapshot_autoload_files": [
+                "<audit-workspace>/cache-recheck-perf/baseline/src/Internal/functions.php"
+              ],
+              "opcache_enabled": true,
+              "opcache_enable_cli": "1",
+              "jit": "disable",
+              "jit_buffer_size": "64M",
+              "iterations": "30000",
+              "build_iterations": "1000"
+            },
+            "postcheck": {
+              "checked_declarations": 130,
+              "all_loaded_di_declarations_in_snapshot": true,
+              "file_map_sha256": "1c5b3c9b68c9738875e0acf550b859f7ad4d21243c01f8c86ebab79b3fa34423"
+            }
+          },
+          "stdout": "PHP 8.5.8, source <audit-workspace>/cache-recheck-perf/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             98529.4 ns          10149\nmake/no-arguments          7247.4 ns         137980\nmake/autowire             15875.4 ns          62991\ncall/reused-closure       17267.2 ns          57913\ncall/fresh-closure        26455.1 ns          37800\ncall/method-array         16328.2 ns          61244\n",
+          "stderr_sha256": "7b74172544b87b6f59d1845819115c702a3c3287f14055687630ef9211f30b1b"
+        }
+      ],
+      "summary": {
+        "84": {
+          "build/default": {
+            "baseline": {
+              "process_medians_ns": [
+                102190.4,
+                86990
+              ],
+              "median_ns": 94590.2,
+              "min_ns": 86990,
+              "max_ns": 102190.4
+            },
+            "fixed": {
+              "process_medians_ns": [
+                104039.8,
+                97873.6
+              ],
+              "median_ns": 100956.70000000001,
+              "min_ns": 97873.6,
+              "max_ns": 104039.8
+            },
+            "fixed_vs_baseline_percent": 6.730612685035031,
+            "adjacent_pair_deltas_percent": [
+              1.809759038030978,
+              12.511323140590868
+            ]
+          },
+          "make/no-arguments": {
+            "baseline": {
+              "process_medians_ns": [
+                6900.5,
+                6778.2
+              ],
+              "median_ns": 6839.35,
+              "min_ns": 6778.2,
+              "max_ns": 6900.5
+            },
+            "fixed": {
+              "process_medians_ns": [
+                7524.7,
+                6955.7
+              ],
+              "median_ns": 7240.2,
+              "min_ns": 6955.7,
+              "max_ns": 7524.7
+            },
+            "fixed_vs_baseline_percent": 5.860937077353823,
+            "adjacent_pair_deltas_percent": [
+              9.045721324541688,
+              2.6186893275500944
+            ]
+          },
+          "make/autowire": {
+            "baseline": {
+              "process_medians_ns": [
+                16180,
+                14329.8
+              ],
+              "median_ns": 15254.9,
+              "min_ns": 14329.8,
+              "max_ns": 16180
+            },
+            "fixed": {
+              "process_medians_ns": [
+                14831.7,
+                14737.1
+              ],
+              "median_ns": 14784.400000000001,
+              "min_ns": 14737.1,
+              "max_ns": 14831.7
+            },
+            "fixed_vs_baseline_percent": -3.0842548951484305,
+            "adjacent_pair_deltas_percent": [
+              -8.333127317676137,
+              2.8423285740205806
+            ]
+          },
+          "call/reused-closure": {
+            "baseline": {
+              "process_medians_ns": [
+                19663.8,
+                18084.4
+              ],
+              "median_ns": 18874.1,
+              "min_ns": 18084.4,
+              "max_ns": 19663.8
+            },
+            "fixed": {
+              "process_medians_ns": [
+                19845.4,
+                19213.8
+              ],
+              "median_ns": 19529.6,
+              "min_ns": 19213.8,
+              "max_ns": 19845.4
+            },
+            "fixed_vs_baseline_percent": 3.4730132827525573,
+            "adjacent_pair_deltas_percent": [
+              0.9235244459361969,
+              6.245161575722702
+            ]
+          },
+          "call/fresh-closure": {
+            "baseline": {
+              "process_medians_ns": [
+                18330.8,
+                19196.4
+              ],
+              "median_ns": 18763.6,
+              "min_ns": 18330.8,
+              "max_ns": 19196.4
+            },
+            "fixed": {
+              "process_medians_ns": [
+                21623.8,
+                18823.3
+              ],
+              "median_ns": 20223.55,
+              "min_ns": 18823.3,
+              "max_ns": 21623.8
+            },
+            "fixed_vs_baseline_percent": 7.780756358054952,
+            "adjacent_pair_deltas_percent": [
+              17.96430052152662,
+              -1.943593590464887
+            ]
+          },
+          "call/method-array": {
+            "baseline": {
+              "process_medians_ns": [
+                9879.7,
+                8338.7
+              ],
+              "median_ns": 9109.2,
+              "min_ns": 8338.7,
+              "max_ns": 9879.7
+            },
+            "fixed": {
+              "process_medians_ns": [
+                8854.3,
+                8499.3
+              ],
+              "median_ns": 8676.8,
+              "min_ns": 8499.3,
+              "max_ns": 8854.3
+            },
+            "fixed_vs_baseline_percent": -4.746849339129689,
+            "adjacent_pair_deltas_percent": [
+              -10.378857657621198,
+              1.9259596819648062
+            ]
+          }
+        },
+        "85": {
+          "build/default": {
+            "baseline": {
+              "process_medians_ns": [
+                89401.1,
+                98529.4
+              ],
+              "median_ns": 93965.25,
+              "min_ns": 89401.1,
+              "max_ns": 98529.4
+            },
+            "fixed": {
+              "process_medians_ns": [
+                101748.4,
+                88776.7
+              ],
+              "median_ns": 95262.54999999999,
+              "min_ns": 88776.7,
+              "max_ns": 101748.4
+            },
+            "fixed_vs_baseline_percent": 1.3806167705614492,
+            "adjacent_pair_deltas_percent": [
+              13.811127603575324,
+              -9.898263868449419
+            ]
+          },
+          "make/no-arguments": {
+            "baseline": {
+              "process_medians_ns": [
+                6987.3,
+                7247.4
+              ],
+              "median_ns": 7117.35,
+              "min_ns": 6987.3,
+              "max_ns": 7247.4
+            },
+            "fixed": {
+              "process_medians_ns": [
+                6880.6,
+                7274.6
+              ],
+              "median_ns": 7077.6,
+              "min_ns": 6880.6,
+              "max_ns": 7274.6
+            },
+            "fixed_vs_baseline_percent": -0.5584943834432754,
+            "adjacent_pair_deltas_percent": [
+              -1.527056230589785,
+              0.3753070066506714
+            ]
+          },
+          "make/autowire": {
+            "baseline": {
+              "process_medians_ns": [
+                14759.4,
+                15875.4
+              ],
+              "median_ns": 15317.4,
+              "min_ns": 14759.4,
+              "max_ns": 15875.4
+            },
+            "fixed": {
+              "process_medians_ns": [
+                14751.8,
+                15636.5
+              ],
+              "median_ns": 15194.15,
+              "min_ns": 14751.8,
+              "max_ns": 15636.5
+            },
+            "fixed_vs_baseline_percent": -0.8046404742319213,
+            "adjacent_pair_deltas_percent": [
+              -0.051492608100600634,
+              -1.5048439724353324
+            ]
+          },
+          "call/reused-closure": {
+            "baseline": {
+              "process_medians_ns": [
+                18127.7,
+                17267.2
+              ],
+              "median_ns": 17697.45,
+              "min_ns": 17267.2,
+              "max_ns": 18127.7
+            },
+            "fixed": {
+              "process_medians_ns": [
+                19169.5,
+                18797.1
+              ],
+              "median_ns": 18983.3,
+              "min_ns": 18797.1,
+              "max_ns": 19169.5
+            },
+            "fixed_vs_baseline_percent": 7.265736024116465,
+            "adjacent_pair_deltas_percent": [
+              5.747005963249618,
+              8.860151037805775
+            ]
+          },
+          "call/fresh-closure": {
+            "baseline": {
+              "process_medians_ns": [
+                18411.5,
+                26455.1
+              ],
+              "median_ns": 22433.3,
+              "min_ns": 18411.5,
+              "max_ns": 26455.1
+            },
+            "fixed": {
+              "process_medians_ns": [
+                19202.7,
+                18969.4
+              ],
+              "median_ns": 19086.050000000003,
+              "min_ns": 18969.4,
+              "max_ns": 19202.7
+            },
+            "fixed_vs_baseline_percent": -14.920898842345965,
+            "adjacent_pair_deltas_percent": [
+              4.297314178638345,
+              -28.29586733748879
+            ]
+          },
+          "call/method-array": {
+            "baseline": {
+              "process_medians_ns": [
+                8925.4,
+                16328.2
+              ],
+              "median_ns": 12626.8,
+              "min_ns": 8925.4,
+              "max_ns": 16328.2
+            },
+            "fixed": {
+              "process_medians_ns": [
+                8760.8,
+                8923.6
+              ],
+              "median_ns": 8842.2,
+              "min_ns": 8760.8,
+              "max_ns": 8923.6
+            },
+            "fixed_vs_baseline_percent": -29.972756359489328,
+            "adjacent_pair_deltas_percent": [
+              -1.844175050978114,
+              -45.34853811197805
+            ]
+          }
+        }
+      }
+    },
+    "availability": {
+      "commit": "94c6ec77a78af4c7db481a3126b1898503e499d7",
+      "iterations": 10000,
+      "rounds": 7,
+      "opcache_cli": false,
+      "runs": [
+        {
+          "runtime": "84",
+          "exit_code": 0,
+          "cases": [
+            {
+              "case": "make/clean",
+              "median_ns": 8203,
+              "ops_per_second": 121907,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            },
+            {
+              "case": "make/1-unavailable",
+              "median_ns": 33545.6,
+              "ops_per_second": 29810,
+              "autoload_per_op": 22,
+              "autoload_per_round_min": 220000,
+              "autoload_per_round_max": 220000
+            },
+            {
+              "case": "make/8-unavailable",
+              "median_ns": 232043,
+              "ops_per_second": 4310,
+              "autoload_per_op": 176,
+              "autoload_per_round_min": 1760000,
+              "autoload_per_round_max": 1760000
+            },
+            {
+              "case": "get-shared/clean",
+              "median_ns": 329.8,
+              "ops_per_second": 3031858,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            },
+            {
+              "case": "get-shared/1-unavailable",
+              "median_ns": 322.4,
+              "ops_per_second": 3101700,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            },
+            {
+              "case": "get-shared/8-unavailable",
+              "median_ns": 337.5,
+              "ops_per_second": 2962898,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            }
+          ],
+          "stdout": "PHP 8.4.23 (Linux, x86_64), binary <audit-workspace>/runtime/php84/php\nsource <audit-workspace>/di/src\niterations 10000, rounds 7, warmup 2000 per case/round\nOPcache CLI off/unavailable, JIT disable, JIT buffer 64M\ncase                        median latency   operations/s autoload/op median autoload/round range\n--------------------------- -------------- -------------- ------------------ --------------------\nmake/clean                      8203.0 ns         121907               0.00         0..0        \nmake/1-unavailable             33545.6 ns          29810              22.00    220000..220000   \nmake/8-unavailable            232043.0 ns           4310             176.00   1760000..1760000  \nget-shared/clean                 329.8 ns        3031858               0.00         0..0        \nget-shared/1-unavailable         322.4 ns        3101700               0.00         0..0        \nget-shared/8-unavailable         337.5 ns        2962898               0.00         0..0        \nCounts cover only unavailable fixture names; timings include the counting loader.\n",
+          "stderr": ""
+        },
+        {
+          "runtime": "85",
+          "exit_code": 0,
+          "cases": [
+            {
+              "case": "make/clean",
+              "median_ns": 7356,
+              "ops_per_second": 135944,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            },
+            {
+              "case": "make/1-unavailable",
+              "median_ns": 36385.1,
+              "ops_per_second": 27484,
+              "autoload_per_op": 22,
+              "autoload_per_round_min": 220000,
+              "autoload_per_round_max": 220000
+            },
+            {
+              "case": "make/8-unavailable",
+              "median_ns": 230069.3,
+              "ops_per_second": 4347,
+              "autoload_per_op": 176,
+              "autoload_per_round_min": 1760000,
+              "autoload_per_round_max": 1760000
+            },
+            {
+              "case": "get-shared/clean",
+              "median_ns": 332.5,
+              "ops_per_second": 3007598,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            },
+            {
+              "case": "get-shared/1-unavailable",
+              "median_ns": 348.8,
+              "ops_per_second": 2867170,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            },
+            {
+              "case": "get-shared/8-unavailable",
+              "median_ns": 382.7,
+              "ops_per_second": 2613286,
+              "autoload_per_op": 0,
+              "autoload_per_round_min": 0,
+              "autoload_per_round_max": 0
+            }
+          ],
+          "stdout": "PHP 8.5.8 (Linux, x86_64), binary <audit-workspace>/runtime/php85/php\nsource <audit-workspace>/di/src\niterations 10000, rounds 7, warmup 2000 per case/round\nOPcache CLI off/unavailable, JIT disable, JIT buffer 64M\ncase                        median latency   operations/s autoload/op median autoload/round range\n--------------------------- -------------- -------------- ------------------ --------------------\nmake/clean                      7356.0 ns         135944               0.00         0..0        \nmake/1-unavailable             36385.1 ns          27484              22.00    220000..220000   \nmake/8-unavailable            230069.3 ns           4347             176.00   1760000..1760000  \nget-shared/clean                 332.5 ns        3007598               0.00         0..0        \nget-shared/1-unavailable         348.8 ns        2867170               0.00         0..0        \nget-shared/8-unavailable         382.7 ns        2613286               0.00         0..0        \nCounts cover only unavailable fixture names; timings include the counting loader.\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "reproduction": {
+      "run-abba.py": {
+        "sha256": "53916223ff8d0ef5a2f8917c19843c49cd815146b4d565f04712914965757218",
+        "source": "#!/usr/bin/env python3\n\"\"\"Exactly four serial RuntimeBench executions per runtime, ordered ABBA.\n\nThe benchmark itself is unchanged and computes seven-round medians. Aggregate\nmedians/ranges below describe its two process medians for each source/runtime.\n\"\"\"\nfrom pathlib import Path\nimport hashlib\nimport json\nimport os\nimport re\nimport statistics\nimport subprocess\nimport time\n\nROOT = Path(__file__).resolve().parent\nSETUP = json.loads((ROOT / 'setup.json').read_text())\nREPO = Path(SETUP['repo'])\nRUNS = []\nRESULT = {\n    'setup': SETUP,\n    'protocol': {\n        'order_per_runtime': ['baseline', 'fixed', 'fixed', 'baseline'],\n        'runtime_order': ['84', '85'],\n        'iterations': 30000,\n        'build_iterations': 1000,\n        'internal_rounds_per_case': 7,\n        'warmup_per_case': 'min(2000, case iterations)',\n        'processes_per_runtime': 4,\n        'opcache_cli': True,\n        'timing': 'Unmodified RuntimeBench seven-round median; aggregate is median/range of two process medians per source/runtime.',\n        'source_verification': 'Override all Componenta DI classmap entries and root autoload_files, precheck Container/functions reflections, postcheck every loaded DI declaration.',\n        'wrapper_sha256': hashlib.sha256((ROOT / 'autoload-snapshot.php').read_bytes()).hexdigest(),\n    },\n    'runs': RUNS,\n}\n\ndef save():\n    (ROOT / 'runtime-abba-results.json').write_text(json.dumps(RESULT, indent=2) + '\\n')\n\ndef diagnostics(stderr):\n    result = {}\n    for line in stderr.splitlines():\n        if line.startswith('ABBA_PRECHECK '):\n            result['precheck'] = json.loads(line.removeprefix('ABBA_PRECHECK '))\n        elif line.startswith('ABBA_POSTCHECK '):\n            result['postcheck'] = json.loads(line.removeprefix('ABBA_POSTCHECK '))\n    return result\n\nsave()\nfor runtime in ('84', '85'):\n    binary = ROOT.parent / 'runtime' / ('php' + runtime) / 'php'\n    for ordinal, source in enumerate(('baseline', 'fixed', 'fixed', 'baseline'), 1):\n        snapshot = Path(SETUP['snapshots'][source]['root'])\n        env = os.environ.copy()\n        env.update({\n            'DI_ABBA_REPOSITORY': str(REPO),\n            'DI_ABBA_SNAPSHOT': str(snapshot),\n            'COMPONENTA_DI_BENCH_AUTOLOAD': str(ROOT / 'autoload-snapshot.php'),\n            'COMPONENTA_DI_BENCH_SOURCE': str(snapshot / 'src'),\n            'DI_BENCH_ITERATIONS': '30000',\n            'DI_BUILD_ITERATIONS': '1000',\n        })\n        command = [str(binary), '-d', 'opcache.enable_cli=1', str(snapshot / 'benchmarks/RuntimeBench.php')]\n        print(f'START php{runtime} {ordinal}/4 {source}', flush=True)\n        started = time.time()\n        completed = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True)\n        name = f'php{runtime}-{ordinal}-{source}'\n        (ROOT / (name + '.stdout.txt')).write_text(completed.stdout)\n        (ROOT / (name + '.stderr.txt')).write_text(completed.stderr)\n        parsed = {case: float(ns) for case, ns in re.findall(r'^([a-z/-]+)\\s+([0-9.]+) ns\\s+[0-9]+$', completed.stdout, re.MULTILINE)}\n        diag = diagnostics(completed.stderr)\n        entry = {\n            'php': runtime, 'ordinal': ordinal, 'source': source,\n            'command': command,\n            'environment': {key: env[key] for key in ('DI_ABBA_REPOSITORY', 'DI_ABBA_SNAPSHOT', 'COMPONENTA_DI_BENCH_AUTOLOAD', 'COMPONENTA_DI_BENCH_SOURCE', 'DI_BENCH_ITERATIONS', 'DI_BUILD_ITERATIONS')},\n            'exit_code': completed.returncode,\n            'elapsed_seconds': time.time() - started,\n            'case_medians_ns': parsed, 'diagnostics': diag,\n            'stdout': completed.stdout, 'stderr': completed.stderr,\n        }\n        RUNS.append(entry)\n        save()\n        if completed.returncode != 0 or len(parsed) != 6 or not diag.get('postcheck', {}).get('all_loaded_di_declarations_in_snapshot'):\n            print(completed.stdout, completed.stderr, flush=True)\n            raise SystemExit('Benchmark/source validation failed; no extra runs were attempted.')\n        print(f'DONE php{runtime} {ordinal}/4 {source}: ' + json.dumps(parsed), flush=True)\n\nsummary = {}\nfor runtime in ('84', '85'):\n    runtime_runs = [run for run in RUNS if run['php'] == runtime]\n    cases = {}\n    for case in runtime_runs[0]['case_medians_ns']:\n        values = {source: [run['case_medians_ns'][case] for run in runtime_runs if run['source'] == source] for source in ('baseline', 'fixed')}\n        baseline = statistics.median(values['baseline'])\n        fixed = statistics.median(values['fixed'])\n        cases[case] = {\n            source: {'process_medians_ns': samples, 'median_ns': statistics.median(samples), 'min_ns': min(samples), 'max_ns': max(samples)}\n            for source, samples in values.items()\n        }\n        cases[case]['fixed_vs_baseline_percent'] = (fixed / baseline - 1) * 100\n        cases[case]['adjacent_pair_deltas_percent'] = [\n            (runtime_runs[1]['case_medians_ns'][case] / runtime_runs[0]['case_medians_ns'][case] - 1) * 100,\n            (runtime_runs[2]['case_medians_ns'][case] / runtime_runs[3]['case_medians_ns'][case] - 1) * 100,\n        ]\n    summary[runtime] = cases\nRESULT['summary'] = summary\nsave()\nprint('COMPLETE ' + str(ROOT / 'runtime-abba-results.json'), flush=True)\nprint(json.dumps(summary, indent=2), flush=True)\n"
+      },
+      "autoload-snapshot.php": {
+        "sha256": "88bb99197c83b68f8aa212a0442633a2a5dac74e0bb0bacea2a05d1760753e39",
+        "source": "<?php\n\ndeclare(strict_types=1);\n\nuse Composer\\Autoload\\ClassLoader;\n\n$repository = realpath((string) getenv('DI_ABBA_REPOSITORY'));\n$snapshot = realpath((string) getenv('DI_ABBA_SNAPSHOT'));\nif ($repository === false || $snapshot === false) {\n    throw new RuntimeException('DI_ABBA_REPOSITORY and DI_ABBA_SNAPSHOT must identify existing directories.');\n}\n$vendor = $repository . '/vendor';\n\n// Composer eagerly includes the root package's functions file. Suppress only\n// those entries and include the selected snapshot equivalents after remapping.\n$snapshotFiles = [];\nforeach (require $vendor . '/composer/autoload_files.php' as $identifier => $file) {\n    if (str_starts_with($file, $repository . '/src/')) {\n        $snapshotFile = $snapshot . substr($file, strlen($repository));\n        if (!is_file($snapshotFile)) {\n            throw new RuntimeException('Snapshot autoload file is missing: ' . $snapshotFile);\n        }\n        $GLOBALS['__composer_autoload_files'][$identifier] = true;\n        $snapshotFiles[] = $snapshotFile;\n    }\n}\n\n$snapshotLoader = require $vendor . '/autoload.php';\nif (!$snapshotLoader instanceof ClassLoader) {\n    throw new RuntimeException('Expected the existing Composer loader.');\n}\n\n$remapped = [];\nforeach ($snapshotLoader->getClassMap() as $class => $file) {\n    if (!str_starts_with($class, 'Componenta\\\\DI\\\\')) {\n        continue;\n    }\n    $file = realpath($file);\n    if ($file === false) {\n        throw new RuntimeException('Optimized DI classmap references a missing file: ' . $class);\n    }\n    if (!str_starts_with($file, $repository . '/')) {\n        throw new RuntimeException('Unexpected DI classmap source: ' . $file);\n    }\n    $snapshotFile = $snapshot . substr($file, strlen($repository));\n    if (!is_file($snapshotFile)) {\n        throw new RuntimeException('Snapshot classmap source is missing: ' . $snapshotFile);\n    }\n    $remapped[$class] = $snapshotFile;\n}\nif ($remapped === []) {\n    throw new RuntimeException('Expected optimized Componenta DI classmap entries.');\n}\n$snapshotLoader->addClassMap($remapped);\n$snapshotLoader->setPsr4('Componenta\\\\DI\\\\', $snapshot . '/src/');\n$snapshotLoader->setPsr4('Componenta\\\\DI\\\\Tests\\\\Support\\\\', $snapshot . '/tests/Support/');\nforeach ($remapped as $class => $expectedFile) {\n    if ($snapshotLoader->findFile($class) !== $expectedFile) {\n        throw new RuntimeException('Classmap override failed for ' . $class);\n    }\n}\nforeach ($snapshotFiles as $file) {\n    require $file;\n}\n\n$containerFile = new ReflectionClass(Componenta\\DI\\Container::class)->getFileName();\n$functionsFile = new ReflectionFunction('Componenta\\\\DI\\\\Internal\\\\is_closure_reflector')->getFileName();\nif ($containerFile !== $snapshot . '/src/Container.php'\n    || $functionsFile !== $snapshot . '/src/Internal/functions.php'\n) {\n    throw new RuntimeException('Reflection source verification failed.');\n}\n$opcacheStatus = opcache_get_status(false);\nif (!is_array($opcacheStatus) || !$opcacheStatus['opcache_enabled']) {\n    throw new RuntimeException('CLI OPcache must be active for this comparison.');\n}\nfwrite(STDERR, 'ABBA_PRECHECK ' . json_encode([\n    'php' => PHP_VERSION,\n    'snapshot' => $snapshot,\n    'container_file' => $containerFile,\n    'functions_file' => $functionsFile,\n    'remapped_classmap_entries' => count($remapped),\n    'snapshot_autoload_files' => $snapshotFiles,\n    'opcache_enabled' => $opcacheStatus['opcache_enabled'],\n    'opcache_enable_cli' => ini_get('opcache.enable_cli'),\n    'jit' => ini_get('opcache.jit'),\n    'jit_buffer_size' => ini_get('opcache.jit_buffer_size'),\n    'iterations' => $_SERVER['DI_BENCH_ITERATIONS'] ?? null,\n    'build_iterations' => $_SERVER['DI_BUILD_ITERATIONS'] ?? null,\n], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . \"\\n\");\n\nregister_shutdown_function(static function () use ($snapshot): void {\n    $checked = [];\n    foreach (array_merge(get_declared_classes(), get_declared_interfaces(), get_declared_traits()) as $class) {\n        if (!str_starts_with($class, 'Componenta\\\\DI\\\\')) {\n            continue;\n        }\n        $file = new ReflectionClass($class)->getFileName();\n        if (!is_string($file) || !str_starts_with($file, $snapshot . '/')) {\n            fwrite(STDERR, 'ABBA_INVALID_SOURCE ' . json_encode([$class, $file]) . \"\\n\");\n            exit(77);\n        }\n        $checked[$class] = $file;\n    }\n    fwrite(STDERR, 'ABBA_POSTCHECK ' . json_encode([\n        'checked_declarations' => count($checked),\n        'all_loaded_di_declarations_in_snapshot' => true,\n        'files' => $checked,\n    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . \"\\n\");\n});\n\nreturn $snapshotLoader;\n"
+      }
+    }
+  },
+  "local_check_logs": {
+    "cache-recheck-final-php84.log": {
+      "sha256": "17a4af70509d35736c4e8589da962bc9203a4b16a9ec894a272a8652ae1f3e69",
+      "tail": [
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ..............",
+        "",
+        "  Tests:    2 skipped, 1076 passed (4884 assertions)",
+        "  Duration: 19.54s",
+        "  Random Order Seed: 1794500248",
+        ""
+      ]
+    },
+    "cache-recheck-final-php85.log": {
+      "sha256": "e29ee28645ab8dfd223b4ff0a8661fc25267a634dfc3d1ca00faa46f9b221538",
+      "tail": [
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ............................................................................",
+        "  ..............",
+        "",
+        "  Tests:    1078 passed (4892 assertions)",
+        "  Duration: 19.43s",
+        "  Random Order Seed: 1794500247",
+        ""
+      ]
+    },
+    "cache-recheck-final-phpstan.log": {
+      "sha256": "8ea51aa9967d33a22e3758022bb1a878c3f717d551261f892bf7c7cf59bc7aca",
+      "tail": [
+        "Warning: PHP Startup: Unable to load dynamic library '<audit-workspace>/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: <audit-workspace>/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924/<audit-workspace>/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0",
+        "Note: Using configuration file <audit-workspace>/di/phpstan.neon.dist.",
+        "",
+        " [OK] No errors                                                                 ",
+        ""
+      ]
+    },
+    "cache-recheck-final-style.log": {
+      "sha256": "28194966ab575e8de9e73a547acb45f5901fbf12f2bd9351c6c69c97b7ce10ff",
+      "tail": [
+        "  71/353 [▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░]  20%",
+        " 106/353 [▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░]  30%",
+        " 142/353 [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░]  40%",
+        " 177/353 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░]  50%",
+        " 212/353 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░]  60%",
+        " 248/353 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░]  70%",
+        " 283/353 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░]  80%",
+        " 318/353 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░]  90%",
+        " 353/353 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%",
+        "",
+        "",
+        "Found 0 of 353 files that can be fixed in 5.877 seconds, 202.00 MB memory used"
+      ]
+    }
+  },
+  "bounded_probes": {
+    "entry-cache-differential.php": {
+      "sha256": "5192036867dad84f6b071dac0fe4db0ccec07756d66ac1bc1365064f09ce1f92",
+      "source": "<?php\ndeclare(strict_types=1);\nrequire __DIR__ . '/di/vendor/autoload.php';\n\nuse Componenta\\DI\\Container;\nuse Componenta\\DI\\Tests\\Support\\ContainerBuilder;\nuse Psr\\Container\\ContainerInterface;\n\nfunction transform(mixed $value, string $suffix): mixed\n{\n    if (is_callable($value)) {\n        return static fn(string $input): mixed => transform($value($input), $suffix);\n    }\n    return $value . ':' . $suffix;\n}\n\nfunction handler(string $suffix): Closure\n{\n    return static fn(mixed $value): mixed => transform($value, $suffix);\n}\n\nfunction applyOperation(Container $container, array $operation): void\n{\n    [$kind, $id, $value] = $operation;\n    match ($kind) {\n        'value' => $container->set($id, $value),\n        'handler' => $container->set($id, handler($value)),\n        'alias' => $container->alias($id, $value),\n        'delegator' => $container->delegator($id, $value),\n        'direct' => $container->delegator($id, handler($value)),\n        'external' => $container->addContainer(new class ($id, $value) implements ContainerInterface {\n            public function __construct(private string $id, private string $value) {}\n            public function has(string $id): bool { return $id === $this->id; }\n            public function get(string $id): mixed {\n                return str_starts_with($id, 'handler') ? handler($this->value) : $this->value;\n            }\n        }),\n    };\n}\n\nfunction observe(Container $container, string $id): mixed\n{\n    try {\n        $value = $container->get($id);\n        return ['value', is_callable($value) ? $value('probe') : $value];\n    } catch (Throwable $e) {\n        return ['error', $e::class, $e->getMessage()];\n    }\n}\n\n$ids = ['value0', 'value1', 'value2', 'handler0', 'handler1', 'handler2', 'alias0', 'alias1'];\nfor ($seed = 1; $seed <= 120; ++$seed) {\n    mt_srand($seed);\n    $history = [\n        ['value', 'value0', 'v0'], ['value', 'value1', 'v1'], ['value', 'value2', 'v2'],\n        ['handler', 'handler0', 'h0'], ['handler', 'handler1', 'h1'], ['handler', 'handler2', 'h2'],\n        ['alias', 'alias0', 'handler0'], ['alias', 'alias1', 'handler1'],\n    ];\n    $warm = (new ContainerBuilder())->build();\n    foreach ($history as $operation) { applyOperation($warm, $operation); }\n    for ($step = 0; $step < 14; ++$step) {\n        foreach ($ids as $id) { observe($warm, $id); }\n        $n = mt_rand(0, 2);\n        $suffix = \"s{$seed}.{$step}\";\n        $operation = match (mt_rand(0, 6)) {\n            0 => ['value', 'value' . $n, $suffix],\n            1 => ['handler', 'handler' . $n, $suffix],\n            2 => ['alias', 'alias' . mt_rand(0, 1), 'handler' . $n],\n            3 => ['delegator', 'value' . $n, 'handler' . mt_rand(0, 2)],\n            4 => ['direct', $ids[mt_rand(0, count($ids) - 1)], $suffix],\n            5 => ['delegator', 'value' . $n, 'alias' . mt_rand(0, 1)],\n            6 => ['external', (mt_rand(0, 1) ? 'value' : 'handler') . $n, $suffix],\n        };\n        $history[] = $operation;\n        applyOperation($warm, $operation);\n    }\n    $fresh = (new ContainerBuilder())->build();\n    foreach ($history as $operation) { applyOperation($fresh, $operation); }\n    foreach ($ids as $id) {\n        $a = observe($warm, $id);\n        $b = observe($fresh, $id);\n        if ($a !== $b) {\n            echo json_encode(['seed' => $seed, 'id' => $id, 'warm' => $a, 'fresh' => $b, 'history' => $history], JSON_PRETTY_PRINT) . PHP_EOL;\n            exit(1);\n        }\n    }\n}\necho \"120 deterministic histories: warm/fresh values and errors agree.\\n\";\n"
+    },
+    "sibling-delegator-invalidation-probe.php": {
+      "sha256": "bf890e1bcbb43693eb6738acbe4da81c8d98f7a1014a8b5fbbad3acbfbbb6a22",
+      "source": "<?php\ndeclare(strict_types=1);\nrequire __DIR__ . '/di/vendor/autoload.php';\n\nuse Componenta\\DI\\Tests\\Support\\ContainerBuilder;\n\nforeach (['append-first-delegator', 'retarget-first-alias', 'replace-first-deferred-delegator'] as $mutation) {\n    $container = (new ContainerBuilder())->build();\n    $source = new stdClass();\n    $container->set('source', $source);\n    $container->set('other-source', new stdClass());\n    $container->alias('first', 'source');\n    $container->alias('second', 'source');\n    $container->set('first.decorator', static fn(object $value): object => (object) ['source' => $value]);\n    $container->delegator('first', 'first.decorator');\n    $secondCalls = 0;\n    $container->delegator('second', static function (object $value) use (&$secondCalls): object {\n        return (object) ['source' => $value, 'number' => ++$secondCalls];\n    });\n    $container->get('first');\n    $second = $container->get('second');\n    match ($mutation) {\n        'append-first-delegator' => $container->delegator('first', static fn(object $value): object => $value),\n        'retarget-first-alias' => $container->alias('first', 'other-source'),\n        'replace-first-deferred-delegator' => $container->set('first.decorator', static fn(object $value): object => (object) ['source' => $value]),\n    };\n    echo json_encode([\n        'mutation' => $mutation,\n        'second_shared_identity_preserved' => $container->get('second') === $second,\n        'second_delegator_calls' => $secondCalls,\n        'source_identity_preserved' => $container->get('source') === $source,\n    ]) . PHP_EOL;\n}\n"
+    },
+    "factory-config-lazy-parity-probe.php": {
+      "sha256": "59de54bf6c69b1ed7697017dbf5c6dc4b447af6d0caf52de63f4a3f8f56016f7",
+      "source": "<?php\ndeclare(strict_types=1);\nrequire __DIR__ . '/di/vendor/autoload.php';\n\nuse Componenta\\Config\\Config;\nuse Componenta\\Config\\ContainerValue;\nuse Componenta\\Config\\Environment;\nuse Componenta\\Config\\LazyValue;\nuse Componenta\\DI\\Tests\\Support\\ContainerBuilder;\n\nforeach ([false, true] as $cache) {\n    $state = (object) ['revision' => 1];\n    $lazy = new LazyValue(static fn(Config $config): object => (object) [\n        'owner' => $config->get('owner'),\n        'revision' => $state->revision,\n    ], cache: $cache);\n    $factory = static fn(ContainerValue $context, array $params): object => (object) [\n        'payload' => $context->config->get('payload'),\n        'input' => $params['input'],\n    ];\n    $containers = [];\n    $initial = [];\n    foreach (['first', 'second'] as $owner) {\n        $containers[$owner] = (new ContainerBuilder(new Config([\n            'owner' => $owner,\n            'payload' => $lazy,\n        ], new Environment([]))))->addFactory('product', $factory)->build();\n        $initial[$owner] = $containers[$owner]->make('product', ['input' => $owner . '-1']);\n    }\n    if ($initial['first']->payload === $initial['second']->payload) {\n        throw new LogicException('LazyValue leaked a value across configuration contexts.');\n    }\n    $state->revision = 2;\n    foreach (['first', 'second'] as $owner) {\n        $fresh = $containers[$owner]->make('product', ['input' => $owner . '-2']);\n        if ($fresh->input !== $owner . '-2'\n            || $fresh->payload->owner !== $owner\n            || $fresh->payload->revision !== ($cache ? 1 : 2)\n            || (($fresh->payload === $initial[$owner]->payload) !== $cache)\n        ) {\n            throw new LogicException('Factory metadata changed current arguments, context or explicit LazyValue cache policy.');\n        }\n    }\n    echo json_encode(['lazy_cache' => $cache, 'context_isolation' => true, 'fresh_factory_arguments' => true, 'native_cache_policy' => true]) . PHP_EOL;\n}\n"
+    }
+  },
+  "evidence_notes": [
+    "SHA-256 fields hash original captured content before workspace path normalization.",
+    "Timing samples are medians of seven rounds within each benchmark process; two process medians per source/runtime do not establish statistical significance.",
+    "Runtime ABBA snapshots use identical vendor dependencies, overridden Composer classmap/root functions, and verified actual source paths.",
+    "Unavailable-attribute counts are instrumented and use OPcache off; do not compare their latency directly with the OPcache-on runtime ABBA table.",
+    "Dependencies were integration-tested through current CI companion workspaces; their entire repositories were not separately audited."
+  ]
+}

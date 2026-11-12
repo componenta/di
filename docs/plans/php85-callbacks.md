@@ -265,9 +265,13 @@ The library must preserve native behavior, rather than promise universal isolati
 
 Do not cache a callback by file/line or `spl_object_id()`, extract its source, serialize it, or reconstruct its scope. Reuse stable class/method metadata where already safe. The November `ReflectionObject` cache isolation fix is a prerequisite regression to retain.
 
+The follow-up [cache parity audit](../audit/2026-11-12-cache-parity-recheck.md) adds executable controls for this boundary. [ObjectAttributeCacheParityContractTest](../../tests/Contract/ObjectAttributeCacheParityContractTest.php) compares ordinary plans with the public no-op-composition-rule control, including a PHP-8.5-gated `Init` fixture whose inline closure has a static local. Repeated materialization must follow PHP's native fresh-closure behavior while each invocation observes the current dependency. Reuse this control for `Transform` and callback `SetUp`; compare values, exception ownership, callback/handler counts, and object lifetime, not only final scalar output.
+
+Keep the revised discovery and classification boundaries in the existing owners. Attribute discovery, object handler discovery, and prepared parameter classification must settle on a coherent registry revision before publication. A new suffix-resolution seam must not bypass this stabilization or cache a selected dependency value. Runtime mutation must preserve unaffected shared identity as well as invalidate changed bindings.
+
 ## 8. PHP version and release compatibility
 
-Development target: DI 6, PHP `^8.5`, branch alias `6.0.x-dev`. The current audited 5.x line retains PHP `^8.4`; none of the audit fixes raises its platform floor. When implementation is authorized, put the 6.x changes on the intended major-version branch before altering the manifest or committing PHP-8.5-only fixtures.
+Development target: DI 6, PHP `^8.5`, branch alias `6.0.x-dev`. The current audited 5.x line retains PHP `^8.4`; none of the audit fixes raises its platform floor. When implementation is authorized, put the 6.x changes on the intended major-version branch before altering the manifest or introducing PHP-8.5-only production syntax. Version-gated eval/subprocess fixtures may remain in the 5.x suite when PHP 8.4 can parse their containing files and skips the unsupported syntax before evaluation.
 
 One upstream limitation must be treated separately from DI correctness. PHP 8.5.8 was observed to reuse the first consuming class's method for trait-relative first-class callable constant expressions. The official fix is [php-src `44a2a2c3`](https://github.com/php/php-src/commit/44a2a2c3db9e4e06c41a0603c3826fac3b1b99f3), dated November 3, 2026. The inspected [PHP-8.5 NEWS](https://github.com/php/php-src/blob/PHP-8.5/NEWS) places it under November 19, 2026 / PHP 8.5.13. That date is in the future at this audit's date; it is not evidence of a released patch.
 
@@ -294,6 +298,7 @@ There is a specific major-version migration for `SetUp` subclasses: a subclass r
 | Definition parity | Enabled/disabled `ClassDefinition` constructor and configured-method autowiring; shared candidate validation; declared default versus required nullable omission; no accidental adoption of the reflection attribute lifecycle. |
 | Failure and retry | Correct owner diagnostics and `previous`; direct callable exceptions unchanged; failed lazy attempt does not retain callback objects or replay completed work in the same attempt. |
 | Memory | `WeakReference` assertions for discarded callback/value/dependency/object-reflection graphs; repeated same-line closure instances remain independent where PHP defines independence. |
+| Cache parity | Identical complete callback signatures under ordinary and non-memoized plan paths; warmed service/alias/provider replacement; no skipped suffix parameters or retained runtime callback/value; stable discovery after incidental autoload; unchanged independent shared-service identity. |
 | Engine | Two trait-consuming classes resolve their own relative helper and respect visibility on the released minimum supported PHP patch. |
 
 Use Pest public-contract tests and focused fixtures, with failing regressions before code where applicable. Do not assert private cache sizes or reimplement the resolver in tests. Preserve full-suite PHPStan max, formatting, dependency audit, and the repository's applicable Linux/Windows/coverage/mutation gates. Record which gates actually ran.
