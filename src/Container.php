@@ -204,12 +204,21 @@ final class Container implements
 
         $affected = $this->deferredDependenciesResolvingTo($canonical);
         if ($entry instanceof DefinitionInterface) {
-            if (!$this->resolver instanceof DefinitionAwareResolverInterface
-                || !$this->resolver->supportsDefinition($entry)
-            ) {
-                throw InvalidConfigurationException::forInvalidDefinition($entry);
+            try {
+                if (!$this->resolver instanceof DefinitionAwareResolverInterface
+                    || !$this->resolver->supportsDefinition($entry)
+                ) {
+                    throw InvalidConfigurationException::forInvalidDefinition($entry);
+                }
+                $this->resolver->setDefinition($canonical, $entry);
+            } catch (ExceptionInterface $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw new InvalidConfigurationException(
+                    sprintf('Failed to register a definition for DI id "%s".', $id),
+                    previous: $e,
+                );
             }
-            $this->resolver->setDefinition($canonical, $entry);
             $this->cache->removeBase($canonical);
         } else {
             $this->cache->putBase($canonical, $entry);
@@ -350,7 +359,16 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
         }
 
-        $this->delegators->register($id, $delegator);
+        try {
+            $this->delegators->register($id, $delegator);
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new InvalidConfigurationException(
+                sprintf('Failed to register a delegator for DI id "%s".', $id),
+                previous: $e,
+            );
+        }
         $this->invalidate($id);
         $this->invalidateDeferredDelegators([$id]);
     }
