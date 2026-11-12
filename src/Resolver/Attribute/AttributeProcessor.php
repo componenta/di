@@ -199,26 +199,30 @@ final class AttributeProcessor
     private function executionPlan(ReflectionClass $class): array
     {
         $name = $class->getName();
-        $revision = $this->registry->revision;
         $cacheable = !$class instanceof ReflectionObject;
-        $cached = $this->cache[$name] ?? null;
-        if ($cacheable && $this->plans->canCachePlans && $cached !== null && $cached['revision'] === $revision) {
-            return $cached;
-        }
+        do {
+            $revision = $this->registry->revision;
+            $cached = $this->cache[$name] ?? null;
+            if ($cacheable && $this->plans->canCachePlans && $cached !== null && $cached['revision'] === $revision) {
+                return $cached;
+            }
 
-        $properties = self::properties($class);
-        $methods = self::methods($class);
-        $hasAttributes = static fn(ReflectionClass|ReflectionProperty|ReflectionMethod $target): bool => $target->getAttributes() !== [];
-        $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
-        $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
-        $hasHandlers = false;
-        foreach ($before as $target) {
-            foreach ($this->plans->build($target)->usages as $usage) {
-                if ($usage->definition->handler instanceof AttributeHandlerInterface) {
-                    $hasHandlers = true;
+            $properties = self::properties($class);
+            $methods = self::methods($class);
+            $hasAttributes = static fn(ReflectionClass|ReflectionProperty|ReflectionMethod $target): bool => $target->getAttributes() !== [];
+            $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
+            $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
+            $hasHandlers = false;
+            foreach ($before as $target) {
+                foreach ($this->plans->build($target)->usages as $usage) {
+                    if ($usage->definition->handler instanceof AttributeHandlerInterface) {
+                        $hasHandlers = true;
+                    }
                 }
             }
-        }
+            // A member's autoload may reveal handlers on an earlier target.
+            // Return and cache only a plan discovered at one registry revision.
+        } while ($revision !== $this->registry->revision);
 
         $plan = [
             'revision' => $revision,
