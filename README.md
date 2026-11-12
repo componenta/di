@@ -293,4 +293,6 @@ Development and production use the same `ContainerFactory`, normalization, valid
 
 Package-owned failures implement `Componenta\DI\Exception\ExceptionInterface`, which also extends the PSR-11 container exception contract. Common concrete exceptions include `InvalidConfigurationException`, `NotFoundException`, `ResolutionException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException`, and `AttributeCompositionException`.
 
+If definition or delegator registration fails during validation or autoloading, `set()` and `delegator()` preserve an existing Componenta exception or wrap a foreign failure in `InvalidConfigurationException`, with the original throwable in `getPrevious()`. A rejected registration leaves the previous binding and delegator pipeline intact.
+
 After DI resolves an explicitly invoked callable and enters its body, exceptions thrown by that callable propagate unchanged.
