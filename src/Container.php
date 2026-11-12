@@ -137,9 +137,8 @@ final class Container implements
     private function resolveAndStore(string $requestedId, string $entryId): mixed
     {
         $requestedRevision = $this->cache->resolvedRevision($requestedId);
-        $canonicalRevision = $this->cache->resolvedRevision($entryId);
+        $baseRevision = $this->cache->baseRevision($entryId);
         if (!$this->cache->tryGetBase($entryId, $entry)) {
-            $baseRevision = $this->cache->baseRevision($entryId);
             // Aliases share source creation, but each requested id owns its
             // delegator pipeline and may read another id once the source exists.
             $this->cycleGuard->enterShared($entryId);
@@ -147,6 +146,7 @@ final class Container implements
                 $entry = $this->resolver->resolve($entryId);
                 if ($this->cache->baseRevision($entryId) === $baseRevision) {
                     $this->cache->putBase($entryId, $entry);
+                    $baseRevision = $this->cache->baseRevision($entryId);
                 }
             } finally {
                 $this->cycleGuard->leaveShared($entryId);
@@ -157,7 +157,7 @@ final class Container implements
         // A factory or delegator may mutate bindings, including while suspended.
         // Its in-flight result must not repopulate an invalidated shared entry.
         if ($this->cache->resolvedRevision($requestedId) === $requestedRevision
-            && $this->cache->resolvedRevision($entryId) === $canonicalRevision
+            && $this->cache->baseRevision($entryId) === $baseRevision
         ) {
             $this->cache->putResolved($requestedId, $entryId, $entry);
         }
@@ -330,10 +330,12 @@ final class Container implements
             }
         }
 
+        $changedTargets = $this->aliases->changedTargets($candidate);
         $before = $this->deferredDependencyTargets();
-        $previous = $this->aliases->resolve($alias);
         $this->aliases->set($alias, $target);
-        $this->invalidate($alias, $previous);
+        foreach ($changedTargets as $changedId => $previousTarget) {
+            $this->invalidateRequested((string) $changedId, $previousTarget);
+        }
 
         $changed = [];
         foreach ($before as $dependencyId => $previousTarget) {
@@ -369,7 +371,7 @@ final class Container implements
                 previous: $e,
             );
         }
-        $this->invalidate($id);
+        $this->invalidateRequested($id, $canonical);
         $this->invalidateDeferredDelegators([$id]);
     }
 
@@ -393,6 +395,12 @@ final class Container implements
         if ($canonical !== $id) {
             $this->delegators->invalidate($canonical);
         }
+    }
+
+    private function invalidateRequested(string $id, string $canonical): void
+    {
+        $this->cache->invalidateRequested($id, $canonical);
+        $this->delegators->invalidate($id);
     }
 
     /** @return list<string> */
@@ -446,11 +454,7 @@ final class Container implements
             } catch (Throwable) {
                 $canonical = $entryId;
             }
-            $this->cache->invalidate($entryId, $canonical);
-            $this->delegators->invalidate($entryId);
-            if ($canonical !== $entryId) {
-                $this->delegators->invalidate($canonical);
-            }
+            $this->invalidateRequested($entryId, $canonical);
         }
     }
 }

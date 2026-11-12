@@ -103,6 +103,20 @@ final class AliasResolver
         return isset($this->map[$alias]);
     }
 
+    /** @return array<string, string> Previous canonical ids for aliases whose target changes. */
+    public function changedTargets(self $candidate): array
+    {
+        $changed = [];
+        foreach ($this->map + $candidate->map as $alias => $_) {
+            $alias = (string) $alias;
+            $previous = $this->resolve($alias);
+            if ($candidate->resolve($alias) !== $previous) {
+                $changed[$alias] = $previous;
+            }
+        }
+        return $changed;
+    }
+
     private static function assertNonEmpty(string $alias, string $target): void
     {
         if ($alias === '') {

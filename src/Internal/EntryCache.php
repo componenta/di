@@ -111,6 +111,16 @@ final class EntryCache
         }
     }
 
+    /** Invalidates one requested pipeline without changing its shared source. */
+    public function invalidateRequested(string $requestedId, string $canonicalId): void
+    {
+        $this->invalidateResolved($requestedId);
+        unset($this->reverseIndex[$canonicalId][$requestedId]);
+        if (($this->reverseIndex[$canonicalId] ?? []) === []) {
+            unset($this->reverseIndex[$canonicalId]);
+        }
+    }
+
     private function invalidateResolved(string $id): void
     {
         unset($this->resolved[$id]);
