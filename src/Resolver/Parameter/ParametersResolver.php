@@ -387,10 +387,19 @@ final class ParametersResolver
             );
         }
 
-        $this->plans->build($target->reflection);
+        do {
+            $revision = $this->revision;
+            $this->plans->build($target->reflection);
+            $resolverSlots = $this->classifyResolverSlots($target);
+            // Immutable type classification can autoload a class file that
+            // also declares attributes. Do not publish slots that skipped a
+            // newly available handler, including for single-parameter calls.
+            $this->synchronizeAttributeRevision();
+        } while ($revision !== $this->revision);
+
         $prepared = new PreparedParameter(
             $target,
-            $this->classifyResolverSlots($target),
+            $resolverSlots,
         );
 
         if (!$cacheable) {
