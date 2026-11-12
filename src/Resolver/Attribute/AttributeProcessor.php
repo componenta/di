@@ -17,6 +17,7 @@ use Componenta\DI\Internal\ObjectAttributeSequence;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionObject;
 use ReflectionProperty;
 use Throwable;
 
@@ -199,8 +200,9 @@ final class AttributeProcessor
     {
         $name = $class->getName();
         $revision = $this->registry->revision;
+        $cacheable = !$class instanceof ReflectionObject;
         $cached = $this->cache[$name] ?? null;
-        if ($this->plans->canCachePlans && $cached !== null && $cached['revision'] === $revision) {
+        if ($cacheable && $this->plans->canCachePlans && $cached !== null && $cached['revision'] === $revision) {
             return $cached;
         }
 
@@ -224,7 +226,7 @@ final class AttributeProcessor
             'before' => $before,
             'after' => $after,
         ];
-        if ($this->plans->canCachePlans) {
+        if ($cacheable && $this->plans->canCachePlans) {
             $this->cache[$name] = $plan;
         }
         return $plan;

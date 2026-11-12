@@ -22,6 +22,7 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
+use ReflectionObject;
 use Throwable;
 
 use function Componenta\DI\Internal\is_entry_class_eligible;
@@ -171,6 +172,7 @@ final class ObjectPipeline
     /** @param class-string|ReflectionClass<object> $class */
     private function metadata(string|ReflectionClass $class): ObjectMetadata
     {
+        $cacheable = !$class instanceof ReflectionObject;
         while (true) {
             $revision = $this->registry->revision;
             if ($revision !== $this->metadataRevision) {
@@ -182,7 +184,7 @@ final class ObjectPipeline
             $name = $class instanceof ReflectionClass
                 ? $class->getName()
                 : ltrim($class, '\\');
-            if ($this->plans->canCachePlans && isset($this->metadata[$name])) {
+            if ($cacheable && $this->plans->canCachePlans && isset($this->metadata[$name])) {
                 return $this->metadata[$name];
             }
 
@@ -215,7 +217,7 @@ final class ObjectPipeline
                 $constructorTargets,
                 $hasAttributeHandlers,
             );
-            if ($this->plans->canCachePlans) {
+            if ($cacheable && $this->plans->canCachePlans) {
                 $this->metadata[$name] = $metadata;
             }
             return $metadata;

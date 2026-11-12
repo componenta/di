@@ -14,6 +14,7 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionObject;
 use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
@@ -101,11 +102,9 @@ final class AttributePlanBuilder
 
         $plan = new AttributePlan($target, $this->ordered($target, $usages));
         if ($key === null) {
-            // User rules require fresh validation. Closure parameters also
-            // cannot be memoized: AttributePlan
-            // retains its target reflector, and ReflectionParameter retains the
-            // declaring Closure; caching such a plan would keep closure captures
-            // alive after the public call has completed.
+            // User rules require fresh validation. ReflectionObject retains its
+            // source instance, and closure parameter reflectors retain captured
+            // state; neither target may be retained in a named shared plan.
             return $plan;
         }
 
@@ -584,6 +583,7 @@ final class AttributePlanBuilder
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): ?string {
         return match (true) {
+            $target instanceof ReflectionObject => null,
             $target instanceof ReflectionClass => 'class:' . $target->getName(),
             $target instanceof ReflectionProperty => sprintf(
                 'property:%s::$%s',
