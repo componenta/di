@@ -46,13 +46,44 @@ final class AttributePlanBuilder
     public function build(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): AttributePlan {
-        $this->synchronizeRegistryRevision();
+        do {
+            $this->synchronizeRegistryRevision();
+            $revision = $this->registryRevision;
 
-        $key = $this->canCachePlans ? self::cacheKey($target) : null;
-        if ($key !== null && isset($this->namedPlans[$key])) {
-            return $this->namedPlans[$key];
+            $key = $this->canCachePlans ? self::cacheKey($target) : null;
+            if ($key !== null && isset($this->namedPlans[$key])) {
+                return $this->namedPlans[$key];
+            }
+
+            $usages = $this->discoverUsages($target);
+            // Loading a later attribute may reveal one skipped earlier. Validate
+            // a complete revision, before a missing dependency can fail creation.
+        } while ($revision !== $this->registry->revision);
+
+        $this->assertCapabilityCardinality($target, $usages);
+        $this->assertInvocationOnlyComposition($target, $usages);
+        $this->assertParameterHandlerComposition($target, $usages);
+        $this->assertDependencies($target, $usages);
+        $this->assertCustomRules($usages);
+
+        $plan = new AttributePlan($target, $this->ordered($target, $usages));
+        if ($key === null) {
+            // User rules require fresh validation. ReflectionObject retains its
+            // source instance, and closure parameter reflectors retain captured
+            // state; neither target may be retained in a named shared plan.
+            return $plan;
         }
 
+        return $this->namedPlans[$key] = $plan;
+    }
+
+    /**
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @return list<AttributeUsage>
+     */
+    private function discoverUsages(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): array {
         $usages = [];
         foreach ($target->getAttributes() as $index => $reflectionAttribute) {
             /** @var class-string $attributeClass */
@@ -94,21 +125,7 @@ final class AttributePlanBuilder
             );
         }
 
-        $this->assertCapabilityCardinality($target, $usages);
-        $this->assertInvocationOnlyComposition($target, $usages);
-        $this->assertParameterHandlerComposition($target, $usages);
-        $this->assertDependencies($target, $usages);
-        $this->assertCustomRules($usages);
-
-        $plan = new AttributePlan($target, $this->ordered($target, $usages));
-        if ($key === null) {
-            // User rules require fresh validation. ReflectionObject retains its
-            // source instance, and closure parameter reflectors retain captured
-            // state; neither target may be retained in a named shared plan.
-            return $plan;
-        }
-
-        return $this->namedPlans[$key] = $plan;
+        return $usages;
     }
 
     private function synchronizeRegistryRevision(): void
