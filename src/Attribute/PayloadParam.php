@@ -86,6 +86,9 @@ readonly class PayloadParam implements ParameterNameAwareExtractorInterface, Cas
     {
         $current = $data;
         foreach ($segments as $segment) {
+            if (is_object($current)) {
+                $current = get_object_vars($current);
+            }
             if (!is_array($current) || !array_key_exists($segment, $current)) {
                 return ['found' => false, 'value' => null];
             }
