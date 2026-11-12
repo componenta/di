@@ -1,0 +1,1097 @@
+{
+  "date": "2026-11-12",
+  "repository": "componenta/di",
+  "baseline_commit": "4e3a9607a9264b92ef3f92b98fe2829881c8e8c2",
+  "fixed_production_commit": "fa4c674095e09134d97d70a647a02084872cdf2a",
+  "verified_contract_commit": "bf0047b3aebc891a24e0d747c376cd96b5d58d68",
+  "runtimes": [
+    "PHP 8.4.23 static CLI, Linux x86_64",
+    "PHP 8.5.8 static CLI, Linux x86_64"
+  ],
+  "published_dependencies": [
+    {
+      "name": "componenta/arrayable",
+      "version": "v1.0.0"
+    },
+    {
+      "name": "componenta/caster",
+      "version": "v1.0.0"
+    },
+    {
+      "name": "componenta/clock",
+      "version": "v1.1.0"
+    },
+    {
+      "name": "componenta/config",
+      "version": "v3.0.0"
+    },
+    {
+      "name": "componenta/mimetype-detector",
+      "version": "v1.0.0"
+    },
+    {
+      "name": "componenta/reflection",
+      "version": "v2.0.1"
+    },
+    {
+      "name": "componenta/validation",
+      "version": "v3.0.1"
+    },
+    {
+      "name": "friendsofphp/php-cs-fixer",
+      "version": "v3.95.30"
+    },
+    {
+      "name": "pestphp/pest",
+      "version": "v4.7.8"
+    },
+    {
+      "name": "phpstan/phpstan",
+      "version": "2.3.5"
+    },
+    {
+      "name": "phpunit/phpunit",
+      "version": "12.5.33"
+    },
+    {
+      "name": "psr/container",
+      "version": "2.0.2"
+    },
+    {
+      "name": "psr/http-message",
+      "version": "2.0"
+    }
+  ],
+  "verification": {
+    "baseline": {
+      "php84": {
+        "tests": 995,
+        "assertions": 3580,
+        "result": "passed"
+      },
+      "php85": {
+        "tests": 995,
+        "assertions": 3580,
+        "result": "passed"
+      }
+    },
+    "fixed_published_dependencies": {
+      "php84": {
+        "tests": 1012,
+        "assertions": 3615,
+        "result": "passed"
+      },
+      "php85": {
+        "tests": 1012,
+        "assertions": 3615,
+        "result": "passed"
+      },
+      "phpstan_max": "no errors",
+      "format": "0 of 343 source/test files require changes",
+      "composer_audit": "no advisories"
+    },
+    "ci_companion_workspaces": {
+      "di": "bf0047b3aebc891a24e0d747c376cd96b5d58d68",
+      "config": {
+        "sha": "dcd218904f7336a61d059363ae1b336f54ad7453",
+        "path_version": "3.0.0"
+      },
+      "validation": {
+        "sha": "8f888784bbe12069f8f9dc75703c5dd66c43e53f",
+        "path_version": "3.0.1"
+      },
+      "reflection": {
+        "sha": "62aca6575934f119277236bb5dec7953063d69da",
+        "path_version": "2.0.1"
+      },
+      "composer_check_php84": "passed: 1012 tests / 3615 assertions; PHPStan max; CS Fixer",
+      "composer_check_php85": "passed: 1012 tests / 3615 assertions; PHPStan max; CS Fixer",
+      "validate_install_audit": "passed",
+      "benchmark_smoke_php84": "all four existing harnesses passed; 10000 runtime / 1000 build iterations"
+    },
+    "not_executed": [
+      "Windows",
+      "coverage",
+      "mutation"
+    ],
+    "remote_actions": "No workflow runs returned for fa4c674 or bf0047b at verification time; no remote CI success claimed"
+  },
+  "existing_harness_settings": {
+    "runtime_iterations": 30000,
+    "build_iterations": 1000,
+    "opcache_enable_cli": true,
+    "runtime_versions_run_serially": true,
+    "note": "Runtime, BuildPhases and ParameterPlan use seven-round medians; GeneratedVsReflection uses its own single measurement loop. Unpaired before/after observations are not controlled performance estimates."
+  },
+  "existing_harness_baseline": [
+    {
+      "php": "84",
+      "benchmark": "RuntimeBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.4.23, source <audit-workspace>/di/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             99519.0 ns          10048\nmake/no-arguments          7375.3 ns         135587\nmake/autowire             14144.3 ns          70700\ncall/reused-closure       17551.5 ns          56975\ncall/fresh-closure        19744.9 ns          50646\ncall/method-array          8787.3 ns         113801\n",
+      "stderr": ""
+    },
+    {
+      "php": "84",
+      "benchmark": "GeneratedVsReflectionBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.4.23, iterations 30000\ncontainer build reflection: 38.381 ms\ncontainer build factory:    3.704 ms\nreflection/default        23948.6 ns        41756 ops/s\nfactory/default            2851.0 ns       350754 ops/s\nreflection/override       23549.0 ns        42465 ops/s\nfactory/override           2920.0 ns       342470 ops/s\nfactory/reflection default ratio: 0.12x\nfactory/reflection override ratio: 0.12x\n",
+      "stderr": ""
+    },
+    {
+      "php": "84",
+      "benchmark": "BuildPhasesBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.4.23, builds 1000\ncase                            latency   operations/s\n------------------------ -------------- --------------\nbuild/empty                100407.4 ns           9959\nbuild/representative       131555.8 ns           7601\n",
+      "stderr": ""
+    },
+    {
+      "php": "84",
+      "benchmark": "ParameterPlanBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.4.23, iterations 30000\ncase                                latency   operations/s\n---------------------------- -------------- --------------\none/prepare                      1311.6 ns         762432\none/resolve-targets              6767.1 ns         147775\none/resolve-prepared             5297.7 ns         188763\nthree/prepare                    2772.7 ns         360656\nthree/resolve-targets           15723.4 ns          63599\nthree/resolve-prepared          12724.6 ns          78588\nsix/prepare                      5351.3 ns         186870\nsix/resolve-targets             30613.8 ns          32665\nsix/resolve-prepared            22546.3 ns          44353\n",
+      "stderr": ""
+    },
+    {
+      "php": "85",
+      "benchmark": "RuntimeBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.5.8, source <audit-workspace>/di/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            103949.1 ns           9620\nmake/no-arguments          7375.9 ns         135576\nmake/autowire             16646.1 ns          60074\ncall/reused-closure       19241.0 ns          51972\ncall/fresh-closure        20660.0 ns          48403\ncall/method-array          9039.1 ns         110631\n",
+      "stderr": ""
+    },
+    {
+      "php": "85",
+      "benchmark": "GeneratedVsReflectionBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.5.8, iterations 30000\ncontainer build reflection: 31.587 ms\ncontainer build factory:    3.761 ms\nreflection/default        24846.2 ns        40248 ops/s\nfactory/default            3068.4 ns       325903 ops/s\nreflection/override       24481.8 ns        40847 ops/s\nfactory/override           3063.1 ns       326463 ops/s\nfactory/reflection default ratio: 0.12x\nfactory/reflection override ratio: 0.13x\n",
+      "stderr": ""
+    },
+    {
+      "php": "85",
+      "benchmark": "BuildPhasesBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.5.8, builds 1000\ncase                            latency   operations/s\n------------------------ -------------- --------------\nbuild/empty                106874.8 ns           9357\nbuild/representative       133728.0 ns           7478\n",
+      "stderr": ""
+    },
+    {
+      "php": "85",
+      "benchmark": "ParameterPlanBench",
+      "exit_code": 0,
+      "stdout": "PHP 8.5.8, iterations 30000\ncase                                latency   operations/s\n---------------------------- -------------- --------------\none/prepare                      1479.8 ns         675747\none/resolve-targets              6904.0 ns         144843\none/resolve-prepared             5466.3 ns         182938\nthree/prepare                    3137.7 ns         318706\nthree/resolve-targets           19843.6 ns          50394\nthree/resolve-prepared          13396.9 ns          74644\nsix/prepare                      5675.9 ns         176183\nsix/resolve-targets             33293.6 ns          30036\nsix/resolve-prepared            26969.8 ns          37079\n",
+      "stderr": ""
+    }
+  ],
+  "existing_harness_fixed": {
+    "84": {
+      "RuntimeBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.4.23, source <audit-workspace>/di/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            101798.2 ns           9823\nmake/no-arguments          6769.7 ns         147718\nmake/autowire             14839.6 ns          67387\ncall/reused-closure       26765.2 ns          37362\ncall/fresh-closure        24151.8 ns          41405\ncall/method-array         10195.6 ns          98082\n",
+        "stderr": ""
+      },
+      "GeneratedVsReflectionBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.4.23, iterations 30000\ncontainer build reflection: 32.659 ms\ncontainer build factory:    4.407 ms\nreflection/default        21910.0 ns        45641 ops/s\nfactory/default            2901.3 ns       344678 ops/s\nreflection/override       23184.5 ns        43132 ops/s\nfactory/override           2971.8 ns       336495 ops/s\nfactory/reflection default ratio: 0.13x\nfactory/reflection override ratio: 0.13x\n",
+        "stderr": ""
+      },
+      "BuildPhasesBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.4.23, builds 1000\ncase                            latency   operations/s\n------------------------ -------------- --------------\nbuild/empty                104552.1 ns           9565\nbuild/representative       140099.3 ns           7138\n",
+        "stderr": ""
+      },
+      "ParameterPlanBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.4.23, iterations 30000\ncase                                latency   operations/s\n---------------------------- -------------- --------------\none/prepare                      1397.4 ns         715593\none/resolve-targets              7017.5 ns         142501\none/resolve-prepared             5349.3 ns         186942\nthree/prepare                    2959.9 ns         337847\nthree/resolve-targets           16315.4 ns          61292\nthree/resolve-prepared          12683.0 ns          78846\nsix/prepare                      5239.5 ns         190857\nsix/resolve-targets             28910.2 ns          34590\nsix/resolve-prepared            23764.6 ns          42079\n",
+        "stderr": ""
+      }
+    },
+    "85": {
+      "RuntimeBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.5.8, source <audit-workspace>/di/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            106588.5 ns           9382\nmake/no-arguments          7426.7 ns         134648\nmake/autowire             18941.7 ns          52793\ncall/reused-closure       19081.1 ns          52408\ncall/fresh-closure        18394.9 ns          54363\ncall/method-array          9315.9 ns         107344\n",
+        "stderr": ""
+      },
+      "GeneratedVsReflectionBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.5.8, iterations 30000\ncontainer build reflection: 47.629 ms\ncontainer build factory:    4.106 ms\nreflection/default        24152.3 ns        41404 ops/s\nfactory/default            2952.0 ns       338754 ops/s\nreflection/override       24492.3 ns        40829 ops/s\nfactory/override           3215.1 ns       311037 ops/s\nfactory/reflection default ratio: 0.12x\nfactory/reflection override ratio: 0.13x\n",
+        "stderr": ""
+      },
+      "BuildPhasesBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.5.8, builds 1000\ncase                            latency   operations/s\n------------------------ -------------- --------------\nbuild/empty                108614.1 ns           9207\nbuild/representative       143879.6 ns           6950\n",
+        "stderr": ""
+      },
+      "ParameterPlanBench": {
+        "exit_code": 0,
+        "stdout": "PHP 8.5.8, iterations 30000\ncase                                latency   operations/s\n---------------------------- -------------- --------------\none/prepare                      1290.5 ns         774923\none/resolve-targets              6842.6 ns         146143\none/resolve-prepared             5354.1 ns         186773\nthree/prepare                    3036.7 ns         329305\nthree/resolve-targets           15679.1 ns          63779\nthree/resolve-prepared          12313.3 ns          81213\nsix/prepare                      5214.8 ns         191763\nsix/resolve-targets             28859.3 ns          34651\nsix/resolve-prepared            24830.8 ns          40273\n",
+        "stderr": ""
+      }
+    }
+  },
+  "attribute_availability": {
+    "harness": "benchmarks/AttributeAvailabilityBench.php",
+    "source_commit": "fa4c674095e09134d97d70a647a02084872cdf2a",
+    "iterations": 10000,
+    "rounds": 7,
+    "warmup_per_case_round": 2000,
+    "opcache_cli": false,
+    "jit": false,
+    "case_order": "reversed on alternating rounds",
+    "containers": "independent per case per round",
+    "counting": "prepended no-op loader counts only reserved missing names; excludes warmup/bootstrap",
+    "php84": {
+      "make/clean": {
+        "median_ns": 7637.2,
+        "autoload_calls_per_op": 0
+      },
+      "make/1-unavailable": {
+        "median_ns": 35678.3,
+        "autoload_calls_per_op": 22
+      },
+      "make/8-unavailable": {
+        "median_ns": 217613.9,
+        "autoload_calls_per_op": 176
+      },
+      "get-shared/clean": {
+        "median_ns": 303.4,
+        "autoload_calls_per_op": 0
+      },
+      "get-shared/1-unavailable": {
+        "median_ns": 303.4,
+        "autoload_calls_per_op": 0
+      },
+      "get-shared/8-unavailable": {
+        "median_ns": 320.8,
+        "autoload_calls_per_op": 0
+      }
+    },
+    "php85": {
+      "make/clean": {
+        "median_ns": 8739.8,
+        "autoload_calls_per_op": 0
+      },
+      "make/1-unavailable": {
+        "median_ns": 38580.3,
+        "autoload_calls_per_op": 22
+      },
+      "make/8-unavailable": {
+        "median_ns": 301712.1,
+        "autoload_calls_per_op": 176
+      },
+      "get-shared/clean": {
+        "median_ns": 354.8,
+        "autoload_calls_per_op": 0
+      },
+      "get-shared/1-unavailable": {
+        "median_ns": 340.3,
+        "autoload_calls_per_op": 0
+      },
+      "get-shared/8-unavailable": {
+        "median_ns": 314.7,
+        "autoload_calls_per_op": 0
+      }
+    },
+    "count_spread": "identical exact counts in all rounds on both versions",
+    "targeted_preservation_tests": {
+      "tests": 84,
+      "assertions": 357,
+      "runtimes": [
+        "8.4.23",
+        "8.5.8"
+      ],
+      "result": "passed"
+    }
+  },
+  "paired_runtime_comparison": {
+    "setup": {
+      "repo": "<audit-workspace>/di",
+      "vendor": "<audit-workspace>/di/vendor",
+      "snapshots": {
+        "baseline": {
+          "commit": "4e3a9607a9264b92ef3f92b98fe2829881c8e8c2",
+          "root": "<audit-workspace>/runtime-abba/baseline",
+          "src_tree": "34c176f04e21bb5297f8d4eae50e7f538c4f9bf2",
+          "benchmark_sha256": "7c8b737413f0f28aeaa025ae0007265e54e7104d6476ba2c522fe585325874b6"
+        },
+        "fixed": {
+          "commit": "bf0047b3aebc891a24e0d747c376cd96b5d58d68",
+          "root": "<audit-workspace>/runtime-abba/fixed",
+          "src_tree": "32524e673a97b46ea03f9b1a7140fb68b768d956",
+          "benchmark_sha256": "7c8b737413f0f28aeaa025ae0007265e54e7104d6476ba2c522fe585325874b6"
+        }
+      },
+      "composer_lock_sha256": "67a6a5eec8ad6527d18c798c97465b105dbcd30e2fdfaf160f3e7bdc2dfba0a1"
+    },
+    "protocol": {
+      "order_per_runtime": [
+        "baseline",
+        "fixed",
+        "fixed",
+        "baseline"
+      ],
+      "runtime_order": [
+        "84",
+        "85"
+      ],
+      "iterations": 30000,
+      "build_iterations": 1000,
+      "internal_rounds_per_case": 7,
+      "warmup_per_case": "min(2000, case iterations)",
+      "processes_per_runtime": 4,
+      "opcache_cli": true,
+      "timing": "Unmodified RuntimeBench seven-round median; aggregate is median/range of two process medians per source/runtime.",
+      "source_verification": "Override all Componenta DI classmap entries and root autoload_files, precheck Container/functions reflections, postcheck every loaded DI declaration.",
+      "wrapper_sha256": "88bb99197c83b68f8aa212a0442633a2a5dac74e0bb0bacea2a05d1760753e39",
+      "snapshot_file_mtime": "Set to at least one hour before execution so OPcache file_update_protection does not treat freshly extracted source differently in the first run.",
+      "setup_preflight_failure": "One loader-validation invocation stopped before any benchmark timer because Composer classmap paths contained ../..; realpath normalization fixed the wrapper. Saved separately as preflight-failure-noncanonical-classmap.json. It is not a timed run."
+    },
+    "runs": [
+      {
+        "php": "84",
+        "ordinal": 1,
+        "source": "baseline",
+        "command": [
+          "<audit-workspace>/runtime/php84/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/baseline/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/baseline",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/baseline/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 16.140320777893066,
+        "case_medians_ns": {
+          "build/default": 98300.5,
+          "make/no-arguments": 6578.1,
+          "make/autowire": 14452.3,
+          "call/reused-closure": 18732.4,
+          "call/fresh-closure": 17950.1,
+          "call/method-array": 8662.3
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.4.23",
+            "snapshot": "<audit-workspace>/runtime-abba/baseline",
+            "container_file": "<audit-workspace>/runtime-abba/baseline/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.4.23, source <audit-workspace>/runtime-abba/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             98300.5 ns          10173\nmake/no-arguments          6578.1 ns         152020\nmake/autowire             14452.3 ns          69193\ncall/reused-closure       18732.4 ns          53383\ncall/fresh-closure        17950.1 ns          55710\ncall/method-array          8662.3 ns         115442\n"
+      },
+      {
+        "php": "84",
+        "ordinal": 2,
+        "source": "fixed",
+        "command": [
+          "<audit-workspace>/runtime/php84/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/fixed/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/fixed",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/fixed/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 15.822701692581177,
+        "case_medians_ns": {
+          "build/default": 98071.6,
+          "make/no-arguments": 6699.7,
+          "make/autowire": 14792.9,
+          "call/reused-closure": 18025.4,
+          "call/fresh-closure": 18323.9,
+          "call/method-array": 8838.0
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.4.23",
+            "snapshot": "<audit-workspace>/runtime-abba/fixed",
+            "container_file": "<audit-workspace>/runtime-abba/fixed/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.4.23, source <audit-workspace>/runtime-abba/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             98071.6 ns          10197\nmake/no-arguments          6699.7 ns         149260\nmake/autowire             14792.9 ns          67600\ncall/reused-closure       18025.4 ns          55477\ncall/fresh-closure        18323.9 ns          54574\ncall/method-array          8838.0 ns         113148\n"
+      },
+      {
+        "php": "84",
+        "ordinal": 3,
+        "source": "fixed",
+        "command": [
+          "<audit-workspace>/runtime/php84/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/fixed/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/fixed",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/fixed/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 15.776170492172241,
+        "case_medians_ns": {
+          "build/default": 98440.3,
+          "make/no-arguments": 6927.0,
+          "make/autowire": 14969.8,
+          "call/reused-closure": 18272.0,
+          "call/fresh-closure": 17680.3,
+          "call/method-array": 9082.4
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.4.23",
+            "snapshot": "<audit-workspace>/runtime-abba/fixed",
+            "container_file": "<audit-workspace>/runtime-abba/fixed/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.4.23, source <audit-workspace>/runtime-abba/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             98440.3 ns          10158\nmake/no-arguments          6927.0 ns         144363\nmake/autowire             14969.8 ns          66801\ncall/reused-closure       18272.0 ns          54729\ncall/fresh-closure        17680.3 ns          56560\ncall/method-array          9082.4 ns         110102\n"
+      },
+      {
+        "php": "84",
+        "ordinal": 4,
+        "source": "baseline",
+        "command": [
+          "<audit-workspace>/runtime/php84/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/baseline/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/baseline",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/baseline/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 16.71625018119812,
+        "case_medians_ns": {
+          "build/default": 114356.7,
+          "make/no-arguments": 7386.4,
+          "make/autowire": 15186.6,
+          "call/reused-closure": 22312.0,
+          "call/fresh-closure": 17229.9,
+          "call/method-array": 8352.2
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.4.23",
+            "snapshot": "<audit-workspace>/runtime-abba/baseline",
+            "container_file": "<audit-workspace>/runtime-abba/baseline/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.4.23, source <audit-workspace>/runtime-abba/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            114356.7 ns           8745\nmake/no-arguments          7386.4 ns         135383\nmake/autowire             15186.6 ns          65847\ncall/reused-closure       22312.0 ns          44819\ncall/fresh-closure        17229.9 ns          58039\ncall/method-array          8352.2 ns         119729\n"
+      },
+      {
+        "php": "85",
+        "ordinal": 1,
+        "source": "baseline",
+        "command": [
+          "<audit-workspace>/runtime/php85/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/baseline/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/baseline",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/baseline/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 16.976256370544434,
+        "case_medians_ns": {
+          "build/default": 100196.6,
+          "make/no-arguments": 7048.3,
+          "make/autowire": 15067.1,
+          "call/reused-closure": 18700.0,
+          "call/fresh-closure": 19553.5,
+          "call/method-array": 9837.6
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.5.8",
+            "snapshot": "<audit-workspace>/runtime-abba/baseline",
+            "container_file": "<audit-workspace>/runtime-abba/baseline/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.5.8, source <audit-workspace>/runtime-abba/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            100196.6 ns           9980\nmake/no-arguments          7048.3 ns         141879\nmake/autowire             15067.1 ns          66370\ncall/reused-closure       18700.0 ns          53476\ncall/fresh-closure        19553.5 ns          51142\ncall/method-array          9837.6 ns         101650\n"
+      },
+      {
+        "php": "85",
+        "ordinal": 2,
+        "source": "fixed",
+        "command": [
+          "<audit-workspace>/runtime/php85/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/fixed/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/fixed",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/fixed/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 17.85918927192688,
+        "case_medians_ns": {
+          "build/default": 106871.8,
+          "make/no-arguments": 9391.8,
+          "make/autowire": 16572.9,
+          "call/reused-closure": 18935.8,
+          "call/fresh-closure": 19417.9,
+          "call/method-array": 9208.5
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.5.8",
+            "snapshot": "<audit-workspace>/runtime-abba/fixed",
+            "container_file": "<audit-workspace>/runtime-abba/fixed/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.5.8, source <audit-workspace>/runtime-abba/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            106871.8 ns           9357\nmake/no-arguments          9391.8 ns         106476\nmake/autowire             16572.9 ns          60340\ncall/reused-closure       18935.8 ns          52810\ncall/fresh-closure        19417.9 ns          51499\ncall/method-array          9208.5 ns         108595\n"
+      },
+      {
+        "php": "85",
+        "ordinal": 3,
+        "source": "fixed",
+        "command": [
+          "<audit-workspace>/runtime/php85/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/fixed/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/fixed",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/fixed/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 16.19155502319336,
+        "case_medians_ns": {
+          "build/default": 98993.3,
+          "make/no-arguments": 7182.5,
+          "make/autowire": 15107.1,
+          "call/reused-closure": 18425.4,
+          "call/fresh-closure": 18661.3,
+          "call/method-array": 9043.1
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.5.8",
+            "snapshot": "<audit-workspace>/runtime-abba/fixed",
+            "container_file": "<audit-workspace>/runtime-abba/fixed/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/fixed/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.5.8, source <audit-workspace>/runtime-abba/fixed/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default             98993.3 ns          10102\nmake/no-arguments          7182.5 ns         139227\nmake/autowire             15107.1 ns          66194\ncall/reused-closure       18425.4 ns          54273\ncall/fresh-closure        18661.3 ns          53587\ncall/method-array          9043.1 ns         110581\n"
+      },
+      {
+        "php": "85",
+        "ordinal": 4,
+        "source": "baseline",
+        "command": [
+          "<audit-workspace>/runtime/php85/php",
+          "-d",
+          "opcache.enable_cli=1",
+          "<audit-workspace>/runtime-abba/baseline/benchmarks/RuntimeBench.php"
+        ],
+        "environment": {
+          "DI_ABBA_REPOSITORY": "<audit-workspace>/di",
+          "DI_ABBA_SNAPSHOT": "<audit-workspace>/runtime-abba/baseline",
+          "COMPONENTA_DI_BENCH_AUTOLOAD": "<audit-workspace>/runtime-abba/autoload-snapshot.php",
+          "COMPONENTA_DI_BENCH_SOURCE": "<audit-workspace>/runtime-abba/baseline/src",
+          "DI_BENCH_ITERATIONS": "30000",
+          "DI_BUILD_ITERATIONS": "1000"
+        },
+        "exit_code": 0,
+        "elapsed_seconds": 16.822479009628296,
+        "case_medians_ns": {
+          "build/default": 109535.8,
+          "make/no-arguments": 7007.0,
+          "make/autowire": 15240.0,
+          "call/reused-closure": 19507.3,
+          "call/fresh-closure": 19627.9,
+          "call/method-array": 8964.0
+        },
+        "diagnostics": {
+          "precheck": {
+            "php": "8.5.8",
+            "snapshot": "<audit-workspace>/runtime-abba/baseline",
+            "container_file": "<audit-workspace>/runtime-abba/baseline/src/Container.php",
+            "functions_file": "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php",
+            "remapped_classmap_entries": 168,
+            "snapshot_autoload_files": [
+              "<audit-workspace>/runtime-abba/baseline/src/Internal/functions.php"
+            ],
+            "opcache_enabled": true,
+            "opcache_enable_cli": "1",
+            "jit": "disable",
+            "jit_buffer_size": "64M",
+            "iterations": "30000",
+            "build_iterations": "1000"
+          },
+          "postcheck": {
+            "checked_declarations": 130,
+            "all_loaded_di_declarations_in_snapshot": true
+          }
+        },
+        "stdout": "PHP 8.5.8, source <audit-workspace>/runtime-abba/baseline/src\ncase                          latency   operations/s\n---------------------- -------------- --------------\nbuild/default            109535.8 ns           9129\nmake/no-arguments          7007.0 ns         142715\nmake/autowire             15240.0 ns          65617\ncall/reused-closure       19507.3 ns          51263\ncall/fresh-closure        19627.9 ns          50948\ncall/method-array          8964.0 ns         111557\n"
+      }
+    ],
+    "summary": {
+      "84": {
+        "build/default": {
+          "baseline": {
+            "process_medians_ns": [
+              98300.5,
+              114356.7
+            ],
+            "median_ns": 106328.6,
+            "min_ns": 98300.5,
+            "max_ns": 114356.7
+          },
+          "fixed": {
+            "process_medians_ns": [
+              98071.6,
+              98440.3
+            ],
+            "median_ns": 98255.95000000001,
+            "min_ns": 98071.6,
+            "max_ns": 98440.3
+          },
+          "fixed_vs_baseline_percent": -7.592171814544713,
+          "adjacent_pair_deltas_percent": [
+            -0.23285741171203966,
+            -13.91820505488528
+          ]
+        },
+        "make/no-arguments": {
+          "baseline": {
+            "process_medians_ns": [
+              6578.1,
+              7386.4
+            ],
+            "median_ns": 6982.25,
+            "min_ns": 6578.1,
+            "max_ns": 7386.4
+          },
+          "fixed": {
+            "process_medians_ns": [
+              6699.7,
+              6927.0
+            ],
+            "median_ns": 6813.35,
+            "min_ns": 6699.7,
+            "max_ns": 6927.0
+          },
+          "fixed_vs_baseline_percent": -2.418991012925631,
+          "adjacent_pair_deltas_percent": [
+            1.8485580942825264,
+            -6.219538611502218
+          ]
+        },
+        "make/autowire": {
+          "baseline": {
+            "process_medians_ns": [
+              14452.3,
+              15186.6
+            ],
+            "median_ns": 14819.45,
+            "min_ns": 14452.3,
+            "max_ns": 15186.6
+          },
+          "fixed": {
+            "process_medians_ns": [
+              14792.9,
+              14969.8
+            ],
+            "median_ns": 14881.349999999999,
+            "min_ns": 14792.9,
+            "max_ns": 14969.8
+          },
+          "fixed_vs_baseline_percent": 0.4176943138915368,
+          "adjacent_pair_deltas_percent": [
+            2.356718307812611,
+            -1.4275743089302462
+          ]
+        },
+        "call/reused-closure": {
+          "baseline": {
+            "process_medians_ns": [
+              18732.4,
+              22312.0
+            ],
+            "median_ns": 20522.2,
+            "min_ns": 18732.4,
+            "max_ns": 22312.0
+          },
+          "fixed": {
+            "process_medians_ns": [
+              18025.4,
+              18272.0
+            ],
+            "median_ns": 18148.7,
+            "min_ns": 18025.4,
+            "max_ns": 18272.0
+          },
+          "fixed_vs_baseline_percent": -11.56552416407598,
+          "adjacent_pair_deltas_percent": [
+            -3.774209391215222,
+            -18.106848332735748
+          ]
+        },
+        "call/fresh-closure": {
+          "baseline": {
+            "process_medians_ns": [
+              17950.1,
+              17229.9
+            ],
+            "median_ns": 17590.0,
+            "min_ns": 17229.9,
+            "max_ns": 17950.1
+          },
+          "fixed": {
+            "process_medians_ns": [
+              18323.9,
+              17680.3
+            ],
+            "median_ns": 18002.1,
+            "min_ns": 17680.3,
+            "max_ns": 18323.9
+          },
+          "fixed_vs_baseline_percent": 2.342808413871511,
+          "adjacent_pair_deltas_percent": [
+            2.082439652146806,
+            2.614060441441901
+          ]
+        },
+        "call/method-array": {
+          "baseline": {
+            "process_medians_ns": [
+              8662.3,
+              8352.2
+            ],
+            "median_ns": 8507.25,
+            "min_ns": 8352.2,
+            "max_ns": 8662.3
+          },
+          "fixed": {
+            "process_medians_ns": [
+              8838.0,
+              9082.4
+            ],
+            "median_ns": 8960.2,
+            "min_ns": 8838.0,
+            "max_ns": 9082.4
+          },
+          "fixed_vs_baseline_percent": 5.324282229862765,
+          "adjacent_pair_deltas_percent": [
+            2.028329658404826,
+            8.74260673834437
+          ]
+        }
+      },
+      "85": {
+        "build/default": {
+          "baseline": {
+            "process_medians_ns": [
+              100196.6,
+              109535.8
+            ],
+            "median_ns": 104866.20000000001,
+            "min_ns": 100196.6,
+            "max_ns": 109535.8
+          },
+          "fixed": {
+            "process_medians_ns": [
+              106871.8,
+              98993.3
+            ],
+            "median_ns": 102932.55,
+            "min_ns": 98993.3,
+            "max_ns": 106871.8
+          },
+          "fixed_vs_baseline_percent": -1.8439211109013254,
+          "adjacent_pair_deltas_percent": [
+            6.662102306864703,
+            -9.624707173362502
+          ]
+        },
+        "make/no-arguments": {
+          "baseline": {
+            "process_medians_ns": [
+              7048.3,
+              7007.0
+            ],
+            "median_ns": 7027.65,
+            "min_ns": 7007.0,
+            "max_ns": 7048.3
+          },
+          "fixed": {
+            "process_medians_ns": [
+              9391.8,
+              7182.5
+            ],
+            "median_ns": 8287.15,
+            "min_ns": 7182.5,
+            "max_ns": 9391.8
+          },
+          "fixed_vs_baseline_percent": 17.9220649861618,
+          "adjacent_pair_deltas_percent": [
+            33.24915227785421,
+            2.504638218923927
+          ]
+        },
+        "make/autowire": {
+          "baseline": {
+            "process_medians_ns": [
+              15067.1,
+              15240.0
+            ],
+            "median_ns": 15153.55,
+            "min_ns": 15067.1,
+            "max_ns": 15240.0
+          },
+          "fixed": {
+            "process_medians_ns": [
+              16572.9,
+              15107.1
+            ],
+            "median_ns": 15840.0,
+            "min_ns": 15107.1,
+            "max_ns": 16572.9
+          },
+          "fixed_vs_baseline_percent": 4.529961626153622,
+          "adjacent_pair_deltas_percent": [
+            9.993960350697883,
+            -0.8720472440944871
+          ]
+        },
+        "call/reused-closure": {
+          "baseline": {
+            "process_medians_ns": [
+              18700.0,
+              19507.3
+            ],
+            "median_ns": 19103.65,
+            "min_ns": 18700.0,
+            "max_ns": 19507.3
+          },
+          "fixed": {
+            "process_medians_ns": [
+              18935.8,
+              18425.4
+            ],
+            "median_ns": 18680.6,
+            "min_ns": 18425.4,
+            "max_ns": 18935.8
+          },
+          "fixed_vs_baseline_percent": -2.2144982765073817,
+          "adjacent_pair_deltas_percent": [
+            1.2609625668449143,
+            -5.546128885084034
+          ]
+        },
+        "call/fresh-closure": {
+          "baseline": {
+            "process_medians_ns": [
+              19553.5,
+              19627.9
+            ],
+            "median_ns": 19590.7,
+            "min_ns": 19553.5,
+            "max_ns": 19627.9
+          },
+          "fixed": {
+            "process_medians_ns": [
+              19417.9,
+              18661.3
+            ],
+            "median_ns": 19039.6,
+            "min_ns": 18661.3,
+            "max_ns": 19417.9
+          },
+          "fixed_vs_baseline_percent": -2.813069466634688,
+          "adjacent_pair_deltas_percent": [
+            -0.6934819853223084,
+            -4.924622603538853
+          ]
+        },
+        "call/method-array": {
+          "baseline": {
+            "process_medians_ns": [
+              9837.6,
+              8964.0
+            ],
+            "median_ns": 9400.8,
+            "min_ns": 8964.0,
+            "max_ns": 9837.6
+          },
+          "fixed": {
+            "process_medians_ns": [
+              9208.5,
+              9043.1
+            ],
+            "median_ns": 9125.8,
+            "min_ns": 9043.1,
+            "max_ns": 9208.5
+          },
+          "fixed_vs_baseline_percent": -2.925282954642161,
+          "adjacent_pair_deltas_percent": [
+            -6.394852403025131,
+            0.8824185631414627
+          ]
+        }
+      }
+    },
+    "interpretation": {
+      "large_php84_closure_regression_reproduced": false,
+      "conclusion": "The earlier roughly +52.5% reused-closure and +22.3% fresh-closure deltas on PHP 8.4 were not reproduced by the bounded paired ABBA comparison. This does not prove zero overhead or identify scheduling as the cause.",
+      "remaining_signals": [
+        "PHP 8.4 fresh closure: +2.34% aggregate; adjacent pairs +2.08% and +2.61%; process-median ranges overlap.",
+        "PHP 8.4 method array: +5.32% aggregate; adjacent pairs +2.03% and +8.74%; both fixed process medians exceed both baseline medians. This is a small residual positive signal.",
+        "PHP 8.5 no-argument make: +17.92% aggregate, but fixed medians differ greatly (9391.8 and 7182.5 ns), with adjacent pair deltas +33.25% and +2.50%. A stable regression of the aggregate magnitude is not established.",
+        "PHP 8.5 autowire make: +4.53% aggregate with adjacent pair deltas +9.99% and -0.87%, so the earlier roughly +14% effect is not consistently reproduced."
+      ],
+      "limitations": [
+        "Only two measured processes per source/runtime; no confidence interval or significance claim.",
+        "Each process result is the unmodified RuntimeBench median of seven rounds. Reported ranges are between process medians, not individual-round ranges.",
+        "No CPU affinity or scheduler instrumentation was added. Variability is observed; its cause is not proven.",
+        "No additional benchmark runs after the requested four valid timed runs per runtime."
+      ]
+    },
+    "evidence_note": "Raw stderr contained only the parsed precheck/postcheck diagnostics retained above; the repetitive enumeration of 130 source paths per process is omitted. Every loaded DI declaration passed source verification."
+  },
+  "interpretation": [
+    "No end-to-end application throughput or SLA claim.",
+    "Large unpaired PHP84 closure increase did not reproduce in the bounded ABBA comparison.",
+    "PHP84 method-array showed a positive 5.32 percent aggregate signal; absence of all overhead is not established.",
+    "PHP85 make/no-arguments aggregate was +17.92 percent, with pair deltas +33.25 and +2.50 percent; a stable effect of that magnitude is not established.",
+    "Two processes per source/runtime do not establish statistical significance. Scheduling was not measured as a cause.",
+    "Availability counts are autoload requests observed by one counting callback, not filesystem reads or number of loaded classes."
+  ]
+}
