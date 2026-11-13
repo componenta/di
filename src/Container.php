@@ -224,7 +224,7 @@ final class Container implements
             $this->cache->putBase($canonical, $entry);
         }
 
-        $this->invalidate($id);
+        $this->invalidate($id, $canonical);
         $this->invalidateDeferredDelegators($affected);
     }
 
