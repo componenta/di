@@ -41,7 +41,9 @@ final class AttributeDefinitionRegistry
     public int $revision {
         get {
             foreach ($this->unavailableAttributes as $attribute => $_) {
-                if (class_exists($attribute) || interface_exists($attribute)) {
+                if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
+                    // The fallback interface probe can autoload a class. Its
+                    // declaration must invalidate plans in this same poll.
                     unset($this->unavailableAttributes[$attribute]);
                     ++$this->generation;
                 }
