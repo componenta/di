@@ -1,12 +1,29 @@
 # Attribute availability polling: evidence and design plan
 
-**Readiness:** the November 13 audit completed a bounded autoloader comparison, a source-level checkpoint map, and an isolated prototype of alternative A. A is measurably cheaper but changes observable discovery and exception timing, so it was not adopted. A broader production optimization remains **blocked by the compatibility and checkpoint decisions below**. The same-poll cache-coherence defect found during the experiment was fixed separately in `996187f`; that correction preserves both autoload attempts.
+[Русская версия](attribute-availability-performance.ru.md)
+
+**Readiness:** `blocked` for production optimization by G1–G3 below. No new production slice is `implementation-ready` in this revision. The November 13 audit completed a bounded autoloader comparison, a source-level checkpoint map, and an isolated prototype of alternative A. A reduced measured miss counts but changed observable discovery and exception timing, so it was not adopted. The same-poll cache-coherence defect found during the experiment was fixed separately in `996187f`; that completed correction preserves both autoload attempts.
 
 ## Objective and scope
 
 Reduce repeated autoload work caused by unresolved optional attributes without losing late attribute discovery, ordered execution, or detection of incompatible changes after part of a resolution has completed. The affected behavior spans class creation, prepared parameters, request mapping, object phases, bootstrap, and deferred initialization. Cached shared-service retrieval is a control case.
 
 The finding concerns the existing PHP 8.4+ runtime. It does not require the PHP 8.5 callback-attribute refactor, an AOT compiler, a persistent metadata cache, or a new public registration API.
+
+## Readiness and evidence boundary
+
+The preserved semantics and settled design constraints below are normative for this behavior-preserving scope. Measurements and alternatives are evidence, not a selected replacement architecture. G2/G3 describe conditional, decision-only investigations; documenting or completing a prototype does not authorize its production adoption. Their results must first revise or supersede the normative specification before dependent production slices are derived.
+
+| Scope | State | Next step |
+|---|---|---|
+| Baseline, isolated A comparison, G1 observations and checkpoint inventory | Completed evidence | Reuse the recorded results; do not repeat G1 merely to reopen the same decision. |
+| Independent P11 correctness fix | Completed and verified | Retain same-poll coherence and its regression proof. It is not an outstanding optimization slice. |
+| G1 compatibility decision | Ready for a decision record, without a new experiment | Specify retained observations and any deliberately changed observations; update the affected normative constraints and proof mapping. |
+| G2 synchronization contract | Blocked by G1 and selection of an eligible direction | Complete the selected direction's owner/checkpoint/failure contract using the existing impact map. |
+| G3 candidate qualification | Blocked by G1 and G2 | Perform only the bounded isolated comparison defined below, if its stated preconditions are satisfied. |
+| Production optimization | Blocked by G1–G3 | Derive executable slices only from an updated specification with settled target semantics and replacement obligations. |
+
+The corrected runtime used for final evidence is `32b1142ede099e398cba03961372584aef069e69`. The A measurements use historical source `65da4acc18b19989041a2813dbc92f2f474b7177`, before P11. Final evidence contains 28 observation processes and a small availability smoke: class/alias discovery returns revision 1 in the first poll, existing miss counts remain 22/176 per creation, and clean/shared controls remain zero. These checks do not turn the historical A timings into a final-source performance comparison. The completed P11 correction belongs to the existing 5.x runtime; it is not deferred to a major release or to the unresolved G1 performance-policy decision.
 
 ## Reproducible evidence
 
@@ -84,18 +101,20 @@ These constraints come from the [extension/runtime contracts in README](../../RE
 | P5 | Deferred objects retain their initial before-phase policy. A conflicting late policy rejects initialization without replay; a fresh `make()` can use the newly available policy. | `CompletedObjectPhaseContractTest`, including both `Lazy` and `Proxy`. |
 | P6 | Bootstrap registration order and completed-use validation remain effective. A custom composition rule continues to observe current arguments/state on each resolution instead of being frozen into a cached plan. | [BootstrapExtensionDependencyContractTest](../../tests/Contract/BootstrapExtensionDependencyContractTest.php), [CompositionRuleRuntimeTest](../../tests/V5/CompositionRuleRuntimeTest.php), README. |
 | P7 | Shared plans retain metadata, not materialized attribute arguments, closure instances, object-bound reflectors, or invocation values. The ReflectionObject lifetime fix remains intact. | README and [ReflectionObjectLifetimeContractTest](../../tests/Contract/ReflectionObjectLifetimeContractTest.php). |
-| P8 | An already cached shared service retains its identity and existing retrieval behavior. Container instances have independent availability state. | The benchmark's independent-container and shared-get controls; `CompletedObjectPhaseContractTest` for failed-versus-successful shared results. |
+| P8 | An already cached shared service retains its identity and existing retrieval behavior. Each container owns its registry/generation and derived plans; PHP declarations and the autoloader stack remain process-wide. | The benchmark's independent-container and shared-get controls; `CompletedObjectPhaseContractTest` for failed-versus-successful shared results. |
 | P9 | Discovery must be coherent before composition validation, handler-presence queries, or publication of prepared resolver slots. Loading a later target or classifying its type must not silently omit an earlier source/handler. | [AttributeDiscoveryRevisionContractTest](../../tests/Contract/AttributeDiscoveryRevisionContractTest.php), [AttributeProcessorRevisionContractTest](../../tests/Contract/AttributeProcessorRevisionContractTest.php), [ParameterClassificationRefreshContractTest](../../tests/Contract/ParameterClassificationRefreshContractTest.php). |
 | P10 | An existing autoloader can become ready inside a dependency factory without changing the registered loader list or directly declaring the attribute. Subsequent work in that same resolution must discover it. | [ObjectAttributeCacheParityContractTest](../../tests/Contract/ObjectAttributeCacheParityContractTest.php), cold/warm and ordinary/no-op-rule controls. |
 | P11 | A class or alias declared by the fallback interface probe advances availability in that same poll. A cached `has()` agrees with the non-memoized control immediately. Both existing miss attempts and a fallback loader exception retain their timing. | [AttributeAvailabilityRevisionContractTest](../../tests/Contract/AttributeAvailabilityRevisionContractTest.php), including first-attempt, fallback, interface, missing-name and throwing-loader controls. |
 
 P1–P6 constrain when discovery must become observable; they do not establish that the precise number of failed autoload calls is itself a supported public contract. That distinction is a design gate, not permission to silently change discovery timing.
 
+P11 distinguishes the same-poll coherence invariant from the two-attempt and fallback-exception controls deliberately preserved by the local fix. Both remain obligations under this revision. If G1 proposes changing those autoloader observations, it must explicitly identify the affected constraints, test expectations and compatibility consequences in a revised normative specification; a prototype cannot silently waive them. Immediate invalidation after a declaration has actually been discovered, and agreement between cached and non-memoized behavior, remain correctness requirements.
+
 The original eleven P1–P8 test files passed on both runtimes; the [cache parity recheck](../audit/2026-11-12-cache-parity-recheck.md) added P9–P10. On November 13, fifteen preservation files passed on both the immutable baseline and prototype A: **117 passing, two PHP-8.5-only skips, 820 assertions on PHP 8.4; 119 passing and 828 assertions on PHP 8.5**. The new P11 file had four failing cases and nine successful controls on the pre-correction source, then all thirteen passed. Passing P1–P10 did not establish arbitrary autoloader equivalence: G1 below contains concrete counterexamples. P11 is part of every future optimization's preservation obligations.
 
 ## Settled design constraints
 
-The semantic definition registry remains the authority for availability and generation. Cached attribute/object/parameter plans remain derived state owned by the existing per-container components. Execution sequences and completed-work guards retain ownership of ordering and phase safety. This finding does not justify another global registry, a persistent negative cache, or an event subsystem.
+The semantic definition registry remains the per-container authority for registered semantics, observed availability and generation. It observes PHP's process-wide declarations and autoloader state; it does not own or isolate them. Cached attribute/object/parameter plans remain derived state owned by the existing per-container components. Execution sequences and completed-work guards retain ownership of ordering and phase safety. This finding does not justify another global registry, a persistent negative cache, or an event subsystem.
 
 Any future split between availability synchronization and reading a generation must specify both operations and migrate their consumers together. A cache consumer must never observe a generation that appears current while a required discovery checkpoint was skipped. Reentrant resolution, bootstrap, deferred initialization, and direct use of the currently exposed plan/processor APIs must be included in that contract; adding a check only to `Container::make()` is insufficient.
 
@@ -118,6 +137,8 @@ Freezing unresolved annotations after bootstrap, imposing an arbitrary poll cap/
 
 ### G1 — Which autoloader observations are contractual?
 
+**Status:** evidence complete; the compatibility decision remains blocked. The ready task is a written decision using the existing observations, not another fixture campaign or a production patch.
+
 The repository proves late class loading and completed-work protection. It does not settle whether arbitrary miss-count-dependent loader behavior must be preserved, whether a newly loadable class must be discovered without visiting its declaring target, or whether every current `revision` read must continue to execute loaders. Reducing these calls necessarily changes some such observations.
 
 **Completed evidence:** seven isolated scenarios and their preloaded controls ran against baseline `65da4acc` and A on both runtimes: 56 processes. The same-resolution readiness case reused `ObjectAttributeCacheParityContractTest`. The portable [AttributeAvailabilityObservations.php](../audit/reproductions/AttributeAvailabilityObservations.php) reproduces the isolated observations; the [evidence](../audit/2026-11-13-evidence.json) preserves exact outcomes and source provenance.
@@ -133,11 +154,13 @@ The repository proves late class loading and completed-work protection. It does 
 | Previously missing annotation loads an unrelated class as a side effect | Constructor sees the class; one constructor; 30 loader calls before it, 38 total | Same semantic outcome; 15 calls before it, 19 total | This fixture is preserved; arbitrary count-sensitive side effects are not. |
 | All preloaded controls | Zero missing-name loader calls | Same | Differences depend on unresolved names. |
 
-The current audit preserves the existing autoloader-observability contract. It does not classify these differences as harmless solely because a broad test suite passes. Evidence gathering for G1 is complete; adoption of A or a broader design still needs a written decision explicitly identifying which observations may change. No additional open-ended fixture campaign is required to establish that decision boundary.
+The current audit preserves the existing autoloader-observability contract. It does not classify these differences as harmless solely because a broad test suite passes. G1 is resolved when a written decision names the retained observations, any observations allowed to change, their compatibility consequences, and the corresponding normative constraints and proof that must be revised. Retaining the corrected baseline is a valid outcome. Adoption of A or a broader design cannot be inferred from the completed experiment. No additional open-ended fixture campaign is required to establish that decision boundary.
 
 ### G2 — Where can a refresh safely be omitted?
 
-**Deciding evidence:** map the existing revision reads to the user-code boundaries and completed-work checks they protect. Use the fixtures above together with the P1–P10 suites. Include nested `make()`/`call()`, direct plan/processor API use, bootstrap, and delayed lazy/proxy initialization. Confirm how a refresh that itself loads another attribute or reenters resolution reaches a coherent generation without replay.
+**Status:** blocked by the G1 decision and selection of an eligible direction. The existing checkpoint inventory is complete as an impact map; the replacement synchronization contract is not settled.
+
+**Deciding evidence:** use the existing map of revision reads, user-code boundaries and completed-work checks to justify each proposed omission under the selected contract. Use the fixtures above together with the P1–P11 suites. Include nested `make()`/`call()`, direct plan/processor API use, bootstrap, and delayed lazy/proxy initialization. Confirm how a refresh that itself loads another attribute or reenters resolution reaches a coherent generation without replay.
 
 The November 13 source review produced this checkpoint map. It is an impact map for B2/C, not proof that any listed refresh can already be removed:
 
@@ -156,9 +179,11 @@ The November 13 source review produced this checkpoint map. It is an impact map 
 
 A pure-generation getter requires an explicit synchronization owner at each applicable boundary, including direct public APIs. Autoload itself is user code: a metadata traversal cannot simply be assumed pure. The remaining design work is to select a contract and prove each omitted poll under that contract, not to introduce a second registry.
 
-**Bound:** temporary instrumentation of an isolated source copy, restricted to the registry and the consumers listed in the ownership table. Produce a checkpoint table with an owner, triggering operation, required observation, and failure propagation for each boundary. Do not keep profiling counters or a second synchronization path in production. Stop once every preserved scenario has an explicit checkpoint and every omitted check has a reason grounded in that map.
+**Bound:** if evidence beyond the existing map is needed after G1, temporary instrumentation is restricted to an isolated source copy of the registry and the consumers listed in the checkpoint map. Produce the selected contract's checkpoint table with an owner, triggering operation, required observation, and failure propagation for each boundary. Retain the findings and source provenance; discard temporary instrumentation from the production change surface. Stop once every preserved scenario has an explicit checkpoint and every omitted check has a reason grounded in that map, then update the normative synchronization contract. No profiling counters or second synchronization path become a production dependency.
 
 ### G3 — Does the smallest preserving candidate justify its complexity?
+
+**Status:** blocked by G1 and G2. Historical A evidence is complete; no current-source candidate has been selected for production.
 
 The isolated A experiment measured the following with the same dependencies, settings and harness as the baseline. It is a pre-P11, unpaired exploratory comparison, not a final-source speedup or statistical non-regression result:
 
@@ -170,7 +195,7 @@ The isolated A experiment measured the following with the same dependencies, set
 
 All source-map checks passed; the optimized Composer classmap and autoloaded functions were remapped to the selected immutable copy. The exact counter reduction is established. The latency figures include instrumentation and do not justify dropping P11 or changing exception timing. No B2/C implementation was attempted because G1 already established the unresolved compatibility choice.
 
-**Deciding evidence:** after G1 and G2 are resolved, use the then-current corrected source, including P11, as the comparison baseline. Historical A remains evidence; rebase it only if the chosen compatibility contract permits its changed observations. Compare at most one broader candidate selected from B2/C. Use this benchmark with identical settings and the targeted preservation suites; run runtime versions serially. Include the clean path and shared-get control in every comparison. Record exact miss counts, median latency and round spread, and any additional metadata retained by the candidate.
+**Deciding evidence:** after G1 and G2 are resolved, use the then-current corrected source, including P11, as the comparison baseline. Historical A remains evidence; rebase it only if the chosen compatibility contract permits its changed observations. Compare at most one broader candidate selected from B2/C. Use this benchmark with identical settings and the targeted preservation suites; run runtime versions serially. Include the clean path and shared-get control in every comparison. Record exact miss counts, median latency, the harness's autoload-count range across rounds, and any additional metadata retained by the candidate. The autoload-count range is not a latency distribution.
 
 Also retain the controlled `RuntimeBench.php` comparison, including reused and fresh closures. The follow-up coherence fixes showed a positive reused-closure latency signal even with no unavailable attribute in that fixture (see the [recheck measurements](../audit/2026-11-12-cache-parity-recheck.md#controlled-runtime-comparison)). A candidate must account for the ordinary non-memoized path as well as the missing-name benchmark; removing a revision check is acceptable only after its required observation is covered by the approved checkpoint contract.
 
@@ -178,13 +203,13 @@ Also retain the controlled `RuntimeBench.php` comparison, including reused and f
 
 ## Implementation sequence and acceptance
 
-The executable work consists of the benchmark, bounded prototype/evidence, and the independent P11 correctness fix. A broader availability architecture is not implementation-ready. The dependency order is:
+The benchmark, historical bounded prototype/evidence and independent P11 correctness fix are completed deliverables. This revision contains no executable production optimization slice. The following order governs the remaining decisions and conditional evidence tasks; it does not authorize production implementation:
 
 1. Preserve the benchmark and the measured baseline as the failure signal. This deliverable is complete.
 2. Resolve the G1 compatibility choice using the completed fixtures. Retain current behavior unless the new contract explicitly permits the observed changes. Do not derive a production patch from benchmark numbers alone.
 3. Resolve G2 for the selected direction. Write the normative synchronization contract, including direct API calls, nested calls, failure behavior, and deferred work.
 4. Resolve G3 in isolated candidate copies. Update this document with the selected architecture, measured tradeoff, and acceptance evidence.
-5. Only then derive production slices. Each slice must change one coherent availability behavior together with all required consumers, preserve P1–P11, and remove superseded polling in that same slice once its replacement is proven. It must not leave both strategies active indefinitely.
+5. Only then derive production slices from the updated normative specification. Under this revision's preservation contract, each slice must change one coherent availability behavior together with all required consumers, preserve P1–P11, and remove superseded polling in that same slice once its replacement is proven. Any intentional compatibility change requires the explicit normative revision described under G1; it cannot be introduced by a slice or a passing benchmark. The result must not leave both strategies active indefinitely.
 
 For the eventual implementation, acceptance requires lower missing-name autoload work in the affected benchmark cases, an explained latency result on both runtimes, no new unresolved-name probes on the clean/shared-get paths, and all P1–P11 scenarios passing. No numeric throughput target is implied. Freshness and failure behavior take precedence over a faster invalid result.
 
