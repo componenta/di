@@ -213,7 +213,8 @@ final class FactorySpecificationValidator
     private static function assertClassDefinition(string $id, ClassDefinition $definition): void
     {
         $className = $definition->value;
-        if (!class_exists($className) && !interface_exists($className)) {
+        // The interface probe can autoload a class after the first probe failed.
+        if (!class_exists($className) && !interface_exists($className) && !class_exists($className, false)) {
             throw new InvalidConfigurationException(sprintf(
                 'ClassDefinition for "%s" references unknown class "%s".',
                 $id,

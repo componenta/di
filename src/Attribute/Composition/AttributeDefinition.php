@@ -38,7 +38,7 @@ final readonly class AttributeDefinition
         public array $rules = [],
         public AttributePhase $phase = AttributePhase::AfterInstantiation,
     ) {
-        if (!class_exists($attribute) && !interface_exists($attribute)) {
+        if (!class_exists($attribute) && !interface_exists($attribute) && !class_exists($attribute, false)) {
             throw new InvalidConfigurationException(sprintf(
                 'Attribute definition target "%s" is not available.',
                 $attribute,
@@ -77,7 +77,7 @@ final readonly class AttributeDefinition
     private static function assertSelectors(array $selectors, string $kind): void
     {
         foreach ($selectors as $selector) {
-            if (!class_exists($selector) && !interface_exists($selector)) {
+            if (!class_exists($selector) && !interface_exists($selector) && !class_exists($selector, false)) {
                 throw new InvalidConfigurationException(sprintf(
                     'Attribute composition selector "%s" in %s is not available.',
                     $selector,
