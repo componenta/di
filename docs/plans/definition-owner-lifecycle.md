@@ -2,258 +2,244 @@
 
 **Canonical specification:** this English document. [Full Russian translation](definition-owner-lifecycle.ru.md).
 
-**Readiness:** implementation-ready for the next major version's container mutation protocol. The target is specified sufficiently for implementation; readiness is not production rollout approval. This is a proposed architecture, not an implemented change in the current 5.x line. **The v5.0.5 bug-fix release does not implement `MutationRetirement` or this protocol.**
+**Readiness:** implementation-ready for the next major version, subject to the verification and convergence gates below. Readiness means that the target is specified for coding, not that implementation or rollout has been approved. **v5.0.5 does not implement this architecture or `MutationRetirement`.** The fresh review supersedes this document's earlier proposal to add required removal/retirement methods to every mutable definition resolver. There is one normative target below: central binding ownership in `CompositeResolver` and definition execution strategies without registration maps.
 
 ## Objective and evidence
 
-Replacing an explicit definition must leave one effective definition owner and release configuration that no owner can use. All four public registration mutations must publish their binding/routing changes and invalidate affected caches before releasing the configuration, service values or resolved delegator callables that they retired. Throwing destructors must not strand a partially invalidated alias family or make shared `get()` disagree with fresh `make()` about the effective registration. This is a reference-lifetime boundary for mutations, not service shutdown, request scope, a general transaction framework, or a dependency graph for rebuilding ordinary shared consumers.
+Replacing an explicit definition must leave one authoritative registration and stop retaining its obsolete configuration. All four public registration mutations must finish publication and affected cache invalidation before releasing retired configuration, service values or resolved delegator callables. Throwing destructors must not leave shared `get()` and fresh `make()` using different registrations or leave an alias family partly invalidated.
 
-Three failures were reproduced through `ContainerFactory` and `Container::set()` on PHP **8.4.23** and **8.5.8**, against the November 13 checkout whose baseline is `65da4acc18b19989041a2813dbc92f2f474b7177`. The diagnostics were rechecked at `794699c80996bf6142b08b50d381ac52378bdfd2` after the localized source fixes; all three failures remain observable.
-
-The executable evidence is [DefinitionLifecycle.php](../audit/reproductions/DefinitionLifecycle.php) and [CacheRetirement.php](../audit/reproductions/CacheRetirement.php). From the repository root, with development dependencies installed, run:
+Three failures remain observable on PHP **8.4.23** and **8.5.8** in the v5.0.5 implementation (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). They were reproduced again during the fresh review; subsequent localized alias/external-lookup and class-availability corrections do not change these ownership paths. Run the public-entry-point diagnostics with development dependencies installed:
 
 ```sh
 php -n docs/audit/reproductions/DefinitionLifecycle.php
 php -n docs/audit/reproductions/CacheRetirement.php
+php -n docs/audit/reproductions/MutationParity.php
 ```
 
-Both scripts use public production entry points, report observations as JSON, and stay outside the regular test suite while the defects remain unfixed.
+The scripts are [DefinitionLifecycle.php](../audit/reproductions/DefinitionLifecycle.php), [CacheRetirement.php](../audit/reproductions/CacheRetirement.php) and [MutationParity.php](../audit/reproductions/MutationParity.php). They report observations outside the regular test suite while the defects remain unfixed.
 
 | Scenario | Current observation on both runtimes | Required result |
 | --- | --- | --- |
-| Replace a callable-object factory with `Definition::invokable(stdClass::class)` | The retired factory and its payload remain reachable through weak references until the entire container is discarded. `make()` already uses the new definition. | Once no caller or in-flight invocation owns them, the retired factory and payload can be collected while the container stays alive. |
-| Replace the factory with another factory, with no throwing destructor | Both weak references clear. | Preserve this successful control. |
-| Replace a factory whose destructor throws, after warming `get()` | `set()` throws `InvalidConfigurationException`, `get()` keeps the old shared product, and `make()` produces the new product. | A validation rejection preserves the old registration; a retirement failure after successful publication reports the committed outcome and leaves both lookup paths using the new registration. |
-| Replace a base service with two warmed decorated aliases; the first retired alias wrapper's destructor throws | `set()` throws `LogicException`; the source and first alias return `new`, but the second alias still returns `old`. | Complete the entire affected invalidation before retirement; all three lookups use the new source despite a reported retirement failure. |
+| Replace a callable-object factory with an invokable definition | The former factory and payload remain reachable until the container is discarded; `make()` already uses the new definition. | Once caller and in-flight references are gone, the old configuration is collectible while the container remains alive. |
+| Replace a factory with another factory whose retirement does not throw | Old factory and payload weak references clear. | Preserve this successful control. |
+| Replace a warmed factory whose destructor throws | `set()` reports `InvalidConfigurationException`, `get()` keeps the old product, and `make()` produces the new one. | A committed retirement failure is distinguishable from rejection; both lookup paths use the committed registration. |
+| Replace a source shared by two decorated aliases; the first old wrapper's destructor throws | Source and first alias return `new`; the second alias still returns `old`. | Complete all affected invalidation before retirement, including after a reported destructor failure. |
 
-The first defect retains at most the obsolete registration held by each former resolver for that ID; this evidence does not show growth on every repeated switch. The other two are observable cache inconsistencies, not merely delayed garbage collection. These findings do not imply that every application destructor is safe to run or that DI can undo application side effects.
+The retained configuration is bounded by former resolver/ID slots; these observations do not prove growth on every replacement. The two destructor cases demonstrate inconsistent published state, not merely delayed GC. The mutation-parity diagnostic still passes **600 operations / 14,400 comparisons** on each runtime. Thus the evidence justifies correcting ownership and release ordering, not replacing all caching or claiming that ordinary mutations generally fail.
 
-## Current responsibility and root cause
+## Current responsibility and architectural choice
 
-[Container::set()](../../src/Container.php) canonicalizes the ID, asks a definition-aware resolver to register the definition, and only after that call succeeds removes the old base value and invalidates affected resolved entries and deferred delegators.
+The current owners are independently mutable:
 
-[CompositeResolver](../../src/Resolver/Entry/CompositeResolver.php) selects the first resolver supporting a definition and stores that resolver in `definitionOwners`. Its member resolvers retain their own authoritative registration maps. [FactoryResolver](../../src/Resolver/Entry/FactoryResolver.php) owns factory callables, `ClassDefinition` objects and validation flags; [InvokableResolver](../../src/Resolver/Entry/InvokableResolver.php) owns invokable classes. Factory and invokable registrations supplied at container construction populate these leaf maps directly, so they initially have no entry in `CompositeResolver::$definitionOwners`.
+| Current component | Owned state and responsibility | Problem at the boundary |
+| --- | --- | --- |
+| [CompositeResolver](../../src/Resolver/Entry/CompositeResolver.php) | Resolver order and runtime `definitionOwners` routing | Changing the selected owner does not detach the old leaf's registration. |
+| [FactoryResolver](../../src/Resolver/Entry/FactoryResolver.php) | Factory/ClassDefinition map and per-ID resolved-callable validation flags | An overwrite can destroy old user state before container invalidation. |
+| [InvokableResolver](../../src/Resolver/Entry/InvokableResolver.php) | Class registrations | Initial registrations, like initial factory entries, bypass `definitionOwners`. |
+| [Container](../../src/Container.php) | Alias canonicalization, protected IDs, public mutations and invalidation orchestration | It treats a throwing leaf overwrite as rejection even when the leaf changed. |
+| [EntryCache](../../src/Internal/EntryCache.php), [DelegatorRegistry](../../src/Internal/DelegatorRegistry.php) | Shared values, revisions, alias reverse membership and cached callable chains | Eviction releases user objects during an incomplete traversal. |
 
-There are three missing boundaries:
+[ContainerFactory](../../src/ContainerFactory.php) fills the leaf maps directly. `Container` also accepts application entry resolvers, so public extension and standalone resolver consumers must be migrated explicitly. Repository search finds three built-in implementations of [DefinitionAwareResolverInterface](../../src/Resolver/Entry/DefinitionAwareResolverInterface.php); it cannot establish that third-party implementations do not exist.
 
-1. Changing the selected resolver does not remove the previous resolver's registration. The interface permits registration but has no operation for relinquishing a definition. Consulting only `definitionOwners` would also miss the initial declarative registrations.
-2. Overwriting a factory's slot can destroy its previous callable immediately. If that destructor throws, the resolver has already changed its map, but `Container::set()` treats the exception as a failed registration and skips cache invalidation. The mutable definition and shared cache then disagree.
-3. [EntryCache](../../src/Internal/EntryCache.php) and [DelegatorRegistry](../../src/Internal/DelegatorRegistry.php) release cached values/callables while traversing invalidation. A destructor can abort that traversal or reenter a partially updated graph. These helpers are shared by `set()`, `alias()`, `delegator()` and `addContainer()`, so protecting only definition payloads would leave the same consistency gap reachable through the adjacent mutation paths.
+**Decision:** centralize explicit registrations in `CompositeResolver`; make factory/invokable extensions strategies that validate and execute supplied definitions without keeping their own ID maps. Keep the existing fallback entry-resolver mechanism and the existing value/delegator caches. Retain old bindings and evicted cache roots through a separate, internal mutation retirement barrier.
 
-The current [DefinitionAwareResolverInterface](../../src/Resolver/Entry/DefinitionAwareResolverInterface.php) is public and has three in-repository implementations: `FactoryResolver`, `InvokableResolver`, and `CompositeResolver`. `Container` is its primary mutation caller. The constructor of `Container` also permits application-supplied resolvers; custom implementations cannot be assumed absent merely because repository search finds none. These facts require a defined extension contract, not a concrete-type check in `CompositeResolver`.
+| Alternative | Assessment |
+| --- | --- |
+| Keep the current design and document its limits | Suitable for the current 5.x line while localized fixes continue. It leaves the three reproduced lifetime/consistency defects, so it is not the target for corrected ownership. |
+| Concrete factory cleanup or optional removal | Does not cover custom owners, initial registration, same-owner overwrite and cache-wrapper retirement together. |
+| Required `removeDefinition()` plus public retirement receipts | Can be made correct, but preserves multiple registration authorities and adds recursive removal, shared-leaf restrictions, receipt aggregation and extension-removal failure handling. Because it already requires a major API migration, retaining those responsibilities is a poor long-term tradeoff. |
+| A central registry separate from `CompositeResolver` | Would duplicate or relocate the existing selection boundary without a demonstrated additional responsibility. Do not introduce a second registry, generated container or generic definition compiler. |
+| One binding table in `CompositeResolver` plus registration-free strategies | Selected. Routing and configuration change together in one slot; initial and runtime definitions have the same owner. There is no cross-resolver removal operation. Cache retirement remains necessary and independent. |
+
+This is a correctness and maintainability refactor, not a measured throughput optimization. It removes an entire class of owner/map synchronization and makes each invocation's configuration snapshot explicit. It also gives custom definition kinds one admission/execution contract. It does not add scopes, disposal hooks, service graph rebuilding, persistent configuration, or hot reload. Warm shared `get()` continues to return from `EntryCache`; no retirement holder belongs on that path. Fresh resolution and bootstrap costs must be measured, including the cost of binding objects; no speedup is promised.
 
 ## Normative desired state
 
-### Ownership and preservation
+### Requirements and preserved behavior
 
-- **R1 — Exclusive explicit ownership.** After a successful explicit definition replacement, the selected resolver owns that ID's current definition. Every other definition-aware resolver in the composition has relinquished its prior definition for that ID. Fallback reflection remains available for IDs without explicit definitions.
-- **R2 — Retirement boundary.** A previous definition's callable/arguments, replaced base values, evicted resolved entries and discarded delegator-callable chains remain strongly held until the public mutation has published its binding/routing changes and invalidated its complete affected cache set. They are then released without a process-global retirement list or later maintenance pass. `set()`, `alias()`, `delegator()` and `addContainer()` share this rule.
-- **R3 — Distinct failure outcomes.** Validation/selection rejection and failure while retiring already-replaced state are different outcomes. A retirement failure cannot leave `get()` on the old cached registration while `make()` uses the new one, or leave affected siblings from different source generations.
-- **P1 — Raw services.** `set($id, $ordinaryValue)` still replaces the shared base value while preserving the underlying definition used by `make()`. It does not remove definitions. Its retired cache values participate in R2, so ordinary value replacement receives the same safe release ordering.
-- **P2 — Lookup semantics.** Aliases, delegator ordering, null/false shared values, protected IDs, external-container precedence, and the distinction between shared `get()` and fresh local `make()` retain their existing contracts.
-- **P3 — In-flight work.** An already-running factory or `ClassDefinition` may finish using its earlier configuration. Existing revision checks continue to prevent that attempt from restoring invalidated caches. Retirement does not cancel a Fiber, replay creation, or destroy objects still held by an active invocation or an application reference.
-- **P4 — Local lifetime.** Named reflection metadata remains reusable; runtime configuration and captured values are not promoted into metadata caches. Unaffected shared entries retain identity.
+- **R1 — One registration authority.** One `CompositeResolver` binding table owns every explicit definition in its composition, including bootstrap definitions. Its entry associates a canonical ID, a selected definition strategy and a validated definition snapshot. Factory and invokable strategies keep no per-ID registration or ownership map.
+- **R2 — Complete retirement boundary.** `set()`, `alias()`, `delegator()` and `addContainer()` retain all replaced binding/configuration roots and affected evicted cache/callable roots through publication and complete invalidation, then release them. No long-lived retirement queue is introduced.
+- **R3 — Distinct outcomes.** Rejection before publication makes no speculative binding/cache write by that operation. A failure delivered during retirement reports an already committed mutation; it never restores the old registration or cache.
+- **P1 — Services and creation.** Raw-value `set()` changes the shared base while preserving the underlying definition used by `make()`. Shared null/false values, factory ABI, explicit ClassDefinition argument/reference behavior and invokable zero-argument construction stay intact.
+- **P2 — Routing and identity.** Preserve aliases, protected-core guards, external first-owner precedence, requested-ID delegator pipelines, their ordering and transitive invalidation. Unaffected shared instances retain identity. Ordinary constructor/factory consumers are not automatically rebuilt when their dependencies change.
+- **P3 — In-flight resolution.** An invocation may finish using the definition it captured before replacement. Existing revision and Fiber ownership checks prevent it from restoring invalidated caches. Do not cancel, replay or lock an invocation merely because a binding changes.
+- **P4 — Metadata and cost.** Reusable metadata may be cached, but invocation values and retired configuration must not enter metadata caches. Ordinary cache population does not allocate a retirement holder. Caller parameters crossing custom definition/fallback boundaries contain no DI-private metadata.
 
-### Architectural decision
+### Central bindings and strategy contract
 
-Extend the existing definition-aware protocol in the next major release. Both replacement and removal return a small **`MutationRetirement` holder** containing detached previous configuration. `Container` incorporates it into the same holder used by affected cache/delegator mutations, retains all removed roots through the complete invalidation batch, and releases them afterwards. This holder is a lifetime barrier for one registration mutation, not a transaction, rollback mechanism, or service lifecycle manager.
+`CompositeResolver` keeps one table of immutable internal `DefinitionBinding` records. A record contains the canonical `id`, selected `DefinitionResolverInterface` instance and validated `DefinitionInterface` payload. It contains no resolved service result. There is no parallel `definitionOwners` map. A record is captured locally before invoking its strategy and is never reread mid-invocation to select a different registration.
 
-| Alternative | Decision and reason |
-| --- | --- |
-| Optional `removeDefinition(string $id): void` capability | Rejected as the target. It leaves custom implementations outside the ownership guarantee, does not protect same-owner replacement, and can run destructors before cache invalidation. Optional best-effort cleanup would not fix the second reproduced failure. |
-| Required removal returning `void` | Insufficient. It makes ownership explicit but still releases captured objects inside the resolver call, where a throwing destructor can strand the old cache. |
-| Detect `FactoryResolver` inside `CompositeResolver` and clear its private state | Rejected. It couples the orchestrator to one leaf implementation, misses custom and nested resolvers, and preserves the missing public protocol. |
-| Centralize every definition in a new registry and turn all resolvers into stateless strategies | Not selected. It could solve ownership, but it changes bootstrap, selection, direct resolver APIs and all definition execution paths. The reproduced failures require bounded ownership transfer and release ordering, not a new runtime resolution layer. |
-| Required mutation/removal retirement protocol | Selected. Existing owners retain their work; the missing release boundary becomes explicit, including custom and nested resolvers. The same holder prevents partial cache eviction. Ordinary lookup writes and the attribute architecture remain unchanged. |
-
-### Public extension contract
-
-The existing interface namespace remains `Componenta\DI\Resolver\Entry`; it imports the new public `Componenta\DI\MutationRetirement`. The next-major interface is:
+Replace the public mutable-leaf `DefinitionAwareResolverInterface` with `Componenta\DI\Resolver\Entry\DefinitionResolverInterface`:
 
 ```php
-interface DefinitionAwareResolverInterface extends EntryResolverInterface
+interface DefinitionResolverInterface
 {
     public function supportsDefinition(DefinitionInterface $definition): bool;
 
-    public function setDefinition(
+    public function validateDefinition(
         string $id,
         DefinitionInterface $definition,
-    ): MutationRetirement;
+    ): DefinitionInterface;
 
-    public function removeDefinition(string $id): MutationRetirement;
+    /** @param array<string|int, mixed> $params */
+    public function resolveDefinition(
+        string $id,
+        DefinitionInterface $validated,
+        array $params = [],
+    ): mixed;
 }
 ```
 
-`supportsDefinition()` classifies the definition kind. It must not publish bindings, execute factories, or mutate another resolver. Selection order remains the configured resolver order.
+`supportsDefinition()` classifies the supplied kind without changing registrations, loading services, executing factories, or invoking application callbacks. The first supporting strategy in configured order wins. If none supports it, admission rejects; if the selected strategy rejects validation, DI does not try a later strategy as a fallback.
 
-`setDefinition()` validates before changing its stored definition. A conforming implementation that rejects validation makes no speculative definition write of its own. Validation may autoload classes, reenter the container, and have application-side effects. A nested successful mutation remains effective even if the outer validation then fails; DI must not restore an obsolete snapshot over it. When no such nested mutation occurs, rejection leaves the prior registration unchanged. Once validation succeeds, the implementation must retain its currently stored configuration in the receipt **before** replacing any reference that could be its last owner. It then publishes the new registration and returns the receipt. Same-owner replacement follows this rule too.
+`validateDefinition()` validates and, when necessary, returns a normalized immutable payload for that same strategy's execution method. It may return the original immutable definition. The returned type can be a strategy-specific implementation of the existing marker interface; it need not be publicly constructible or supported as fresh input. Only the selected strategy executes its validated payload. This permits current factory validation flags to travel with a registration instead of remaining in another ID map.
 
-`removeDefinition()` detaches a registration owned by that resolver and returns the detached state in a receipt. Absence is an idempotent success with an empty receipt. Removal must not discover or instantiate a service, call `can()`, validate a replacement, invoke user callbacks deliberately, or release the detached state prematurely. Built-in implementations perform only local map updates while the returned receipt retains user-owned values. Removal also clears the definition's local derived state, such as `FactoryResolver::$validateResolvedFactories[$id]`.
+Validation must not resolve a factory service or execute a service constructor/delegator. Class/callable inspection may autoload and reenter application code. The strategy must not retain the supplied or returned definition in a per-ID store, or publish a binding itself. Its output is stable configuration: mutable application factory objects may keep their intended business state, but the strategy cannot mutate the descriptor's routing/execution policy after admission. Custom definitions needing normalization return an owned stable descriptor; DI does not deep-clone arbitrary user graphs.
 
-These obligations are extension conformance requirements. DI cannot provide rollback for an arbitrary implementation that publishes a new binding and then throws instead of returning its receipt, or that disposes objects before retaining them. Such code violates this protocol; the migration guide and shared conformance tests must make that distinction explicit.
+`resolveDefinition()` receives exactly the selected record's validated payload and current public parameters. It can call services and factories, and it may suspend. It must not consult another per-ID definition store. Resolution errors retain the existing Componenta exception projection at the owning boundary. Direct strategy callers must call validation before resolving a supplied definition and must keep the returned payload alive for that invocation. They own any results; strategies never become shared-value caches.
 
-### Retirement holder and committed failure
+These are extension conformance obligations. DI cannot undo arbitrary side effects of a violating implementation. Factories and invokable construction remain effectful; “registration-free” does not mean mathematically pure.
 
-Add `Componenta\DI\MutationRetirement` as a final, non-callable reference holder. It is public only because application-supplied definition resolvers must return it through the extension protocol. Its surface is:
+### Built-in forms and admission
+
+Public `Definition`, `FactoryDefinition(callable)`, `ClassDefinition`, `InvokableDefinition` and `ReferenceDefinition` construction APIs remain unchanged. A reference stays an argument/value descriptor, not a new top-level binding kind. The ownership refactor does not broaden the public factory constructor to arbitrary `mixed` values.
+
+Declarative configuration still accepts its existing callable, non-empty service/function string, deferred `[service-id, method]`, lazy-factory and ClassDefinition forms. `DependencyConfiguration` continues shape/ID/alias normalization, but semantic factory ABI and class-eligibility validation belongs to admission in `CompositeResolver`. Direct users of the public configuration normalizer must therefore no longer treat shape normalization alone as proof of executable factory validity; `ContainerFactory::create()` still rejects invalid eager specifications before returning a container.
+
+`ContainerFactory` wraps raw configured factory forms once in internal `ConfiguredFactoryDefinition` descriptors and submits them to the same admission path used for explicit definitions. A configured public definition is submitted as that definition, without wrapping ClassDefinition or inventing a second execution route. Factory strategy admission produces an internal readonly `PreparedFactoryDefinition` containing the normalized factory specification and the current `validateResolvedCallable` flag. Both internal descriptor classes implement `DefinitionInterface`; neither is a registry or public construction API.
+
+Preserve validation timing: known non-string direct callables are checked against `(ContainerValue, array)` at admission; strings and unresolved service-method specifications remain deferred and are checked after the owner is actually resolved. Preserve service-ID precedence over callable-string fallback and the lazy-factory path. Do not resolve deferred owners during admission, repeat semantic normalization during `resolveDefinition()`, or cache the resolved callable's service instance in the binding. The current factory validation metadata cache can still avoid repeating checks for the same reflection metadata.
+
+ClassDefinition admission retains current eligibility and explicit-method checks, including classes loaded by a later availability probe. Execution continues to use literal runtime overrides, fresh reference lookups and ordered explicit calls, without applying DI attributes. Invokable admission validates and normalizes its class name; execution remains a direct zero-argument constructor call. Reflection fallback remains an ordinary `EntryResolverInterface` and receives no definition-admission methods.
+
+### Composition, bootstrap and direct consumers
+
+`CompositeResolver` accepts an ordered variadic list of `EntryResolverInterface|DefinitionResolverInterface` providers. A provider may implement both contracts; the contracts keep their separate responsibilities. `can()` first checks the central explicit table; without an explicit binding it consults current fallback `can()` results in order. `resolve()` executes the captured explicit binding, or selects and invokes the current fallback. Explicit bindings take precedence over fallbacks. Unsupported IDs retain existing not-found behavior.
+
+Nested `CompositeResolver` arguments are composition-time snapshots, not live mutable children. Construction flattens their provider order and imports their immutable binding records without revalidation, then releases references to the child composite itself. Identical definition-strategy objects reached through multiple branches are included once at their first position. Fallback occurrence ordering remains intact. Keep the current rejection of duplicate objects passed directly to one constructor.
+
+Importing the exact same `DefinitionBinding` record through multiple branches is idempotent. Different records for the same ID are rejected before publishing the new composition; do not compare arbitrary definitions for structural equality or silently select an owner. A later explicit `setDefinition()` on the new standalone composition is an intentional replacement. Later changes to a source child affect that child only. A caller retaining the child legitimately retains its independent snapshot; this is not obsolete configuration retained by the new container. Shared strategy instances remain valid because strategies hold no registrations. No generic export interface or recursive removal protocol is introduced.
+
+A standalone `CompositeResolver::setDefinition(string $id, DefinitionInterface $definition): void` remains available. It prepares a record, publishes it with an internal retirement holder, and releases the holder after its own map update. There are no surrounding container caches in this standalone flow. Its direct users receive the same committed-retirement exception when an old configuration destructor fails.
+
+Once a `CompositeResolver` is attached to a `Container`, that container is the sole public mutation authority for that binding table. Subsequent direct `setDefinition()` calls, attachment to a second container, and use of an attached composite as a snapshot child reject with `InvalidConfigurationException`. Enforce this with local attachment state on the composite; no process-global registry, cross-container lock or detachment protocol is needed. The attachment lasts for the composite's lifetime. This is an explicit next-major restriction: otherwise a direct/shared-root mutation bypasses one or more containers' revision/invalidation batches. Build an independent composition from the desired providers for another container; provider-specific container dependencies remain the caller's responsibility.
+
+`Container` keeps its `EntryResolverInterface` constructor input. An input already using `CompositeResolver` becomes its root; a bare fallback resolver is wrapped in an empty composite. Custom definition support is supplied through the new definition-strategy contract, not by probing a legacy mutable-leaf capability. `ContainerFactory` creates the root providers, admits all normalized bootstrap definitions before attachment, then completes its existing bootstrap hand-off. Initial and later definitions occupy the same table. Validate constructor/bootstrap arguments before claiming attachment; a rejected attachment must not alter the previously attached container.
+
+`Container` and the final composite use internal preparation/publication methods: preparation returns `DefinitionBinding` without a write; publication retains the currently stored record in the operation's holder before replacing the slot. Prepared bindings belong to the producing composite and canonical ID and are not an application transfer API. Only the internal container path may publish into an attached composite. Public direct strategy/composite consumers never receive a retirement receipt and never call cache-invalidation helpers.
+
+For this publication guard, `Container` creates a private object capability at attachment; the composite stores its identity and requires that same capability before any attached-table publication write. Neither a prepared binding nor an accessor exposes the capability. Standalone publication is allowed only while unattached. This is a local identity check, not a global authority registry or a guarantee against deliberate reflection into private internals.
+
+### Publication, reentry and retirement
+
+All mutators follow **validation → publication → complete invalidation → release**. The operation performs no binding, revision, reverse-index or pipeline write after final release begins. User callbacks belong to preparation/resolution or native object retirement, not to the central publication/invalidation batch.
+
+For `set($requestedId, $definition)`:
+
+1. Check the mutable/protected target and capture the canonical ID. Ask the root to select/validate and prepare a binding without publishing it.
+2. After validation succeeds, use the current alias/deferred-dependency graph to determine affected pipelines for that captured canonical ID. Successful nested mutations are retained. Do not retarget the outer write by canonicalizing the requested alias again.
+3. Create one internal holder. Retain the record currently occupying that canonical slot, publish the new binding, retain/remove the old base and invalidate every affected requested result and deferred callable chain, updating all revisions and reverse membership.
+4. Release the holder outside the validation-rejection catch. New lookups now use the committed binding. A reported retirement failure does not restore old state.
+
+Validation can suspend or perform a nested mutation. The binding retired in step 3 is the current one at publication, not a stale pre-validation snapshot. A successful outer mutation publishes after earlier nested work; a rejected outer validation does not roll that work back. No new optimistic-conflict, retry or cancellation policy is added.
+
+Raw `set()` preserves the definition and retains/replaces only its cache roots. `alias()`, `delegator()` and `addContainer()` preserve their existing affected-set semantics and use the same holder through all invalidation helpers. Preserve post-validation protected-target checks without repeating user validation. External-registration ownership inspection must include newly added deferred dependency IDs, inspect an ID only once per registration, and invalidate dependents from the completed current graph; its rejection occurs before publishing the external container. These are preserved localized fixes, not a reason to introduce a transaction framework.
+
+`EntryCache` mutation helpers retain every overwritten/removed base and resolved value before dropping its map reference. `DelegatorRegistry` retains evicted resolved callable chains before dropping them. Raw pipeline specifications remain owned while registered; this proposal adds no unregister API. Normal resolution `putBase()`/`putResolved()` remains direct and does not create holders. Internal forwarding helpers pass the one operation holder rather than creating independent receipts.
+
+Add internal `Componenta\DI\Internal\MutationRetirement` with only this surface:
 
 ```php
 final class MutationRetirement
 {
     public function __construct(public readonly ?string $id);
-
     public function retain(mixed ...$values): void;
-    public function absorb(self $other): void;
-    public function recordFailure(Throwable $failure): void;
     public function release(): void;
 }
 ```
 
-`id` identifies the canonical target of a `set()`/definition operation, the requested alias/delegator ID for those mutations, or `null` for `addContainer()`, which has no single service target. It is diagnostic context, not a cache key. Child holders can carry another ID; absorption transfers their retained roots and recorded causes into the outer operation without releasing anything. The recipient keeps its own `id`.
+`id` is the canonical target of `set()`, requested alias/delegator ID, or `null` for `addContainer()`. `retain()` appends roots while active, without cloning, traversing user graphs or invoking callbacks. First `release()` moves its roots to local ownership and marks the holder released before dropping any root. Repeated or reentrant release returns immediately, including while the first invocation is suspended; it does not join or repeat that invocation's eventual error. `retain()` after release throws `\LogicException` before changing state. There is no `absorb()`, `recordFailure()`, consumed-receipt state, implicit destructor drain or extension-removal failure path: one owner and one internal holder make those mechanisms unnecessary.
 
-The holder starts active. Consumed and released are terminal states, not new public types or an external state-management API:
+Release uses native reference dropping, never calls `__destruct()` directly, and attempts each directly held root in insertion order. Catch each `Throwable` synchronously delivered at those direct release boundaries, continue releasing the remaining roots, and preserve all encountered causes in order without deduplication. This does not promise a destructor count or order inside a nested user graph. Application/in-flight references, cycles, resurrection and exception objects can keep values alive after the holder stops owning them. Production code never forces GC.
 
-| Operation | Preconditions | State and outcome |
+Add public `Componenta\DI\Exception\MutationRetirementException` extending `InvalidConfigurationException`. It exposes readonly `?string $id` and a readonly non-empty ordered `array $causes` of `Throwable`; `getPrevious()` is the first cause. Its message states that the mutation committed. This type denotes a committed outcome, not a validation rejection or instruction to retry. No causes means normal return. Callers deciding whether to retry must distinguish this subtype before their broader invalid-configuration handling.
+
+The [PHP destructor documentation](https://www.php.net/manual/en/language.oop5.decon.php#language.oop5.decon.destructor) describes separate GC destructor Fibers from PHP 8.4 and fatal shutdown-destructor exceptions; the [Fiber documentation](https://www.php.net/manual/en/language.fibers.php) allows destructor Fiber switching from PHP 8.4. Consequently the holder collects only errors actually propagated into its active release invocation. It does not wait for GC, another destructor Fiber or shutdown. Those later events already see completed publication/invalidation, but their timing and error delivery remain PHP/application responsibilities.
+
+| Event | Published binding and caches | Observable outcome |
 | --- | --- | --- |
-| `retain()` / `recordFailure()` | Recipient is active | Append roots/causes; remain active. |
-| `absorb($other)` | Both holders are active and distinct | Append the donor's roots/causes in their existing order, empty the donor and mark it consumed; recipient remains active. An empty active donor is valid. |
-| First `release()` | Holder is active | Detach its stored roots/causes into this invocation's local ownership and mark the holder released before dropping any root. Drain them and either return normally or throw the committed-retirement exception. |
-| `release()` on a consumed or released holder | None | Return immediately without releasing roots again or repeating an earlier error. |
+| Unsupported kind or validation rejection | No speculative write by the rejected operation; independent nested changes remain | Existing configuration rejection, with existing Componenta/foreign exception normalization. |
+| Successful mutation and retirement | New binding/routing; full affected invalidation | Normal return. |
+| Synchronous destructor failure during final retirement | New binding/routing; full affected invalidation | `MutationRetirementException`; later lookups use current state. |
+| Destructor reentry or suspension | The complete outer mutation is already visible | A successful nested mutation becomes current; outer retirement performs no later state writes. |
+| Old factory suspended during replacement | Current table changes; old local binding stays alive as needed | Existing concurrent-resolution rules remain; old result cannot repopulate invalidated cache. |
 
-Self-absorption, absorption from a consumed/released donor, and `retain()`, `recordFailure()` or `absorb()` on a consumed/released recipient throw `\LogicException` before changing either holder. Normal mutation paths must never depend on these programmer errors for flow control. They are not reported as committed-retirement failures. If the first `release()` suspends in a destructor, a reentrant or concurrent call to `release()` still returns immediately; it neither waits for nor joins the first invocation. Only that first invocation reports its eventual retirement failure.
-
-`retain()` keeps the supplied roots privately before their owning maps are overwritten/unset. It does not clone values, invoke callbacks, inspect an object's graph or traverse user arrays recursively. `absorb()` moves another holder's roots/causes into the recipient, so nested composites and the outer container use one eventual release boundary. `recordFailure()` records a post-publication extension-removal failure for later reporting; it is not a rollback operation.
-
-`release()` uses native reference release, never calls `__destruct()` directly, and drops directly held roots in their retained order. It catches each `Throwable` delivered synchronously at those release boundaries and continues with the remaining roots. Recorded extension-removal failures precede these newly observed failures in `causes`; each group keeps its encounter order, including order preserved by `absorb()`. Repeated occurrences of the same throwable are preserved rather than deduplicated. With no causes it returns normally; otherwise it reports the combined list once. This promises neither a count nor an order for destructors deeper inside a user object graph; PHP owns that destruction. A retained exception or an application reference can itself keep an object alive.
-
-Add `Componenta\DI\Exception\MutationRetirementException`, implementing the existing Componenta exception contract and extending `InvalidConfigurationException`. It exposes readonly `?string $id` and readonly `array $causes`, the latter a non-empty ordered list of underlying `Throwable` causes; `getPrevious()` is `causes[0]`. Its diagnostic states that the registration mutation has already committed. Callers distinguish this outcome from rejection by type, without parsing messages. No automatic retry or rollback is performed.
-
-A malformed third-party removal can throw despite the detach-only contract. `CompositeResolver` records the failure, continues detaching other independent non-selected owners, and keeps the selected routing authoritative. The retention guarantee for that violating resolver cannot be met, but the error is reported after the container invalidates affected caches. A selected custom setter that writes then throws without returning a holder violates the separate registration contract; the container cannot reconstruct its opaque state or undo application side effects.
-
-The holder has no custom destructor that throws or performs an implicit commit. The caller must retain and explicitly release it after its complete derived-state update. Direct resolver callers without surrounding caches can use `$resolver->setDefinition(...)->release()`; other callers must honor the same ordering as `Container`. Ignoring or dropping the holder early invokes normal PHP lifetime rules and bypasses the deferred-release/error-projection guarantee; that is a caller contract violation. Cloning or serialization is not a supported ownership-transfer mechanism; callers use `absorb()`. The guarantee is cessation of this subsystem's ownership, not immediate destruction of every reachable object. Production code must not call `gc_collect_cycles()`; tests may use it to observe collection after the intended owners have gone away.
-
-PHP controls destruction outside these synchronous boundaries. The [PHP destructor documentation](https://www.php.net/manual/en/language.oop5.decon.php#language.oop5.decon.destructor) documents separate garbage-collector destructor Fibers from PHP 8.4 and fatal exceptions from shutdown destructors; the [Fiber documentation](https://www.php.net/manual/en/language.fibers.php) permits destructor Fiber switching from PHP 8.4. Therefore the holder does not collect errors raised later by cyclic GC, another destructor Fiber or shutdown unless they actually propagate into its active `release()` invocation. It does not wait for deferred destruction. Its cache-publication guarantee already holds before any of those later events; their timing and error delivery remain PHP/application responsibilities.
-
-### Cache and delegator mutation boundaries
-
-The operation's holder is passed to mutation-only helpers that overwrite or remove values:
-
-- `EntryCache` retains an old base before raw replacement or definition removal, and every removed resolved value before invalidation. It still updates the same revisions and reverse membership. Introduce a mutation-specific base replacement path; normal `putBase()`/`putResolved()` used by successful resolution stay direct and do not allocate holders or run retirement logic.
-- `DelegatorRegistry` retains a discarded cached callable chain before invalidating it. Registration and dependency invalidation propagate the same holder instead of releasing a chain midway through a transitive traversal. Raw registered pipeline specifications remain owned while still registered; this proposal adds no unregister API.
-- `Container::invalidate()`, `invalidateRequested()` and `invalidateDeferredDelegators()` pass the holder through the whole affected family. Their callers release it only after completing every required source, requested-entry and transitive-dependent invalidation.
-
-A source/base replacement continues to invalidate the source and affected aliases. A requested-pipeline mutation continues to preserve unrelated shared source/sibling identity. The holder changes when old references are released, not which valid entries are invalidated. All removals must update their revisions and indexes before any captured user object can be destroyed through the mutation. No holder is stored on `Container`, a global registry, a cache value, or a long-lived cleanup queue.
-
-### Composite selection, initial registrations and nesting
-
-For a successful `CompositeResolver::setDefinition($id, $definition)`:
-
-1. Select the first definition-aware resolver supporting the definition. If none does, reject without changing state.
-2. Call the selected resolver's `setDefinition()`. If it rejects, make no routing change for this rejected outer operation, retain independently completed nested mutations, and do not remove any other registration.
-3. Publish that resolver in `definitionOwners[$id]` and retain its receipt.
-4. Call `removeDefinition($id)` on every other definition-aware resolver in this composition, collecting their receipts. Do not call `can()` to infer ownership. This deliberately includes initial declarative factory/invokable registrations that have never populated `definitionOwners`.
-5. Return the combined receipt, including any unexpected removal failures, without releasing its contents.
-
-`CompositeResolver::removeDefinition()` detaches the ID from all its definition-aware children and removes its own explicit routing entry. It aggregates their receipts and leaves ordinary reflection eligibility unchanged. Nested composites therefore implement the same boundary recursively.
-
-Each object implementing `DefinitionAwareResolverInterface` must appear at most once in a visible composite tree, including nested composites and their definition-aware descendants. Extend the existing duplicate-instance constructor guard across nested `CompositeResolver` members for these objects, inspecting stored members without calling user resolution methods. Otherwise removal through one sibling could delete the newly selected registration through a shared leaf. Reject this configuration before resolution begins. Keep the existing direct-duplicate check for all directly supplied resolvers; the new transitive check does not reject a shared non-definition-aware `EntryResolverInterface` solely because it appears in different branches. Do not add a global registry or restrict independent stateless metadata sharing. Custom resolver wrappers own their hidden state and must not secretly share mutable definition ownership across sibling registrations.
-
-### Container publication and failure ordering
-
-`Container` continues to own canonicalization, protected-ID checks and invalidation of shared entries/deferred delegators. Every mutator has a preparation/validation boundary, a publication/invalidation batch that retains removed roots, and a final release boundary. The operation performs no additional binding/cache writes after starting final release; a reentrant mutation from a destructor therefore cannot be overwritten by unfinished outer invalidation.
-
-For `set($requestedId, $value)`, the canonical ID captured when validating the operation remains its target even if validation autoloads code that retargets the requested alias. After successful definition registration, determine current deferred dependencies of that captured canonical ID from the current alias graph; do not use a stale pre-validation dependency list or canonicalize the requested alias again to select another source for invalidation. Independently completed nested alias/binding changes remain in place.
-
-The successful definition flow is:
-
-1. Validate the mutable canonical target and create its operation holder.
-2. Ask the resolver to install the explicit definition, then absorb its holder. Existing rejection normalization applies only to selection/validation/registration. Retired configuration remains held.
-3. Retain/remove the canonical base and invalidate its currently affected resolved entries and deferred delegators through the same holder. Every member of the invalidation batch reaches its final revision/index state before retirement starts.
-4. Call `release()` outside the validation-rejection catch. Destructors now observe the committed binding and completed cache invalidation; a retirement exception does not restore prior state.
-
-Raw-value `set()` uses the same flow except that it retains/replaces the base directly and leaves resolver definitions untouched. `alias()`, `delegator()` and `addContainer()` use their existing binding/affected-set semantics, pass one holder through all their invalidations, and release at the end. Validation that may invoke user/autoload code must complete before binding publication; requested-pipeline mutations recheck protected-target eligibility against the current alias graph after such validation. Helpers must not invoke a second user-code validation pass after that final eligibility check.
-
-| Event | Binding/routing | Affected shared caches | Outcome |
-| --- | --- | --- | --- |
-| Unsupported definition or validation failure before publication | No speculative write by the rejected operation | Unchanged by the rejected operation | Existing rejection; independently completed nested mutations are preserved. |
-| Successful replacement | New | Invalidated | Normal return after retirement. |
-| A destructor throwable propagates into the active retirement invocation | New | Entire affected batch invalidated | `MutationRetirementException`; subsequent lookups use the effective new registration and unaffected entries preserve identity. |
-| Non-selected custom remover violates the detach contract | New | Invalidated | `MutationRetirementException`; failing extension may still retain obsolete state. |
-| Old factory is still executing in a Fiber | New for later resolution | Invalidated; existing revision protection remains | Old invocation retains what it needs until it ends; no cancellation or stale publication. |
-
-The holder neither prevents nor rolls back application effects. A destructor can deliberately perform another mutation, retain/resurrect an object, throw, or suspend supported execution. Any subsequent successful mutation is then the current state. No lock, cancellation, replay, implicit retry, forced GC, or rollback of validation/destructor/external-container side effects is added.
+The boundary cannot roll back user callbacks, external side effects or deliberately nonconforming extensions. A destructor may make another mutation, retain an object, throw or suspend. Do not describe every exception as rejection, and do not promise rollback after publication.
 
 ## Compatibility and change surface
 
-This is a **next-major API change**. Adding `removeDefinition()` and changing `setDefinition()` from `void` to `MutationRetirement` breaks existing interface implementations. Do not introduce those changes into the current 5.x bug-fix line. The mechanism itself does not require PHP 8.5 syntax; any platform-floor change belongs to the separate [PHP 8.5 plan](php85-callbacks.md).
+This target belongs in the **next major version**. Remove `DefinitionAwareResolverInterface`; factory/invokable constructors and direct resolver APIs change, nested composites become snapshots, and attached roots no longer accept direct mutation or sharing. None of these changes belongs in a 5.x patch. The architecture does not itself require PHP 8.5 syntax; platform-floor decisions belong to the separate [PHP 8.5 plan](php85-callbacks.md).
 
-Existing `Container` callers keep the same method signatures. They gain an explicit committed-retirement failure category. Document that committed outcome alongside validation rejection in both READMEs, and replace the current 5.x limitation notice only when this protocol is implemented. Consumers catching `InvalidConfigurationException` still catch the new subtype, but those deciding whether to retry must inspect `MutationRetirementException` first.
+Application `Container` mutation signatures and the public definition constructors remain unchanged. Custom mutable definition resolvers split into the new registration-free strategy and, only if needed, an ordinary fallback entry resolver. Their configuration moves into definitions admitted to the root composite. Standalone factory/invokable callers either validate/execute one descriptor directly or register definitions in a standalone composite. Consumers needing shared-cache-aware mutation use `Container::set()`. There is no safe adapter that makes an opaque legacy mutable owner registration-free, so no permanent legacy path remains.
 
-There is no persistent data migration, generated container, or serialized graph to migrate. Custom resolvers migrate with the package major: implement detach-only removal, return receipts from successful registration/removal, and stop releasing previous state before the caller's invalidation boundary. Direct mutation callers must release returned receipts at their own publication boundary. No fallback adapter can safely add these guarantees to an opaque old implementation, so the target has no permanent legacy path.
-
-| File or consumer | Required change |
+| File or consumer | Required disposition |
 | --- | --- |
-| `src/Resolver/Entry/DefinitionAwareResolverInterface.php` | Required mutation/removal signatures and conformance documentation. |
-| New `src/MutationRetirement.php` | Hold and aggregate detached definition/cache/callable roots until explicit retirement. |
-| New `src/Exception/MutationRetirementException.php` | Distinguish committed cleanup failure from rejection and preserve causes. |
-| `src/Resolver/Entry/FactoryResolver.php` | Retain old callable/definition before same-owner replacement; detach configuration and validation flags on removal. |
-| `src/Resolver/Entry/InvokableResolver.php` | Implement the same protocol for class registrations. |
-| `src/Resolver/Entry/CompositeResolver.php` | Exclusive ownership transfer, initial-owner cleanup, nested aggregation and duplicate-tree guard. |
-| `src/Internal/EntryCache.php` | Mutation-aware base replacement/removal and batched value invalidation using the supplied holder; keep ordinary resolution writes direct. |
-| `src/Internal/DelegatorRegistry.php` | Retain discarded callable chains and propagate the holder through registration/dependency invalidation. |
-| `src/Container.php` | Keep one holder through each public mutation's complete invalidation and release outside rejection normalization. |
-| `src/ContainerFactory.php` | Verify existing leaf bootstrap still participates without creating a second initial-ownership registry. No new definition execution layer. |
-| README and README.ru.md | Document replacement outcomes and custom/direct resolver migration. |
-| Public custom implementations and direct callers | Explicit next-major migration; apply shared conformance scenarios. Their identities are not discoverable from this repository. |
+| `src/Resolver/Entry/DefinitionAwareResolverInterface.php` | Delete the obsolete mutable-owner extension contract. |
+| New `src/Resolver/Entry/DefinitionResolverInterface.php` | Add admission/execution contract and custom implementation obligations. |
+| `src/Resolver/Entry/CompositeResolver.php` | Replace `definitionOwners` with the sole binding table; add preparation/publication, standalone mutation, snapshot composition and local attachment rules. |
+| New `src/Internal/Resolver/Entry/DefinitionBinding.php`, `ConfiguredFactoryDefinition.php`, `PreparedFactoryDefinition.php` | Immutable binding and factory admission data; no independent registries or runtime value caches. |
+| `src/Resolver/Entry/FactoryResolver.php`, `InvokableResolver.php` | Remove registration maps and setters; implement validation/execution against supplied snapshots. Preserve their actual creation behavior. |
+| `src/Configuration/DependencyConfiguration.php`, `src/ContainerFactory.php` | Normalize shape once; admit all initial definitions to the root through the selected strategy; stop filling leaf maps. Document the normalizer's changed semantic-validation boundary. |
+| `src/Internal/Resolver/Entry/FactorySpecificationValidator.php` | Reuse existing ABI/eligibility checks for admission and deferred resolved-callable validation. |
+| `src/Container.php`, `src/Internal/Resolver/Entry/EntryResolverContext.php` | Use central prepare/publish and current invalidation; preserve private-metadata filtering for fallback and definition execution. |
+| `src/Internal/EntryCache.php`, `src/Internal/DelegatorRegistry.php` | Retain removed roots in the operation holder through all mutation-only helper paths. |
+| New `src/Internal/MutationRetirement.php`, `src/Exception/MutationRetirementException.php` | Internal lifetime barrier and public committed-failure type. |
+| READMEs, custom implementations and direct consumers | Explain major migration, snapshots, attachment and failure outcomes; replace the 5.x limitation notice only after implementation passes its proof. |
 
-Keep `FactoryResolver`, `InvokableResolver`, their maps and current resolution paths. Replace only the implicit abandon/overwrite behavior at mutation time. `ReflectionResolver` remains an `EntryResolverInterface` and gains no definition-removal API.
+No persistent data, serialized graph or generated container needs migration. Unknown external consumer identities do not remove the documented consumer-class migration obligation. Keep ordinary fallback interfaces, value caches, alias compression, reflection metadata and object/attribute construction pipelines. Delete leaf registration maps, redundant owner routing and every obsolete remove/receipt proposal rather than leaving parallel authorities.
 
 ## Verification and implementation plan
 
-The slices below implement the normative target. They are not authorization to apply the major-version change during the current audit.
+The slices implement the normative target; they do not authorize a major refactor during this audit.
 
-### Slice 1 — Consistent registration publication and retirement
+### Slice 1 — Authoritative bindings and complete mutation publication
 
-**Intent:** close the three reproduced failures through one coherent ownership/retirement protocol. **Depends on:** the next-major API target described above.
+**Depends on:** the next-major contract above. Add the strategy interface, immutable internal records, internal retirement holder and committed-failure type; migrate factory/invokable behavior and the composite together. Change bootstrap and public-normalizer semantics in the same slice so no initial definition remains in an old leaf map. Update direct callers and metadata filtering. Remove the old interface and obsolete maps immediately. Add snapshot imports and attachment restrictions where the new authority is introduced. Integrate the holder into central publication, standalone replacement and all four public container mutators, including every cache/delegator invalidation helper. Final release is outside rejection normalization and after the last state write. Do not ship a prepared/publication API without its holder, or protect definitions while leaving adjacent cache retirement unprotected.
 
-Implement the required interface, retirement holder and exception; migrate all three built-in definition-aware implementations, mutation-only `EntryCache`/`DelegatorRegistry` helpers and all four public `Container` mutators in the same slice. Replace mutation overwrites/evictions with retain-before-detach behavior and include the nested duplicate guard where recursive removal is introduced. Do not ship an interface change with unmigrated implementations, an unprotected adjacent invalidation caller, or an old-owner cleanup pass deferred to later work.
+Start with public regressions for all three diagnostic failures. Prove runtime and bootstrap factory/invokable/ClassDefinition transitions, including reverse transitions, null results, deferred service methods and lazy factories. Preserve ClassDefinition arguments, references, native defaults, explicit calls and absence of target attributes. Add a test-only custom strategy with stable normalized data; prove first-match selection, rejection without speculative writes, unsupported kinds, private-parameter filtering and no deferred service execution during admission. Check imported identical bindings, conflicting IDs, child-independent mutation and absence of retained child composites.
 
-Start with public contract tests reproducing all three diagnostic cases. Add the cross-owner `ClassDefinition` case with object-valued constructor/method arguments, initial declarative owners and an explicitly registered owner, and reverse transitions back to factory/invokable definitions. Check weak references only after dropping fixture/application references; never assert private map sizes.
+**Done when:** all three original failures are gone; explicit registrations use one table and one admission path; direct/extension migration is executable; existing creation/routing contracts pass; no mutable-leaf interface or second ownership map remains. Ordinary lookups allocate no retirement holders.
 
-Use a retired factory whose destructor reenters `get()` to verify it sees the new result after publication, and a throwing destructor to verify the dedicated failure class, retained cause, new `get()`/`make()` values and repeatable later lookup. Include same-owner replacement. Use distinct decorated alias wrappers so releasing the first one would have interrupted the remaining invalidations on the baseline. Verify every affected sibling is current after a throwing release and that no destructor is called eagerly for a still-referenced application object.
+### Slice 2 — Ownership and retirement conformance
 
-**Done when:** all three original failures are gone; successful/rejected validation controls pass; all affected owners/callers use the holder; static analysis finds no old `void` implementation; ordinary lookups do not gain lifecycle work.
+**Depends on:** slice 1. Prove the introduced boundaries across custom strategies, nested snapshots and all adjacent mutation paths. This slice adds conformance coverage and any corrections needed to meet the already specified target; it introduces no new ownership or failure policy.
 
-### Slice 2 — Extension, nesting and suspended-work conformance
+Include ClassDefinition object-valued arguments, raw-value replacement preserving `make()`, several throwing retired roots, a still-referenced application object, and an unaffected shared identity. A destructor that reenters `get()` must see the complete new state. A nested successful mutation from retirement must remain current after the outer operation returns or throws. Test standalone replacement and attached-root rejection as separate public boundaries. Confirm snapshot identity deduplication, conflicting import rejection, independent child mutations and safe sharing of registration-free strategies.
 
-**Intent:** prove the new boundary at its public extension seams. **Depends on:** slice 1.
+**Done when:** old unneeded configuration is collectible, both cache inconsistency diagnostics are gone, failures identify committed state, and ordinary lookups still allocate no retirement holders.
 
-Add shared behavioral scenarios for factory, invokable, composite and test-only custom resolvers. Cover a custom resolver rejecting before mutation, idempotent removal of an unknown ID, a custom removal violation surfaced after committed invalidation, nested ownership switches, bootstrap registrations, and rejection of a shared mutable leaf in sibling composites. Both direct resolver and `Container` flows must release holders without retaining an audit/history list. Verify active/consumed/released holder transitions, invalid absorption without reference loss, error ordering, repeated release after failure and release reentry while a destructor is suspended. Exercise `alias()`, `delegator()` and `addContainer()` with retired cached chains or wrapper objects, including multiple release failures, an object retained by the application, and a reentrant nested mutation from a destructor. Confirm the outer mutation performs no later invalidation that overwrites that nested result.
+### Slice 3 — Concurrency, consumer conformance and convergence
 
-Exercise a Fiber-suspended old factory while replacing its definition with a different owner: the current binding remains usable according to existing concurrent-resolution rules; the old result must not restore a cache entry when it resumes; its captured object remains alive only while the invocation needs it. Repeat with an alias and deferred-delegator dependent. A destructor-suspension fixture must separately show that publication/invalidation is already complete while the first retirement invocation is paused, and that resuming it does not overwrite a later successful mutation. Use a non-throwing cyclic object as a collection-timing control; do not turn deferred GC or shutdown error capture into an acceptance promise. Preserve raw-value `set()`/fresh-`make()` behavior explicitly. Add validation-autoload controls that retarget an alias or complete a nested mutation before the outer validation succeeds or rejects; anchor the outer operation to its original canonical ID and do not undo the nested mutation.
+**Depends on:** slices 1 and 2. Exercise a suspended old factory across replacement, alias retarget and deferred-delegator invalidation. Verify the old binding stays alive only as long as the invocation needs it and cannot restore an invalidated entry. Suspend a destructor during release, perform another mutation, resume it, and prove there are no later outer writes. Check repeated release, retain-after-release rejection and ordered multiple causes; use a non-throwing cyclic object to separate ownership release from GC timing.
 
-**Done when:** every implementation claiming the protocol passes the same ownership/failure obligations, and the preserved lifecycle suites stay green on supported PHP versions. No extension capability check or concrete-leaf coupling remains as a silent fallback.
+Exercise successful and rejecting validation-autoload callbacks, captured canonical IDs, current deferred-dependency scans, protected-target rechecks and external ownership callbacks that add deferred dependencies. Run custom strategy conformance through both standalone and container composition. Confirm all application mutation examples use the correct owner and all old interface/map references have a disposition.
 
-### Slice 3 — Consumer documentation and final convergence
+Run complete formatting, static analysis, tests and applicable Linux/Windows/coverage/mutation gates. Compare unchanged shared-get, explicit-definition fresh-make, reflection-fallback and construction benchmarks using the same runtime/settings. Measure bootstrap as well as steady-state costs; use weak references for lifetime proof rather than treating RSS reduction as evidence. Update both READMEs and the complete Russian specification only after implementation and desired state converge.
 
-**Intent:** make the changed failure/ownership contract usable by package consumers. **Depends on:** slices 1 and 2.
-
-Document the next-major migration and committed-retirement outcome in both READMEs, update examples of direct resolver mutation, and convert the diagnostic observations into links to the accepted regression cases. Inspect every `DefinitionAwareResolverInterface`, `setDefinition()` and `removeDefinition()` reference, including constructor-based standalone composition, to confirm correct receipt ownership. Remove any temporary compatibility or investigation path introduced during implementation.
-
-Run the repository's complete formatting/static-analysis/test checks and applicable Linux/Windows/coverage/mutation gates. Compare the unchanged runtime benchmark's ordinary shared lookup and fresh construction controls using the same runtime/settings; this architecture should add work only to registration mutations, and no throughput percentage is promised. Use the public weak-reference scenarios to prove resource release rather than treating lower process RSS as proof.
-
-**Done when:** observed behavior, public interfaces, docs, failure diagnostics and executable conformance tests agree with this specification; the known retention limit and both cache inconsistencies can no longer be reproduced; no general shutdown, transaction or definition registry framework has appeared.
+**Done when:** implementation, interfaces, error categories, docs and proof agree; no superseded owner path, generic compiler, public receipt protocol or long-lived retirement store remains.
 
 ### Acceptance mapping
 
-| Requirement or preservation | Proof |
+| Requirement or boundary | Proof |
 | --- | --- |
-| R1 exclusive ownership | Public factory/invokable/ClassDefinition transitions; initial and nested owners; subsequent fresh/shared results. |
-| R2 bounded retirement | Weak-reference payload/callable/cache-root tests; application-reference and cyclic-object controls; suspended factory lifetime; holder state/absorption and repeated release idempotence. |
-| R3 distinct outcomes | Validation rejection without speculative writes; preserved nested validation mutation; captured canonical target plus a post-validation deferred-dependency scan; synchronous throwing/reentrant retirement using the committed graph; full alias-family eviction; custom removal violation; ordered multiple-cause preservation; suspended first release with a no-op second release. |
-| P1 raw services | Raw `set()` changes shared lookup and retains the former `make()` definition. |
-| P2 lookup contracts | Existing binding, alias, deferred delegator, external ownership, protected-core and null/false suites. |
-| P3 in-flight work | Existing in-flight mutation and Fiber recovery contracts plus cross-owner replacement fixture. |
-| P4 isolation and cost | Independent shared identity, current cache-parity/lifetime suites, no receipt store, unchanged lookup path review and controlled benchmark. |
-| Public extension compatibility | Required-interface migration, direct-call receipt consumption, nested duplicate guard and no old-signature implementations. |
+| R1 central ownership | Bootstrap/runtime transitions; one current binding; custom strategies; no leaf maps; nested snapshot/import/conflict tests. |
+| R2 retirement | Public weak-reference cases; all four mutators; wrapper/callable roots; application and cyclic-reference controls; last-write-before-release review. |
+| R3 outcomes | Pre-publication rejection and nested-mutation preservation; committed destructor failures; full sibling invalidation; ordered causes and release reentry. |
+| P1 creation | Existing factory/ClassDefinition/invokable suites plus deferred-form timing and raw-service/fresh-make controls. |
+| P2 routing and identity | Alias, external ownership, protected-core, requested-pipeline and transitive invalidation suites; unrelated identity. |
+| P3 in-flight work | Current Fiber/cycle/recovery contracts plus retained binding snapshot and suspended retirement cases. |
+| P4 isolation and cost | Custom-definition/fallback metadata boundaries; no hot-lookup holder; controlled bootstrap/get/make benchmarks. |
+| Consumer migration | No old interface/map consumers; strategy direct-call examples; snapshot independence; rejection of attached direct mutation and second attachment. |
+| Single semantic admission | Declarative and runtime controls reject eager invalid input before use, preserve deferred failures and avoid repeating normalization during execution. |
 
-No material architectural choice remains deferred in this specification. Implementation readiness applies to this major-version protocol; the current line retains the documented ownership/retirement limits until that change is separately implemented and verified.
+There are no deferred material design choices in this target. Implementation must still produce the specified evidence; the 5.x ownership/retirement limitation remains until this separately versioned change is implemented and verified.
