@@ -431,12 +431,22 @@ final class Container implements
     private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
     {
         $dependencies = [];
-        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            if ($this->externalContainers?->findOwning($dependencyId) !== null || !$container->has($dependencyId)) {
-                continue;
+        $inspected = [];
+        do {
+            $discovered = false;
+            foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+                if (isset($inspected[$dependencyId])) {
+                    continue;
+                }
+                $inspected[$dependencyId] = true;
+                $discovered = true;
+                if ($this->externalContainers?->findOwning($dependencyId) !== null || !$container->has($dependencyId)) {
+                    continue;
+                }
+                $dependencies[] = $dependencyId;
             }
-            $dependencies[] = $dependencyId;
-        }
+            // Ownership callbacks can register more deferred dependencies.
+        } while ($discovered);
         return $dependencies;
     }
 
