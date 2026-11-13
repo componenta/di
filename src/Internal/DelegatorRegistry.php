@@ -10,7 +10,6 @@ use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\DelegatorException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Psr\Container\ContainerInterface;
-use ReflectionMethod;
 use Throwable;
 
 /**
@@ -183,11 +182,9 @@ final class DelegatorRegistry
             if (str_contains($delegator, '::')) {
                 [$owner, $method] = explode('::', $delegator, 2);
                 if ($owner !== '' && $method !== '') {
-                    $isKnownStatic = (class_exists($owner) || interface_exists($owner))
-                        && method_exists($owner, $method)
-                        && (new ReflectionMethod($owner, $method))->isStatic()
+                    $isNativeStatic = (class_exists($owner) || interface_exists($owner))
                         && is_callable([$owner, $method]);
-                    if (!$isKnownStatic) {
+                    if (!$isNativeStatic) {
                         // A class may be autoloaded only after registration. Track
                         // its owner conservatively so a later non-static method
                         // resolved through the container is invalidated correctly.
