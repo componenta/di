@@ -107,7 +107,9 @@ final class Container implements
                 $lookupGuard->enter($externalGuard);
                 try {
                     $external = $this->externalContainers->findOwning($id);
-                    if ($external !== null) {
+                    // External has() may retarget aliases before local resolution.
+                    $entryId = $this->aliases->resolve($id);
+                    if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
                         return $external->get($id);
                     }
                 } finally {
