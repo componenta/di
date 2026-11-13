@@ -193,7 +193,8 @@ final class DelegatorRegistry
             if (str_contains($delegator, '::')) {
                 [$owner, $method] = explode('::', $delegator, 2);
                 if ($owner !== '' && $method !== '') {
-                    $isNativeStatic = (class_exists($owner) || interface_exists($owner))
+                    // The interface probe can autoload a class after the first probe failed.
+                    $isNativeStatic = (class_exists($owner) || interface_exists($owner) || class_exists($owner, false))
                         && is_callable([$owner, $method]);
                     if (!$isNativeStatic) {
                         // A class may be autoloaded only after registration. Track

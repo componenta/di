@@ -68,3 +68,32 @@ test('native static delegators preserve shared results when an unused owner bind
         ->and($container->get('product'))->toBe($replacement)
         ->and(StaticDecorator::$calls)->toBe(1);
 })->with(['declared', 'dynamic', 'hiddenInstance', 'hiddenStatic']);
+
+test('static delegators loaded during registration do not acquire owner dependencies', function (bool $loaded): void {
+    StaticDecorator::$calls = 0;
+    $class = __NAMESPACE__ . '\\AutoloadedDecorator_' . bin2hex(random_bytes(5));
+    if ($loaded) {
+        class_alias(StaticDecorator::class, $class);
+    }
+    $attempts = 0;
+    $loader = static function (string $requested) use ($class, &$attempts): void {
+        if ($requested === $class && ++$attempts === 2) {
+            class_alias(StaticDecorator::class, $class);
+        }
+    };
+    spl_autoload_register($loader);
+
+    try {
+        $container = (new ContainerBuilder())->addService('product', new Product('base'))->build();
+        $container->delegator('product', $class . '::declared');
+        expect(class_exists($class, false))->toBeTrue();
+        $original = $container->get('product');
+
+        $container->set($class, new \stdClass());
+
+        expect($container->get('product'))->toBe($original)
+            ->and(StaticDecorator::$calls)->toBe(1);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['already loaded' => true, 'loaded on second probe' => false]);
