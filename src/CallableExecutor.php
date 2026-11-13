@@ -139,7 +139,7 @@ final class CallableExecutor implements CallableExecutorInterface
         if (is_array($callable)) {
             [$owner, $method] = $callable;
             $class = is_object($owner) ? $owner::class : $owner;
-            return 'method:' . $class . '::' . strtolower((string) $method);
+            return 'method:' . strtolower($class) . '::' . strtolower((string) $method);
         }
         if (!is_object($callable)) {
             throw new LogicException('Resolved callable must be a function, method or invokable object.');
