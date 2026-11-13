@@ -148,7 +148,7 @@ A source/base replacement continues to invalidate the source and affected aliase
 For a successful `CompositeResolver::setDefinition($id, $definition)`:
 
 1. Select the first definition-aware resolver supporting the definition. If none does, reject without changing state.
-2. Call the selected resolver's `setDefinition()`. If it rejects, preserve this composite's previous routing and do not remove any other registration.
+2. Call the selected resolver's `setDefinition()`. If it rejects, make no routing change for this rejected outer operation, retain independently completed nested mutations, and do not remove any other registration.
 3. Publish that resolver in `definitionOwners[$id]` and retain its receipt.
 4. Call `removeDefinition($id)` on every other definition-aware resolver in this composition, collecting their receipts. Do not call `can()` to infer ownership. This deliberately includes initial declarative factory/invokable registrations that have never populated `definitionOwners`.
 5. Return the combined receipt, including any unexpected removal failures, without releasing its contents.

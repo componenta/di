@@ -2,7 +2,7 @@
 
 Componenta DI is a PSR-11 dependency injection container for PHP 8.4+. It provides reflection autowiring, explicit factories and services, ordered delegators, callable invocation, lazy objects, request mapping, and composable PHP attributes.
 
-The package owns container construction and dependency-resolution semantics. [`componenta/config`](../config/README.md) owns provider execution and produces two separate values:
+The package owns container construction and dependency-resolution semantics. [`componenta/config`](https://github.com/componenta/config/blob/main/README.md) owns provider execution and produces two separate values:
 
 - `Config`, which contains application configuration only;
 - `DependencyDefinitions`, which is consumed once by `ContainerFactory` and is not published as a container service.
@@ -293,6 +293,10 @@ Development and production use the same `ContainerFactory`, normalization, valid
 
 Package-owned failures implement `Componenta\DI\Exception\ExceptionInterface`, which also extends the PSR-11 container exception contract. Common concrete exceptions include `InvalidConfigurationException`, `NotFoundException`, `ResolutionException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException`, and `AttributeCompositionException`.
 
-If definition or delegator registration fails during validation or autoloading, `set()` and `delegator()` preserve an existing Componenta exception or wrap a foreign failure in `InvalidConfigurationException`, with the original throwable in `getPrevious()`. A rejected registration leaves the previous binding and delegator pipeline intact.
+If definition or delegator registration fails during validation or autoloading, `set()` and `delegator()` preserve an existing Componenta exception or wrap a foreign failure in `InvalidConfigurationException`, with the original throwable in `getPrevious()`. A rejection before publication leaves the previous binding and delegator pipeline intact; independently completed mutations from application code are not rolled back. Exceptions from destructors while discarding old configuration or cached values have a separate, documented [5.x limitation](docs/plans/definition-owner-lifecycle.md#objective-and-evidence).
 
 After DI resolves an explicitly invoked callable and enters its body, exceptions thrown by that callable propagate unchanged.
+
+## Audit and architecture plans
+
+The [architecture plan index](docs/plans/README.md) links the reviewed specifications, their implementation readiness, and complete Russian translations. Proposed next-major contracts are separate from the current 5.x API. The [November audit](docs/audit/2026-11-13-di-audit.md) records fixes, reproductions, performance evidence, and remaining limitations.
