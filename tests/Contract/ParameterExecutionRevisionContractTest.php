@@ -11,6 +11,7 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -20,6 +21,29 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 class DeclaredSource {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class ExistingTransformer {}
+
+final class ExistingTransformerHandler implements ParameterAttributeHandlerInterface
+{
+    public int $calls = 0;
+
+    public function __construct(private readonly bool $continueResolution) {}
+
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        ++$this->calls;
+        return $this->continueResolution
+            ? ParameterAttributeValue::unresolved()
+            : ParameterAttributeValue::resolved('known-value');
+    }
+}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
@@ -53,7 +77,7 @@ final class SourceHandler implements ParameterAttributeHandlerInterface
     }
 }
 
-test('parameter execution never silently skips an available attribute source', function (bool $warm, bool $uncached): void {
+test('parameter execution never silently skips an available attribute source', function (bool $warm, bool $uncached, string $priorHandler): void {
     // These delays span every current cold/warm discovery point, including the
     // uncached control and loading after resolution. They are test inputs, not
     // an expected poll count or a production retry limit. The endpoints also
@@ -68,7 +92,7 @@ test('parameter execution never silently skips an available attribute source', f
             'namespace %s; function %s(#[%s] string $value): array { ++InvocationLog::$bodyCalls; return [$value, class_exists(%s, false)]; }',
             __NAMESPACE__,
             $function,
-            $attribute,
+            $priorHandler === 'none' ? $attribute : 'ExistingTransformer, ' . $attribute,
             var_export($attributeClass, true),
         ));
 
@@ -87,7 +111,13 @@ test('parameter execution never silently skips an available attribute source', f
 
         try {
             $handler = new SourceHandler();
+            $existing = new ExistingTransformerHandler($priorHandler === 'unresolved');
             $container = (new ContainerBuilder())
+                ->addAttributeDefinition(new AttributeDefinition(
+                    ExistingTransformer::class,
+                    $existing,
+                    [ValueTransformer::class],
+                ))
                 ->addAttributeDefinition(new AttributeDefinition(
                     DeclaredSource::class,
                     $handler,
@@ -95,13 +125,15 @@ test('parameter execution never silently skips an available attribute source', f
                     rules: $uncached ? [new NoOpRule()] : [],
                 ))
                 ->build();
+            $withoutSource = $priorHandler === 'resolved' ? 'known-value' : 'caller-value';
             if ($warm) {
                 expect($container->call($callable, ['value' => 'caller-value']))
-                    ->toBe(['caller-value', false]);
+                    ->toBe([$withoutSource, false]);
             }
 
             $phase->armed = true;
             InvocationLog::$bodyCalls = 0;
+            $existing->calls = 0;
             try {
                 $result = $container->call($callable, ['value' => 'caller-value']);
             } catch (AttributeCompositionException) {
@@ -109,20 +141,24 @@ test('parameter execution never silently skips an available attribute source', f
                 // fail before the body rather than replaying completed work.
                 expect(InvocationLog::$bodyCalls)->toBe(0)
                     ->and($handler->calls)->toBe(0)
+                    ->and($existing->calls)->toBe($priorHandler === 'none' ? 0 : 1)
                     ->and(class_exists($attributeClass, false))->toBeTrue();
                 continue;
             }
 
-            expect(InvocationLog::$bodyCalls)->toBe(1);
+            expect(InvocationLog::$bodyCalls)->toBe(1)
+                ->and($existing->calls)->toBe($priorHandler === 'none' ? 0 : 1);
             if (class_exists($attributeClass, false)) {
                 expect($result)->toBe(['source-value', true])
                     ->and($handler->calls)->toBe(1);
             } else {
-                expect($result)->toBe(['caller-value', false])
+                expect($result)->toBe([$withoutSource, false])
                     ->and($handler->calls)->toBe(0);
             }
         } finally {
             spl_autoload_unregister($loader);
         }
     }
-})->with(['cold' => false, 'warm' => true])->with(['cached' => false, 'uncached' => true]);
+})->with(['cold' => false, 'warm' => true])
+    ->with(['cached' => false, 'uncached' => true])
+    ->with(['none', 'resolved', 'unresolved']);

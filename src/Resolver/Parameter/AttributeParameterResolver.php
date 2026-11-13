@@ -36,9 +36,20 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
+        return $this->resolveParameterWithPlan($target, $context)['result'];
+    }
+
+    /**
+     * @internal
+     * @return array{result:array{0:int,1:mixed}|null,plan:AttributePlan}
+     */
+    public function resolveParameterWithPlan(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): array {
         $plan = $this->plans->build($target->reflection);
         if (!$this->hasHandler($plan)) {
-            return null;
+            return ['result' => null, 'plan' => $plan];
         }
 
         $value = ParameterAttributeValue::unresolved();
@@ -93,9 +104,10 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             break;
         }
 
-        return $value->resolved
-            ? [$target->position, $value->value]
-            : null;
+        return [
+            'result' => $value->resolved ? [$target->position, $value->value] : null,
+            'plan' => $plan,
+        ];
     }
 
     private function hasHandler(AttributePlan $plan): bool

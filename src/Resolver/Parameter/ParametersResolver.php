@@ -298,11 +298,12 @@ final class ParametersResolver
             $resolvers = $this->resolverList;
             foreach ($prepared->resolverSlots as $slot) {
                 $resolver = $resolvers[$slot];
-                $result = $resolver->resolveParameter($target, $context);
                 if ($resolver instanceof AttributeParameterResolver) {
-                    // The attribute bridge refreshes and consumes its plan during resolution.
-                    // Other resolvers do not execute newly available attribute handlers.
-                    $attributePlan = $this->plans->build($target->reflection);
+                    // Record the plan actually consumed by the bridge. Fresh
+                    // discovery here could load a handler that never executed.
+                    ['result' => $result, 'plan' => $attributePlan] = $resolver->resolveParameterWithPlan($target, $context);
+                } else {
+                    $result = $resolver->resolveParameter($target, $context);
                 }
                 if ($result !== null) {
                     $result = \Componenta\DI\Internal\validate_parameter_resolution_result(
