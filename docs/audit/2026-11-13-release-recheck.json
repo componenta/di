@@ -1,0 +1,730 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-13T13:49:24.123805+00:00",
+  "release": "v5.0.5",
+  "previous_release": {
+    "version": "v5.0.4",
+    "commit": "4e3a9607a9264b92ef3f92b98fe2829881c8e8c2"
+  },
+  "source": {
+    "commit": "794699c80996bf6142b08b50d381ac52378bdfd2",
+    "src_tree": "124f6733553551308d7475140348983b100c16b5",
+    "tests_tree": "c253dd7823ac2711d66c8ded8a17e0cc94d78baf",
+    "dependency_mode": "standard composer.json; no workspace/path repositories"
+  },
+  "dependency_resolution": {
+    "lock_sha256": "67a6a5eec8ad6527d18c798c97465b105dbcd30e2fdfaf160f3e7bdc2dfba0a1",
+    "packages": [
+      {
+        "name": "componenta/arrayable",
+        "version": "v1.0.0",
+        "reference": "482acfddffa3b1b85e982d1bf4ab6c007d084a8a"
+      },
+      {
+        "name": "componenta/caster",
+        "version": "v1.0.0",
+        "reference": "383455d00c5ab8a1067b4916e11d11dae7c4a58c"
+      },
+      {
+        "name": "componenta/clock",
+        "version": "v1.1.0",
+        "reference": "a97b782bd17e413864ba24d90d86b75297b7b99d"
+      },
+      {
+        "name": "componenta/config",
+        "version": "v3.0.0",
+        "reference": "dcd218904f7336a61d059363ae1b336f54ad7453"
+      },
+      {
+        "name": "componenta/mimetype-detector",
+        "version": "v1.0.0",
+        "reference": "88cb85b51e95eb8695eaaa1f3c315dd7a7dd8ee9"
+      },
+      {
+        "name": "componenta/reflection",
+        "version": "v2.0.1",
+        "reference": "62aca6575934f119277236bb5dec7953063d69da"
+      },
+      {
+        "name": "componenta/validation",
+        "version": "v3.0.1",
+        "reference": "8f888784bbe12069f8f9dc75703c5dd66c43e53f"
+      },
+      {
+        "name": "cycle/database",
+        "version": "2.23.3",
+        "reference": "75fb8f244569254f382f1beca64332b7c9814137"
+      },
+      {
+        "name": "giggsey/libphonenumber-for-php",
+        "version": "9.0.43",
+        "reference": "75a801c3dbf9a675e4bc83e0da2c2142fcc5344d"
+      },
+      {
+        "name": "giggsey/locale",
+        "version": "2.10.0",
+        "reference": "c13d22635eac0e51d1dcd7f09b99fd7475209a51"
+      },
+      {
+        "name": "psr/clock",
+        "version": "1.0.0",
+        "reference": "e41a24703d4560fd0acb709162f73b8adfc3aa0d"
+      },
+      {
+        "name": "psr/container",
+        "version": "2.0.2",
+        "reference": "c71ecc56dfe541dbd90c5360474fbc405f8d5963"
+      },
+      {
+        "name": "psr/event-dispatcher",
+        "version": "1.0.0",
+        "reference": "dbefd12671e8a14ec7f180cab83036ed26714bb0"
+      },
+      {
+        "name": "psr/http-message",
+        "version": "2.0",
+        "reference": "402d35bcb92c70c026d1a6a9883f06b2ead23d71"
+      },
+      {
+        "name": "psr/log",
+        "version": "3.0.2",
+        "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3"
+      },
+      {
+        "name": "spiral/core",
+        "version": "3.18.2",
+        "reference": "832abb5851c7cd07d67eb9c60f314a941fd8d477"
+      },
+      {
+        "name": "spiral/hmvc",
+        "version": "3.18.2",
+        "reference": "9bca030c17d6a0b8fb0f83824ee88bd0b545def7"
+      },
+      {
+        "name": "spiral/interceptors",
+        "version": "3.18.2",
+        "reference": "3cbef3bf13ef4700b14eeafb2b0f77f76b95f520"
+      },
+      {
+        "name": "spiral/pagination",
+        "version": "3.18.2",
+        "reference": "b4c3e6c15b4f1a0b176f40400e81483fd4bb860d"
+      },
+      {
+        "name": "spiral/security",
+        "version": "3.18.2",
+        "reference": "71d69b14edacf05882e25f929137512253606a20"
+      },
+      {
+        "name": "symfony/polyfill-mbstring",
+        "version": "v1.43.3",
+        "reference": "122889ed24dc000165bcbfd77ec412f15cbdfc6a"
+      },
+      {
+        "name": "symfony/polyfill-php83",
+        "version": "v1.43.0",
+        "reference": "80ccff923a8d61f73ebe9da0aa94e25232f004ce"
+      },
+      {
+        "name": "brianium/paratest",
+        "version": "v7.20.0",
+        "reference": "81c80677c9ec0ed4ef16b246167f11dec81a6e3d"
+      },
+      {
+        "name": "clue/ndjson-react",
+        "version": "v1.3.0",
+        "reference": "392dc165fce93b5bb5c637b67e59619223c931b0"
+      },
+      {
+        "name": "composer/pcre",
+        "version": "3.4.0",
+        "reference": "d5a341b3fb61f3001970940afb1d332968a183ed"
+      },
+      {
+        "name": "composer/semver",
+        "version": "3.6.0",
+        "reference": "d92543b7ede9c4ec6b59853cefb061e39866d2cf"
+      },
+      {
+        "name": "composer/xdebug-handler",
+        "version": "3.0.5",
+        "reference": "6c1925561632e83d60a44492e0b344cf48ab85ef"
+      },
+      {
+        "name": "doctrine/deprecations",
+        "version": "1.2.0",
+        "reference": "d2e16653a734c8784c1851ad68b02f997b53ca82"
+      },
+      {
+        "name": "ergebnis/agent-detector",
+        "version": "2.0.0",
+        "reference": "bcc63004284c61c6df6e9625acf2673e3be1889b"
+      },
+      {
+        "name": "evenement/evenement",
+        "version": "v3.0.2",
+        "reference": "0a16b0d71ab13284339abb99d9d2bd813640efbc"
+      },
+      {
+        "name": "fidry/cpu-core-counter",
+        "version": "1.4.1",
+        "reference": "d384a7d0d6e67aa497327260ca95023e92dc2032"
+      },
+      {
+        "name": "filp/whoops",
+        "version": "2.19.3",
+        "reference": "d5480d53f10069dc4620a39f87e38e8945d47322"
+      },
+      {
+        "name": "friendsofphp/php-cs-fixer",
+        "version": "v3.95.30",
+        "reference": "e85cafc4d861c122839d5409eda3325ac0ec0300"
+      },
+      {
+        "name": "jean85/pretty-package-versions",
+        "version": "2.1.1",
+        "reference": "4d7aa5dab42e2a76d99559706022885de0e18e1a"
+      },
+      {
+        "name": "myclabs/deep-copy",
+        "version": "1.14.0",
+        "reference": "8680aa248f8e07bc8fb43f56f0f5fc77a0c96aae"
+      },
+      {
+        "name": "nikic/php-parser",
+        "version": "v5.9.0",
+        "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def"
+      },
+      {
+        "name": "nunomaduro/collision",
+        "version": "v8.9.6",
+        "reference": "68806f9257968f23775bee62970cb90925b79d51"
+      },
+      {
+        "name": "nunomaduro/termwind",
+        "version": "v2.4.1",
+        "reference": "9b85ae4d802403bfc004ea633ce542bc262ee5c3"
+      },
+      {
+        "name": "nyholm/psr7",
+        "version": "1.8.2",
+        "reference": "a71f2b11690f4b24d099d6b16690a90ae14fc6f3"
+      },
+      {
+        "name": "pestphp/pest",
+        "version": "v4.7.8",
+        "reference": "5b2293f67adcf1b2320b33f521b94a692d18f360"
+      },
+      {
+        "name": "pestphp/pest-plugin",
+        "version": "v4.0.0",
+        "reference": "9d4b93d7f73d3f9c3189bb22c220fef271cdf568"
+      },
+      {
+        "name": "pestphp/pest-plugin-arch",
+        "version": "v4.0.2",
+        "reference": "3fb0d02a91b9da504b139dc7ab2a31efb7c3215c"
+      },
+      {
+        "name": "pestphp/pest-plugin-mutate",
+        "version": "v4.0.1",
+        "reference": "d9b32b60b2385e1688a68cc227594738ec26d96c"
+      },
+      {
+        "name": "pestphp/pest-plugin-profanity",
+        "version": "v4.2.1",
+        "reference": "343cfa6f3564b7e35df0ebb77b7fa97039f72b27"
+      },
+      {
+        "name": "phar-io/manifest",
+        "version": "2.0.4",
+        "reference": "54750ef60c58e43759730615a392c31c80e23176"
+      },
+      {
+        "name": "phar-io/version",
+        "version": "3.2.1",
+        "reference": "4f7fd7836c6f332bb2933569e566a0d6c4cbed74"
+      },
+      {
+        "name": "phpdocumentor/reflection-common",
+        "version": "2.2.1",
+        "reference": "ee15a5a2022c8383906b225055e9496a6a5e6e3b"
+      },
+      {
+        "name": "phpdocumentor/reflection-docblock",
+        "version": "6.0.3",
+        "reference": "7bae67520aa9f5ecc506d646810bd40d9da54582"
+      },
+      {
+        "name": "phpdocumentor/type-resolver",
+        "version": "2.1.0",
+        "reference": "dbe2133bb23e2e33a6834f4ed417f24a1b167769"
+      },
+      {
+        "name": "phpstan/phpdoc-parser",
+        "version": "2.4.1",
+        "reference": "af8e840551031d254cfdb3a18a62c3470a309c10"
+      },
+      {
+        "name": "phpstan/phpstan",
+        "version": "2.3.5",
+        "reference": null
+      },
+      {
+        "name": "phpunit/php-code-coverage",
+        "version": "12.5.8",
+        "reference": "7440368d94738d54f2c1de24dbd3871793bbb0dd"
+      },
+      {
+        "name": "phpunit/php-file-iterator",
+        "version": "6.0.2",
+        "reference": "a248d1640ab059b075f53a2ef0f9856e864e06b5"
+      },
+      {
+        "name": "phpunit/php-invoker",
+        "version": "6.0.0",
+        "reference": "12b54e689b07a25a9b41e57736dfab6ec9ae5406"
+      },
+      {
+        "name": "phpunit/php-text-template",
+        "version": "5.0.1",
+        "reference": "babab73b7ef9fae406f2eb3ee11323a61caa63d5"
+      },
+      {
+        "name": "phpunit/php-timer",
+        "version": "8.0.0",
+        "reference": "f258ce36aa457f3aa3339f9ed4c81fc66dc8c2cc"
+      },
+      {
+        "name": "phpunit/phpunit",
+        "version": "12.5.33",
+        "reference": "b98e028a26c5c5ba7e4a54be96ccf35f2914d184"
+      },
+      {
+        "name": "psr/http-factory",
+        "version": "1.1.0",
+        "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a"
+      },
+      {
+        "name": "psr/simple-cache",
+        "version": "3.0.0",
+        "reference": "764e0b3939f5ca87cb904f570ef9be2d78a07865"
+      },
+      {
+        "name": "react/cache",
+        "version": "v1.2.0",
+        "reference": "d47c472b64aa5608225f47965a484b75c7817d5b"
+      },
+      {
+        "name": "react/child-process",
+        "version": "v0.6.7",
+        "reference": "970f0e71945556422ee4570ccbabaedc3cf04ad3"
+      },
+      {
+        "name": "react/dns",
+        "version": "v1.14.0",
+        "reference": "7562c05391f42701c1fccf189c8225fece1cd7c3"
+      },
+      {
+        "name": "react/event-loop",
+        "version": "v1.6.0",
+        "reference": "ba276bda6083df7e0050fd9b33f66ad7a4ac747a"
+      },
+      {
+        "name": "react/promise",
+        "version": "v3.3.0",
+        "reference": "23444f53a813a3296c1368bb104793ce8d88f04a"
+      },
+      {
+        "name": "react/socket",
+        "version": "v1.17.0",
+        "reference": "ef5b17b81f6f60504c539313f94f2d826c5faa08"
+      },
+      {
+        "name": "react/stream",
+        "version": "v1.4.0",
+        "reference": "1e5b0acb8fe55143b5b426817155190eb6f5b18d"
+      },
+      {
+        "name": "sebastian/cli-parser",
+        "version": "4.2.1",
+        "reference": "7d05781b13f7dec9043a629a21d086ed74582a15"
+      },
+      {
+        "name": "sebastian/comparator",
+        "version": "7.1.8",
+        "reference": "7c65c1e79836812819705b473a90c12399542485"
+      },
+      {
+        "name": "sebastian/complexity",
+        "version": "5.0.0",
+        "reference": "bad4316aba5303d0221f43f8cee37eb58d384bbb"
+      },
+      {
+        "name": "sebastian/diff",
+        "version": "7.0.1",
+        "reference": "cd4cabe39f8a4e8ee6818ba99f10a05561ea4ad6"
+      },
+      {
+        "name": "sebastian/environment",
+        "version": "8.1.2",
+        "reference": "9d32c685773823b1983e256ae4ecd48a10d6e439"
+      },
+      {
+        "name": "sebastian/exporter",
+        "version": "7.0.3",
+        "reference": "c5e21b5de653ce0a769fb36f5cdfcb5e7a32cf23"
+      },
+      {
+        "name": "sebastian/global-state",
+        "version": "8.0.3",
+        "reference": "b164d3274d6537ab462591c5755f76a8f5b1aae9"
+      },
+      {
+        "name": "sebastian/lines-of-code",
+        "version": "4.0.1",
+        "reference": "d543b8ef219dcd8da262cbb958639a96bedba10e"
+      },
+      {
+        "name": "sebastian/object-enumerator",
+        "version": "7.0.0",
+        "reference": "1effe8e9b8e068e9ae228e542d5d11b5d16db894"
+      },
+      {
+        "name": "sebastian/object-reflector",
+        "version": "5.0.0",
+        "reference": "4bfa827c969c98be1e527abd576533293c634f6a"
+      },
+      {
+        "name": "sebastian/recursion-context",
+        "version": "7.0.1",
+        "reference": "0b01998a7d5b1f122911a66bebcb8d46f0c82d8c"
+      },
+      {
+        "name": "sebastian/type",
+        "version": "6.0.4",
+        "reference": "82ff822c2edc46724be9f7411d3163021f602773"
+      },
+      {
+        "name": "sebastian/version",
+        "version": "6.0.2",
+        "reference": "a8b6643a19ba6c8125a473623e45fb8cbb0e4159"
+      },
+      {
+        "name": "staabm/side-effects-detector",
+        "version": "1.0.5",
+        "reference": "d8334211a140ce329c13726d4a715adbddd0a163"
+      },
+      {
+        "name": "symfony/console",
+        "version": "v8.1.11",
+        "reference": "5a315b092b81f3e920e9daea1a2ae4c66ed298b9"
+      },
+      {
+        "name": "symfony/deprecation-contracts",
+        "version": "v3.8.1",
+        "reference": "feb1edf4e546af3b85c5caebe8359a20db230ca3"
+      },
+      {
+        "name": "symfony/event-dispatcher",
+        "version": "v8.1.5",
+        "reference": "7458da64220376b2e0dc2d8451bf43382c1ad297"
+      },
+      {
+        "name": "symfony/event-dispatcher-contracts",
+        "version": "v3.8.1",
+        "reference": "658e29751424da3ef4758c60f769e59d1b2981eb"
+      },
+      {
+        "name": "symfony/filesystem",
+        "version": "v8.1.11",
+        "reference": "58f57b6a33e3495f7f41e01258f1ae5ef76cccd2"
+      },
+      {
+        "name": "symfony/finder",
+        "version": "v8.1.11",
+        "reference": "a2902e479ba5691d20d51d100a715ea19ad2c837"
+      },
+      {
+        "name": "symfony/options-resolver",
+        "version": "v8.1.10",
+        "reference": "68cc43038d234c69d510c62f37bd0058b40d548a"
+      },
+      {
+        "name": "symfony/polyfill-ctype",
+        "version": "v1.37.0",
+        "reference": "141046a8f9477948ff284fa65be2095baafb94f2"
+      },
+      {
+        "name": "symfony/polyfill-intl-grapheme",
+        "version": "v1.43.3",
+        "reference": "5a8f33c87aeecffce24e721b5064fab05f4becf8"
+      },
+      {
+        "name": "symfony/polyfill-intl-normalizer",
+        "version": "v1.43.0",
+        "reference": "ebd57ccc7edb93d632e184efbe7693d2517bab3b"
+      },
+      {
+        "name": "symfony/polyfill-php80",
+        "version": "v1.43.0",
+        "reference": "9c6a5d6b01ca51d486c813e9a9c0ed55f208bb74"
+      },
+      {
+        "name": "symfony/polyfill-php81",
+        "version": "v1.38.1",
+        "reference": "6bfb9c766cacffbc8e118cb87217d08ed84e5cd7"
+      },
+      {
+        "name": "symfony/polyfill-php84",
+        "version": "v1.43.0",
+        "reference": "22c6548499cbe5c5bb072fc0c42312dff062a015"
+      },
+      {
+        "name": "symfony/polyfill-php85",
+        "version": "v1.43.0",
+        "reference": "86a42cbcc07adc331481a5ab310a4024bfc227f6"
+      },
+      {
+        "name": "symfony/process",
+        "version": "v8.1.10",
+        "reference": "08aa69fa0998bb65a089f9e148a2c0f8b391398e"
+      },
+      {
+        "name": "symfony/service-contracts",
+        "version": "v3.8.1",
+        "reference": "052852a96fd5e5ebdb617dba22031e41a3300fb5"
+      },
+      {
+        "name": "symfony/stopwatch",
+        "version": "v8.1.0",
+        "reference": "21c07b026905d596e8379caeb115d87aa479499d"
+      },
+      {
+        "name": "symfony/string",
+        "version": "v8.1.10",
+        "reference": "6c6110979c0150393bbb336170e286d51ab4d76c"
+      },
+      {
+        "name": "ta-tikoma/phpunit-architecture-test",
+        "version": "0.8.7",
+        "reference": "1248f3f506ca9641d4f68cebcd538fa489754db8"
+      },
+      {
+        "name": "theseer/tokenizer",
+        "version": "2.0.1",
+        "reference": "7989e43bf381af0eac72e4f0ca5bcbfa81658be4"
+      },
+      {
+        "name": "webmozart/assert",
+        "version": "2.5.0",
+        "reference": "8a163706bbcac613733dba03f51e13b5eb1bb819"
+      }
+    ]
+  },
+  "results": [
+    {
+      "name": "tests-php84",
+      "command": [
+        "php8.4",
+        "-n",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 8.525,
+      "stdout": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................ss..............\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................\n\n  Tests:    2 skipped, 1106 passed (5131 assertions)\n  Duration: 7.69s\n  Random Order Seed: 1794577597\n\n",
+      "stderr": ""
+    },
+    {
+      "name": "phpstan",
+      "command": [
+        "php8.4",
+        "-n",
+        "vendor/bin/phpstan",
+        "analyse",
+        "src",
+        "tests",
+        "--level=max",
+        "--no-progress",
+        "--memory-limit=1G"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.885,
+      "stdout": "\n [OK] No errors                                                                 \n\n",
+      "stderr": "Warning: PHP Startup: Unable to load dynamic library '{release-source}/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: {release-source}/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924/{release-source}/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0\nNote: Using configuration file {release-source}/phpstan.neon.dist.\n"
+    },
+    {
+      "name": "cs",
+      "command": [
+        "php8.4",
+        "-n",
+        "vendor/bin/php-cs-fixer",
+        "check",
+        "--diff",
+        "--using-cache=no"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.938,
+      "stdout": "\nFound 0 of 359 files that can be fixed in 2.932 seconds, 202.00 MB memory used\n",
+      "stderr": "PHP CS Fixer 3.95.30 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.\nPHP runtime: 8.4.23\nLoaded config default from \"{release-source}/.php-cs-fixer.dist.php\".\nRunning analysis on 8 cores with 10 files per process.\n   0/359 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n   1/359 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n  36/359 [▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░]  10%\n  72/359 [▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░]  20%\n 144/359 [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░]  40%\n 180/359 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░]  50%\n 216/359 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░]  60%\n 252/359 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░]  70%\n 288/359 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░]  80%\n 324/359 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░]  90%\n 359/359 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%\n\n"
+    },
+    {
+      "name": "composer-validate",
+      "command": [
+        "php8.4",
+        "-n",
+        "composer.phar",
+        "validate",
+        "--strict"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.043,
+      "stdout": "./composer.json is valid\n",
+      "stderr": "Composer could not detect the root package (componenta/di) version, defaulting to '1.0.0'. See https://getcomposer.org/root-version\nComposer could not detect the root package (componenta/di) version, defaulting to '1.0.0'. See https://getcomposer.org/root-version\n"
+    },
+    {
+      "name": "composer-audit",
+      "command": [
+        "php8.4",
+        "-n",
+        "composer.phar",
+        "audit",
+        "--format=json",
+        "--no-interaction"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.155,
+      "stdout": "{\n    \"advisories\": [],\n    \"abandoned\": [],\n    \"filter\": [],\n    \"cooldown\": []\n}\n",
+      "stderr": "Composer could not detect the root package (componenta/di) version, defaulting to '1.0.0'. See https://getcomposer.org/root-version\n"
+    },
+    {
+      "name": "tests-php85",
+      "command": [
+        "php8.5",
+        "-n",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.073,
+      "stdout": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................\n\n  Tests:    1108 passed (5139 assertions)\n  Duration: 5.60s\n  Random Order Seed: 1794577608\n\n",
+      "stderr": ""
+    },
+    {
+      "name": "MutationParity-php84",
+      "command": [
+        "php8.4",
+        "-n",
+        "docs/audit/reproductions/MutationParity.php"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.942,
+      "stdout": "{\"php\":\"8.4.23\",\"operations\":600,\"comparisons\":14400}\n",
+      "stderr": ""
+    },
+    {
+      "name": "DefinitionLifecycle-php84",
+      "command": [
+        "php8.4",
+        "-n",
+        "docs/audit/reproductions/DefinitionLifecycle.php"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.368,
+      "stdout": "{\n    \"php\": \"8.4.23\",\n    \"different_owner\": {\n        \"factory_and_capture_retained\": [\n            true,\n            true\n        ],\n        \"new_make_class\": \"stdClass\",\n        \"retained_after_container_disposal\": [\n            false,\n            false\n        ]\n    },\n    \"same_owner\": {\n        \"factory_and_capture_retained\": [\n            false,\n            false\n        ],\n        \"new_make_class\": \"stdClass\",\n        \"retained_after_container_disposal\": [\n            false,\n            false\n        ]\n    },\n    \"throwing_retirement\": {\n        \"failure\": [\n            \"Componenta\\\\DI\\\\Exception\\\\InvalidConfigurationException\",\n            \"retired factory destructor failed\"\n        ],\n        \"get\": \"old\",\n        \"make\": \"new\",\n        \"shared_is_old\": true\n    }\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "CacheRetirement-php84",
+      "command": [
+        "php8.4",
+        "-n",
+        "docs/audit/reproductions/CacheRetirement.php"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.447,
+      "stdout": "{\n    \"php\": \"8.4.23\",\n    \"before\": [\n        \"old\",\n        \"old\"\n    ],\n    \"failure\": [\n        \"LogicException\",\n        \"retired cached wrapper failed\"\n    ],\n    \"after\": {\n        \"a\": \"new\",\n        \"b\": \"old\",\n        \"source\": \"new\"\n    }\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "MutationParity-php85",
+      "command": [
+        "php8.5",
+        "-n",
+        "docs/audit/reproductions/MutationParity.php"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.753,
+      "stdout": "{\"php\":\"8.5.8\",\"operations\":600,\"comparisons\":14400}\n",
+      "stderr": ""
+    },
+    {
+      "name": "DefinitionLifecycle-php85",
+      "command": [
+        "php8.5",
+        "-n",
+        "docs/audit/reproductions/DefinitionLifecycle.php"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.441,
+      "stdout": "{\n    \"php\": \"8.5.8\",\n    \"different_owner\": {\n        \"factory_and_capture_retained\": [\n            true,\n            true\n        ],\n        \"new_make_class\": \"stdClass\",\n        \"retained_after_container_disposal\": [\n            false,\n            false\n        ]\n    },\n    \"same_owner\": {\n        \"factory_and_capture_retained\": [\n            false,\n            false\n        ],\n        \"new_make_class\": \"stdClass\",\n        \"retained_after_container_disposal\": [\n            false,\n            false\n        ]\n    },\n    \"throwing_retirement\": {\n        \"failure\": [\n            \"Componenta\\\\DI\\\\Exception\\\\InvalidConfigurationException\",\n            \"retired factory destructor failed\"\n        ],\n        \"get\": \"old\",\n        \"make\": \"new\",\n        \"shared_is_old\": true\n    }\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "CacheRetirement-php85",
+      "command": [
+        "php8.5",
+        "-n",
+        "docs/audit/reproductions/CacheRetirement.php"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.391,
+      "stdout": "{\n    \"php\": \"8.5.8\",\n    \"before\": [\n        \"old\",\n        \"old\"\n    ],\n    \"failure\": [\n        \"LogicException\",\n        \"retired cached wrapper failed\"\n    ],\n    \"after\": {\n        \"a\": \"new\",\n        \"b\": \"old\",\n        \"source\": \"new\"\n    }\n}\n",
+      "stderr": ""
+    }
+  ],
+  "summary": {
+    "php84": {
+      "version": "8.4.23",
+      "passed": 1106,
+      "skipped": 2,
+      "assertions": 5131
+    },
+    "php85": {
+      "version": "8.5.8",
+      "passed": 1108,
+      "skipped": 0,
+      "assertions": 5139
+    },
+    "parity_each_runtime": {
+      "operations": 600,
+      "comparisons": 14400
+    },
+    "phpstan_level": "max",
+    "phpstan_errors": 0,
+    "cs_files": 359,
+    "cs_changes": 0,
+    "composer_validate": "pass",
+    "composer_audit": "no advisories or abandoned packages"
+  },
+  "scope_notes": [
+    "Standard composer.json was used in an isolated git archive with no path/workspace repositories. Published config v3.0.0, reflection v2.0.1 and validation v3.0.1 resolved to the same immutable sources used by the previous workspace verification.",
+    "PHPStan completed without errors despite an optional accelerator-extension startup warning on the local static PHP binary.",
+    "Composer root-version inference warns because this isolated archive has no Git metadata. The root version is not used to satisfy a self-dependency; composer validate --strict passed.",
+    "The two PHP 8.4 skips are PHP 8.5-only native closure-in-constant-expression tests; they run and pass on PHP 8.5.",
+    "DefinitionLifecycle and CacheRetirement are diagnostic reproductions, not success assertions for a future architecture. Their zero exit status does not mean the observed 5.x limitations have been fixed. Their JSON output deliberately records the retained old factory and the partial state after destructor exceptions.",
+    "Local binaries do not provide a coverage driver. The existing release workflow independently checks Linux PHP 8.4/8.5, Windows PHP 8.4, coverage >=80%, and mutation >=85% on the exact release commit before it publishes the tag."
+  ],
+  "previous_exact_source_ci": {
+    "source_commit": "32b1142ede099e398cba03961372584aef069e69",
+    "run_id": 43428285178,
+    "url": "https://github.com/componenta/di/actions/runs/43428285178",
+    "conclusion": "success",
+    "coverage_percent": 90.5,
+    "mutation_percent": 85.95,
+    "note": "Prior audit evidence for the same src/tests trees; not a claim about the upcoming release-workflow run."
+  }
+}
