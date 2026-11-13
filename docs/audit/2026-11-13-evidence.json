@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "created_utc": "2026-11-13T12:53:58.225508+00:00",
+  "created_utc": "2026-11-13T13:19:30.457440+00:00",
   "repository": {
     "name": "componenta/di",
     "branch": "main",
@@ -9010,17 +9010,17 @@
     "docs/audit/reproductions/MutationParity.php": "81686aa9f03eeaba6aa5eb8a578c160a6882f0ba836590604436c9b8e63ef342"
   },
   "ci": {
-    "observed_utc": "2026-11-13T12:51:19.337342+00:00",
+    "observed_utc": "2026-11-13T13:18:01.079605+00:00",
     "runs": [
       {
         "id": 43428285178,
         "head_sha": "32b1142ede099e398cba03961372584aef069e69",
         "name": "CI",
-        "status": "in_progress",
-        "conclusion": null,
+        "status": "completed",
+        "conclusion": "success",
         "html_url": "https://github.com/componenta/di/actions/runs/43428285178",
         "created_at": "2026-11-13T12:48:24Z",
-        "updated_at": "2026-11-13T12:48:37Z",
+        "updated_at": "2026-11-13T13:16:57Z",
         "jobs": [
           {
             "id": 131895057304,
@@ -9137,8 +9137,8 @@
           {
             "id": 131895057583,
             "name": "Coverage PHP 8.4",
-            "status": "in_progress",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "run_id": 43428285178,
             "logs_url": null,
             "steps": [
@@ -9216,40 +9216,59 @@
               },
               {
                 "name": "Check mutation score",
-                "status": "in_progress",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 13
               },
               {
                 "name": "Upload coverage artifact",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 14
               },
               {
                 "name": "Post Checkout reflection v2 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 25
               },
               {
                 "name": "Post Checkout validation workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 26
               },
               {
                 "name": "Post Checkout config v3 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 27
               },
               {
                 "name": "Post Checkout",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 28
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 29
               }
+            ],
+            "log_evidence": [
+              "2026-11-13T12:48:35.4066235Z ✓ PHP Installed PHP 8.4.27",
+              "2026-11-13T12:48:52.6491238Z   Tests:    2 skipped, 1106 passed (5131 assertions)",
+              "2026-11-13T12:48:52.6492257Z   Duration: 7.80s",
+              "2026-11-13T12:48:56.0357366Z                                                                  Total: 90.5 %  ",
+              "2026-11-13T12:49:04.8057056Z   Tests:    2 skipped, 1106 passed (5131 assertions)",
+              "2026-11-13T12:49:04.8057746Z   Duration: 8.09s",
+              "2026-11-13T12:51:09.9947840Z   3899 Mutations for 107 Files created",
+              "2026-11-13T13:16:53.7628791Z   Mutations: 548 untested, 31 timeout, 3320 tested",
+              "2026-11-13T13:16:53.7653760Z   Score:     85.95%",
+              "2026-11-13T13:16:53.7654508Z   Duration:  1,537.99s",
+              "2026-11-13T13:16:53.7655247Z   Parallel:  4 processes"
             ]
           },
           {
@@ -9524,6 +9543,15 @@
               "8f888784bbe12069f8f9dc75703c5dd66c43e53f",
               "62aca6575934f119277236bb5dec7953063d69da"
             ]
+          },
+          {
+            "id": 131908611680,
+            "name": "v4.0.10 vs v5 benchmark",
+            "status": "completed",
+            "conclusion": "skipped",
+            "run_id": 43428285178,
+            "logs_url": null,
+            "steps": null
           }
         ]
       },
@@ -9531,11 +9559,11 @@
         "id": 43427756772,
         "head_sha": "38742bcd77d2ebc9557f66943033811fb81f6aef",
         "name": "CI",
-        "status": "in_progress",
-        "conclusion": null,
+        "status": "completed",
+        "conclusion": "success",
         "html_url": "https://github.com/componenta/di/actions/runs/43427756772",
         "created_at": "2026-11-13T12:44:41Z",
-        "updated_at": "2026-11-13T12:44:45Z",
+        "updated_at": "2026-11-13T13:06:29Z",
         "jobs": [
           {
             "id": 131893298456,
@@ -9888,8 +9916,8 @@
           {
             "id": 131893298970,
             "name": "Coverage PHP 8.4",
-            "status": "in_progress",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "run_id": 43427756772,
             "logs_url": null,
             "steps": [
@@ -9967,41 +9995,56 @@
               },
               {
                 "name": "Check mutation score",
-                "status": "in_progress",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 13
               },
               {
                 "name": "Upload coverage artifact",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 14
               },
               {
                 "name": "Post Checkout reflection v2 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 25
               },
               {
                 "name": "Post Checkout validation workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 26
               },
               {
                 "name": "Post Checkout config v3 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 27
               },
               {
                 "name": "Post Checkout",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 28
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 29
               }
             ]
+          },
+          {
+            "id": 131903448528,
+            "name": "v4.0.10 vs v5 benchmark",
+            "status": "completed",
+            "conclusion": "skipped",
+            "run_id": 43427756772,
+            "logs_url": null,
+            "steps": null
           }
         ]
       },
@@ -10009,17 +10052,17 @@
         "id": 43427082849,
         "head_sha": "51773f9a4493ac0e5e3f5429ce9f20ebf29d0f3f",
         "name": "CI",
-        "status": "in_progress",
-        "conclusion": null,
+        "status": "completed",
+        "conclusion": "success",
         "html_url": "https://github.com/componenta/di/actions/runs/43427082849",
         "created_at": "2026-11-13T12:39:50Z",
-        "updated_at": "2026-11-13T12:39:55Z",
+        "updated_at": "2026-11-13T13:00:18Z",
         "jobs": [
           {
             "id": 131891041622,
             "name": "Coverage PHP 8.4",
-            "status": "in_progress",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "run_id": 43427082849,
             "logs_url": null,
             "steps": [
@@ -10097,39 +10140,45 @@
               },
               {
                 "name": "Check mutation score",
-                "status": "in_progress",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 13
               },
               {
                 "name": "Upload coverage artifact",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 14
               },
               {
                 "name": "Post Checkout reflection v2 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 25
               },
               {
                 "name": "Post Checkout validation workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 26
               },
               {
                 "name": "Post Checkout config v3 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 27
               },
               {
                 "name": "Post Checkout",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 28
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 29
               }
             ]
           },
@@ -10480,6 +10529,15 @@
                 "number": 29
               }
             ]
+          },
+          {
+            "id": 131900475444,
+            "name": "v4.0.10 vs v5 benchmark",
+            "status": "completed",
+            "conclusion": "skipped",
+            "run_id": 43427082849,
+            "logs_url": null,
+            "steps": null
           }
         ]
       },
@@ -10487,11 +10545,11 @@
         "id": 43426667444,
         "head_sha": "b1276bd25294a6cf558e1571195d67be444567ad",
         "name": "CI",
-        "status": "in_progress",
-        "conclusion": null,
+        "status": "completed",
+        "conclusion": "success",
         "html_url": "https://github.com/componenta/di/actions/runs/43426667444",
         "created_at": "2026-11-13T12:36:53Z",
-        "updated_at": "2026-11-13T12:36:57Z",
+        "updated_at": "2026-11-13T12:59:29Z",
         "jobs": [
           {
             "id": 131889641015,
@@ -10844,8 +10902,8 @@
           {
             "id": 131889641466,
             "name": "Coverage PHP 8.4",
-            "status": "in_progress",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "run_id": 43426667444,
             "logs_url": null,
             "steps": [
@@ -10923,41 +10981,56 @@
               },
               {
                 "name": "Check mutation score",
-                "status": "in_progress",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 13
               },
               {
                 "name": "Upload coverage artifact",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 14
               },
               {
                 "name": "Post Checkout reflection v2 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 25
               },
               {
                 "name": "Post Checkout validation workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 26
               },
               {
                 "name": "Post Checkout config v3 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 27
               },
               {
                 "name": "Post Checkout",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 28
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 29
               }
             ]
+          },
+          {
+            "id": 131900102413,
+            "name": "v4.0.10 vs v5 benchmark",
+            "status": "completed",
+            "conclusion": "skipped",
+            "run_id": 43426667444,
+            "logs_url": null,
+            "steps": null
           }
         ]
       },
@@ -10965,11 +11038,11 @@
         "id": 43426575817,
         "head_sha": "996187f2175cfb846026ffecb363ca2c78e6e9b9",
         "name": "CI",
-        "status": "in_progress",
-        "conclusion": null,
+        "status": "completed",
+        "conclusion": "success",
         "html_url": "https://github.com/componenta/di/actions/runs/43426575817",
         "created_at": "2026-11-13T12:36:15Z",
-        "updated_at": "2026-11-13T12:36:19Z",
+        "updated_at": "2026-11-13T12:55:37Z",
         "jobs": [
           {
             "id": 131889333005,
@@ -11098,8 +11171,8 @@
           {
             "id": 131889333403,
             "name": "Coverage PHP 8.4",
-            "status": "in_progress",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "run_id": 43426575817,
             "logs_url": null,
             "steps": [
@@ -11177,39 +11250,45 @@
               },
               {
                 "name": "Check mutation score",
-                "status": "in_progress",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 13
               },
               {
                 "name": "Upload coverage artifact",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 14
               },
               {
                 "name": "Post Checkout reflection v2 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 25
               },
               {
                 "name": "Post Checkout validation workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 26
               },
               {
                 "name": "Post Checkout config v3 workspace",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 27
               },
               {
                 "name": "Post Checkout",
-                "status": "pending",
-                "conclusion": null,
+                "status": "completed",
+                "conclusion": "success",
                 "number": 28
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 29
               }
             ]
           },
@@ -11436,6 +11515,15 @@
                 "number": 29
               }
             ]
+          },
+          {
+            "id": 131898340482,
+            "name": "v4.0.10 vs v5 benchmark",
+            "status": "completed",
+            "conclusion": "skipped",
+            "run_id": 43426575817,
+            "logs_url": null,
+            "steps": null
           }
         ]
       },
@@ -12426,7 +12514,24 @@
         ]
       }
     ],
-    "status": "final_mutation_pending"
+    "status": "all_source_runs_complete_success",
+    "final_source_metrics": {
+      "source_commit": "32b1142ede099e398cba03961372584aef069e69",
+      "run_id": 43428285178,
+      "job_id": 131895057583,
+      "php": "8.4.27",
+      "coverage_percent": 90.5,
+      "mutation_score_percent": 85.95,
+      "mutation_minimum_percent": 85,
+      "generated_mutations": 3899,
+      "mutated_files": 107,
+      "tested": 3320,
+      "timeouts": 31,
+      "untested": 548,
+      "run_conclusion": "success",
+      "run_updated_at": "2026-11-13T13:16:57Z",
+      "job_url": "https://github.com/componenta/di/actions/runs/43428285178/job/131895057583"
+    }
   },
   "limitations": [
     "No local PCOV/Xdebug; coverage and mutation evidence comes from GitHub Actions.",
