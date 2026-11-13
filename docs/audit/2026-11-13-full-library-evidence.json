@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-11-13T16:09:30.825816+00:00",
+  "generated_at_utc": "2026-11-13T16:15:06.263240+00:00",
   "repository": "componenta/di",
   "published_release_at_audit_start": {
     "version": "v5.0.5",
@@ -13,7 +13,7 @@
     "snapshot": "/workspace/scratch/8f6c1df8ef3b/full-recheck-7dc88a4",
     "all_source_files_match_snapshot": true,
     "current_head_same_src_and_tests": true,
-    "head_when_recorded": "fd690acc99ce54edb82c7cf4ae181e1487871fcb"
+    "head_when_recorded": "1ad46f1fe54af37efa35c254671412f975c2e1f8"
   },
   "source_review": {
     "production_file_count": 161,
@@ -1289,8 +1289,8 @@
       {
         "pair": "docs/audit/2026-11-13-full-library-recheck.md",
         "line_counts": [
-          158,
-          158
+          160,
+          160
         ],
         "headings_equal": true,
         "code_blocks_equal": true,
@@ -7144,7 +7144,7 @@
   "ci": {
     "source_commit": "7dc88a415ba40c3b99daf9ee64b656d2c9028b4b",
     "run_id": 43454980253,
-    "observed_at_utc": "2026-11-13 16:08:55 UTC",
+    "observed_at_utc": "2026-11-13 16:13:19 UTC",
     "workflow_url": "https://github.com/componenta/di/actions/runs/43454980253",
     "jobs": [
       {
@@ -7498,8 +7498,8 @@
       {
         "id": 131986609783,
         "name": "Coverage PHP 8.4",
-        "status": "in_progress",
-        "conclusion": null,
+        "status": "completed",
+        "conclusion": "success",
         "run_id": 43454980253,
         "logs_url": null,
         "steps": [
@@ -7577,41 +7577,56 @@
           },
           {
             "name": "Check mutation score",
-            "status": "in_progress",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "number": 13
           },
           {
             "name": "Upload coverage artifact",
-            "status": "pending",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "number": 14
           },
           {
             "name": "Post Checkout reflection v2 workspace",
-            "status": "pending",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "number": 25
           },
           {
             "name": "Post Checkout validation workspace",
-            "status": "pending",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "number": 26
           },
           {
             "name": "Post Checkout config v3 workspace",
-            "status": "pending",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "number": 27
           },
           {
             "name": "Post Checkout",
-            "status": "pending",
-            "conclusion": null,
+            "status": "completed",
+            "conclusion": "success",
             "number": 28
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29
           }
         ]
+      },
+      {
+        "id": 132005261797,
+        "name": "v4.0.10 vs v5 benchmark",
+        "status": "completed",
+        "conclusion": "skipped",
+        "run_id": 43454980253,
+        "logs_url": null,
+        "steps": null
       }
     ],
     "completed_job_log_summaries": [
@@ -7645,8 +7660,50 @@
           "2026-11-13T15:41:32.6453184Z  [OK] No errors",
           "2026-11-13T15:41:38.1504525Z   Tests:    2 skipped, 1139 passed (22570 assertions)"
         ]
+      },
+      {
+        "job_id": 131986609783,
+        "source": "GitHub Actions decoded completed job log",
+        "excerpts": [
+          "2026-11-13T15:40:44.4401872Z ✓ PHP Installed PHP 8.4.27",
+          "2026-11-13T15:41:02.9360222Z   Tests:    2 skipped, 1139 passed (22570 assertions)",
+          "2026-11-13T15:41:02.9360927Z   Duration: 9.70s",
+          "2026-11-13T15:41:05.4254063Z                                                                  Total: 90.6 %",
+          "2026-11-13T15:41:15.9095999Z   Tests:    2 skipped, 1139 passed (22570 assertions)",
+          "2026-11-13T15:41:15.9096926Z   Duration: 10.02s",
+          "2026-11-13T16:12:17.8209213Z   Mutations: 548 untested, 37 timeout, 3347 tested",
+          "2026-11-13T16:12:17.8231881Z   Score:     86.06%",
+          "2026-11-13T16:12:17.8232472Z   Duration:  1,774.21s",
+          "2026-11-13T16:12:17.8232882Z   Parallel:  4 processes"
+        ]
       }
-    ]
+    ],
+    "run": {
+      "id": 43454980253,
+      "head_sha": "7dc88a415ba40c3b99daf9ee64b656d2c9028b4b",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-13T15:40:34Z",
+      "run_started_at": "2026-11-13T15:40:34Z",
+      "updated_at": "2026-11-13T16:12:23Z",
+      "html_url": "https://github.com/componenta/di/actions/runs/43454980253"
+    },
+    "quality_metrics": {
+      "coverage_percent": 90.6,
+      "coverage_minimum": 80,
+      "mutation_score_percent": 86.06,
+      "mutation_minimum": 85,
+      "mutation_reported_categories": {
+        "untested": 548,
+        "timeout": 37,
+        "tested": 3347
+      },
+      "mutation_total": 3932,
+      "mutation_duration_seconds": 1774.21,
+      "mutation_parallel_processes": 4,
+      "interpretation": "Categories preserve the runner's own labels. A passing threshold is not a claim that all mutants were detected."
+    },
+    "skipped_job_explanation": "The optional v4.0.10 vs v5 benchmark only runs for workflow_dispatch. The existing benchmark bootstrap changes have separate source-selection smokes."
   },
   "limits": [
     "The architectural definition-ownership and retirement changes are specifications for a future major; the three public diagnostics still reproduce on the final source.",
