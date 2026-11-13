@@ -286,7 +286,13 @@ final class ParametersResolver
             && !$target->variadic
             && $target->reflection->isOptional()
             && $target->reflection->getDeclaringFunction()->isInternal();
-        $attributePlan = $this->plans->build($target->reflection);
+        do {
+            $revision = $this->revision;
+            $attributePlan = $this->plans->build($target->reflection);
+            // Discovery can make a source available after the outer plan was
+            // accepted. Classify and record one revision before executing work.
+            $prepared = $this->prepareTarget($target);
+        } while ($revision !== $this->revision);
 
         try {
             $resolvers = $this->resolverList;
