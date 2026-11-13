@@ -1,6 +1,6 @@
 # Attribute availability polling: evidence and design plan
 
-**Readiness:** the benchmark and current-behavior audit are complete. A production optimization is **blocked by the availability-checkpoint and autoloader-observability decisions below**. This document authorizes no change to the attribute execution contract. The current production implementation remains in place.
+**Readiness:** the November 13 audit completed a bounded autoloader comparison, a source-level checkpoint map, and an isolated prototype of alternative A. A is measurably cheaper but changes observable discovery and exception timing, so it was not adopted. A broader production optimization remains **blocked by the compatibility and checkpoint decisions below**. The same-poll cache-coherence defect found during the experiment was fixed separately in `996187f`; that correction preserves both autoload attempts.
 
 ## Objective and scope
 
@@ -25,18 +25,18 @@ For every case in every round, the probe creates a separate container. The conta
 
 A prepended autoloader counts requests only for the eight reserved fixture names. It never defines a class. Name matching is case insensitive, unrelated Composer requests are ignored, and counts reset immediately before timing. Loaded-only checks before and after measurement reject a run in which another loader defines a fixture name. Consequently, counts represent attempts to autoload these missing names, not the number of filesystem reads or the total number of callbacks in the autoloader stack. Timings include the counting callback's overhead.
 
-### Observed baseline
+### Observed baseline, November 13
 
-Observed on Linux x86_64, PHP 8.4.23 and PHP 8.5.8 static CLI binaries, `-n`, OPcache CLI disabled and JIT disabled. Each version ran separately, with seven rounds of 10,000 operations and 2,000 warmup operations per case/round. The production source was `fa4c674095e09134d97d70a647a02084872cdf2a`; the subsequent documentation/test commit `bf0047b` does not change that production source.
+Observed on Linux x86_64, PHP 8.4.23 and PHP 8.5.8 static CLI binaries, `-n`, OPcache CLI disabled and JIT disabled. Each version ran separately, with seven rounds of 10,000 operations and 2,000 warmup operations per case/round. These measurements use an immutable snapshot of `65da4acc18b19989041a2813dbc92f2f474b7177`, before the November 13 fixes. The [audit evidence](../audit/2026-11-13-evidence.json) records exact source/dependency identity and a later final-source smoke check. Historical measurements remain in the November 12 reports; differences between sessions are not attributed to code changes.
 
 | Case | PHP 8.4.23 median, µs/op | PHP 8.5.8 median, µs/op | Missing-name autoload calls/op, both versions | Calls in every 10,000-operation round |
 |---|---:|---:|---:|---:|
-| `make/clean` | 7.6372 | 8.7398 | 0 | 0 |
-| `make/1-unavailable` | 35.6783 | 38.5803 | 22 | 220,000 |
-| `make/8-unavailable` | 217.6139 | 301.7121 | 176 | 1,760,000 |
-| `get-shared/clean` | 0.3034 | 0.3548 | 0 | 0 |
-| `get-shared/1-unavailable` | 0.3034 | 0.3403 | 0 | 0 |
-| `get-shared/8-unavailable` | 0.3208 | 0.3147 | 0 | 0 |
+| `make/clean` | 5.1196 | 5.5019 | 0 | 0 |
+| `make/1-unavailable` | 22.0571 | 25.2777 | 22 | 220,000 |
+| `make/8-unavailable` | 132.1754 | 137.7157 | 176 | 1,760,000 |
+| `get-shared/clean` | 0.2010 | 0.2008 | 0 | 0 |
+| `get-shared/1-unavailable` | 0.1997 | 0.2050 | 0 | 0 |
+| `get-shared/8-unavailable` | 0.2016 | 0.1993 | 0 | 0 |
 
 The exact autoload counts were identical in every round on both runtimes. They establish that one inspected class can add repeated work to unrelated later object creation within the same container. Increasing the unresolved set from one name to eight multiplies that count by eight in this fixture. A shared `get()` hit does not perform these probes.
 
@@ -47,13 +47,15 @@ These are local, instrumented measurements, not a production throughput claim or
 [AttributeDefinitionRegistry](../../src/Attribute/Composition/AttributeDefinitionRegistry.php) owns registered semantic definitions, capability policies, the set of unresolved attribute names, and a generation counter. `definition()` can record a name whose class/interface is not yet available. Reading `revision` scans every recorded name with:
 
 ```php
-if (class_exists($attribute) || interface_exists($attribute)) {
+if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
     unset($this->unavailableAttributes[$attribute]);
     ++$this->generation;
 }
 ```
 
 Both functions default to autoloading: see the PHP manuals for [class_exists](https://www.php.net/manual/en/function.class-exists.php) and [interface_exists](https://www.php.net/manual/en/function.interface-exists.php). For a name which remains absent, both attempts occur. The benchmark's counter is prepended using the documented [spl_autoload_register](https://www.php.net/manual/en/function.spl-autoload-register.php) behavior.
+
+The final loaded-only `class_exists` check is the November 13 correction. The fallback `interface_exists` call can trigger a loader that declares a class; its own return value is still false because that declaration is not an interface. Previously the registry could return the old generation after the class became available. A warmed `has()` then returned false while the public non-memoized control returned true. The added check observes that declaration immediately without invoking another loader, changing the number of miss attempts, or delaying a fallback exception.
 
 Revision reads are used for correctness across several owners:
 
@@ -85,10 +87,11 @@ These constraints come from the [extension/runtime contracts in README](../../RE
 | P8 | An already cached shared service retains its identity and existing retrieval behavior. Container instances have independent availability state. | The benchmark's independent-container and shared-get controls; `CompletedObjectPhaseContractTest` for failed-versus-successful shared results. |
 | P9 | Discovery must be coherent before composition validation, handler-presence queries, or publication of prepared resolver slots. Loading a later target or classifying its type must not silently omit an earlier source/handler. | [AttributeDiscoveryRevisionContractTest](../../tests/Contract/AttributeDiscoveryRevisionContractTest.php), [AttributeProcessorRevisionContractTest](../../tests/Contract/AttributeProcessorRevisionContractTest.php), [ParameterClassificationRefreshContractTest](../../tests/Contract/ParameterClassificationRefreshContractTest.php). |
 | P10 | An existing autoloader can become ready inside a dependency factory without changing the registered loader list or directly declaring the attribute. Subsequent work in that same resolution must discover it. | [ObjectAttributeCacheParityContractTest](../../tests/Contract/ObjectAttributeCacheParityContractTest.php), cold/warm and ordinary/no-op-rule controls. |
+| P11 | A class or alias declared by the fallback interface probe advances availability in that same poll. A cached `has()` agrees with the non-memoized control immediately. Both existing miss attempts and a fallback loader exception retain their timing. | [AttributeAvailabilityRevisionContractTest](../../tests/Contract/AttributeAvailabilityRevisionContractTest.php), including first-attempt, fallback, interface, missing-name and throwing-loader controls. |
 
 P1–P6 constrain when discovery must become observable; they do not establish that the precise number of failed autoload calls is itself a supported public contract. That distinction is a design gate, not permission to silently change discovery timing.
 
-The original eleven P1–P8 test files were executed together against the first audit's production implementation: **84 tests and 357 assertions passed on each of PHP 8.4.23 and PHP 8.5.8**. The subsequent [cache parity recheck](../audit/2026-11-12-cache-parity-recheck.md) adds P9–P10, fixes the coherence defects, and records the expanded verification. These results verify preservation baselines; they do not prove any proposed optimization or settle every missing scenario in G1.
+The original eleven P1–P8 test files passed on both runtimes; the [cache parity recheck](../audit/2026-11-12-cache-parity-recheck.md) added P9–P10. On November 13, fifteen preservation files passed on both the immutable baseline and prototype A: **117 passing, two PHP-8.5-only skips, 820 assertions on PHP 8.4; 119 passing and 828 assertions on PHP 8.5**. The new P11 file had four failing cases and nine successful controls on the pre-correction source, then all thirteen passed. Passing P1–P10 did not establish arbitrary autoloader equivalence: G1 below contains concrete counterexamples. P11 is part of every future optimization's preservation obligations.
 
 ## Settled design constraints
 
@@ -102,12 +105,12 @@ No target, counter, retry limit, timeout, or miss-expiry policy is selected by t
 
 | Alternative | Concrete change being evaluated | Potential benefit | Semantic/design gate |
 |---|---|---|---|
-| A. One autoload attempt per existing poll | Keep the current polling locations; after the autoload-capable `class_exists`, check `interface_exists` with autoload disabled. | Removes the second miss attempt in the shown expression; expected count reduction is a hypothesis until measured. Does not remove the repeated scan. | A loader can change its result or throw on a second invocation. Define whether redundant attempts and their side effects are outside the contract. Verify class, interface, alias, and throwing-loader cases. This is not yet certified as equivalent. |
+| A. One autoload attempt per existing poll | Keep the current polling locations; after the autoload-capable `class_exists`, check `interface_exists` with autoload disabled. | Measured miss counts fall from 22 to 11 and 176 to 88 per operation in every round. The repeated container-wide scan remains. | Rejected as a transparent fix: the G1 prototype delays second-attempt discovery and exceptions. Adoption would require explicitly changing the compatibility contract. |
 | B1. Root-only autoload refresh plus loaded-only internal checks | Autoload missing names at the start of an outer resolution; inside it observe only names already declared. | Avoids most repeated autoload misses while retaining explicit `eval`/`class_alias` discovery. | An earlier dependency can make the same loader able to resolve a class without declaring it. A loaded-only check does not discover that state change. This variant is unacceptable unless that loss of same-resolution discovery is explicitly permitted. |
 | B2. Explicit refresh checkpoints around user code | Use an availability snapshot during pure metadata operations; refresh at entry and after the relevant user-code boundaries, before consuming or validating the next plan. | Can remove repeated autoload work between boundaries without freezing discovery for a whole resolution. | The checkpoint inventory and reentrancy behavior must be complete. Attribute constructors, custom rules, resolver support/resolution, factories, constructors, property/lifecycle callbacks, configuration callbacks, and deferred initialization need explicit treatment. Autoloading itself is user code. |
 | C. Track unresolved names relevant to active plans | Retain unresolved dependencies with target metadata; poll names needed by the active target, its inherited members, and completed-work guards. | Could stop an unrelated annotated class from slowing plain object creation. | Must preserve late discovery for every active/completed target and prepared plan. It also removes autoload side effects from unrelated names; determine whether those are incidental. Account for new dependency-index memory and invalidation complexity before adding it. |
 
-Start evidence acquisition with A because it has the smallest change surface, then compare B2 and C only if the remaining cost justifies their complexity. This is an investigation order, not a chosen production architecture. B1 is a useful falsification control for the same-resolution contract, not the default design.
+The bounded A experiment is complete. Do not repeat it merely to obtain a more favorable latency figure. Consider at most one B2/C prototype only after settling the compatibility contract and showing that the remaining application-level cost justifies the broader change. B1 remains a falsification control for the same-resolution contract, not the default design.
 
 Freezing unresolved annotations after bootstrap, imposing an arbitrary poll cap/TTL, or using only changes to `spl_autoload_functions()` as an invalidation signal is not an accepted solution. An unchanged loader can depend on mutable state or newly available files. An explicit application notification API would change ownership and the public contract and requires its own approved proposal.
 
@@ -117,21 +120,57 @@ Freezing unresolved annotations after bootstrap, imposing an arbitrary poll cap/
 
 The repository proves late class loading and completed-work protection. It does not settle whether arbitrary miss-count-dependent loader behavior must be preserved, whether a newly loadable class must be discovered without visiting its declaring target, or whether every current `revision` read must continue to execute loaders. Reducing these calls necessarily changes some such observations.
 
-**Deciding evidence:** add isolated fixtures for (1) an already registered loader whose readiness flag changes between two public resolutions, (2) the same change inside an earlier dependency, without directly declaring the attribute, (3) a loader which defines the name on its second attempt, (4) a loader which throws, and (5) loading an unrelated missing name as an autoloader side effect. Record the returned value/exception, execution order, and constructor/handler call counts on the baseline.
+**Completed evidence:** seven isolated scenarios and their preloaded controls ran against baseline `65da4acc` and A on both runtimes: 56 processes. The same-resolution readiness case reused `ObjectAttributeCacheParityContractTest`. The portable [AttributeAvailabilityObservations.php](../audit/reproductions/AttributeAvailabilityObservations.php) reproduces the isolated observations; the [evidence](../audit/2026-11-13-evidence.json) preserves exact outcomes and source provenance.
 
-Recheck update: scenario (2) is now preserved by the cold/warm, ordinary/non-memoized readiness cases in `ObjectAttributeCacheParityContractTest`. They pass on both audited runtimes. Reuse those cases instead of creating a duplicate fixture. The miss-count and unrelated-side-effect compatibility decisions remain open; this evidence does not approve a production checkpoint redesign.
+| Observation | Baseline `65da4acc` | Prototype A | Decision |
+| --- | --- | --- | --- |
+| Existing loader becomes ready between two `make()` calls | Values `0, 1`; two constructors, one handler | Same values and counts | Freshness preserved in this case; loader calls differ, 67 versus 48. |
+| Readiness changes inside an earlier dependency | Cold/warm and cached/non-memoized controls pass | Same | Keep P10; root-only refresh cannot satisfy it. |
+| Class or alias declared on the second loader invocation | Declaration exists after the first poll, but old revision stays 0 | Declaration remains absent until a later poll | A changes discovery timing. The baseline revision defect was independently fixed by P11: current code reports revision 1 in that first poll. |
+| Interface declared on the second invocation | First poll returns revision 1 | First poll returns 0, second returns 1 | Direct public registry result changes. |
+| Loader throws on its first invocation | Immediate original exception | Same | Preserved control. |
+| Loader throws on its second invocation | First poll throws | First poll succeeds, second throws | Exception timing changes; A is not transparent. |
+| Previously missing annotation loads an unrelated class as a side effect | Constructor sees the class; one constructor; 30 loader calls before it, 38 total | Same semantic outcome; 15 calls before it, 19 total | This fixture is preserved; arbitrary count-sensitive side effects are not. |
+| All preloaded controls | Zero missing-name loader calls | Same | Differences depend on unresolved names. |
 
-**Bound:** one fixture per scenario, run once on each supported audit runtime, plus preloaded controls. Keep prototypes outside the production source tree. Stop when these observations are classified as preserved requirements or deliberately superseded incidental behavior. Runtime results establish current behavior; an explicit documented compatibility decision establishes the intended contract.
+The current audit preserves the existing autoloader-observability contract. It does not classify these differences as harmless solely because a broad test suite passes. Evidence gathering for G1 is complete; adoption of A or a broader design still needs a written decision explicitly identifying which observations may change. No additional open-ended fixture campaign is required to establish that decision boundary.
 
 ### G2 — Where can a refresh safely be omitted?
 
 **Deciding evidence:** map the existing revision reads to the user-code boundaries and completed-work checks they protect. Use the fixtures above together with the P1–P10 suites. Include nested `make()`/`call()`, direct plan/processor API use, bootstrap, and delayed lazy/proxy initialization. Confirm how a refresh that itself loads another attribute or reenters resolution reaches a coherent generation without replay.
 
+The November 13 source review produced this checkpoint map. It is an impact map for B2/C, not proof that any listed refresh can already be removed:
+
+| Owner | Required observation boundary | Required failure or lifetime behavior |
+| --- | --- | --- |
+| Registry `definition()` / `revision` | Classification can autoload; consumers must observe classes, aliases and interfaces discovered by that poll | No permanent negative result; propagate loader exceptions; preserve P11. |
+| `AttributePlanBuilder::build` | Before reuse and after complete discovery, before composition validation/publication | A later declaration may reveal an earlier one; stabilize without replaying runtime handlers. |
+| `ObjectPipeline::metadata` | Before reuse and after constructor/member discovery | Publish one coherent generation across class, parameters and handlers. |
+| `ParametersResolver::prepareTarget` | After custom `supports()` or native type classification, before slot publication | Direct, prepared, complete and callable paths agree. |
+| `ParametersResolver::resolvePrepared` | After resolver/dependency/default work, before later input is consumed or completed results accepted | Discover newly authoritative sources; reject incompatible completed input. |
+| `AttributeProcessor::executionPlan` | Direct `prepare()` / `hasHandlers()` entry points | Synchronize without depending on a surrounding Container call. |
+| Object attribute sequence / handler dispatch | After argument/attribute materialization and handler effects, before the next handler | Retain one pending instance, preserve executed prefix, reject late predecessors. |
+| Completed guards / property transactions | After constructors, setters, callbacks, configuration and later dependencies | Validate completed semantics before success; failures do not publish shared results. |
+| Bootstrap guard | Extension factories and registration expose semantics during bootstrap | Do not silently omit final extension semantics from premature service use. |
+| Lazy/proxy initialization | Deferred entry into user code, including nested resolution | Keep initial before-phase policy and reject incompatible changes without replay. |
+
+A pure-generation getter requires an explicit synchronization owner at each applicable boundary, including direct public APIs. Autoload itself is user code: a metadata traversal cannot simply be assumed pure. The remaining design work is to select a contract and prove each omitted poll under that contract, not to introduce a second registry.
+
 **Bound:** temporary instrumentation of an isolated source copy, restricted to the registry and the consumers listed in the ownership table. Produce a checkpoint table with an owner, triggering operation, required observation, and failure propagation for each boundary. Do not keep profiling counters or a second synchronization path in production. Stop once every preserved scenario has an explicit checkpoint and every omitted check has a reason grounded in that map.
 
 ### G3 — Does the smallest preserving candidate justify its complexity?
 
-**Deciding evidence:** after G1 and G2 are resolved, compare the baseline with A and at most one broader candidate selected from B2/C. Use this benchmark with identical settings and the targeted preservation suites; run runtime versions serially. Include the clean path and shared-get control in every comparison. Record exact miss counts, median latency and round spread, and any additional metadata retained by the candidate.
+The isolated A experiment measured the following with the same dependencies, settings and harness as the baseline. It is a pre-P11, unpaired exploratory comparison, not a final-source speedup or statistical non-regression result:
+
+| Scenario | PHP 8.4 baseline → A, µs | PHP 8.5 baseline → A, µs | Missing-name calls/op |
+| --- | ---: | ---: | ---: |
+| One unavailable attribute | 22.057 → 14.656 | 25.278 → 16.654 | 22 → 11 |
+| Eight unavailable attributes | 132.175 → 74.966 | 137.716 → 79.601 | 176 → 88 |
+| Clean creation and shared retrieval controls | No new missing-name probes | No new missing-name probes | 0 → 0 |
+
+All source-map checks passed; the optimized Composer classmap and autoloaded functions were remapped to the selected immutable copy. The exact counter reduction is established. The latency figures include instrumentation and do not justify dropping P11 or changing exception timing. No B2/C implementation was attempted because G1 already established the unresolved compatibility choice.
+
+**Deciding evidence:** after G1 and G2 are resolved, use the then-current corrected source, including P11, as the comparison baseline. Historical A remains evidence; rebase it only if the chosen compatibility contract permits its changed observations. Compare at most one broader candidate selected from B2/C. Use this benchmark with identical settings and the targeted preservation suites; run runtime versions serially. Include the clean path and shared-get control in every comparison. Record exact miss counts, median latency and round spread, and any additional metadata retained by the candidate.
 
 Also retain the controlled `RuntimeBench.php` comparison, including reused and fresh closures. The follow-up coherence fixes showed a positive reused-closure latency signal even with no unavailable attribute in that fixture (see the [recheck measurements](../audit/2026-11-12-cache-parity-recheck.md#controlled-runtime-comparison)). A candidate must account for the ordinary non-memoized path as well as the missing-name benchmark; removing a revision check is acceptable only after its required observation is covered by the approved checkpoint contract.
 
@@ -139,15 +178,15 @@ Also retain the controlled `RuntimeBench.php` comparison, including reused and f
 
 ## Implementation sequence and acceptance
 
-The executable work in this report is limited to the reproducible benchmark and evidence gathering. Architecture implementation is not ready. The dependency order is:
+The executable work consists of the benchmark, bounded prototype/evidence, and the independent P11 correctness fix. A broader availability architecture is not implementation-ready. The dependency order is:
 
 1. Preserve the benchmark and the measured baseline as the failure signal. This deliverable is complete.
-2. Resolve G1 with the bounded fixtures and a written compatibility decision. Do not derive a production patch from benchmark numbers alone.
+2. Resolve the G1 compatibility choice using the completed fixtures. Retain current behavior unless the new contract explicitly permits the observed changes. Do not derive a production patch from benchmark numbers alone.
 3. Resolve G2 for the selected direction. Write the normative synchronization contract, including direct API calls, nested calls, failure behavior, and deferred work.
 4. Resolve G3 in isolated candidate copies. Update this document with the selected architecture, measured tradeoff, and acceptance evidence.
-5. Only then derive and approve production slices. Each slice must change one coherent availability behavior together with all required consumers, preserve P1–P10, and remove superseded polling in that same slice once its replacement is proven. It must not leave both strategies active indefinitely.
+5. Only then derive production slices. Each slice must change one coherent availability behavior together with all required consumers, preserve P1–P11, and remove superseded polling in that same slice once its replacement is proven. It must not leave both strategies active indefinitely.
 
-For the eventual approved implementation, acceptance requires lower missing-name autoload work in the affected benchmark cases, an explained latency result on both runtimes, no new unresolved-name probes on the clean/shared-get paths, and all P1–P10 scenarios passing. No numeric throughput target is implied. Freshness and failure behavior take precedence over a faster invalid result.
+For the eventual implementation, acceptance requires lower missing-name autoload work in the affected benchmark cases, an explained latency result on both runtimes, no new unresolved-name probes on the clean/shared-get paths, and all P1–P11 scenarios passing. No numeric throughput target is implied. Freshness and failure behavior take precedence over a faster invalid result.
 
 The grounded change surface is `AttributeDefinitionRegistry::revision`/`definition()`, `AttributePlanBuilder`, `ObjectPipeline::metadata`, `AttributeProcessor`, `ObjectAttributeSequence`, `CompletedAttributeGuard`, and `ParametersResolver`, with request-source/bootstrap consumers included wherever the selected contract crosses them. This is an impact map, not an instruction to modify every file. Registry polling stays unchanged until its complete replacement contract and consumers are settled.
 
