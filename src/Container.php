@@ -202,7 +202,6 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot replace protected DI id "%s".', $id));
         }
 
-        $affected = $this->deferredDependenciesResolvingTo($canonical);
         if ($entry instanceof DefinitionInterface) {
             try {
                 if (!$this->resolver instanceof DefinitionAwareResolverInterface
@@ -224,6 +223,8 @@ final class Container implements
             $this->cache->putBase($canonical, $entry);
         }
 
+        // Registration may autoload code that retargets deferred dependencies.
+        $affected = $this->deferredDependenciesResolvingTo($canonical);
         $this->invalidate($id, $canonical);
         $this->invalidateDeferredDelegators($affected);
     }
