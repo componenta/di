@@ -101,7 +101,7 @@ final class MappedRequestParameterSourceGuard
      */
     public static function bindings(string $class): array
     {
-        if (!class_exists($class) && !interface_exists($class)) {
+        if (!class_exists($class) && !interface_exists($class) && !class_exists($class, false)) {
             return [];
         }
         if (array_key_exists($class, self::$sourceCache)) {
@@ -168,7 +168,7 @@ final class MappedRequestParameterSourceGuard
         foreach ($parameter->getAttributes() as $attribute) {
             /** @var class-string $attributeClass */
             $attributeClass = $attribute->getName();
-            if (!class_exists($attributeClass) && !interface_exists($attributeClass)) {
+            if (!class_exists($attributeClass) && !interface_exists($attributeClass) && !class_exists($attributeClass, false)) {
                 $complete = false;
                 continue;
             }
