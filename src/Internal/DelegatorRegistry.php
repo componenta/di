@@ -16,6 +16,11 @@ use Throwable;
  * Keeps track of delegator callables attached to container entries and applies
  * them in registration order.
  *
+ * @phpstan-type PreparedDelegator array{
+ *     delegator: callable|string|array{object|string,string},
+ *     dependencies: list<string>
+ * }
+ *
  * @internal
  */
 final class DelegatorRegistry
@@ -31,13 +36,19 @@ final class DelegatorRegistry
 
     public function __construct(private readonly CallableResolverInterface $callableResolver) {}
 
-    public function register(string $id, mixed $delegator): void
+    /** @return PreparedDelegator */
+    public function prepare(string $id, mixed $delegator): array
     {
         $delegator = DependencyConfiguration::normalizeDelegatorSpecification($delegator, $id);
-        $dependencies = self::dependencyIds($delegator);
-        $this->raw[$id][] = $delegator;
+        return ['delegator' => $delegator, 'dependencies' => self::dependencyIds($delegator)];
+    }
 
-        foreach ($dependencies as $dependencyId) {
+    /** @param PreparedDelegator $prepared */
+    public function register(string $id, array $prepared): void
+    {
+        $this->raw[$id][] = $prepared['delegator'];
+
+        foreach ($prepared['dependencies'] as $dependencyId) {
             $this->dependents[$dependencyId][$id] = true;
         }
 

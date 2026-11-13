@@ -363,7 +363,13 @@ final class Container implements
         }
 
         try {
-            $this->delegators->register($id, $delegator);
+            $prepared = $this->delegators->prepare($id, $delegator);
+            // Preparing a callable may autoload code that retargets this alias.
+            $canonical = $this->aliases->resolve($id);
+            if (ProtectedServiceIds::contains($canonical)) {
+                throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
+            }
+            $this->delegators->register($id, $prepared);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
