@@ -98,6 +98,19 @@ final class CallableExecutor implements CallableExecutorInterface
             unset($this->callablePlans[$key]);
         }
 
+        // Missing methods use native magic dispatch and have no signature to
+        // cache. Their names may vary on every call in a long-running process;
+        // retain metadata only for actual declarations, not that input history.
+        if (is_array($callable) && !method_exists($callable[0], (string) $callable[1])) {
+            return null;
+        }
+        if (is_string($callable) && str_contains($callable, '::')) {
+            [$class, $method] = explode('::', $callable, 2);
+            if (!method_exists($class, $method)) {
+                return null;
+            }
+        }
+
         try {
             $reflection = Reflection::callable($callable);
         } catch (InvalidArgumentException) {
