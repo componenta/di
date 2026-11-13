@@ -299,4 +299,10 @@ After DI resolves an explicitly invoked callable and enters its body, exceptions
 
 ## Audit and architecture plans
 
-The [architecture plan index](docs/plans/README.md) links the reviewed specifications, their implementation readiness, and complete Russian translations. Proposed next-major contracts are separate from the current 5.x API. The [November audit](docs/audit/2026-11-13-di-audit.md) records fixes, reproductions, performance evidence, and remaining limitations.
+The [architecture plan index](docs/plans/README.md) links the reviewed specifications, their implementation readiness, and complete Russian translations. The selected directions are:
+
+- **Attribute availability:** retain corrected polling in current 5.x. B2 remains conditional on application cost and a specified synchronization contract; C is not selected.
+- **Definition ownership:** the next-major target centralizes immutable bindings in `CompositeResolver`, uses execution strategies without registration maps, and releases replaced state through an internal retirement barrier.
+- **PHP 8.5 features:** the callback binder, `Transform`, callback `SetUp` and simple-union contracts are ready for coding on a future major branch. E1 separately blocks the native trait-callable support promise and selection of the final minimum PHP patch for the DI 6 release; request-to-DTO callbacks remain deferred.
+
+The [full-library and specification recheck](docs/audit/2026-11-13-full-library-recheck.md) records subsequent main-branch fixes, verified measurements, and remaining limitations, with the earlier audit retained as historical evidence. The published release remains v5.0.5; these proposed architectures and features are separate from its API.

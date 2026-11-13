@@ -2,11 +2,11 @@
 
 [Русская версия](php85-callbacks.ru.md)
 
-Created: 2026-11-12. Rechecked: 2026-11-13 against `794699c80996bf6142b08b50d381ac52378bdfd2`, including the [November 13 correctness fixes](../audit/2026-11-13-di-audit.md). The original review used DI 5.0.4 (`4e3a960`) and the audit fixes through `bf0047b`.
+Created: 2026-11-12. Rechecked: 2026-11-13 against `71a843082e7850672bc1fef87401e5697d433f66`, after a fresh review of the released DI 5.0.5 baseline (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). The earlier review and [November 13 correctness fixes](../audit/2026-11-13-di-audit.md) remain historical evidence. The new [native evidence](../audit/2026-11-13-php85-native-evidence.json) records the exact source revision, binary versions, fixture sources and results.
 
-**Readiness: the feature contracts are specified; the DI 6 platform and dependent production sequence remain blocked by E1 in §8.** The minimum released PHP patch containing the required engine fix has not been verified. Sections 1–9 define the proposed desired state; §10 records the dependent change sequence, which becomes executable only after E1 is resolved in this document. Request-to-DTO callbacks remain separately blocked by the decisions in §11.
+**Readiness: the callback binder, `Transform`, callback `SetUp` and simple-union contracts are implementation-ready for a future major branch.** The native trait-callable support promise and final PHP patch floor remain blocked by E1 in §8. That release gate does not prevent implementing and testing the specified library behavior. Request-to-DTO callbacks remain separately blocked by the decisions in §11. Readiness describes the coding contract, not authorization to implement or release these features during this audit.
 
-The current non-major release is DI 5.0.5 with PHP `^8.4` and the audited fixes. This document authorizes no new callback API, union-autowiring behavior, manifest change, or PHP-minimum increase in that release. The PHP 8.5 platform gate applies to the proposed DI 6 work, not to the existing 5.x fixes.
+The published non-major release is DI 5.0.5 with PHP `^8.4`. Fresh audit fixes are subsequent main-branch work; they do not retroactively change that tag. This document introduces no new callback API, union-autowiring behavior, manifest change or PHP-minimum increase into that release. Existing `Init` already accepts the new native expressions when the application runs PHP 8.5.
 
 ## 1. Goal and recovered intent
 
@@ -28,6 +28,23 @@ This specification updates those notes against the current repository. The old n
 In scope: `Transform`, callback `SetUp`, PHP 8.5 regression coverage for existing `Init`, simple union autowiring, diagnostics, lifecycle and memory contracts, documentation, and migration guidance.
 
 Out of scope: compiled containers, closure serialization, source-code extraction, new factory registries, global resolver-priority changes, automatic intersection/DNF service discovery, a callback parameter on every existing attribute, and changes to unrelated Componenta packages. Attribute availability polling has its own [performance plan](attribute-availability-performance.md).
+
+### Necessity and compatibility by feature
+
+The recovered DI 6 bundle remains the intended delivery target. It does not make every feature technically dependent on PHP 8.5 or a major version:
+
+| Feature | Actual compatibility boundary | Chosen disposition |
+| --- | --- | --- |
+| Existing `Init` | No public API change. PHP 8.5 inline/static-reference expressions already work through the current callable path; existing string/array/invokable inputs remain valid. | Add native syntax, scope and lifetime proof and examples without redesigning `Init`. These additions can be compatible with 5.x. |
+| New `Transform` | An additive attribute and handler can use PHP 8.4-compatible implementation syntax. `Closure` as an attribute value does not itself require PHP 8.5; the new inline/reference expressions do. | Keep it in the planned DI 6 bundle, but recognize that it is independently implementable and potentially suitable for a minor release if delivery policy changes explicitly. |
+| Callback `SetUp` | Widening a non-final readonly attribute's public `$method` property breaks subclasses that redeclare `string $method`, because PHP properties are invariant. | A real major-version change. Prefer the existing `SetUp` lifecycle owner and preserved named argument over another public setup attribute. |
+| Simple-union autowiring | PHP 8.5 adds no required language capability here. Selecting a service where the old path used a default/null, or introducing ambiguity errors, changes resolution behavior. | Keep this independent behavioral change in DI 6. It is not required by the callback binder. |
+| Request-to-DTO callback | Its input/output and provenance contract is not settled. | Defer independently under §11; it does not block the other features. |
+| PHP `^8.5` target | A recovered packaging decision, distinct from implementation syntax and from the minimum fixed engine patch. | Retain DI 6 intent; settle the actual supported patch floor at E1 before release. |
+
+A separate `SetUpCallback` attribute could avoid changing the existing property in a minor release, but it would duplicate the public representation of the same lifecycle operation. An extra callback argument requiring a placeholder method would also violate the recovered API intent. With a major release already intended, widening `SetUp` is the smaller coherent public API. Do not narrow `Init` or general runtime callable APIs merely to make their signatures look uniform.
+
+The native fixture `runtime_constant_on_php84` proves that an already-created closure in a runtime constant can be passed to a `Closure`-typed attribute constructor on PHP 8.4.23 and 8.5.8. This is evidence about API/platform separation, not a recommendation to introduce global constants into application configuration.
 
 ## 2. Existing ownership and the required extension
 
@@ -187,14 +204,14 @@ For `Transform`, the semantic argument is the current value. For callback `SetUp
 
 Calling `$container->call($callback, [0 => $value])` is insufficient: an authoritative attribute or a higher-priority custom resolver can replace that argument. Supplying the first parameter's name as well does not protect it from the whole resolver chain.
 
-Introduce one internal helper, `Internal\AttributeCallbackInvoker`, that owns callback reflection, first-argument validation and the prepared final invocation. It must:
+Introduce one internal helper, `Internal\AttributeCallbackInvoker`, that owns callback reflection, first-argument ABI/value validation and the prepared final invocation. DI metadata validation stays in the parameter resolver's guarded boundary. The helper must:
 
 1. Reflect the actual `Closure` without rebinding or reconstructing it.
 2. Handle the empty-signature case with an empty native argument vector, still making one prepared call through the existing invoker/decorators.
-3. Check the first parameter's ABI and metadata. Registered DI attribute usages on this reserved parameter are invalid; ordinary non-DI metadata such as `SensitiveParameter` remains allowed.
+3. Check the first parameter's ABI and value. Pass its real `ParameterTarget` to the suffix entry point for metadata-only validation. Registered DI attribute usages on this reserved parameter are invalid; ordinary non-DI metadata such as `SensitiveParameter` remains allowed.
 4. Prepare only the suffix for parameter resolution, preserving original parameter positions. The first parameter must not enter custom resolver `supports()` or `resolveParameter()` calls or attribute handlers.
 5. Resolve the suffix through a narrow internal entry point in `ParametersResolver`, using its existing loop with an initial native argument prefix and `resolved[0]` state.
-6. Recheck the reserved parameter's attribute plan after suffix resolution, before invocation. A dependency may make a previously unavailable DI attribute visible; in that case fail without invoking the callback.
+6. Keep the reserved first target and completed suffix targets in the same `CompletedAttributeGuard`. Any newly visible DI semantics on the first target, or incompatible change to a completed suffix, must fail before invocation. Do not perform a separate first-target discovery probe after the guarded suffix operation returns.
 7. Call the existing invoker with `new PreparedCallable($callback)` and the complete native argument vector.
 
 The ordinary `resolvePrepared()` entry point must use the same loop with an empty prefix. Do not copy the parameter-resolution loop, use hidden special keys in the public context, or synthesize a wrapper closure with copied attributes. `ParameterResolutionContext` already supports initial resolved state. `PreparedCallable` already prevents a second DI pass and exposes the original callable to compliant decorators.
@@ -210,13 +227,18 @@ The new seam is an internal operation on `ParametersResolver`, not a new extensi
  */
 public function resolvePreparedSuffix(
     PreparedParameterPlan $suffix,
+    ParameterTarget $firstTarget,
     mixed $firstArgument,
     array $providedParameters = [],
     ?string $diagnosticOwner = null,
 ): array;
 ```
 
-`$suffix` contains only the callback parameters after its first declaration and retains their original positions. The binder has already validated the first declaration and value. This operation seeds the native argument vector with `[$firstArgument]` and resolution state with `[0 => $firstArgument]`, then runs the same refresh, boundary, omission, variadic and completed-work logic as `resolvePrepared()`. It returns the complete native vector, including the first value. An empty suffix is valid; the zero-declaration callback branch bypasses this seam and supplies no arguments. Neither the prefix nor the diagnostic owner becomes shared plan state.
+`$suffix` contains only the callback parameters after its first declaration and retains their original positions. `$firstTarget` is the actual first declaration, at position `0`; the binder has already validated its ABI and value. The suffix entry point builds its metadata plan, rejects registered DI usages before suffix execution, and records the accepted empty DI plan as reserved-argument proof in the same invocation-local completed guard used for suffix execution. It never classifies or executes a resolver for this target.
+
+This operation seeds the native argument vector with `[$firstArgument]` and resolution state with `[0 => $firstArgument]`, then runs the same refresh, boundary, omission, variadic and completed-work logic as `resolvePrepared()`. Its final guard stabilizes both directions: first-target discovery can reveal a change to an already completed suffix, and suffix discovery can reveal forbidden first-target metadata. It records the plan actually consumed by each attribute bridge, without replacing that proof with a later discovery result or replaying handlers. Use the existing guard/revision machinery; do not add a second completion algorithm or mutable last-invocation state.
+
+The operation returns the complete native vector, including the first value. An empty suffix is valid and still performs reserved-target validation; the zero-declaration callback branch bypasses this seam and supplies no arguments. Neither the prefix, reserved proof nor diagnostic owner becomes shared plan state.
 
 ### 5.3 Supplied context
 
@@ -228,7 +250,7 @@ In the callback branch, remove ambient position `0` and the first parameter's na
 
 This keeps `SetUpValueUnwrapperInterface::unwrap(mixed $value, string $key, ?ReflectionParameter $parameter)` unchanged. A key matching a suffix parameter's name is unwrapped with that parameter's actual reflection metadata. The new callback branch does not add positional-key support to the unwrapper API or alter the existing string-method branch. A zero-declaration callback has no reserved parameter name, still rejects integer explicit keys, and receives zero native arguments as specified in §5.1.
 
-Other string keys, including unused names and class type-keys, remain accepted. As in the current `SetUpRunner::unwrapParams()`, their values reach a matching unwrapper with `null` reflection metadata, and their keys are preserved during the merge. The suffix then applies the existing provided-parameter rules, including type-key matching and source-boundary checks; unconsumed keys do not become extra native arguments. For a zero-declaration callback, string-key validation and unwrapping still occur with `null` metadata before invoking it with an empty argument vector. Do not introduce a whitelist of declared callback parameter names or skip those unwrappers merely because no suffix parameter consumes the value.
+Other public string keys, including unused names and class type-keys, remain accepted. As in the current `SetUpRunner::unwrapParams()`, their values reach a matching unwrapper with `null` reflection metadata, and their keys are preserved during the merge. The suffix then applies the existing provided-parameter rules, including type-key matching and source-boundary checks; unconsumed keys do not become extra native arguments. The existing filtering of DI-private keys remains intact. For a zero-declaration callback, string-key validation and unwrapping still occur with `null` metadata before invoking it with an empty argument vector. Do not introduce a whitelist of declared callback parameter names or skip those unwrappers merely because no suffix parameter consumes the value.
 
 There is one necessary extension to the source boundary: `MappedRequestParameterSourceGuard` currently skips a target whose `ReflectionParameter::getDeclaringClass()` is null. Named-function first-class callbacks and unbound closures can have no declaring class. For callback `SetUp`, carry the constructed class from `ObjectCreationContext` as an internal diagnostic-owner argument through the suffix entry point and `ParameterResolutionBoundary` into the source guard. A missing declaring class must not suppress source-conflict checks when this owner is supplied. Preserve that owner across initial and refreshed-plan checks. Do not encode it in public parameter keys or infer ownership from a callback's first parameter type. The ordinary `resolvePrepared()` path retains its existing contract when no such owner is supplied.
 
@@ -238,7 +260,8 @@ The string-method branch has no reserved first argument and retains its current 
 
 | Failure | Owner and result |
 | --- | --- |
-| Invalid first-argument ABI or registered DI attributes on it | Internal binder raises `InvalidConfigurationException` before callback execution. |
+| Invalid first-argument ABI or initially registered DI attributes on it | Binder or guarded parameter entry point raises `InvalidConfigurationException` before callback execution. |
+| Late first-target DI metadata or incompatible completed-suffix change | Existing `AttributeCompositionException`, an `InvalidConfigurationException` subtype; no callback body or completed-handler replay. |
 | Runtime input incompatible with the first parameter | Parameter `ResolutionException`, contextualized by the owning transform/property/lifecycle boundary as appropriate. |
 | Suffix dependency or parameter failure | Existing resolver diagnostics and Componenta exception hierarchy. |
 | Foreign exception inside `Transform` | Existing parameter/property boundary produces `ResolutionException` and preserves the cause. |
@@ -253,16 +276,16 @@ This is an independent resolver enhancement, not a prerequisite for basic PHP 8.
 
 ### 6.1 Supported candidates
 
-Extend `AutowireByTypeResolver` to handle non-variadic simple unions whose arms are named types. Collect non-builtin class/interface service IDs, resolve contextual names using the existing type helpers, deduplicate equivalent IDs case-insensitively, and exclude `Closure` from union candidates.
+Extend `AutowireByTypeResolver` to handle non-variadic simple unions whose arms are named types. Collect all non-builtin class/interface service IDs, including `Closure`, resolve contextual names using the existing type helpers, and deduplicate equivalent type names case-insensitively. Keep each actual candidate ID for the existing container lookup; this does not introduce case folding for opaque service registrations.
 
-Do not flatten an intersection into unrelated alternatives. Intersections and DNF unions containing intersection arms remain outside implicit autowiring for this release; supplied values still undergo full existing type validation. A plain named type retains existing named-type behavior. In particular, this feature does not remove an explicitly registered plain `Closure::class` entry from the old named-type path.
+Do not flatten an intersection into unrelated alternatives. Intersections and DNF unions containing intersection arms remain outside implicit autowiring for this release; supplied values still undergo full existing type validation. A plain named type retains existing named-type behavior. There is no special union-only ban on a valid explicit `Closure::class` binding.
 
 ### 6.2 Selection algorithm
 
 1. Preserve existing resolver priorities. Applicable explicit values, provider attributes and custom earlier resolvers finish before autowiring. Existing authoritative-source semantics remain unchanged.
 2. Query `container->has()` for each distinct candidate service ID. This is the existing availability contract and can autoload; it is not a promise of zero side effects or successful construction.
 3. Zero available candidates: return unresolved to the caller. Reflection creation and DI-aware ordinary callable invocation then use their existing PHP-default, nullable, then error path. Explicit `ClassDefinition` calls keep their different omission contract described in §6.3.
-4. Exactly one available candidate: call `get()` for that ID once. In `AutowireByTypeResolver`, require the returned value to implement that selected class/interface, then retain full target-type validation. Matching a different union arm is insufficient: a `Service::class` binding returning a closure must not implicitly satisfy the explicit-only `Closure` arm of `Closure|Service`.
+4. Exactly one available candidate: call `get()` for that ID once. In `AutowireByTypeResolver`, require the returned value to implement that selected class/interface, then retain full target-type validation. Matching a different union arm is insufficient: a selected `Service::class` binding returning a closure is invalid even though the target is `Closure|Service`.
 5. More than one available candidate: throw `ResolutionException` with a stable, sorted list of candidate IDs before calling `get()` for any candidate. Do not choose declaration order, inspect factory bodies, or instantiate every candidate to compare object identity.
 6. A selected candidate that fails during construction propagates its normal resolution failure. Do not silently try another arm, fall back to `null`, or use a default after construction starts.
 
@@ -270,7 +293,7 @@ Two different interface IDs that are aliases of the same implementation still fo
 
 `supports()` classifies only the declared type shape. Candidate availability and the winner are recomputed in `resolveParameter()` on every call; never cache a selected service in a prepared parameter plan. Existing runtime mutations, alias changes and external-container ownership changes must be visible after a plan is warmed. Probe candidates in a stable sorted order so reflected arm ordering is not itself a choice rule; retain the existing `has()` error contract rather than inspecting service factories.
 
-For `Closure|Service`, the closure arm is explicit-only, so `Service` can be selected if available. For `Closure|string`, there are no implicit candidates. Explicit closure arguments remain valid. Enums, abstract classes and unbound interfaces count only as available under the container's existing `has()` behavior; do not invent a new availability definition.
+For `Closure|Service`, an explicitly bound `Closure::class` participates under the same `has()` rule as `Service`; two available arms are ambiguous, one available arm wins, and zero arms remain unresolved. For `Closure|string`, a bound closure is the sole possible service candidate; an unbound `Closure` is not implicitly constructible. Explicit argument closures remain valid through the earlier supplied-value path. Enums, abstract classes and unbound interfaces likewise count only as available under existing `has()` behavior. The earlier draft's union-only exclusion of `Closure` had no recovered requirement or demonstrated necessity and is removed.
 
 ### 6.3 Shared resolver, separate entry contracts
 
@@ -284,7 +307,7 @@ Add a dedicated type helper for eligible simple-union candidates if necessary. D
 
 The existing `AttributeUsage::newInstance()` materializes an attribute at execution time. Plans store reflection metadata and composition, not runtime callback results or newly constructed attribute instances. Preserve that boundary.
 
-The audit's PHP 8.5.8 probes observed the following native behavior:
+The fresh audit's [portable generator](../audit/reproductions/Php85Callbacks.py) and [exact fixture/output record](../audit/2026-11-13-php85-native-evidence.json) cover 14 cases on PHP 8.4.23 and 8.5.8. The two current-`Init` fixtures assert both class and internal-function source mappings against the checkout before making DI observations. Pure-engine fixtures do not load DI. PHP 8.5.8 observed:
 
 | Callback origin in the attribute argument | Repeated materialization | State behavior |
 | --- | --- | --- |
@@ -292,27 +315,45 @@ The audit's PHP 8.5.8 probes observed the following native behavior:
 | Named function/static-method first-class reference | Fresh closure wrapper | Static state belongs to the referenced function/method and is shared. |
 | Class constant holding a closure | Reuses the constant's closure object | State is shared according to the constant's lifetime. |
 
+For four successive materializations, calls in the order first/first/second/third/fourth return `[1, 2, 1, 1, 1]` for the inline callback and `[1, 2, 3, 4, 5]` for named/static-method references and the constant-held closure. Weak references clear for discarded inline and named/static-method wrappers; the class constant legitimately keeps its closure alive. This control distinguishes wrapper identity from the lifetime of referenced function state.
+
+Current `Init` produces identical cached and no-op-composition-rule results across three `make()` calls: inline counters restart, named-function and constant counters advance, the private static helper receives its DI dependency, and shared `get()` preserves identity. Its inline static-local object becomes unreachable after creation. Lazy initialization runs only on first property access. These are verified existing behaviors, not results from a prototype of the proposed `Transform` or callback `SetUp`.
+
 The library must preserve native behavior, rather than promise universal isolation for all callbacks. Attribute materialization can autoload or throw; guard recomposition and original causes must survive. Repeated resolutions, failed attempts and delayed lazy initialization must not retain an otherwise unreachable runtime callback, semantic value, dependency object, or `ReflectionObject` through shared metadata caches.
 
 Do not cache a callback by file/line or `spl_object_id()`, extract its source, serialize it, or reconstruct its scope. Reuse stable class/method metadata where already safe. The November `ReflectionObject` cache isolation fix is a prerequisite regression to retain.
 
 The follow-up [cache parity audit](../audit/2026-11-12-cache-parity-recheck.md) adds executable controls for this boundary. [ObjectAttributeCacheParityContractTest](../../tests/Contract/ObjectAttributeCacheParityContractTest.php) compares ordinary plans with the public no-op-composition-rule control, including a PHP-8.5-gated `Init` fixture whose inline closure has a static local. Repeated materialization must follow PHP's native fresh-closure behavior while each invocation observes the current dependency. Reuse this control for `Transform` and callback `SetUp`; compare values, exception ownership, callback/handler counts, and object lifetime, not only final scalar output.
 
-Keep the revised discovery and classification boundaries in the existing owners. Attribute discovery, object handler discovery, and prepared parameter classification must settle on a coherent registry revision before publication. A new suffix-resolution seam must not bypass this stabilization or cache a selected dependency value. Runtime mutation must preserve unaffected shared identity as well as invalidate changed bindings.
+Keep the revised discovery and classification boundaries in the existing owners. Attribute discovery, object handler discovery, and prepared parameter classification must settle on a coherent registry revision before publication. Preserve the fresh audit's [parameter execution/consumption regression](../../tests/Contract/ParameterExecutionRevisionContractTest.php): coherent slots and plans before execution, then proof of the actual bridge plan consumed. A new suffix-resolution seam must not bypass this stabilization or cache a selected dependency value. Runtime mutation must preserve unaffected shared identity as well as invalidate changed bindings.
 
 ## 8. PHP version and release compatibility
 
-Development target: DI 6 on PHP 8.5, with branch alias `6.0.x-dev`. The final Composer constraint must use the verified minimum patch from E1; the broad `^8.5` constraint is not the settled support promise. The current audited 5.x line retains PHP `^8.4`; none of the audit fixes raises its platform floor. After E1 and authorization for the major-version work, use the intended major-version branch before altering the manifest or introducing PHP-8.5-only production syntax. Version-gated eval/subprocess fixtures may remain in the 5.x suite when PHP 8.4 can parse their containing files and skips the unsupported syntax before evaluation.
+Delivery target: DI 6 on PHP 8.5, with branch alias `6.0.x-dev`. The final Composer constraint must use the verified minimum patch from E1; broad `^8.5` is not a settled promise that every runtime in that range satisfies the native trait contract. The current 5.x line retains PHP `^8.4`; none of the audit fixes raises its floor.
 
-One upstream limitation must be treated separately from DI correctness. PHP 8.5.8 was observed to reuse the first consuming class's method for trait-relative first-class callable constant expressions. The official fix is [php-src `44a2a2c3`](https://github.com/php/php-src/commit/44a2a2c3db9e4e06c41a0603c3826fac3b1b99f3), dated November 3, 2026; its [official commit announcement and regression cases](https://news-web.php.net/php.cvs/143271) explain the cached scope and visibility defect. The earlier inspection of [PHP-8.5 NEWS](https://github.com/php/php-src/blob/PHP-8.5/NEWS) placed the fix under November 19, 2026 / PHP 8.5.13. The [official November 5 announcement](https://news-web.php.net/php.internals/133012) identifies 8.5.13RC1 as a testing release and November 19 as an expected release date. On this recheck date, the official stable release is [PHP 8.5.12](https://www.php.net/releases/8_5_12.php). Neither an RC nor a future NEWS date proves that a suitable stable patch has been released.
+After separate authorization for implementation, use the intended major-version branch for the public `SetUp` and union changes. The specified library implementation can remain parseable on PHP 8.4 while E1 is pending; test it with PHP 8.4-compatible callback construction and the available PHP 8.5 native-expression fixtures. Final platform packaging is a later, explicit gate. Version-gated eval/subprocess fixtures may also remain in 5.x when PHP 8.4 can parse their containing files and skips unsupported syntax before evaluation. A diagnostic of a known engine defect is not a passing support regression for that native form.
+
+One upstream limitation is separate from DI correctness. On PHP 8.5.8, an attribute declared in a trait with `self::who(...)` returns the first consuming class's result for both consumers; `parent::who(...)` has the corresponding parent-scope error. A named private method reference in the trait also incorrectly retains the first consumer's successful visibility result. The native inline-static-closure control resolves each consuming class correctly. These observations come from actual attribute expressions, without DI or shared reflection caches, in the portable evidence above.
+
+The upstream correction is [php-src `44a2a2c3`](https://github.com/php/php-src/commit/44a2a2c3db9e4e06c41a0603c3826fac3b1b99f3), dated November 3, 2026. Its [official announcement and regression cases](https://news-web.php.net/php.cvs/143271) identify the **PHP-8.6 branch** and explain cached scope and visibility. That announcement alone does not prove a backport into any PHP 8.5 release. The [official November 5 announcement](https://news-web.php.net/php.internals/133012) describes 8.5.13RC1 as a testing release and November 19 as an expected release date. On this recheck date, the official stable 8.5 release is [PHP 8.5.12](https://www.php.net/releases/8_5_12.php). Neither an RC, a future NEWS date nor the PHP-8.6 commit proves that PHP 8.5.13 is released or will contain the required fix.
+
+A bounded check of the [released `php-8.5.12` source](https://github.com/php/php-src/blob/php-8.5.12/Zend/zend_ast.c#L1092-L1151) confirms that this correction is absent: the static-call branch reuses cached `fptr` and still stores it unconditionally, without the new `ZEND_FETCH_CLASS_DEFAULT` and `ZEND_ACC_PUBLIC` restrictions. The [official changelog](https://www.php.net/ChangeLog-8.php#8.5.12) dates that release to October 22, 2026. The ordinary DI CI suite passes on PHP 8.5.12, but it does not execute these portable trait fixtures; no binary-level trait result on 8.5.12 is claimed. This source check leaves E1 open for the affected support promise.
 
 ### E1 — Verify the released PHP patch floor
 
-**Blocked scope:** the DI 6 platform declaration, the dependent production sequence in §10, and the claim that all supported runtimes implement the callback scope contract. The callback and union rules above are specified, but no numeric minimum patch is invented here.
+**Blocked scope:** the final DI 6 supported-patch declaration and release claim that all supported runtimes correctly implement the affected trait first-class-reference forms. The binder, `Transform`, callback `SetUp`, union implementation, unaffected native-form tests and migration work are not blocked by this platform evidence task. No numeric minimum patch is invented here.
 
 **Bounded deciding evidence:** identify an officially released PHP 8.5 patch; verify its tagged source contains the engine correction; run the upstream trait `self::`/`parent::`, named-class visibility and two-consuming-class fixtures plus the attribute-expression examples on that exact binary. Record the release/tag, binary version and outcomes. A release candidate may inform the investigation but cannot satisfy this stable-release gate. Do not broaden this into an engine workaround or a new DI callback-scope mechanism.
 
-**Stop and unblock:** once the released patch passes those fixtures, update this section with the actual minimum, its evidence and the corresponding Composer/CI target; only then mark the dependent sequence implementation-ready. If no released patch satisfies the evidence, keep E1 blocked. Do not publish a claim of fully correct trait-relative callbacks on the tested 8.5.8 runtime. A fully qualified reference to a public helper is an interim application-level alternative; DI must not emulate or rebind native lexical scope.
+**Stop and unblock:** once the released patch passes those fixtures, update this section with the actual minimum, tagged-source evidence and corresponding Composer/CI target. If no released patch satisfies the evidence, keep the affected platform/release gate blocked while independently ready library work can proceed. Do not publish a claim of fully correct trait-relative callbacks on the tested 8.5.8 runtime. A capture-free inline static closure or fully qualified reference to a public helper is an interim application-level alternative within the verified scope; DI must not emulate or rebind native lexical scope.
+
+| Work or promise | Readiness |
+| --- | --- |
+| Existing `Init` native-expression examples and compatible regression fixtures | Ready; actual current behavior is recorded. |
+| Shared binder, `Transform`, callback `SetUp`, simple-union behavior | Contracts ready for a separately authorized major branch; test supported forms while E1 is pending. |
+| Correct trait-relative/mixed-visibility first-class references on the minimum supported runtime | Blocked by E1; PHP 8.5.8 demonstrably fails. |
+| Final DI 6 Composer floor, supported-runtime CI and release asserting that scope contract | Blocked by the released-patch proof, then by the ordinary implementation/release gates. |
+| Request-to-DTO callback | Blocked independently by §11's semantic decisions. |
 
 Compatibility review must cover existing `SetUp` subclasses and named arguments, `Init` string/array/invokable inputs, extension handler definitions, decorated `CallableInvokerInterface` services, companion package constraints, and applications enabling `ClassDefinition` autowiring. Use the actual consuming packages' manifests and test suites before proposing any coordinated version bumps. No unrelated package release is required just to add syntax-aware tests here.
 
@@ -325,13 +366,13 @@ There is a specific major-version migration for `SetUp` subclasses: a subclass r
 | Syntax | Inline static closure and named/declared-static first-class references compile; forbidden arrow/non-static/capture, dynamic-reference, object-method and magic-static examples are tested in separate subprocess fixtures so they cannot break suite discovery. |
 | `Init` parity | Existing input forms remain valid; readonly initialization; DI dependency; private static helper; three repeated creations; native closure state and lazy initialization behavior. |
 | First argument | Arbitrary name, nullable and optional declaration, zero parameters, whole array input, invalid type, by-reference rejection, variadic-first rejection. |
-| First-argument isolation | Ambient name/position cannot replace it; first parameter never enters custom resolver classification or execution; registered DI metadata rejected; ordinary `SensitiveParameter` allowed; late metadata fails before body. |
+| First-argument isolation | Ambient name/position cannot replace it; first parameter never enters custom resolver classification or execution; registered DI metadata rejected; ordinary `SensitiveParameter` allowed; late metadata fails before body. First-target discovery revealing a completed-suffix change and suffix discovery revealing first-target metadata both fail before body without replaying completed handlers. |
 | Suffix | Dependency autowiring, attributed dependency, custom resolver seeing `resolved[0]`, default/null, native omitted optional argument, variadic collection and ordering. |
 | Parameter transform | Explicit/source/default/null/empty-variadic/missing input; no implicit source autowiring; repeated and mixed `Cast`/`Transform`; final full type checking. |
 | Property transform | Pending intermediate types; readonly final assignment; promoted skip; write-only setter; wider setter input; one setter call; no partial write on callback failure. |
 | Setup | Unchanged string validation; callback after property commits; repeatable declaration order; ignored return; explicit reserved-name or integer-key rejection before unwrappers execute; ambient suffix positions preserved; matching-name unwrappers receive the real suffix parameter, other string keys receive `null` metadata; unused/type-key values and named values for a zero-declaration callback retain §5.3 handling without extra native arguments; existing request provenance. |
 | Classless setup provenance | Full `MapRequest` → DTO → named-function callback path rejects raw name/type-key collisions with suffix `EntryId`/`Env`; repeat with a late-loaded source after suffix dependency resolution; callback body never receives the conflict, owner/provenance stay hidden from extensions. |
-| Union | Zero/one/two candidates, reversed arm order, aliases, `Closure` arm, explicit override, optional/default/null, failing selected factory, wrong returned value (including another union arm), variadic exclusion, intersections/DNF unchanged; warmed-plan transitions zero → one and one → ambiguous after mutation. |
+| Union | Zero/one/two candidates, reversed arm order, aliases, bound/unbound `Closure` arm under uniform `has()` rules, explicit override, optional/default/null, failing selected factory, wrong returned value (including another union arm), variadic exclusion, intersections/DNF unchanged; warmed-plan transitions zero → one and one → ambiguous after mutation. |
 | Definition parity | Enabled/disabled `ClassDefinition` constructor and configured-method autowiring; shared candidate validation; declared default versus required nullable omission; no accidental adoption of the reflection attribute lifecycle. |
 | Failure and retry | Correct owner diagnostics and `previous`; direct callable exceptions unchanged; failed lazy attempt does not retain callback objects or replay completed work in the same attempt. |
 | Memory | `WeakReference` assertions for discarded callback/value/dependency/object-reflection graphs; repeated same-line closure instances remain independent where PHP defines independence. |
@@ -342,23 +383,23 @@ Use Pest public-contract tests and focused fixtures, with failing regressions be
 
 ## 10. Derived implementation plan
 
-**This dependent sequence is blocked by E1 and is not executable production work for the current 5.0.5 release.** Until E1 is resolved, the only platform work defined here is its bounded evidence task. The scopes below record the required order after this document is updated with a verified PHP floor; they do not authorize an interim broad platform promise.
+**Library slices are specified and can be implemented on a separately authorized future-major branch while E1 remains pending.** E1 blocks the final affected platform/support promise, not unrelated coding. None of these slices retroactively adds features to the published 5.0.5 tag.
 
-After that gate, every slice must be reviewed, checked, committed and pushed before the next independently reviewable slice. No slice should leave two competing resolution algorithms in place.
+Every completed slice must be reviewed, checked, committed and pushed. Slices 3 and 4 depend on the binder in slice 2; union work in slice 5 is independent of that binder. No slice should leave two competing resolution algorithms in place. The evidence requirements below describe completion, not an approval to perform the major work in the current audit.
 
-### Slice 1 — Establish the major-version platform and native behavior
+### Slice 1 — Establish native behavior and existing `Init` controls
 
-Files: `composer.json`, `.github/workflows/ci.yml`, `README.md`, new PHP 8.5 fixture directory and `tests/Contract/Php85AttributeCallableContractTest.php`.
+Files: `README.md`, new PHP 8.5 fixture directory and `tests/Contract/Php85AttributeCallableContractTest.php`; retain the portable audit reproduction as historical evidence.
 
-After E1 is resolved and the major-version branch is selected, set its verified PHP patch floor/alias and move the branch's CI to its supported runtime. Add syntax/scope/lifetime fixtures and `Init` end-to-end cases against the existing implementation. Keep compile-error fixtures outside normal test discovery. Retain the upstream engine cases as platform regressions, without teaching DI a workaround.
+Add syntax/scope/lifetime fixtures and `Init` end-to-end cases against the existing implementation. Keep compile-error fixtures outside normal test discovery and confirm source mapping when using an installed Composer graph. Separate verified native forms from the known failing trait diagnostic; once E1 is resolved, run the latter as a correct-behavior regression on the supported minimum. Do not change the manifest merely to start this work and do not teach DI an engine workaround.
 
-Done when ordinary supported examples run through the real container, old `Init` representations still pass, and the minimum-patch decision is explicit rather than guessed.
+Done when verified native examples run through the real container, old `Init` representations still pass, native state/lifetime controls match, and the unresolved patch-floor question is explicitly isolated as E1.
 
 ### Slice 2 — Add the semantic-first-argument seam
 
 Files: new `src/Internal/AttributeCallbackInvoker.php`; `src/Resolver/Parameter/ParametersResolver.php`; `src/Internal/Resolver/Parameter/ParameterResolutionBoundary.php`; `src/Internal/Resolver/Parameter/Request/MappedRequestParameterSourceGuard.php`; focused new `tests/Contract/AttributeCallbackInvocationContractTest.php`.
 
-Extract only the existing argument assembly loop into a shared private implementation accepting an initial prefix/resolved state. Add the internal suffix entry point; do not route the first parameter through classification. Carry an optional internal diagnostic owner through initial and refreshed source-boundary checks so classless setup suffixes remain guarded. The binder validates first metadata before and after suffix resolution, uses native type acceptance, and invokes through `PreparedCallable` and the existing invoker. No new public configuration key or extension interface is needed.
+Depends on the native baseline and §5 contract, not on E1. Extract only the existing argument assembly loop into a shared private implementation accepting an initial prefix/resolved state and reserved-target proof. Add the internal suffix entry point; do not route the first parameter through classification. Keep its metadata-only validation and completed suffixes in one guard through final stabilization. Carry an optional internal diagnostic owner through initial and refreshed source-boundary checks so classless setup suffixes remain guarded. The binder uses existing strict type acceptance and invokes through `PreparedCallable` and the existing invoker. No new public configuration key or extension interface is needed.
 
 Done when first-slot override attempts fail or are ignored as specified, suffix extensions see the correct state, decorators see one prepared invocation, native default omission remains intact, and lifetime regressions pass. The ordinary callable suite must remain unchanged in behavior.
 
@@ -366,7 +407,7 @@ Done when first-slot override attempts fail or are ignored as specified, suffix 
 
 Files: new `src/Attribute/Transform.php`; new `src/Resolver/Attribute/Handler/TransformHandler.php`; `src/ContainerFactory.php`; new `tests/Contract/TransformContractTest.php` and property-hook fixtures.
 
-Wire one binder shared by the two new consumers. Register the capability/order, implement the precise source fallback, use existing pending property reads/writes, and add diagnostics at the owning target. Do not modify `ObjectCreationContext` assignment semantics or reorder the global resolver chain.
+Depends on slice 2. Wire one binder shared by the two new consumers. Register the capability/order, implement the precise source fallback, use existing pending property reads/writes, and add diagnostics at the owning target. Do not modify `ObjectCreationContext` assignment semantics or reorder the global resolver chain.
 
 Done when the parameter/property rows in §9 pass, a callback runs once per usage, mixed transformer order is stable, and setter/readonly failure cases demonstrate one final write.
 
@@ -374,7 +415,7 @@ Done when the parameter/property rows in §9 pass, a callback runs once per usag
 
 Files: `src/Attribute/SetUp.php`; `src/Resolver/Entry/SetUpRunner.php`; `src/ContainerFactory.php`; new `tests/Contract/SetUpCallbackContractTest.php`; existing setup/environment/provenance regressions.
 
-Widen the constructor/property type without renaming it. Add closure dispatch through the binder with the constructed class as the private diagnostic owner, generalize the reflector accepted by unwrapping, preserve the private context store and merge rule, and reject explicit integer keys or first-parameter-name replacement before unwrapping. Preserve ambient suffix positions and the existing named-key unwrapper interface. Keep string validation and existing method invocation behavior. Exercise the complete mapped-request path with named-function callbacks as well as class-scoped closures.
+Depends on slice 2 and a major-version branch. Widen the constructor/property type without renaming it. Add closure dispatch through the binder with the constructed class as the private diagnostic owner, generalize the reflector accepted by unwrapping, preserve the private context store and merge rule, and reject explicit integer keys or first-parameter-name replacement before unwrapping. Preserve ambient suffix positions and the existing named-key unwrapper interface. Keep string validation and existing method invocation behavior. Exercise the complete mapped-request path with named-function callbacks as well as class-scoped closures.
 
 Done when callbacks run after property injection, repeated hooks execute in order, returning an object cannot replace the entry, and method-based setup and request source guards retain their previous results.
 
@@ -382,17 +423,17 @@ Done when callbacks run after property injection, repeated hooks execute in orde
 
 Files: `src/Resolver/Parameter/AutowireByTypeResolver.php`; a narrow helper in `src/Resolver/TypeHints.php` if needed; `tests/Contract/UnionAutowiringContractTest.php`; `ClassDefinition` contract tests.
 
-Implement candidate collection and cardinality checking before `get()`, and selected-candidate compatibility validation in the shared resolver after it. Keep `supports()` independent of mutable service availability, and keep priority, supplied type-key handling, intersection/DNF behavior and definition opt-in semantics intact. Add stable ambiguity diagnostics, warm-plan mutation and selected-factory-failure cases for reflection creation and explicit constructor/method definitions.
+Depends on §6 and a major-version branch, not on the callback binder or E1. Implement candidate collection and cardinality checking before `get()`, and selected-candidate compatibility validation in the shared resolver after it. Apply existing availability uniformly to `Closure` and other named arms. Keep `supports()` independent of mutable service availability, and keep priority, supplied type-key handling, intersection/DNF behavior and definition opt-in semantics intact. Add stable ambiguity diagnostics, warm-plan mutation and selected-factory-failure cases for reflection creation and explicit constructor/method definitions.
 
 Done when factory counters prove ambiguity performs no candidate `get()`, exactly one candidate is instantiated once, and explicit values/default/null/definition cases obey §6.
 
-### Slice 6 — Publish the migration contract and validate cost
+### Slice 6 — Validate cost, migration and final release packaging
 
-Files: `README.md`; migration documentation; focused additions to existing benchmark harnesses only for new paths.
+Files: `README.md`; migration documentation; focused additions to existing benchmark harnesses only for new paths; `composer.json` and `.github/workflows/ci.yml` for the final supported-platform decision.
 
-Document correct PHP syntax, the property/parameter source distinction, callback scope/lifetime, setup parameter binding, union ambiguity and the actual tested PHP patch floor. Compare ordinary get/make/call/build behavior against a pinned pre-feature commit, plus zero/one/multiple transformations, setup callbacks and union candidate counts. Verify weak-reference lifetime contracts separately from noisy wall-clock timing.
+Documentation and measurements can proceed as their feature slices finish. Document correct PHP syntax, the property/parameter source distinction, callback scope/lifetime, setup parameter binding and subclass migration, and union ambiguity. Compare ordinary get/make/call/build behavior against a pinned pre-feature commit, plus zero/one/multiple transformations, setup callbacks and union candidate counts. Verify weak-reference lifetime contracts separately from noisy wall-clock timing.
 
-Run the applicable CI matrix, current companion-workspace tests and dependency checks. Confirm the released minimum PHP patch passes the engine fixture. Record commands and results; do not infer application throughput from microbenchmarks. Tag/release is a separate action after implementation and gates are complete.
+Only after E1 is resolved, set the verified PHP patch floor and `6.0.x-dev` alias, align the supported-runtime CI, and record the exact tested platform in migration docs. Run the applicable CI matrix, current companion-workspace tests and dependency checks. Confirm that the released minimum passes the engine fixtures. Record commands and results; do not infer application throughput from microbenchmarks. Tag/release is a separate action after implementation and gates are complete. Pending E1 must not be relabeled as production readiness for the affected native forms.
 
 ## 11. Deferred work and bounded decisions
 
@@ -410,6 +451,6 @@ Address the measured repeated autoload issue under the separate [availability pe
 
 ### Settled policies and convergence
 
-The following are proposed normative choices, not unresolved decisions: empty-signature callbacks are allowed; first DI parameter metadata is forbidden; the `Transform` suffix receives no ambient public bag; explicit callback `SetUp::$params` uses string keys with the existing provided-parameter matching rules; standalone property transformation needs a source; only simple unions are autowired; different service IDs remain ambiguous even when aliases converge. If a choice changes, revise its owning contract and acceptance rows before implementing it. E1 and the separate request-to-DTO questions are the remaining blockers.
+The following are normative choices for the proposed target, not unresolved decisions: empty-signature callbacks are allowed; first DI parameter metadata is forbidden and guarded together with the suffix; the `Transform` suffix receives no ambient public bag; explicit callback `SetUp::$params` uses string keys with existing provided-parameter matching rules; standalone property transformation needs a source; only simple unions are autowired; `Closure` uses the same availability rule as other service-type arms; different service IDs remain ambiguous even when aliases converge. If a choice changes, revise its owning contract and acceptance rows before implementing it. E1 blocks the affected platform/release promise, while the separate request-to-DTO questions block that deferred feature only.
 
 After the eventual implementation, compare code, wiring, public migration notes and observed behavior with §§2–9. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.

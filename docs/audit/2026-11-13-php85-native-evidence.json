@@ -1,0 +1,621 @@
+{
+  "schema_version": 1,
+  "source_commit": "71a843082e7850672bc1fef87401e5697d433f66",
+  "src_tree": "a1e173e3bef2dbfe7c2d9370e4bfbece4a31445b",
+  "source_matches_head": true,
+  "binaries": {
+    "php84": {
+      "path": "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+      "version": "8.4.23"
+    },
+    "php85": {
+      "path": "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+      "version": "8.5.8"
+    }
+  },
+  "fixture_environment": {
+    "COMPONENTA_DI_AUTOLOAD": "/workspace/scratch/8f6c1df8ef3b/di/vendor/autoload.php",
+    "COMPONENTA_DI_SOURCE": "/workspace/scratch/8f6c1df8ef3b/di/src"
+  },
+  "fixtures": {
+    "runtime_constant_on_php84.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute(Attribute::TARGET_CLASS)]\nfinal class Callback { public function __construct(public Closure $value) {} }\ndefine('RUNTIME_CALLBACK', static fn(): int => 42);\n#[Callback(RUNTIME_CALLBACK)] final class Target {}\n$attribute = (new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();\necho json_encode(['value' => ($attribute->value)(), 'same_constant' => $attribute->value === RUNTIME_CALLBACK]), \"\\n\";\n",
+    "materialization_identity_and_state.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]\nfinal class Callback { public function __construct(public Closure $value) {} }\nfunction namedCounter(): int { static $value = 0; return ++$value; }\nfinal class Counter {\n    public static function next(): int { static $value = 0; return ++$value; }\n    public const VALUE = static function (): int { static $value = 0; return ++$value; };\n}\n#[Callback(static function (): int { static $value = 0; return ++$value; })]\n#[Callback(namedCounter(...))]\n#[Callback(Counter::next(...))]\n#[Callback(Counter::VALUE)]\nfinal class Target {}\n$observations = [];\nforeach ((new ReflectionClass(Target::class))->getAttributes() as $index => $attribute) {\n    $callbacks = [$attribute->getArguments()[0], $attribute->getArguments()[0], $attribute->newInstance()->value, $attribute->newInstance()->value];\n    $references = array_map(WeakReference::create(...), $callbacks);\n    $observations[['inline', 'named', 'static_method', 'constant'][$index]] = [\n        'all_share_identity' => $callbacks[0] === $callbacks[1] && $callbacks[1] === $callbacks[2] && $callbacks[2] === $callbacks[3],\n        'distinct_wrappers' => count(array_unique(array_map(spl_object_id(...), $callbacks))),\n        'values' => [$callbacks[0](), $callbacks[0](), $callbacks[1](), $callbacks[2](), $callbacks[3]()],\n    ];\n    unset($callbacks);\n    gc_collect_cycles();\n    $observations[['inline', 'named', 'static_method', 'constant'][$index]]['alive_after_release'] = array_map(static fn(WeakReference $reference): bool => $reference->get() !== null, $references);\n}\necho json_encode($observations), \"\\n\";\n",
+    "lexical_private_scope.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_PROPERTY | Attribute::IS_REPEATABLE)]\nfinal class Callback { public function __construct(public Closure $value) {} }\n#[Callback(self::secret(...))]\n#[Callback(static function (): string { return self::secret(); })]\nclass DeclaringScope {\n    #[Callback(self::secret(...))] public string $value;\n    private static function secret(): string { return __CLASS__; }\n}\nfinal class InheritedScope extends DeclaringScope {}\n$values = [];\nforeach ((new ReflectionClass(DeclaringScope::class))->getAttributes() as $attribute) {\n    $callback = $attribute->newInstance()->value;\n    $reflection = new ReflectionFunction($callback);\n    $values[] = [$callback(), $reflection->getClosureScopeClass()?->getName(), $reflection->getClosureThis()];\n}\n$inherited = (new ReflectionProperty(InheritedScope::class, 'value'))->getAttributes()[0]->newInstance()->value;\necho json_encode(['class_attributes' => $values, 'inherited_property' => $inherited()]), \"\\n\";\n",
+    "trait_relative_attributes.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute(Attribute::TARGET_PROPERTY)]\nfinal class Callback { public function __construct(public Closure $value) {} }\ntrait RelativeCallbacks {\n    #[Callback(self::who(...))] public string $firstClass;\n    #[Callback(static function (): string { return self::who(); })] public string $inline;\n}\nfinal class First { use RelativeCallbacks; public static function who(): string { return 'first'; } }\nfinal class Second { use RelativeCallbacks; public static function who(): string { return 'second'; } }\n$actual = [];\nforeach (['firstClass', 'inline'] as $property) {\n    foreach ([First::class, Second::class] as $class) {\n        $callback = (new ReflectionProperty($class, $property))->getAttributes()[0]->newInstance()->value;\n        $actual[$property][] = $callback();\n    }\n}\necho json_encode(['actual' => $actual, 'required_per_consumer' => ['first', 'second'], 'fcc_engine_defect_reproduced' => $actual['firstClass'] !== ['first', 'second']]), \"\\n\";\n",
+    "trait_parent_attributes.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute(Attribute::TARGET_PROPERTY)]\nfinal class Callback { public function __construct(public Closure $value) {} }\nclass FirstParent { public static function who(): string { return 'first-parent'; } }\nclass SecondParent { public static function who(): string { return 'second-parent'; } }\ntrait ParentCallback { #[Callback(parent::who(...))] public string $value; }\nfinal class First extends FirstParent { use ParentCallback; }\nfinal class Second extends SecondParent { use ParentCallback; }\n$actual = [];\nforeach ([First::class, Second::class] as $class) {\n    $callback = (new ReflectionProperty($class, 'value'))->getAttributes()[0]->newInstance()->value;\n    $actual[] = $callback();\n}\necho json_encode(['actual' => $actual, 'required_per_consumer' => ['first-parent', 'second-parent']]), \"\\n\";\n",
+    "trait_private_scope_leak.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute(Attribute::TARGET_PROPERTY)]\nfinal class Callback { public function __construct(public Closure $value) {} }\ntrait PrivateCallback { #[Callback(First::secret(...))] public string $value; }\nfinal class First { use PrivateCallback; private static function secret(): string { return 'private-first'; } }\nfinal class Second { use PrivateCallback; }\n$actual = [];\nforeach ([First::class, Second::class] as $class) {\n    try {\n        $callback = (new ReflectionProperty($class, 'value'))->getAttributes()[0]->newInstance()->value;\n        $actual[] = ['value' => $callback()];\n    } catch (Error $failure) {\n        $actual[] = ['error' => $failure::class, 'message' => $failure->getMessage()];\n    }\n}\necho json_encode(['actual' => $actual, 'required_second' => 'visibility Error']), \"\\n\";\n",
+    "invalid_arrow.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute] final class Callback { public function __construct(public Closure $value) {} }\n#[Callback(static fn(): int => 1)] final class Target {}\necho \"compiled\\n\";\n(new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();\n",
+    "invalid_capture.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute] final class Callback { public function __construct(public Closure $value) {} }\n$value = 1;\n#[Callback(static function () use ($value): int { return $value; })] final class Target {}\necho \"compiled\\n\";\n(new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();\n",
+    "invalid_nonstatic_literal.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute] final class Callback { public function __construct(public Closure $value) {} }\n#[Callback(function (): int { return 1; })] final class Target {}\necho \"compiled\\n\";\n(new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();\n",
+    "invalid_dynamic_reference.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute] final class Callback { public function __construct(public Closure $value) {} }\nfinal class Helper { public static function value(): int { return 1; } }\n#[Callback([Helper::class, 'value'](...))] final class Target {}\necho \"compiled\\n\";\n(new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();\n",
+    "invalid_magic_reference.php": "<?php\ndeclare(strict_types=1);\n\n#[Attribute] final class Callback { public function __construct(public Closure $value) {} }\nfinal class Helper { public static function __callStatic(string $method, array $arguments): int { return 1; } }\n#[Callback(Helper::missing(...))] final class Target {}\necho \"compiled\\n\";\n(new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();\n",
+    "property_widening_subclass_break.php": "<?php\ndeclare(strict_types=1);\n\nreadonly class ParentAttribute { public function __construct(public string|Closure $method) {} }\nreadonly class ExistingChild extends ParentAttribute { public string $method; }\necho \"compiled\\n\";\n",
+    "init_current_cached.php": "<?php\ndeclare(strict_types=1);\n\nrequire getenv('COMPONENTA_DI_AUTOLOAD');\n$sourceDirectory = realpath(getenv('COMPONENTA_DI_SOURCE'));\n$sourceMap = [\n    'Componenta\\\\DI\\\\Container' => [\n        'actual' => realpath((new ReflectionClass(Componenta\\DI\\Container::class))->getFileName()),\n        'expected' => $sourceDirectory . '/Container.php',\n    ],\n    'Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible' => [\n        'actual' => realpath((new ReflectionFunction('Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible'))->getFileName()),\n        'expected' => $sourceDirectory . '/Internal/functions.php',\n    ],\n];\nforeach ($sourceMap as $symbol => &$mapping) {\n    $mapping['verified'] = $sourceDirectory !== false && $mapping['actual'] === $mapping['expected'];\n    if (!$mapping['verified']) {\n        throw new RuntimeException('Unexpected DI source mapping for ' . $symbol . ': ' . json_encode($mapping));\n    }\n}\nunset($mapping);\n\nuse Componenta\\DI\\Attribute\\Init;\nuse Componenta\\DI\\Attribute\\Lazy;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeCompositionRuleInterface;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeDefinition;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeSet;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeUsage;\nuse Componenta\\DI\\Tests\\Support\\ContainerBuilder;\n#[Attribute] final class UnusedMarker {}\nfinal class NoOpRule implements AttributeCompositionRuleInterface { public function validate(AttributeUsage $attribute, AttributeSet $set): void {} }\nfinal class Dependency { public string $label = 'injected'; }\nfunction namedCounter(): int { static $count = 0; return ++$count; }\nfinal class SharedCounter { public const VALUE = static function (): int { static $count = 0; return ++$count; }; }\nfinal class Target {\n    #[Init(static function (): int { static $count = 0; return ++$count; })] public int $inline;\n    #[Init(namedCounter(...))] public int $named;\n    #[Init(SharedCounter::VALUE)] public int $constant;\n    #[Init(self::makeDependency(...))] public readonly string $dependency;\n    private static function makeDependency(Dependency $dependency): string { return $dependency->label; }\n}\nfinal class LifetimeTarget {\n    #[Init(static function (): WeakReference { static $held; $held ??= new stdClass(); return WeakReference::create($held); })]\n    public WeakReference $reference;\n}\nfinal class Calls { public static int $count = 0; }\n#[Lazy] final class Delayed {\n    #[Init(static function (): string { ++Calls::$count; return 'initialized'; })] public string $value;\n}\n$builder = new ContainerBuilder();\nif (false) { $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()])); }\n$container = $builder->build();\n$values = [];\nfor ($i = 0; $i < 3; ++$i) {\n    $value = $container->make(Target::class);\n    $values[] = [$value->inline, $value->named, $value->constant, $value->dependency];\n}\n$first = $container->get(Target::class);\n$second = $container->get(Target::class);\n$lifetime = $container->make(LifetimeTarget::class);\n$delayed = $container->make(Delayed::class);\n$before = Calls::$count;\n$value = $delayed->value;\necho json_encode(['source_map' => $sourceMap, 'make_values' => $values, 'get_shared_identity' => $first === $second, 'inline_static_object_retained' => $lifetime->reference->get() !== null, 'lazy' => [$before, $value, Calls::$count]]), \"\\n\";\n",
+    "init_current_uncached.php": "<?php\ndeclare(strict_types=1);\n\nrequire getenv('COMPONENTA_DI_AUTOLOAD');\n$sourceDirectory = realpath(getenv('COMPONENTA_DI_SOURCE'));\n$sourceMap = [\n    'Componenta\\\\DI\\\\Container' => [\n        'actual' => realpath((new ReflectionClass(Componenta\\DI\\Container::class))->getFileName()),\n        'expected' => $sourceDirectory . '/Container.php',\n    ],\n    'Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible' => [\n        'actual' => realpath((new ReflectionFunction('Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible'))->getFileName()),\n        'expected' => $sourceDirectory . '/Internal/functions.php',\n    ],\n];\nforeach ($sourceMap as $symbol => &$mapping) {\n    $mapping['verified'] = $sourceDirectory !== false && $mapping['actual'] === $mapping['expected'];\n    if (!$mapping['verified']) {\n        throw new RuntimeException('Unexpected DI source mapping for ' . $symbol . ': ' . json_encode($mapping));\n    }\n}\nunset($mapping);\n\nuse Componenta\\DI\\Attribute\\Init;\nuse Componenta\\DI\\Attribute\\Lazy;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeCompositionRuleInterface;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeDefinition;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeSet;\nuse Componenta\\DI\\Attribute\\Composition\\AttributeUsage;\nuse Componenta\\DI\\Tests\\Support\\ContainerBuilder;\n#[Attribute] final class UnusedMarker {}\nfinal class NoOpRule implements AttributeCompositionRuleInterface { public function validate(AttributeUsage $attribute, AttributeSet $set): void {} }\nfinal class Dependency { public string $label = 'injected'; }\nfunction namedCounter(): int { static $count = 0; return ++$count; }\nfinal class SharedCounter { public const VALUE = static function (): int { static $count = 0; return ++$count; }; }\nfinal class Target {\n    #[Init(static function (): int { static $count = 0; return ++$count; })] public int $inline;\n    #[Init(namedCounter(...))] public int $named;\n    #[Init(SharedCounter::VALUE)] public int $constant;\n    #[Init(self::makeDependency(...))] public readonly string $dependency;\n    private static function makeDependency(Dependency $dependency): string { return $dependency->label; }\n}\nfinal class LifetimeTarget {\n    #[Init(static function (): WeakReference { static $held; $held ??= new stdClass(); return WeakReference::create($held); })]\n    public WeakReference $reference;\n}\nfinal class Calls { public static int $count = 0; }\n#[Lazy] final class Delayed {\n    #[Init(static function (): string { ++Calls::$count; return 'initialized'; })] public string $value;\n}\n$builder = new ContainerBuilder();\nif (true) { $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()])); }\n$container = $builder->build();\n$values = [];\nfor ($i = 0; $i < 3; ++$i) {\n    $value = $container->make(Target::class);\n    $values[] = [$value->inline, $value->named, $value->constant, $value->dependency];\n}\n$first = $container->get(Target::class);\n$second = $container->get(Target::class);\n$lifetime = $container->make(LifetimeTarget::class);\n$delayed = $container->make(Delayed::class);\n$before = Calls::$count;\n$value = $delayed->value;\necho json_encode(['source_map' => $sourceMap, 'make_values' => $values, 'get_shared_identity' => $first === $second, 'inline_static_object_retained' => $lifetime->reference->get() !== null, 'lazy' => [$before, $value, Calls::$count]]), \"\\n\";\n"
+  },
+  "results": [
+    {
+      "case": "runtime_constant_on_php84",
+      "fixture": "runtime_constant_on_php84.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/runtime_constant_on_php84.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"value\":42,\"same_constant\":true}\n",
+      "stderr": "",
+      "observed": {
+        "value": 42,
+        "same_constant": true
+      }
+    },
+    {
+      "case": "runtime_constant_on_php84",
+      "fixture": "runtime_constant_on_php84.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/runtime_constant_on_php84.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"value\":42,\"same_constant\":true}\n",
+      "stderr": "",
+      "observed": {
+        "value": 42,
+        "same_constant": true
+      }
+    },
+    {
+      "case": "materialization_identity_and_state",
+      "fixture": "materialization_identity_and_state.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/materialization_identity_and_state.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/materialization_identity_and_state.php on line 9\n",
+      "stderr": ""
+    },
+    {
+      "case": "materialization_identity_and_state",
+      "fixture": "materialization_identity_and_state.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/materialization_identity_and_state.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"inline\":{\"all_share_identity\":false,\"distinct_wrappers\":4,\"values\":[1,2,1,1,1],\"alive_after_release\":[false,false,false,false]},\"named\":{\"all_share_identity\":false,\"distinct_wrappers\":4,\"values\":[1,2,3,4,5],\"alive_after_release\":[false,false,false,false]},\"static_method\":{\"all_share_identity\":false,\"distinct_wrappers\":4,\"values\":[1,2,3,4,5],\"alive_after_release\":[false,false,false,false]},\"constant\":{\"all_share_identity\":true,\"distinct_wrappers\":1,\"values\":[1,2,3,4,5],\"alive_after_release\":[true,true,true,true]}}\n",
+      "stderr": "",
+      "observed": {
+        "inline": {
+          "all_share_identity": false,
+          "distinct_wrappers": 4,
+          "values": [
+            1,
+            2,
+            1,
+            1,
+            1
+          ],
+          "alive_after_release": [
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "named": {
+          "all_share_identity": false,
+          "distinct_wrappers": 4,
+          "values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "alive_after_release": [
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "static_method": {
+          "all_share_identity": false,
+          "distinct_wrappers": 4,
+          "values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "alive_after_release": [
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "constant": {
+          "all_share_identity": true,
+          "distinct_wrappers": 1,
+          "values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "alive_after_release": [
+            true,
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    },
+    {
+      "case": "lexical_private_scope",
+      "fixture": "lexical_private_scope.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/lexical_private_scope.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/lexical_private_scope.php on line 8\n",
+      "stderr": ""
+    },
+    {
+      "case": "lexical_private_scope",
+      "fixture": "lexical_private_scope.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/lexical_private_scope.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"class_attributes\":[[\"DeclaringScope\",\"DeclaringScope\",null],[\"DeclaringScope\",\"DeclaringScope\",null]],\"inherited_property\":\"DeclaringScope\"}\n",
+      "stderr": "",
+      "observed": {
+        "class_attributes": [
+          [
+            "DeclaringScope",
+            "DeclaringScope",
+            null
+          ],
+          [
+            "DeclaringScope",
+            "DeclaringScope",
+            null
+          ]
+        ],
+        "inherited_property": "DeclaringScope"
+      }
+    },
+    {
+      "case": "trait_relative_attributes",
+      "fixture": "trait_relative_attributes.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/trait_relative_attributes.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/trait_relative_attributes.php on line 7\n",
+      "stderr": ""
+    },
+    {
+      "case": "trait_relative_attributes",
+      "fixture": "trait_relative_attributes.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/trait_relative_attributes.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"actual\":{\"firstClass\":[\"first\",\"first\"],\"inline\":[\"first\",\"second\"]},\"required_per_consumer\":[\"first\",\"second\"],\"fcc_engine_defect_reproduced\":true}\n",
+      "stderr": "",
+      "observed": {
+        "actual": {
+          "firstClass": [
+            "first",
+            "first"
+          ],
+          "inline": [
+            "first",
+            "second"
+          ]
+        },
+        "required_per_consumer": [
+          "first",
+          "second"
+        ],
+        "fcc_engine_defect_reproduced": true
+      }
+    },
+    {
+      "case": "trait_parent_attributes",
+      "fixture": "trait_parent_attributes.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/trait_parent_attributes.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/trait_parent_attributes.php on line 8\n",
+      "stderr": ""
+    },
+    {
+      "case": "trait_parent_attributes",
+      "fixture": "trait_parent_attributes.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/trait_parent_attributes.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"actual\":[\"first-parent\",\"first-parent\"],\"required_per_consumer\":[\"first-parent\",\"second-parent\"]}\n",
+      "stderr": "",
+      "observed": {
+        "actual": [
+          "first-parent",
+          "first-parent"
+        ],
+        "required_per_consumer": [
+          "first-parent",
+          "second-parent"
+        ]
+      }
+    },
+    {
+      "case": "trait_private_scope_leak",
+      "fixture": "trait_private_scope_leak.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/trait_private_scope_leak.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/trait_private_scope_leak.php on line 6\n",
+      "stderr": ""
+    },
+    {
+      "case": "trait_private_scope_leak",
+      "fixture": "trait_private_scope_leak.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/trait_private_scope_leak.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"actual\":[{\"value\":\"private-first\"},{\"value\":\"private-first\"}],\"required_second\":\"visibility Error\"}\n",
+      "stderr": "",
+      "observed": {
+        "actual": [
+          {
+            "value": "private-first"
+          },
+          {
+            "value": "private-first"
+          }
+        ],
+        "required_second": "visibility Error"
+      }
+    },
+    {
+      "case": "invalid_arrow",
+      "fixture": "invalid_arrow.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_arrow.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_arrow.php on line 5\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_arrow",
+      "fixture": "invalid_arrow.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_arrow.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_arrow.php on line 5\nStack trace:\n#0 {main}\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_capture",
+      "fixture": "invalid_capture.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_capture.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_capture.php on line 6\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_capture",
+      "fixture": "invalid_capture.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_capture.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Cannot use(...) variables in constant expression in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_capture.php on line 6\nStack trace:\n#0 {main}\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_nonstatic_literal",
+      "fixture": "invalid_nonstatic_literal.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_nonstatic_literal.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_nonstatic_literal.php on line 5\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_nonstatic_literal",
+      "fixture": "invalid_nonstatic_literal.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_nonstatic_literal.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Closures in constant expressions must be static in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_nonstatic_literal.php on line 5\nStack trace:\n#0 {main}\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_dynamic_reference",
+      "fixture": "invalid_dynamic_reference.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_dynamic_reference.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_dynamic_reference.php on line 6\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_dynamic_reference",
+      "fixture": "invalid_dynamic_reference.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_dynamic_reference.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Cannot use dynamic function name in constant expression in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_dynamic_reference.php on line 6\nStack trace:\n#0 {main}\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_magic_reference",
+      "fixture": "invalid_magic_reference.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_magic_reference.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_magic_reference.php on line 6\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid_magic_reference",
+      "fixture": "invalid_magic_reference.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/invalid_magic_reference.php"
+      ],
+      "exit_code": 255,
+      "stdout": "compiled\n\nFatal error: Uncaught Error: Creating a callable for the magic __callStatic() method is not supported in constant expressions in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_magic_reference.php:6\nStack trace:\n#0 /tmp/componenta-di-native-callbacks-by4jgidt/invalid_magic_reference.php(8): ReflectionAttribute->newInstance()\n#1 {main}\n  thrown in /tmp/componenta-di-native-callbacks-by4jgidt/invalid_magic_reference.php on line 6\n",
+      "stderr": ""
+    },
+    {
+      "case": "property_widening_subclass_break",
+      "fixture": "property_widening_subclass_break.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/property_widening_subclass_break.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Type of ExistingChild::$method must be Closure|string (as in class ParentAttribute) in /tmp/componenta-di-native-callbacks-by4jgidt/property_widening_subclass_break.php on line 5\n",
+      "stderr": ""
+    },
+    {
+      "case": "property_widening_subclass_break",
+      "fixture": "property_widening_subclass_break.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/property_widening_subclass_break.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Type of ExistingChild::$method must be Closure|string (as in class ParentAttribute) in /tmp/componenta-di-native-callbacks-by4jgidt/property_widening_subclass_break.php on line 5\nStack trace:\n#0 {main}\n",
+      "stderr": ""
+    },
+    {
+      "case": "init_current_cached",
+      "fixture": "init_current_cached.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/init_current_cached.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/init_current_cached.php on line 35\n",
+      "stderr": ""
+    },
+    {
+      "case": "init_current_cached",
+      "fixture": "init_current_cached.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/init_current_cached.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"source_map\":{\"Componenta\\\\DI\\\\Container\":{\"actual\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Container.php\",\"expected\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Container.php\",\"verified\":true},\"Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible\":{\"actual\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Internal\\/functions.php\",\"expected\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Internal\\/functions.php\",\"verified\":true}},\"make_values\":[[1,1,1,\"injected\"],[1,2,2,\"injected\"],[1,3,3,\"injected\"]],\"get_shared_identity\":true,\"inline_static_object_retained\":false,\"lazy\":[0,\"initialized\",1]}\n",
+      "stderr": "",
+      "observed": {
+        "source_map": {
+          "Componenta\\DI\\Container": {
+            "actual": "/workspace/scratch/8f6c1df8ef3b/di/src/Container.php",
+            "expected": "/workspace/scratch/8f6c1df8ef3b/di/src/Container.php",
+            "verified": true
+          },
+          "Componenta\\DI\\Internal\\is_entry_class_eligible": {
+            "actual": "/workspace/scratch/8f6c1df8ef3b/di/src/Internal/functions.php",
+            "expected": "/workspace/scratch/8f6c1df8ef3b/di/src/Internal/functions.php",
+            "verified": true
+          }
+        },
+        "make_values": [
+          [
+            1,
+            1,
+            1,
+            "injected"
+          ],
+          [
+            1,
+            2,
+            2,
+            "injected"
+          ],
+          [
+            1,
+            3,
+            3,
+            "injected"
+          ]
+        ],
+        "get_shared_identity": true,
+        "inline_static_object_retained": false,
+        "lazy": [
+          0,
+          "initialized",
+          1
+        ]
+      }
+    },
+    {
+      "case": "init_current_uncached",
+      "fixture": "init_current_uncached.php",
+      "runtime": "php84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/init_current_uncached.php"
+      ],
+      "exit_code": 255,
+      "stdout": "\nFatal error: Constant expression contains invalid operations in /tmp/componenta-di-native-callbacks-by4jgidt/init_current_uncached.php on line 35\n",
+      "stderr": ""
+    },
+    {
+      "case": "init_current_uncached",
+      "fixture": "init_current_uncached.php",
+      "runtime": "php85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/tmp/componenta-di-native-callbacks-by4jgidt/init_current_uncached.php"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"source_map\":{\"Componenta\\\\DI\\\\Container\":{\"actual\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Container.php\",\"expected\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Container.php\",\"verified\":true},\"Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible\":{\"actual\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Internal\\/functions.php\",\"expected\":\"\\/workspace\\/scratch\\/8f6c1df8ef3b\\/di\\/src\\/Internal\\/functions.php\",\"verified\":true}},\"make_values\":[[1,1,1,\"injected\"],[1,2,2,\"injected\"],[1,3,3,\"injected\"]],\"get_shared_identity\":true,\"inline_static_object_retained\":false,\"lazy\":[0,\"initialized\",1]}\n",
+      "stderr": "",
+      "observed": {
+        "source_map": {
+          "Componenta\\DI\\Container": {
+            "actual": "/workspace/scratch/8f6c1df8ef3b/di/src/Container.php",
+            "expected": "/workspace/scratch/8f6c1df8ef3b/di/src/Container.php",
+            "verified": true
+          },
+          "Componenta\\DI\\Internal\\is_entry_class_eligible": {
+            "actual": "/workspace/scratch/8f6c1df8ef3b/di/src/Internal/functions.php",
+            "expected": "/workspace/scratch/8f6c1df8ef3b/di/src/Internal/functions.php",
+            "verified": true
+          }
+        },
+        "make_values": [
+          [
+            1,
+            1,
+            1,
+            "injected"
+          ],
+          [
+            1,
+            2,
+            2,
+            "injected"
+          ],
+          [
+            1,
+            3,
+            3,
+            "injected"
+          ]
+        ],
+        "get_shared_identity": true,
+        "inline_static_object_retained": false,
+        "lazy": [
+          0,
+          "initialized",
+          1
+        ]
+      }
+    }
+  ],
+  "limits": [
+    "Native syntax failures are isolated in subprocesses; exit 255 alone is not a DI defect.",
+    "Trait-relative first-class callable behavior is recorded as an upstream engine defect, with required and observed outcomes separated.",
+    "The PHP 8.5.8 run cannot establish the minimum fixed stable PHP 8.5 patch.",
+    "No OPcache/JIT matrix or throughput benchmark is performed by this script."
+  ]
+}
