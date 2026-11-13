@@ -3,8 +3,6 @@
 declare(strict_types=1);
 
 namespace {
-    use Composer\Autoload\ClassLoader;
-
     $autoload = getenv('COMPONENTA_DI_BENCH_AUTOLOAD');
     $source = getenv('COMPONENTA_DI_BENCH_SOURCE');
 
@@ -22,12 +20,7 @@ namespace {
         throw new RuntimeException('Benchmark DI source directory does not exist: ' . $source);
     }
 
-    $loader = require $autoload;
-    if (!$loader instanceof ClassLoader) {
-        throw new RuntimeException('Composer autoloader is unavailable.');
-    }
-
-    $loader->setPsr4('Componenta\\DI\\', rtrim($source, '/\\') . '/');
+    $loader = (require __DIR__ . '/autoload.php')($autoload, $source);
 }
 
 namespace Componenta\DI\Benchmarks\FactoryVsReflection {
