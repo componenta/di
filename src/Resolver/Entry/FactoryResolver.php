@@ -251,6 +251,15 @@ final class FactoryResolver implements DefinitionResolverInterface
             $definition instanceof ConfiguredFactoryDefinition => $definition->factory,
             default => throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class),
         };
+        if (is_array($factory)) {
+            // Readonly arrays can still contain caller-owned references. Snapshot
+            // routing slots while preserving the factory object's business state.
+            $snapshot = [];
+            foreach ($factory as $key => $value) {
+                $snapshot[$key] = $value;
+            }
+            $factory = $snapshot;
+        }
         $validateResolved = is_string($factory) || !is_callable($factory);
         FactorySpecificationValidator::assertValid($id, $factory);
         return new PreparedFactoryDefinition($factory, $validateResolved);
