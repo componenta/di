@@ -34,7 +34,12 @@ final class CallableExecutor implements CallableExecutorInterface
     public function call(mixed $callable, array $params = []): mixed
     {
         try {
-            $resolved = $this->callableResolver->resolve($callable);
+            $resolved = $this->callableResolver->resolve(
+                is_array($callable) ? self::snapshotCallable($callable) : $callable,
+            );
+            if (is_array($resolved)) {
+                $resolved = self::snapshotCallable($resolved);
+            }
             $plan = $resolved instanceof PreparedCallable ? null : $this->plan($resolved);
             $arguments = $plan === null
                 ? ResolutionMetadata::publicParameters($params)
@@ -59,6 +64,24 @@ final class CallableExecutor implements CallableExecutorInterface
         } catch (Throwable $e) {
             throw InvalidCallableException::forValue($callable, $e);
         }
+    }
+
+    /**
+     * @template T of array<array-key,mixed>
+     * @param T $callable
+     * @return T
+     */
+    private static function snapshotCallable(array $callable): array
+    {
+        // Argument resolution may mutate caller-owned reference slots. Keep
+        // the callable used for reflection and invocation on the same route.
+        $snapshot = [];
+        foreach ($callable as $key => $value) {
+            $snapshot[$key] = $value;
+        }
+
+        /** @var T $snapshot */
+        return $snapshot;
     }
 
     /**
