@@ -34,21 +34,34 @@ final readonly class AttributePlan
     /** @param class-string<AttributeCapabilityInterface> $capability */
     public function one(string $capability): ?AttributeUsage
     {
-        $usages = $this->all($capability);
-        if (count($usages) > 1) {
+        $first = null;
+        $count = 0;
+        foreach ($this->usages as $usage) {
+            if ($usage->hasCapability($capability)) {
+                $first ??= $usage;
+                ++$count;
+            }
+        }
+        if ($count > 1) {
             throw new AttributeCompositionException(sprintf(
                 'Capability "%s" is not singular in this plan.',
                 $capability,
             ));
         }
 
-        return $usages[0] ?? null;
+        return $first;
     }
 
     /** @param class-string<AttributeCapabilityInterface> $capability */
     public function has(string $capability): bool
     {
-        return $this->all($capability) !== [];
+        $found = false;
+        foreach ($this->usages as $usage) {
+            if ($usage->hasCapability($capability)) {
+                $found = true;
+            }
+        }
+        return $found;
     }
 
     /**

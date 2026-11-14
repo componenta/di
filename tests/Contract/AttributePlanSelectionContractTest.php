@@ -72,7 +72,7 @@ test('capability selection preserves explicit attribute ordering constraints', f
         FirstSelectionAttribute::class,
         MiddleSelectionAttribute::class,
         LastSelectionAttribute::class,
-    ]);
+    ])->and($plan->one(SecondSelectionCapability::class))->toBe($plan->usages[1]);
 });
 
 test('attribute family selection preserves interleaved declaration order', function (): void {

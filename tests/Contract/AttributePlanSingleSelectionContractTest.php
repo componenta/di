@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
@@ -30,6 +31,31 @@ function planSelectionTwo(#[PlanSelectionTag, PlanSelectionTag] mixed $value): m
     return $value;
 }
 
+interface PlanSelectionRootCapability extends AttributeCapabilityInterface {}
+interface PlanSelectionDerivedCapability extends PlanSelectionRootCapability {}
+
+final class PlanSelectionNativeArgument
+{
+    public static int $constructions = 0;
+
+    public function __construct()
+    {
+        ++self::$constructions;
+    }
+}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class PlanSelectionNativeTag
+{
+    public function __construct(public PlanSelectionNativeArgument $argument) {}
+}
+
+function planSelectionNative(
+    #[PlanSelectionNativeTag(new PlanSelectionNativeArgument())] mixed $value,
+): mixed {
+    return $value;
+}
+
 test('a plan exposes absence and one usage without inventing a default selection', function (): void {
     $registry = new AttributeDefinitionRegistry();
     $definition = new AttributeDefinition(PlanSelectionTag::class, capabilities: [ValueTransformer::class]);
@@ -42,7 +68,9 @@ test('a plan exposes absence and one usage without inventing a default selection
         ->and($empty->has(ValueTransformer::class))->toBeFalse()
         ->and($single->one(ValueTransformer::class))->toBe($single->all(ValueTransformer::class)[0])
         ->and($single->one(ValueTransformer::class)?->definition)->toBe($definition)
-        ->and($single->one(ValueProvider::class))->toBeNull();
+        ->and($single->one(ValueProvider::class))->toBeNull()
+        ->and($single->has(ValueTransformer::class))->toBeTrue()
+        ->and($single->has(ValueProvider::class))->toBeFalse();
 });
 
 test('singular plan selection refuses two usages even when the capability permits repetition', function (): void {
@@ -61,4 +89,44 @@ test('extension phases retain their stable serialized identifiers', function ():
         AttributePhase::AfterInstantiation->value,
         AttributePhase::Both->value,
     ])->toBe([100, 200, 300]);
+});
+
+test('capability selection observes a newly loaded query alias without evaluating native arguments', function (): void {
+    PlanSelectionNativeArgument::$constructions = 0;
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(
+        PlanSelectionNativeTag::class,
+        capabilities: [PlanSelectionDerivedCapability::class],
+    ));
+    $target = (new ReflectionFunction(__NAMESPACE__ . '\\planSelectionNative'))->getParameters()[0];
+    $plan = (new AttributePlanBuilder($registry))->build($target);
+    $usage = $plan->usages[0];
+    /** @var class-string<PlanSelectionRootCapability> $alias */
+    $alias = __NAMESPACE__ . '\\LatePlanSelectionCapability' . bin2hex(random_bytes(8));
+    $autoloads = 0;
+    $loader = static function (string $requested) use ($alias, &$autoloads): void {
+        if ($requested === $alias) {
+            ++$autoloads;
+            class_alias(PlanSelectionRootCapability::class, $alias);
+        }
+    };
+    spl_autoload_register($loader, true, true);
+
+    try {
+        expect($plan->has(PlanSelectionRootCapability::class))->toBeTrue()
+            ->and($plan->one(PlanSelectionRootCapability::class))->toBe($usage)
+            ->and($plan->has($alias))->toBeFalse()
+            ->and($plan->one($alias))->toBeNull()
+            ->and($autoloads)->toBe(0)
+            ->and(PlanSelectionNativeArgument::$constructions)->toBe(0);
+
+        expect(interface_exists($alias))->toBeTrue()
+            ->and($plan->has($alias))->toBeTrue()
+            ->and($plan->one($alias))->toBe($usage)
+            ->and($autoloads)->toBe(1)
+            ->and(PlanSelectionNativeArgument::$constructions)->toBe(0);
+    } finally {
+        spl_autoload_unregister($loader);
+        PlanSelectionNativeArgument::$constructions = 0;
+    }
 });
