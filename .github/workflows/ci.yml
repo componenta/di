@@ -5,6 +5,7 @@ on:
     branches:
       - v5
       - main
+      - 'refactor/di6-*'
   pull_request:
     branches:
       - v5
@@ -13,6 +14,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: di-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   USE_CONFIG_V3_WORKSPACE: ${{ github.ref == 'refs/heads/v5' || github.base_ref == 'v5' || github.ref == 'refs/heads/main' || github.base_ref == 'main' }}

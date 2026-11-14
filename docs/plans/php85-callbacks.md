@@ -17,7 +17,7 @@ The recovered design discussions from August 13 and September 24–25, 2026, and
 - `SetUp` may receive a callback whose first argument is the constructed instance; DI supplies further dependencies.
 - A repeatable `Transform` attribute handles value transformation without adding a callback option to every source attribute.
 - Attribute-facing callbacks use `Closure`; existing runtime callable representations remain supported.
-- Existing constructor argument names and ordering remain compatible. Optional additions, if needed elsewhere, go last; callers must not supply placeholder `null` arguments.
+- Existing public attribute constructor argument names and ordering remain compatible. Optional attribute arguments, if needed elsewhere, go last; callers must not supply placeholder `null` arguments. Infrastructure constructor migrations in this major are specified separately.
 - DI 6 moves to PHP 8.5. Union resolution must choose exactly one available service type and reject ambiguity.
 - `Init` already accepts a callable. Request-to-DTO transformation is a separate possible follow-up.
 
@@ -216,6 +216,8 @@ Introduce one internal helper, `Internal\AttributeCallbackInvoker`, that owns ca
 
 The ordinary `resolvePrepared()` entry point must use the same loop with an empty prefix. Do not copy the parameter-resolution loop, use hidden special keys in the public context, or synthesize a wrapper closure with copied attributes. `ParameterResolutionContext` already supports initial resolved state. `PreparedCallable` already prevents a second DI pass and exposes the original callable to compliant decorators.
 
+The shared internal helper is constructed as `AttributeCallbackInvoker(ParametersResolver $parameters, CallableInvokerInterface $invoker)` and exposes `invoke(Closure $callback, mixed $argument, array $providedParameters = [], ?string $diagnosticOwner = null): mixed`. `ContainerFactory` creates one helper for `TransformHandler` and `SetUpRunner`, using the container as its invoker so existing decorators remain effective. The helper is not a new public service registration and stores no invocation closures or values.
+
 The new seam is an internal operation on `ParametersResolver`, not a new extension interface:
 
 ```php
@@ -356,6 +358,8 @@ A bounded check of the [released `php-8.5.12` source](https://github.com/php/php
 | Request-to-DTO callback | Blocked independently by §11's semantic decisions. |
 
 Compatibility review must cover existing `SetUp` subclasses and named arguments, `Init` string/array/invokable inputs, extension handler definitions, decorated `CallableInvokerInterface` services, companion package constraints, and applications enabling `ClassDefinition` autowiring. Use the actual consuming packages' manifests and test suites before proposing any coordinated version bumps. No unrelated package release is required just to add syntax-aware tests here.
+
+Direct construction of the infrastructure handler `SetUpRunner` changes in this major: its constructor takes `CallableInvokerInterface`, `ObjectResolutionParameterStore`, then the shared `AttributeCallbackInvoker`, followed by the existing variadic `SetUpValueUnwrapperInterface` instances. The only in-repository construction site is `ContainerFactory`; external direct consumers insert this helper before their unwrappers. This does not change the attribute constructor names/order or add a legacy handler path.
 
 There is a specific major-version migration for `SetUp` subclasses: a subclass redeclaring or promoting `public string $method` must widen that property to the same `string|Closure` type or remove the redeclaration. PHP property invariance rejects the narrower redeclaration after the parent changes. A constructor-only `string` parameter that forwards to the parent without redeclaring the property can remain narrower. Document and test these cases; do not describe the widening as universally source-compatible.
 
