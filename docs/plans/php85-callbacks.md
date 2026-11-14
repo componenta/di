@@ -4,9 +4,9 @@
 
 Created: 2026-11-12. Rechecked: 2026-11-13 against `71a843082e7850672bc1fef87401e5697d433f66`, after a fresh review of the released DI 5.0.5 baseline (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). The earlier review and [November 13 correctness fixes](../audit/2026-11-13-di-audit.md) remain historical evidence. The new [native evidence](../audit/2026-11-13-php85-native-evidence.json) records the exact source revision, binary versions, fixture sources and results.
 
-**Readiness: the callback binder, `Transform`, callback `SetUp` and simple-union contracts are implementation-ready for a future major branch.** The native trait-callable support promise and final PHP patch floor remain blocked by E1 in §8. That release gate does not prevent implementing and testing the specified library behavior. Request-to-DTO callbacks remain separately blocked by the decisions in §11. Readiness describes the coding contract, not authorization to implement or release these features during this audit.
+**Implementation status (2026-11-14):** native `Init` controls, the shared callback binder, `Transform`, callback `SetUp` and simple-union autowiring are implemented and locally verified on `refactor/di6-definitions-callbacks`. See the [migration guide](../migrations/di6-callbacks.md) and [implementation evidence](../audit/2026-11-14-di6-refactoring.md). The final DI 6 release, affected native trait-callable support promise and minimum PHP patch remain blocked by E1 in §8. Request-to-DTO callbacks remain separately deferred by §11.
 
-The published non-major release is DI 5.0.5 with PHP `^8.4`. Fresh audit fixes are subsequent main-branch work; they do not retroactively change that tag. This document introduces no new callback API, union-autowiring behavior, manifest change or PHP-minimum increase into that release. Existing `Init` already accepts the new native expressions when the application runs PHP 8.5.
+The compatible v5.0.6 work stays on the 5.x line with PHP `^8.4`. This major branch does not change that release. Its source remains parseable on PHP 8.4 while platform packaging is pending; this does not settle the final DI 6 support floor. Existing `Init` keeps its public API and accepts supported native expressions on PHP 8.5. Baseline descriptions below refer to the audited 5.x implementation.
 
 ## 1. Goal and recovered intent
 
@@ -333,7 +333,7 @@ Keep the revised discovery and classification boundaries in the existing owners.
 
 Delivery target: DI 6 on PHP 8.5, with branch alias `6.0.x-dev`. The final Composer constraint must use the verified minimum patch from E1; broad `^8.5` is not a settled promise that every runtime in that range satisfies the native trait contract. The current 5.x line retains PHP `^8.4`; none of the audit fixes raises its floor.
 
-After separate authorization for implementation, use the intended major-version branch for the public `SetUp` and union changes. The specified library implementation can remain parseable on PHP 8.4 while E1 is pending; test it with PHP 8.4-compatible callback construction and the available PHP 8.5 native-expression fixtures. Final platform packaging is a later, explicit gate. Version-gated eval/subprocess fixtures may also remain in 5.x when PHP 8.4 can parse their containing files and skips unsupported syntax before evaluation. A diagnostic of a known engine defect is not a passing support regression for that native form.
+The user authorized implementation on a separate major-version branch; `refactor/di6-definitions-callbacks` carries the public `SetUp` and union changes. The specified library implementation can remain parseable on PHP 8.4 while E1 is pending; test it with PHP 8.4-compatible callback construction and the available PHP 8.5 native-expression fixtures. Final platform packaging is a later, explicit gate. Version-gated eval/subprocess fixtures may also remain in 5.x when PHP 8.4 can parse their containing files and skips unsupported syntax before evaluation. A diagnostic of a known engine defect is not a passing support regression for that native form.
 
 One upstream limitation is separate from DI correctness. On PHP 8.5.8, an attribute declared in a trait with `self::who(...)` returns the first consuming class's result for both consumers; `parent::who(...)` has the corresponding parent-scope error. A named private method reference in the trait also incorrectly retains the first consumer's successful visibility result. The native inline-static-closure control resolves each consuming class correctly. These observations come from actual attribute expressions, without DI or shared reflection caches, in the portable evidence above.
 
@@ -352,7 +352,7 @@ A bounded check of the [released `php-8.5.12` source](https://github.com/php/php
 | Work or promise | Readiness |
 | --- | --- |
 | Existing `Init` native-expression examples and compatible regression fixtures | Ready; actual current behavior is recorded. |
-| Shared binder, `Transform`, callback `SetUp`, simple-union behavior | Contracts ready for a separately authorized major branch; test supported forms while E1 is pending. |
+| Shared binder, `Transform`, callback `SetUp`, simple-union behavior | Implemented on the authorized major branch; supported forms are tested while E1 remains pending. |
 | Correct trait-relative/mixed-visibility first-class references on the minimum supported runtime | Blocked by E1; PHP 8.5.8 demonstrably fails. |
 | Final DI 6 Composer floor, supported-runtime CI and release asserting that scope contract | Blocked by the released-patch proof, then by the ordinary implementation/release gates. |
 | Request-to-DTO callback | Blocked independently by §11's semantic decisions. |
@@ -387,9 +387,9 @@ Use Pest public-contract tests and focused fixtures, with failing regressions be
 
 ## 10. Derived implementation plan
 
-**Library slices are specified and can be implemented on a separately authorized future-major branch while E1 remains pending.** E1 blocks the final affected platform/support promise, not unrelated coding. None of these slices retroactively adds features to the published 5.0.5 tag.
+**Library slices 1–5 are implemented on the authorized major branch. Slice 6 contains the remaining verification, documentation and release gates.** E1 blocks the final affected platform/support promise, not unrelated coding. None of these slices retroactively adds features to the published 5.0.5 tag.
 
-Every completed slice must be reviewed, checked, committed and pushed. Slices 3 and 4 depend on the binder in slice 2; union work in slice 5 is independent of that binder. No slice should leave two competing resolution algorithms in place. The evidence requirements below describe completion, not an approval to perform the major work in the current audit.
+Every completed slice must be reviewed, checked, committed and pushed. Slices 3 and 4 depend on the binder in slice 2; union work in slice 5 is independent of that binder. No slice should leave two competing resolution algorithms in place. The evidence requirements below define completion; release packaging remains subject to E1.
 
 ### Slice 1 — Establish native behavior and existing `Init` controls
 
@@ -457,4 +457,4 @@ Address the measured repeated autoload issue under the separate [availability pe
 
 The following are normative choices for the proposed target, not unresolved decisions: empty-signature callbacks are allowed; first DI parameter metadata is forbidden and guarded together with the suffix; the `Transform` suffix receives no ambient public bag; explicit callback `SetUp::$params` uses string keys with existing provided-parameter matching rules; standalone property transformation needs a source; only simple unions are autowired; `Closure` uses the same availability rule as other service-type arms; different service IDs remain ambiguous even when aliases converge. If a choice changes, revise its owning contract and acceptance rows before implementing it. E1 blocks the affected platform/release promise, while the separate request-to-DTO questions block that deferred feature only.
 
-After the eventual implementation, compare code, wiring, public migration notes and observed behavior with §§2–9. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.
+During implementation convergence, compare code, wiring, public migration notes and observed behavior with §§2–9. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.

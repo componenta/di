@@ -1,0 +1,561 @@
+{
+  "date": "2026-11-14",
+  "repository": "componenta/di",
+  "branch": "refactor/di6-definitions-callbacks",
+  "baseline_release": {
+    "version": "v5.0.6",
+    "sha": "ad46b3098f663d6c0d55bf6d1651a526af16ac68",
+    "published_at": "2026-11-14T11:43:26Z",
+    "release_id": 445255038,
+    "run_id": 43589493808,
+    "workflow": "success",
+    "packagist_version": "v5.0.6",
+    "packagist_reference": "ad46b3098f663d6c0d55bf6d1651a526af16ac68",
+    "coverage_percent": 90.6,
+    "mutation": {
+      "score_percent": 86.09,
+      "tested": 3359,
+      "timeout": 34,
+      "untested": 548
+    },
+    "fresh_packagist_consumer": {
+      "install": "composer install --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader",
+      "require": "componenta/di:5.0.6",
+      "isolated_project": true,
+      "runtimes": [
+        "8.4.23",
+        "8.5.8"
+      ],
+      "public_smoke": "shared/fresh/config identity and external alias-availability correction passed; major Transform API absent",
+      "installed_production_php_files": 161,
+      "installed_source_byte_matches_release": true
+    }
+  },
+  "implementation_commits": {
+    "union": "135d4679e7ad0c10f4b96ba78b0d41016c352702",
+    "definitions": "87d7a77579832d6a2935bcd4f67b27193e93e9c8",
+    "callbacks": "f19342252ebadf6917eb7aa55c7e15934fffebb1",
+    "transform": "ecea22e5ee933aa75ebec708080393305aa01c24"
+  },
+  "fingerprints": {
+    "algorithm": "sha256: sorted relative path + NUL + contents + NUL",
+    "production_php": "e523294724ae57fe7eb250ca9bb6efd99d7a3e854e0cb023707e6101ba737aae",
+    "production_php_files": 169,
+    "verification_including_native_fixtures": "0d8e756f223df3a98afc92e31aacbb09b74e6e49677854da60ffd98c8149a389",
+    "verification_files": 396,
+    "test_files": 201,
+    "native_fixture_files": 9
+  },
+  "tdd": {
+    "retirement": {
+      "baseline_failures": 3,
+      "baseline_assertions": 9,
+      "final_focused_tests": 14,
+      "final_assertions": 96,
+      "runtimes": [
+        "8.4.23",
+        "8.5.8"
+      ]
+    },
+    "union": {
+      "baseline_failures": 23,
+      "baseline_controls_passed": 6,
+      "final_tests": 29,
+      "final_assertions": 93
+    },
+    "callbacks": {
+      "frozen_baseline_failures": 40,
+      "baseline_native_controls_passed": 8,
+      "initial_binder_and_setup_red_before_implementation": true
+    },
+    "transform": {
+      "initial_red_failures": 40,
+      "initial_controls_passed": 2,
+      "initial_native_skips": 4,
+      "final_php84": {
+        "passed": 46,
+        "skipped": 6,
+        "assertions": 172
+      },
+      "final_php85": {
+        "passed": 52,
+        "assertions": 240
+      }
+    },
+    "new_admission_regression": "A newly available static callable keeps ABI validation after admission; failed before its correction."
+  },
+  "local_verification": {
+    "php84": {
+      "version": "8.4.23",
+      "passed": 1326,
+      "skipped": 18,
+      "assertions": 23324
+    },
+    "php85": {
+      "version": "8.5.8",
+      "passed": 1344,
+      "skipped": 0,
+      "assertions": 23426
+    },
+    "phpstan": "maximum level, no errors; optional turbo extension unavailable; PHP analyzer completed",
+    "formatting": {
+      "files": 387,
+      "changes": 0
+    },
+    "mutation_history_parity": {
+      "operations_each": 600,
+      "comparisons_each": 14400,
+      "runtimes": [
+        "8.4.23",
+        "8.5.8"
+      ]
+    },
+    "migration_examples": {
+      "definitions": {
+        "php_blocks_each_language": 6,
+        "languages": [
+          "en",
+          "ru"
+        ],
+        "runtimes": [
+          "8.4.23",
+          "8.5.8"
+        ],
+        "all_exit_codes": 0
+      },
+      "callbacks": {
+        "executable_examples": 4,
+        "runtime": "8.5.8",
+        "all_exit_codes": 0
+      }
+    },
+    "dependency_mode": "Full local test suites use existing workspace dependencies. Timings use one retained published-dependency vendor installation; hosted branch jobs install published packages independently.",
+    "commands": {
+      "tests": "php -n vendor/bin/pest --compact",
+      "phpstan": "php -n vendor/bin/phpstan analyse --no-progress --memory-limit=1G",
+      "formatting": "php -n vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no",
+      "mutation_history_parity": "php -n docs/audit/reproductions/MutationParity.php"
+    }
+  },
+  "hosted_feature_checks_at_report": {
+    "sha": "ecea22e5ee933aa75ebec708080393305aa01c24",
+    "run_id": 43591226872,
+    "conclusion": "success",
+    "linux_php84": "success",
+    "linux_php85": "success",
+    "windows_php84": "success",
+    "coverage_percent": 91.2,
+    "mutation": {
+      "score_percent": 86.62,
+      "tested": 3517,
+      "timeout": 36,
+      "untested": 549
+    },
+    "note": "This exact commit contains all production and test changes. The final documentation/benchmark commit preserves its production/test bytes; its separate CI rerun may be pending."
+  },
+  "benchmarks": {
+    "runtime_flags": [
+      "-n"
+    ],
+    "rounds_each_process": 7,
+    "operation_iterations_each_round": 20000,
+    "default_build_iterations_each_round": 1000,
+    "build_phases_recheck_iterations_each_round": 5000,
+    "build_phases_recheck": "Two process medians for each version/runtime, in baseline-feature-feature-baseline order; first PHP84 baseline process replaced after a short overlapping parity diagnostic. Reported values are medians of those process medians.",
+    "ordinary_runtime_recheck": "The final harness completes ordinary cases before constructing feature-only container graphs. Initial exploratory RuntimeBench timings are excluded.",
+    "baseline_source": "ad46b3098f663d6c0d55bf6d1651a526af16ac68",
+    "feature_source": "ecea22e5ee933aa75ebec708080393305aa01c24",
+    "units": "nanoseconds per operation",
+    "results": {
+      "84": {
+        "RuntimeBench": {
+          "baseline": {
+            "build/default": 64243.8,
+            "get/shared": 187.5,
+            "make/no-arguments": 5311.0,
+            "make/autowire": 11795.2,
+            "call/reused-closure": 17536.4,
+            "call/fresh-closure": 17196.4,
+            "call/method-array": 7425.6
+          },
+          "feature": {
+            "build/default": 66385.4,
+            "get/shared": 188.6,
+            "make/no-arguments": 4970.4,
+            "make/autowire": 11811.2,
+            "call/reused-closure": 17107.0,
+            "call/fresh-closure": 18068.5,
+            "call/method-array": 7211.9,
+            "transform/none": 6014.8,
+            "transform/zeroArguments": 11368.9,
+            "transform/one": 16921.8,
+            "transform/three": 30331.9,
+            "transform/suffix": 32926.2,
+            "setup/method": 22953.4,
+            "setup/callback": 37616.4,
+            "union/zero": 12698.4,
+            "union/one": 11750.9,
+            "union/two-rejected": 11634.4
+          }
+        },
+        "GeneratedVsReflectionBench": {
+          "baseline": {
+            "reflection/default": 22887.8,
+            "factory/default": 2027.5,
+            "reflection/override": 19923.1,
+            "factory/override": 2187.5
+          },
+          "feature": {
+            "reflection/default": 19333.8,
+            "factory/default": 1909.9,
+            "reflection/override": 19241.9,
+            "factory/override": 2071.3
+          }
+        },
+        "ParameterPlanBench": {
+          "baseline": {
+            "one/prepare": 950.3,
+            "one/resolve-targets": 5498.1,
+            "one/resolve-prepared": 4580.3,
+            "three/prepare": 2163.5,
+            "three/resolve-targets": 13356.2,
+            "three/resolve-prepared": 11514.2,
+            "six/prepare": 3714.7,
+            "six/resolve-targets": 25139.9,
+            "six/resolve-prepared": 21420.9
+          },
+          "feature": {
+            "one/prepare": 920.3,
+            "one/resolve-targets": 5592.3,
+            "one/resolve-prepared": 4456.3,
+            "three/prepare": 1920.3,
+            "three/resolve-targets": 13397.1,
+            "three/resolve-prepared": 11175.1,
+            "six/prepare": 3671.2,
+            "six/resolve-targets": 25188.4,
+            "six/resolve-prepared": 22312.9
+          }
+        },
+        "BuildPhasesBench": {
+          "baseline": {
+            "build/empty": 62296.95,
+            "build/representative": 78932.4
+          },
+          "baseline_process_medians": {
+            "build/empty": [
+              63565.8,
+              61028.1
+            ],
+            "build/representative": [
+              81498.5,
+              76366.3
+            ]
+          },
+          "feature": {
+            "build/empty": 66586.29999999999,
+            "build/representative": 84888.6
+          },
+          "feature_process_medians": {
+            "build/empty": [
+              67137.7,
+              66034.9
+            ],
+            "build/representative": [
+              86642.8,
+              83134.4
+            ]
+          }
+        }
+      },
+      "85": {
+        "RuntimeBench": {
+          "baseline": {
+            "build/default": 66930.8,
+            "get/shared": 197.5,
+            "make/no-arguments": 5596.3,
+            "make/autowire": 11970.8,
+            "call/reused-closure": 17784.5,
+            "call/fresh-closure": 18012.2,
+            "call/method-array": 7399.5
+          },
+          "feature": {
+            "build/default": 67000.3,
+            "get/shared": 196.1,
+            "make/no-arguments": 5432.7,
+            "make/autowire": 12214.2,
+            "call/reused-closure": 19066.9,
+            "call/fresh-closure": 18964.1,
+            "call/method-array": 7377.3,
+            "transform/none": 6218.0,
+            "transform/zeroArguments": 11722.2,
+            "transform/one": 18031.2,
+            "transform/three": 32739.2,
+            "transform/suffix": 33858.0,
+            "setup/method": 23192.4,
+            "setup/callback": 41660.6,
+            "union/zero": 13305.1,
+            "union/one": 12805.5,
+            "union/two-rejected": 12553.4
+          }
+        },
+        "GeneratedVsReflectionBench": {
+          "baseline": {
+            "reflection/default": 20192.3,
+            "factory/default": 2176.3,
+            "reflection/override": 19969.9,
+            "factory/override": 2234.6
+          },
+          "feature": {
+            "reflection/default": 19193.0,
+            "factory/default": 1872.1,
+            "reflection/override": 20392.2,
+            "factory/override": 2197.9
+          }
+        },
+        "ParameterPlanBench": {
+          "baseline": {
+            "one/prepare": 1172.3,
+            "one/resolve-targets": 5953.5,
+            "one/resolve-prepared": 4850.2,
+            "three/prepare": 2360.7,
+            "three/resolve-targets": 15308.3,
+            "three/resolve-prepared": 12904.0,
+            "six/prepare": 3926.0,
+            "six/resolve-targets": 27791.5,
+            "six/resolve-prepared": 22545.4
+          },
+          "feature": {
+            "one/prepare": 1261.8,
+            "one/resolve-targets": 5970.9,
+            "one/resolve-prepared": 4743.4,
+            "three/prepare": 2240.1,
+            "three/resolve-targets": 14596.4,
+            "three/resolve-prepared": 11720.2,
+            "six/prepare": 3951.9,
+            "six/resolve-targets": 27161.1,
+            "six/resolve-prepared": 22156.6
+          }
+        },
+        "BuildPhasesBench": {
+          "baseline": {
+            "build/empty": 67933.15,
+            "build/representative": 85131.79999999999
+          },
+          "baseline_process_medians": {
+            "build/empty": [
+              69410.6,
+              66455.7
+            ],
+            "build/representative": [
+              82249.9,
+              88013.7
+            ]
+          },
+          "feature": {
+            "build/empty": 70771.45,
+            "build/representative": 92210.95
+          },
+          "feature_process_medians": {
+            "build/empty": [
+              69835.7,
+              71707.2
+            ],
+            "build/representative": [
+              90611.5,
+              93810.4
+            ]
+          }
+        }
+      }
+    },
+    "log_proof": [
+      {
+        "file": "84-RuntimeBench-baseline-final.txt",
+        "sha256": "8c0a316bc3d4f36339eb8fef638ad9de30b52dbe158b854f4e92dd7be1a70788",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 126,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-RuntimeBench-feature-final.txt",
+        "sha256": "60164c3de505a3919dc6eb141559bacd21d41d372a5fcb09ef654a246e1fdbfa",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 141,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-GeneratedVsReflectionBench-baseline.txt",
+        "sha256": "036721e4fdf3fab23caba4532982a38187915485149c0f0d1ebca077c0f6a4bb",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 127,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-GeneratedVsReflectionBench-feature.txt",
+        "sha256": "cfabd9d4f1df912771fba1d4765c76cbdedecd705905be6316e8d5a62b144f65",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 135,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-ParameterPlanBench-baseline.txt",
+        "sha256": "c9e519ac314784abe6bb2b4debd42e1b20a8ce2750d37d89a3b291b4b32a1b91",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 123,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-ParameterPlanBench-feature.txt",
+        "sha256": "b3690e8d27fc6311a18a641d2169181a9e25896324596b992de2d890816bde31",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 126,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-BuildPhasesBench-baseline-repeat1-final.txt",
+        "sha256": "3adb831fa34e0e289a418d81b0ddb87d544406dfd24fce3a7d208e9ac4e1306b",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 113,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-BuildPhasesBench-baseline-repeat4.txt",
+        "sha256": "5a23545c60a4b9338c85dcda562391aa77ee9480e99f512c9f95110fc1308d0e",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 113,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-BuildPhasesBench-feature-repeat2.txt",
+        "sha256": "aadd3f0acf5dd3f2ac25184792f2154a64b24bb4fe26c77725000c528a773e82",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 122,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "84-BuildPhasesBench-feature-repeat3.txt",
+        "sha256": "59863cad15e0fa0aa3b116db3d873ecc1342bf1bafae0ab11e59ff42310405e5",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 122,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-RuntimeBench-baseline-final.txt",
+        "sha256": "0b3cae1bbef495ababc3e631cc16b6d3ef54830f1b558a6b24ab9f09c9c98e02",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 126,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-RuntimeBench-feature-final.txt",
+        "sha256": "4ffc95b5ee78bcee362ec075417a529b91cac439bc1852f22539621d25e6f3d3",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 141,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-GeneratedVsReflectionBench-baseline.txt",
+        "sha256": "15613dcfecdac51801a136c94e79d91fa62f1e73514ef6ce05d7ae5e08c769ce",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 127,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-GeneratedVsReflectionBench-feature.txt",
+        "sha256": "d781278e1e821320e55b28f406e8992ac1a37d30fa8889ecac7fc47f3480979d",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 135,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-ParameterPlanBench-baseline.txt",
+        "sha256": "660b89bb04c755e826ca9814013189de30b3835dcc2cbc26e298e7a9de6b5ad5",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 123,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-ParameterPlanBench-feature.txt",
+        "sha256": "f04fc61c609e2bb3162607c3a63599ac58cbcfa80471ade8c4717aac61bc01fc",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 126,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-BuildPhasesBench-baseline-repeat1.txt",
+        "sha256": "3a4d280af96211b9715816aff0fc535e5d4fac17908ce5b2d49ff41ee5aa8a57",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 113,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-BuildPhasesBench-baseline-repeat4.txt",
+        "sha256": "cfdc5a6833d238965100a1239f2fda930e254715de41ec0138933fb719714db8",
+        "source_check": {
+          "source": "/workspace/scratch/fd8d36626f47/di6-baseline/src",
+          "checked_declarations": 113,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-BuildPhasesBench-feature-repeat2.txt",
+        "sha256": "179cb6faa0f0db24c820e045cca258d43fa20f85fa70c2112d6a8742b83dcc1f",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 122,
+          "checked_functions": 6
+        }
+      },
+      {
+        "file": "85-BuildPhasesBench-feature-repeat3.txt",
+        "sha256": "9ef6b91ef599f6ba30a456ca0345060446d6a295169bc02675f93ac3507b3cd7",
+        "source_check": {
+          "source": "/workspace/scratch/8f6c1df8ef3b/di/src",
+          "checked_declarations": 122,
+          "checked_functions": 6
+        }
+      }
+    ],
+    "interpretation": "Single machine microbenchmarks; no application throughput or universal speedup claim. GC occurs between rounds. Weak-reference tests, not timing or RSS, establish lifetime."
+  },
+  "remaining_gates": {
+    "E1": "Verify a released PHP8.5 patch containing the native trait first-class-reference fix on its exact binary before setting the final floor and publishing DI6.",
+    "availability_B2": "Application cost evidence and a revised synchronization contract remain required; no broad refactor selected.",
+    "request_to_dto_callbacks": "Separate source/provenance/API decisions remain unresolved; not implemented.",
+    "DI6_release": "Not requested or published as part of the compatible 5.0.6 release."
+  }
+}

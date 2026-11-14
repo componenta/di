@@ -2,7 +2,7 @@
 
 **Canonical specification:** this English document. [Full Russian translation](definition-owner-lifecycle.ru.md).
 
-**Readiness:** implementation-ready for the next major version, subject to the verification and convergence gates below. Readiness means that the target is specified for coding, not that implementation or rollout has been approved. **v5.0.5 does not implement this architecture or `MutationRetirement`.** The fresh review supersedes this document's earlier proposal to add required removal/retirement methods to every mutable definition resolver. There is one normative target below: central binding ownership in `CompositeResolver` and definition execution strategies without registration maps.
+**Implementation status (2026-11-14):** the central binding table, registration-free strategies, snapshots, attachment rules and complete mutation retirement are implemented on `refactor/di6-definitions-callbacks` in commit `87d7a775`. This is unreleased next-major work; the compatible 5.x line retains its earlier architecture. See the [migration guide](../migrations/di6-definitions.md) and [implementation evidence](../audit/2026-11-14-di6-refactoring.md) for verification and remaining gates. The baseline analysis below describes the audited 5.x implementation. The normative contract and acceptance criteria remain the implementation target.
 
 ## Objective and evidence
 
@@ -27,19 +27,19 @@ The scripts are [DefinitionLifecycle.php](../audit/reproductions/DefinitionLifec
 
 The retained configuration is bounded by former resolver/ID slots; these observations do not prove growth on every replacement. The two destructor cases demonstrate inconsistent published state, not merely delayed GC. The mutation-parity diagnostic still passes **600 operations / 14,400 comparisons** on each runtime. Thus the evidence justifies correcting ownership and release ordering, not replacing all caching or claiming that ordinary mutations generally fail.
 
-## Current responsibility and architectural choice
+## Baseline responsibility and architectural choice
 
 The current owners are independently mutable:
 
 | Current component | Owned state and responsibility | Problem at the boundary |
 | --- | --- | --- |
-| [CompositeResolver](../../src/Resolver/Entry/CompositeResolver.php) | Resolver order and runtime `definitionOwners` routing | Changing the selected owner does not detach the old leaf's registration. |
-| [FactoryResolver](../../src/Resolver/Entry/FactoryResolver.php) | Factory/ClassDefinition map and per-ID resolved-callable validation flags | An overwrite can destroy old user state before container invalidation. |
-| [InvokableResolver](../../src/Resolver/Entry/InvokableResolver.php) | Class registrations | Initial registrations, like initial factory entries, bypass `definitionOwners`. |
-| [Container](../../src/Container.php) | Alias canonicalization, protected IDs, public mutations and invalidation orchestration | It treats a throwing leaf overwrite as rejection even when the leaf changed. |
-| [EntryCache](../../src/Internal/EntryCache.php), [DelegatorRegistry](../../src/Internal/DelegatorRegistry.php) | Shared values, revisions, alias reverse membership and cached callable chains | Eviction releases user objects during an incomplete traversal. |
+| [CompositeResolver](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Resolver/Entry/CompositeResolver.php) | Resolver order and runtime `definitionOwners` routing | Changing the selected owner does not detach the old leaf's registration. |
+| [FactoryResolver](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Resolver/Entry/FactoryResolver.php) | Factory/ClassDefinition map and per-ID resolved-callable validation flags | An overwrite can destroy old user state before container invalidation. |
+| [InvokableResolver](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Resolver/Entry/InvokableResolver.php) | Class registrations | Initial registrations, like initial factory entries, bypass `definitionOwners`. |
+| [Container](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Container.php) | Alias canonicalization, protected IDs, public mutations and invalidation orchestration | It treats a throwing leaf overwrite as rejection even when the leaf changed. |
+| [EntryCache](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Internal/EntryCache.php), [DelegatorRegistry](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Internal/DelegatorRegistry.php) | Shared values, revisions, alias reverse membership and cached callable chains | Eviction releases user objects during an incomplete traversal. |
 
-[ContainerFactory](../../src/ContainerFactory.php) fills the leaf maps directly. `Container` also accepts application entry resolvers, so public extension and standalone resolver consumers must be migrated explicitly. Repository search finds three built-in implementations of [DefinitionAwareResolverInterface](../../src/Resolver/Entry/DefinitionAwareResolverInterface.php); it cannot establish that third-party implementations do not exist.
+[ContainerFactory](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/ContainerFactory.php) fills the leaf maps directly. `Container` also accepts application entry resolvers, so public extension and standalone resolver consumers must be migrated explicitly. Repository search finds three built-in implementations of [DefinitionAwareResolverInterface](https://github.com/componenta/di/blob/ad46b3098f663d6c0d55bf6d1651a526af16ac68/src/Resolver/Entry/DefinitionAwareResolverInterface.php); it cannot establish that third-party implementations do not exist.
 
 **Decision:** centralize explicit registrations in `CompositeResolver`; make factory/invokable extensions strategies that validate and execute supplied definitions without keeping their own ID maps. Keep the existing fallback entry-resolver mechanism and the existing value/delegator caches. Retain old bindings and evicted cache roots through a separate, internal mutation retirement barrier.
 
@@ -164,6 +164,8 @@ Release uses native reference dropping, never calls `__destruct()` directly, and
 
 Add public `Componenta\DI\Exception\MutationRetirementException` extending `InvalidConfigurationException`. It exposes readonly `?string $id` and a readonly non-empty ordered `array $causes` of `Throwable`; `getPrevious()` is the first cause. Its message states that the mutation committed. This type denotes a committed outcome, not a validation rejection or instruction to retry. No causes means normal return. Callers deciding whether to retry must distinguish this subtype before their broader invalid-configuration handling.
 
+Existing Componenta exception identity is preserved across validation callbacks. A callback can propagate a `MutationRetirementException` from an independently committed nested mutation before the outer operation publishes anything. Its committed outcome and `id` describe the mutation that produced the exception; the outer call must not infer that its own requested write completed.
+
 The [PHP destructor documentation](https://www.php.net/manual/en/language.oop5.decon.php#language.oop5.decon.destructor) describes separate GC destructor Fibers from PHP 8.4 and fatal shutdown-destructor exceptions; the [Fiber documentation](https://www.php.net/manual/en/language.fibers.php) allows destructor Fiber switching from PHP 8.4. Consequently the holder collects only errors actually propagated into its active release invocation. It does not wait for GC, another destructor Fiber or shutdown. Those later events already see completed publication/invalidation, but their timing and error delivery remain PHP/application responsibilities.
 
 | Event | Published binding and caches | Observable outcome |
@@ -242,4 +244,4 @@ Run complete formatting, static analysis, tests and applicable Linux/Windows/cov
 | Consumer migration | No old interface/map consumers; strategy direct-call examples; snapshot independence; rejection of attached direct mutation and second attachment. |
 | Single semantic admission | Declarative and runtime controls reject eager invalid input before use, preserve deferred failures and avoid repeating normalization during execution. |
 
-There are no deferred material design choices in this target. Implementation must still produce the specified evidence; the 5.x ownership/retirement limitation remains until this separately versioned change is implemented and verified.
+There are no deferred material design choices in this target. The specified implementation, local evidence and executable migration are present on the major branch; hosted verification status is recorded in the implementation report. The separately versioned change does not remove the ownership/retirement limitation from the existing 5.x release.

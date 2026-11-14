@@ -1,5 +1,7 @@
 # Componenta DI
 
+**Unreleased DI 6 development branch.** `refactor/di6-definitions-callbacks` implements the approved definition and callback plans on top of v5.0.6. Review the [definition migration](docs/migrations/di6-definitions.md) and [callback/union migration](docs/migrations/di6-callbacks.md). The source still parses on PHP 8.4; the final supported PHP patch and DI 6 release remain subject to E1 in the [platform specification](docs/plans/php85-callbacks.md#8-php-version-and-release-compatibility).
+
 Componenta DI is a PSR-11 dependency injection container for PHP 8.4+. It provides reflection autowiring, explicit factories and services, ordered delegators, callable invocation, lazy objects, request mapping, and composable PHP attributes.
 
 The package owns container construction and dependency-resolution semantics. [`componenta/config`](https://github.com/componenta/config/blob/main/README.md) owns provider execution and produces two separate values:
@@ -254,7 +256,7 @@ Built-in object and parameter attributes include:
 
 ```text
 #[Config] #[Env] #[EntryId] #[Inject] #[Make]
-#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast]
+#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast] #[Transform]
 #[CurrentRequest] #[CurrentUri]
 #[Header] #[Cookie] #[QueryParam] #[PayloadParam]
 #[RequestAttribute] #[ServerParam] #[UploadedFile]
@@ -293,7 +295,7 @@ Development and production use the same `ContainerFactory`, normalization, valid
 
 Package-owned failures implement `Componenta\DI\Exception\ExceptionInterface`, which also extends the PSR-11 container exception contract. Common concrete exceptions include `InvalidConfigurationException`, `NotFoundException`, `ResolutionException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException`, and `AttributeCompositionException`.
 
-If definition or delegator registration fails during validation or autoloading, `set()` and `delegator()` preserve an existing Componenta exception or wrap a foreign failure in `InvalidConfigurationException`, with the original throwable in `getPrevious()`. A rejection before publication leaves the previous binding and delegator pipeline intact; independently completed mutations from application code are not rolled back. Exceptions from destructors while discarding old configuration or cached values have a separate, documented [5.x limitation](docs/plans/definition-owner-lifecycle.md#objective-and-evidence).
+If definition or delegator registration fails during validation or autoloading, `set()` and `delegator()` preserve an existing Componenta exception or wrap a foreign failure in `InvalidConfigurationException`, with the original throwable in `getPrevious()`. A rejection before publication leaves the previous binding and delegator pipeline intact; independently completed mutations from application code are not rolled back. After publication, all affected caches and callable chains are invalidated before retired roots are released. Synchronously delivered retirement failures become `MutationRetirementException`, whose readonly `id` and ordered `causes` identify a committed mutation; `getPrevious()` is the first cause. A propagated exception may originate from an independently committed nested mutation. See the [migration guide](docs/migrations/di6-definitions.md) for recovery and lifetime boundaries.
 
 After DI resolves an explicitly invoked callable and enters its body, exceptions thrown by that callable propagate unchanged.
 
@@ -302,7 +304,7 @@ After DI resolves an explicitly invoked callable and enters its body, exceptions
 The [architecture plan index](docs/plans/README.md) links the reviewed specifications, their implementation readiness, and complete Russian translations. The selected directions are:
 
 - **Attribute availability:** retain corrected polling in current 5.x. B2 remains conditional on application cost and a specified synchronization contract; C is not selected.
-- **Definition ownership:** the next-major target centralizes immutable bindings in `CompositeResolver`, uses execution strategies without registration maps, and releases replaced state through an internal retirement barrier.
-- **PHP 8.5 features:** the callback binder, `Transform`, callback `SetUp` and simple-union contracts are ready for coding on a future major branch. E1 separately blocks the native trait-callable support promise and selection of the final minimum PHP patch for the DI 6 release; request-to-DTO callbacks remain deferred.
+- **Definition ownership:** implemented in this branch. `CompositeResolver` owns immutable bindings; strategies execute supplied definitions without registration maps; all registration mutations complete before retired roots are released.
+- **Callbacks and unions:** implemented in this branch, with a shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and deterministic simple-union autowiring. E1 still blocks the final PHP patch floor and affected native trait-callable support promise; request-to-DTO callbacks remain deferred.
 
-The [November 14 full recheck](docs/audit/2026-11-14-release-audit.md) records the new TDD corrections and local verification for [v5.0.6](docs/releases/v5.0.6.md); publication requires fresh release gates on its exact commit. The [November 13 recheck](docs/audit/2026-11-13-full-library-recheck.md) retains the earlier fixes, measurements and architecture evidence. The proposed next-major architectures and features remain separate from the compatible 5.x release.
+The [November 14 full recheck](docs/audit/2026-11-14-release-audit.md) records the new TDD corrections and local verification for [v5.0.6](docs/releases/v5.0.6.md). That version is now published on GitHub and Packagist after all release gates passed on its exact commit. The [November 13 recheck](docs/audit/2026-11-13-full-library-recheck.md) retains the earlier fixes, measurements and architecture evidence. The [DI 6 implementation report](docs/audit/2026-11-14-di6-refactoring.md) records TDD evidence, migration checks, benchmark costs and remaining gates for this branch.
