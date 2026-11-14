@@ -29,7 +29,8 @@ final class CallableInvoker implements CallableInvokerInterface
      * @param mixed $callable A valid callable ready for invocation.
      * @param array<int|string, mixed> $params Complete, ordered parameter list.
      *
-     * @throws InvalidCallableException If the value is not callable.
+     * @throws ExceptionInterface If callable validation fails.
+     * @throws Throwable Anything thrown by the target after invocation begins.
      */
     public function call(mixed $callable, array $params = []): mixed
     {

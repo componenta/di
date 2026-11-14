@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-14",
+  "repository": "componenta/di",
+  "release": "v5.0.6",
+  "baseline": "1a1a0a8772eaabc2a80016744b123ebcd98975ca",
+  "fix_head": "6a4486883485eff1f97d8e87d77868a7cccecd90",
+  "source_fingerprint": {
+    "algorithm": "sha256",
+    "scope": "sorted PHP paths under src, tests, benchmarks; path + NUL + contents + NUL",
+    "value": "f0c0dbabff72fa3c7a2dceaab239f92c116937d47d5d63ad5d36ae6804fd2e09"
+  },
+  "source_files": 161,
+  "test_files": 190,
+  "installed_dependencies_sha256": "ffdbc52aadae57ef3553e8bf20035a5da492f1c3d9870f9f68fec975772dfc38",
+  "componenta_dependencies": [
+    {
+      "name": "componenta/arrayable",
+      "version": "v1.0.0",
+      "install_type": "zip",
+      "reference": "482acfddffa3b1b85e982d1bf4ab6c007d084a8a"
+    },
+    {
+      "name": "componenta/caster",
+      "version": "v1.0.0",
+      "install_type": "zip",
+      "reference": "383455d00c5ab8a1067b4916e11d11dae7c4a58c"
+    },
+    {
+      "name": "componenta/clock",
+      "version": "v1.1.0",
+      "install_type": "zip",
+      "reference": "a97b782bd17e413864ba24d90d86b75297b7b99d"
+    },
+    {
+      "name": "componenta/config",
+      "version": "3.0.0",
+      "install_type": "path",
+      "reference": "dcd218904f7336a61d059363ae1b336f54ad7453"
+    },
+    {
+      "name": "componenta/mimetype-detector",
+      "version": "v1.0.0",
+      "install_type": "zip",
+      "reference": "88cb85b51e95eb8695eaaa1f3c315dd7a7dd8ee9"
+    },
+    {
+      "name": "componenta/reflection",
+      "version": "2.0.1",
+      "install_type": "path",
+      "reference": "62aca6575934f119277236bb5dec7953063d69da"
+    },
+    {
+      "name": "componenta/validation",
+      "version": "3.0.1",
+      "install_type": "path",
+      "reference": "8f888784bbe12069f8f9dc75703c5dd66c43e53f"
+    }
+  ],
+  "fixes": [
+    {
+      "commit": "427609169971dc83b664d98b8387b901db3e1933",
+      "behavior": "Native callable autoload failures normalize before invocation; body failures unchanged",
+      "red": 2,
+      "test": "tests/Contract/NativeCallableInvokerContractTest.php"
+    },
+    {
+      "commit": "bfc296872293f9501da40129d088b421656508de",
+      "behavior": "has observes alias retargeting and protected targets after external callbacks",
+      "red": 9,
+      "test": "tests/Contract/ExternalLookupMutationContractTest.php"
+    },
+    {
+      "commit": "5fb06b7853718f161140f758f410f280b85f4277",
+      "behavior": "Mapped request source discovery observes earlier attributes loaded by later metadata before factory dispatch",
+      "red": 8,
+      "test": "tests/Contract/RequestSourceDiscoveryContractTest.php"
+    },
+    {
+      "commit": "6a4486883485eff1f97d8e87d77868a7cccecd90",
+      "behavior": "In-flight deferred factory validation belongs to its captured registration",
+      "red": 8,
+      "test": "tests/Contract/DeferredFactoryRecoveryContractTest.php"
+    }
+  ],
+  "verification": {
+    "php84": {
+      "version": "8.4.23",
+      "command": "php -n vendor/bin/pest --compact --colors=never",
+      "passed": 1168,
+      "skipped": 2,
+      "assertions": 22731
+    },
+    "php85": {
+      "version": "8.5.8",
+      "command": "php -n vendor/bin/pest --compact --colors=never",
+      "passed": 1170,
+      "skipped": 0,
+      "assertions": 22739
+    },
+    "static_analysis": {
+      "command": "php -n vendor/bin/phpstan analyse --level=max --no-progress --memory-limit=1G",
+      "result": "No errors",
+      "note": "Optional turbo extension unavailable in static binary; PHP analyzer succeeded."
+    },
+    "formatting": {
+      "command": "php -n vendor/bin/php-cs-fixer fix --dry-run --diff",
+      "files": 368,
+      "changes": 0
+    },
+    "composer_validate": "strict valid",
+    "composer_audit": {
+      "advisories": 0,
+      "abandoned": 0
+    },
+    "mutation_history_parity": {
+      "command": "php -n docs/audit/reproductions/MutationParity.php",
+      "runtimes": [
+        "8.4.23",
+        "8.5.8"
+      ],
+      "operations_each": 600,
+      "comparisons_each": 14400
+    },
+    "hosted_release_gate": "pending exact release commit: Linux8.4/8.5,Windows8.4,coverage>=80%,mutation>=85%"
+  },
+  "limitations": [
+    "Three definition ownership and retirement defects require the specified major refactor.",
+    "Conditional availability B2 and request-to-DTO callback extension are not implementation-ready.",
+    "PHP E1 minimum fixed stable patch support gate remains open for DI6; current stable8.5.12 does not establish the required trait fix."
+  ],
+  "dependency_mode": "Existing workspace development graph; config/reflection/validation source references match published v3.0.0/v2.0.1/v3.0.1. Release workflow installs published packages independently."
+}
