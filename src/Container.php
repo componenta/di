@@ -175,11 +175,16 @@ final class Container implements
             $lookupGuard->enter($guardId);
             try {
                 $entryId = $this->aliases->resolve($id);
-                if (!ProtectedServiceIds::contains($id)
+                if ($this->externalContainers !== null
+                    && !ProtectedServiceIds::contains($id)
                     && !ProtectedServiceIds::contains($entryId)
-                    && $this->externalContainers?->findOwning($id) !== null
                 ) {
-                    return true;
+                    $external = $this->externalContainers->findOwning($id);
+                    // External has() may retarget aliases before local availability checks.
+                    $entryId = $this->aliases->resolve($id);
+                    if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
+                        return true;
+                    }
                 }
                 if ($this->cache->tryGetResolved($id, $resolved)) {
                     return true;
