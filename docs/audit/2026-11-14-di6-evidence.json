@@ -557,5 +557,105 @@
     "availability_B2": "Application cost evidence and a revised synchronization contract remain required; no broad refactor selected.",
     "request_to_dto_callbacks": "Separate source/provenance/API decisions remain unresolved; not implemented.",
     "DI6_release": "Not requested or published as part of the compatible 5.0.6 release."
+  },
+  "continuation": {
+    "initial_head": "4f8acab83aaf940211a021d8c87bc2a3891f9831",
+    "initial_head_remote_matched": true,
+    "initial_uncommitted_changes": false,
+    "prior_workbenches": "Earlier implementation stages already incorporated into the branch; no missing local patches found.",
+    "production_head": "21a1ded6c04fc9b81d7f03d03eb70425c58a14c6",
+    "fixes": [
+      {
+        "name": "Factory callable reference snapshot",
+        "commit": "db74140ed1c4a0b2959ef0efafa912e0920e877c",
+        "test": "tests/Contract/FactoryDefinitionSnapshotContractTest.php",
+        "pre_fix_failed_cases": 7
+      },
+      {
+        "name": "Delegator routing and dependency snapshot",
+        "commit": "e31948f19fe08368bc241369874582f31f37658e",
+        "test": "tests/Contract/DelegatorSpecificationSnapshotContractTest.php",
+        "pre_fix_failed_cases": 5
+      },
+      {
+        "name": "ClassDefinition owned array graph",
+        "commit": "21a1ded6c04fc9b81d7f03d03eb70425c58a14c6",
+        "test": "tests/Contract/ClassDefinitionSnapshotContractTest.php",
+        "pre_fix_failed_cases": 7
+      }
+    ],
+    "fingerprints": {
+      "algorithm": "sha256: sorted relative path + NUL + contents + NUL",
+      "production_php": "6847f590dc1104088caa23dea0f72a4b909c0e6b7ef07c9063f8854ee69032ed",
+      "production_php_files": 169,
+      "tests_and_native_fixtures": "00c4c90241bb94b45524f9aad80447869fecebcc1a74d753532f238b3de67a7a",
+      "named_test_files": 204,
+      "native_fixture_files": 10
+    },
+    "local_verification": {
+      "php84": {
+        "version": "8.4.23",
+        "passed": 1345,
+        "skipped": 18,
+        "assertions": 23421,
+        "log_sha256": "164c6ebd9c44ef6407c51306a4efe0c6a1629b929a69cae3a3acc88e9947a952"
+      },
+      "php85": {
+        "version": "8.5.8",
+        "passed": 1363,
+        "skipped": 0,
+        "assertions": 23523,
+        "log_sha256": "f05738d51a0d36173f2f230223328133c5618b0c4782d18dacc40ddc0f6d08e2"
+      },
+      "phpstan_max": "passed; optional turbo extension cannot dynamically load in static CLI; PHP analysis completed",
+      "php_cs_fixer": {
+        "checked_files": 391,
+        "fixable_files": 0
+      },
+      "composer_validate": "passed",
+      "dependency_mode": "Existing installed companion-workspace graph from composer.audit.lock",
+      "dependency_lock_sha256": "6650b00c31a76c15ff59b0ba47fbbd060f681459ca78eddee6ed7cdb3c9ac337",
+      "composer_audit": {
+        "advisories": [],
+        "abandoned": [],
+        "filter": [],
+        "cooldown": []
+      },
+      "cache_parity": {
+        "runtimes": [
+          "8.4.23",
+          "8.5.8"
+        ],
+        "operations_per_runtime": 600,
+        "comparisons_per_runtime": 14400
+      },
+      "commands": [
+        "php -n vendor/bin/pest --compact --colors=never",
+        "php -n vendor/bin/phpstan analyse --no-progress --memory-limit=1G",
+        "php -n vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no",
+        "php -n composer.phar validate --strict --no-check-publish",
+        "COMPOSER=composer.audit.json php -n composer.phar audit --locked --no-interaction --format=json",
+        "php -n docs/audit/reproductions/MutationParity.php"
+      ]
+    },
+    "independent_review": [
+      "Callback/Transform/SetUp contracts reviewed without a new confirmed defect",
+      "ClassDefinition autoload mutation isolation, acyclic immediate release and cyclic release after test GC verified on both runtimes"
+    ],
+    "platform_evidence": "2026-11-14-di6-platform-evidence.json",
+    "platform_command": "php -n tests/php85-platform.php (composer test-platform)",
+    "candidate_semantic_pass": {
+      "version": "8.5.13RC1",
+      "passed_cases": 10,
+      "total_cases": 10,
+      "stable_runtime_accepted": false
+    },
+    "E1_closed": false,
+    "benchmark_scope": "Earlier benchmark measurements remain historical; no new application performance claim.",
+    "verified_pre_continuation_ci": {
+      "sha": "4f8acab83aaf940211a021d8c87bc2a3891f9831",
+      "run_id": 43593362160,
+      "conclusion": "success"
+    }
   }
 }

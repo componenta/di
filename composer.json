@@ -63,6 +63,7 @@
     },
     "scripts": {
         "test": "pest",
+        "test-platform": "@php -n tests/php85-platform.php",
         "test-coverage": "pest --coverage --min=80",
         "test-mutation": [
             "Composer\\Config::disableProcessTimeout",

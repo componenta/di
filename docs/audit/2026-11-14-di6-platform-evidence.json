@@ -1,0 +1,419 @@
+{
+  "schema_version": 1,
+  "checked_utc": "2026-11-14T14:11:25.216962+00:00",
+  "runner_sha256": "07629a6061cdabd676d1e6a3706829b418b842989651c93bf226c287f521c8bd",
+  "fixture_sha256": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+  "stable_release": {
+    "version": "8.5.12",
+    "release_url": "https://www.php.net/releases/8_5_12.php",
+    "current_downloads_url": "https://www.php.net/downloads.php?source=Y",
+    "source_url": "https://github.com/php/php-src/blob/php-8.5.12/Zend/zend_ast.c",
+    "source_blob_sha": "03ce073808adc3a0728a3be0709504f5e1d51823",
+    "required_correction_present": false,
+    "binary_tested": false
+  },
+  "candidate": {
+    "version": "8.5.13RC1",
+    "official_announcement_url": "https://news-web.php.net/php.internals/133012",
+    "source_archive_url": "https://downloads.php.net/~edorian/php-8.5.13RC1.tar.xz",
+    "source_archive_sha256": "dd6fa1450ecb0ca96c081adbb1b0691facf6e6492d9a127960f295ec20bdca8f",
+    "official_sha256": "dd6fa1450ecb0ca96c081adbb1b0691facf6e6492d9a127960f295ec20bdca8f",
+    "official_checksum_verified": true,
+    "tagged_source_url": "https://github.com/php/php-src/blob/php-8.5.13RC1/Zend/zend_ast.c",
+    "tagged_source_blob_sha": "f7eb7ee05e6e7f9ec1bb9a05e05078fd078ba9c2",
+    "tagged_source_sha256": "3b027d53b9c89854588d5452cd6fa35164ddc9dbc1316ad41c27c1802d7dbf37",
+    "required_correction_present": true,
+    "binary_sha256": "e9b94a0ef0ffe103ebb3d21bb4e5111b2243a1158365b60bfa6408a251b05802",
+    "binary_version": "PHP 8.5.13RC1 (cli) (built: Nov 14 2026 15:09:33) (NTS)\nCopyright (c) The PHP Group\nZend Engine v4.5.13RC1, Copyright (c) Zend Technologies\n    with Zend OPcache v8.5.13RC1, Copyright (c), by Zend Technologies",
+    "compiler": "gcc (Debian 14.2.0-19) 14.2.0",
+    "configure": [
+      "--disable-all",
+      "--disable-cgi",
+      "--disable-phpdbg",
+      "--without-pear",
+      "--enable-cli"
+    ],
+    "make": [
+      "make",
+      "-j6"
+    ],
+    "installed_globally": false
+  },
+  "runs": {
+    "php84": {
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/workspace/scratch/c1ee9cf6cd27/platform-gate/tests/php85-platform.php"
+      ],
+      "exit_code": 2,
+      "report": {
+        "schema_version": 1,
+        "runtime": {
+          "binary": "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "version": "8.4.23",
+          "stable_php85": false
+        },
+        "fixture_sha256": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+        "fixture_exit_code": null,
+        "semantic_acceptance_passed": false,
+        "stable_runtime_acceptance_passed": false,
+        "passed_cases": 0,
+        "total_cases": 10,
+        "cases": [],
+        "release_provenance_verified": false,
+        "tagged_source_verified": false,
+        "error": "Native first-class callable attribute expressions require PHP 8.5."
+      }
+    },
+    "php858": {
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "/workspace/scratch/c1ee9cf6cd27/platform-gate/tests/php85-platform.php"
+      ],
+      "exit_code": 1,
+      "report": {
+        "schema_version": 1,
+        "runtime": {
+          "binary": "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+          "version": "8.5.8",
+          "stable_php85": true
+        },
+        "fixture_sha256": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+        "fixture_exit_code": 0,
+        "semantic_acceptance_passed": false,
+        "stable_runtime_acceptance_passed": false,
+        "passed_cases": 2,
+        "total_cases": 10,
+        "cases": {
+          "self_default": {
+            "passed": false,
+            "expected": [
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "first"
+            ]
+          },
+          "parent_default": {
+            "passed": false,
+            "expected": [
+              "first-parent",
+              "second-parent"
+            ],
+            "actual": [
+              "first-parent",
+              "first-parent"
+            ]
+          },
+          "constant_and_property": {
+            "passed": false,
+            "expected": [
+              "first",
+              "second",
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "first",
+              "first",
+              "first"
+            ]
+          },
+          "private_self_default": {
+            "passed": false,
+            "expected": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to undefined method Componenta\\DI\\PlatformAcceptance\\PrivateSelfReference\\Second::who()"
+              }
+            ],
+            "actual": [
+              {
+                "value": "private-first"
+              },
+              {
+                "value": "private-first"
+              }
+            ]
+          },
+          "named_private_default": {
+            "passed": false,
+            "expected": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to private method Componenta\\DI\\PlatformAcceptance\\NamedPrivateReference\\First::who() from scope Componenta\\DI\\PlatformAcceptance\\NamedPrivateReference\\Second"
+              }
+            ],
+            "actual": [
+              {
+                "value": "private-first"
+              },
+              {
+                "value": "private-first"
+              }
+            ]
+          },
+          "named_public_default": {
+            "passed": true,
+            "expected": [
+              "public-first",
+              "public-first",
+              "public-first"
+            ],
+            "actual": [
+              "public-first",
+              "public-first",
+              "public-first"
+            ]
+          },
+          "attribute_self": {
+            "passed": false,
+            "expected": [
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "first"
+            ]
+          },
+          "attribute_inline": {
+            "passed": true,
+            "expected": [
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "second"
+            ]
+          },
+          "attribute_parent": {
+            "passed": false,
+            "expected": [
+              "first-parent",
+              "second-parent"
+            ],
+            "actual": [
+              "first-parent",
+              "first-parent"
+            ]
+          },
+          "attribute_named_private": {
+            "passed": false,
+            "expected": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to private method Componenta\\DI\\PlatformAcceptance\\Attributes\\PrivateFirst::who() from scope Componenta\\DI\\PlatformAcceptance\\Attributes\\PrivateSecond"
+              }
+            ],
+            "actual": [
+              {
+                "value": "private-first"
+              },
+              {
+                "value": "private-first"
+              }
+            ]
+          }
+        },
+        "release_provenance_verified": false,
+        "tagged_source_verified": false
+      }
+    },
+    "php8513rc1": {
+      "command": [
+        "/workspace/scratch/c1ee9cf6cd27/platform-gate/php-8.5.13RC1/sapi/cli/php",
+        "-n",
+        "/workspace/scratch/c1ee9cf6cd27/platform-gate/tests/php85-platform.php"
+      ],
+      "exit_code": 1,
+      "report": {
+        "schema_version": 1,
+        "runtime": {
+          "binary": "/workspace/scratch/c1ee9cf6cd27/platform-gate/php-8.5.13RC1/sapi/cli/php",
+          "version": "8.5.13RC1",
+          "stable_php85": false
+        },
+        "fixture_sha256": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+        "fixture_exit_code": 0,
+        "semantic_acceptance_passed": true,
+        "stable_runtime_acceptance_passed": false,
+        "passed_cases": 10,
+        "total_cases": 10,
+        "cases": {
+          "self_default": {
+            "passed": true,
+            "expected": [
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "second"
+            ]
+          },
+          "parent_default": {
+            "passed": true,
+            "expected": [
+              "first-parent",
+              "second-parent"
+            ],
+            "actual": [
+              "first-parent",
+              "second-parent"
+            ]
+          },
+          "constant_and_property": {
+            "passed": true,
+            "expected": [
+              "first",
+              "second",
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "second",
+              "first",
+              "second"
+            ]
+          },
+          "private_self_default": {
+            "passed": true,
+            "expected": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to undefined method Componenta\\DI\\PlatformAcceptance\\PrivateSelfReference\\Second::who()"
+              }
+            ],
+            "actual": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to undefined method Componenta\\DI\\PlatformAcceptance\\PrivateSelfReference\\Second::who()"
+              }
+            ]
+          },
+          "named_private_default": {
+            "passed": true,
+            "expected": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to private method Componenta\\DI\\PlatformAcceptance\\NamedPrivateReference\\First::who() from scope Componenta\\DI\\PlatformAcceptance\\NamedPrivateReference\\Second"
+              }
+            ],
+            "actual": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to private method Componenta\\DI\\PlatformAcceptance\\NamedPrivateReference\\First::who() from scope Componenta\\DI\\PlatformAcceptance\\NamedPrivateReference\\Second"
+              }
+            ]
+          },
+          "named_public_default": {
+            "passed": true,
+            "expected": [
+              "public-first",
+              "public-first",
+              "public-first"
+            ],
+            "actual": [
+              "public-first",
+              "public-first",
+              "public-first"
+            ]
+          },
+          "attribute_self": {
+            "passed": true,
+            "expected": [
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "second"
+            ]
+          },
+          "attribute_inline": {
+            "passed": true,
+            "expected": [
+              "first",
+              "second"
+            ],
+            "actual": [
+              "first",
+              "second"
+            ]
+          },
+          "attribute_parent": {
+            "passed": true,
+            "expected": [
+              "first-parent",
+              "second-parent"
+            ],
+            "actual": [
+              "first-parent",
+              "second-parent"
+            ]
+          },
+          "attribute_named_private": {
+            "passed": true,
+            "expected": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to private method Componenta\\DI\\PlatformAcceptance\\Attributes\\PrivateFirst::who() from scope Componenta\\DI\\PlatformAcceptance\\Attributes\\PrivateSecond"
+              }
+            ],
+            "actual": [
+              {
+                "value": "private-first"
+              },
+              {
+                "error": "Error",
+                "message": "Call to private method Componenta\\DI\\PlatformAcceptance\\Attributes\\PrivateFirst::who() from scope Componenta\\DI\\PlatformAcceptance\\Attributes\\PrivateSecond"
+              }
+            ]
+          }
+        },
+        "release_provenance_verified": false,
+        "tagged_source_verified": false
+      }
+    }
+  },
+  "E1_closed": false,
+  "limits": [
+    "A release candidate does not satisfy the officially released stable PHP 8.5 requirement.",
+    "Existing PHP 8.5.8 is the negative binary control, not the latest stable release.",
+    "PHP 8.5.12 was rechecked at tagged source level, not executed as a binary.",
+    "The locally built RC is a minimal CLI for pure-engine acceptance, not a full DI suite or performance runtime.",
+    "The runner verifies semantics and the native version string; official release status and source provenance are separate evidence requirements."
+  ]
+}

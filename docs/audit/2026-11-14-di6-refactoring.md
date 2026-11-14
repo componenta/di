@@ -2,6 +2,8 @@
 
 [Полная русская версия](2026-11-14-di6-refactoring.ru.md) · [Machine-readable evidence](2026-11-14-di6-evidence.json)
 
+**Continuation:** the [follow-up below](#follow-up-owned-array-snapshots-and-e1-acceptance) records three additional corrections, current local checks and the PHP 8.5.13RC1 evidence. Earlier sections retain the initial implementation measurements and verification; they are not substituted for checks of the follow-up source.
+
 ## Outcome and version boundaries
 
 **v5.0.6 is published** on [GitHub](https://github.com/componenta/di/releases/tag/v5.0.6) and [Packagist](https://packagist.org/packages/componenta/di#v5.0.6). Both references identify `ad46b3098f663d6c0d55bf6d1651a526af16ac68`. The release is a compatible patch: PHP remains `^8.4`, public construction and configuration APIs are unchanged, and the four new TDD fixes plus the prior main-branch corrections are recorded in the [release audit](2026-11-14-release-audit.md).
@@ -120,3 +122,32 @@ php -n docs/audit/reproductions/MutationParity.php
 ```
 
 For timings, set `COMPONENTA_DI_BENCH_AUTOLOAD` to the shared vendor autoloader and `COMPONENTA_DI_BENCH_SOURCE` to either the immutable release checkout or the branch source. Run RuntimeBench, GeneratedVsReflectionBench, BuildPhasesBench and ParameterPlanBench serially with the iteration values above. `DI_BENCH_CASES` optionally selects comma-separated RuntimeBench cases; no filter was used for the final full RuntimeBench measurements.
+
+## Follow-up: owned array snapshots and E1 acceptance
+
+Re-entry started at `4f8acab83aaf940211a021d8c87bc2a3891f9831`, which matched the remote branch and had no uncommitted changes. The other local workbenches contained earlier implementation stages, not missing patches. [CI run 43593362160](https://github.com/componenta/di/actions/runs/43593362160) had completed successfully on that exact head. The new review found that readonly PHP array properties could still retain caller-owned reference slots, undermining the specified stable configuration boundary.
+
+| Correction | Commit | Observable result |
+| --- | --- | --- |
+| Factory callable-array snapshot | [`db74140`](https://github.com/componenta/di/commit/db74140ed1c4a0b2959ef0efafa912e0920e877c) | Rebinding caller owner/method variables cannot redirect an admitted factory. Deferred resolution no longer writes the resolved owner through the caller's reference or pins that owner after service replacement. |
+| Delegator routing snapshot | [`e31948f`](https://github.com/componenta/di/commit/e31948f19fe08368bc241369874582f31f37658e) | Callable routing and its dependency index use the same snapshot, including when autoload code changes caller references during discovery. Owner replacement invalidates the correct warmed entries. |
+| ClassDefinition array snapshot | [`21a1ded`](https://github.com/componenta/di/commit/21a1ded6c04fc9b81d7f03d03eb70425c58a14c6) | Nested arguments and configured method routing cannot change outside registration. Array cycles/shared edges remain owned; objects retain identity, service references remain fresh and runtime overrides keep their literal semantics. |
+
+The three regression groups failed before their corresponding production changes: **7 factory, 5 delegator and 7 ClassDefinition cases**. Admission now owns configuration reference slots; mutable application objects retain their intended business state. Recursive configured arrays still fail only when consumed, so runtime overrides can bypass unused invalid configuration. Independent checks also verified autoload-time mutation isolation and release of acyclic/cyclic payloads after replacement. No production GC, object cloning, new registry or second invocation path was introduced.
+
+| Current local gate | Result |
+| --- | --- |
+| PHP 8.4.23 complete suite | 1,345 passed; 18 expected native PHP 8.5 skips; 23,421 assertions |
+| PHP 8.5.8 complete suite | 1,363 passed; 23,523 assertions |
+| PHPStan maximum level | No errors; the static CLI's optional turbo-extension warning does not prevent analysis. |
+| PHP CS Fixer | 391 PHP files; no changes required. |
+| Composer metadata and locked dependency audit | Valid metadata; no advisories or abandoned packages in the installed companion-workspace dependency graph. |
+| Cache mutation parity, each runtime | 600 operations / 14,400 comparisons. |
+
+These checks cover the three corrections and the new platform runner. The `continuation` section of the evidence JSON records production/test fingerprints, exact commands and dependency-lock identity. Hosted checks are associated with their own commit SHA; [branch runs](https://github.com/componenta/di/actions?query=branch%3Arefactor%2Fdi6-definitions-callbacks) show the current result. The earlier timing table has not been rerun or relabeled as performance evidence for these admission changes.
+
+### Native platform progress
+
+`composer test-platform` now runs an isolated, DI-independent acceptance fixture for the ten required trait/default/property/attribute scope and visibility scenarios. PHP 8.5.8 passes only the two unaffected controls. A minimal CLI built from the official, checksum-verified **PHP 8.5.13RC1** archive passes **10/10 semantic cases**. The command still exits nonzero for that RC because it is not a stable PHP 8.5 release; PHP 8.4 is rejected before the native fixture executes. [Platform evidence](2026-11-14-di6-platform-evidence.json) includes the exact source and binary hashes, build options and individual outcomes.
+
+The RC source contains the upstream correction; the current stable 8.5.12 tag does not. No 8.5.12 binary result is claimed. **E1 remains open** until an officially released stable patch, its tagged source and its exact binary satisfy the same proof. The final Composer floor, branch alias and DI 6 release remain governed by that condition. Conditional availability optimization and request-to-DTO callbacks retain their separately deferred scope.
