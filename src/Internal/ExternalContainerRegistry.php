@@ -15,12 +15,21 @@ final class ExternalContainerRegistry
 {
     /** @var array<int, ContainerInterface> */
     private array $containers = [];
+    public private(set) int $revision = 0;
 
     public function register(ContainerInterface $container): void
     {
-        $this->containers[spl_object_id($container)] ??= $container;
+        $id = spl_object_id($container);
+        if (!isset($this->containers[$id])) {
+            $this->containers[$id] = $container;
+            ++$this->revision;
+        }
     }
 
+    /**
+     * Reentrant ownership callbacks can change membership between queries.
+     * @phpstan-impure
+     */
     public function contains(ContainerInterface $container): bool
     {
         return isset($this->containers[spl_object_id($container)]);

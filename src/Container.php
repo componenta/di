@@ -305,7 +305,7 @@ final class Container implements
         if ($container === $this) {
             throw new InvalidConfigurationException('The container cannot delegate lookups to itself.');
         }
-        if ($this->externalContainers?->contains($container) === true) {
+        if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
             return;
         }
 
@@ -318,6 +318,10 @@ final class Container implements
                 'Failed to inspect an external container while registering it.',
                 previous: $e,
             );
+        }
+
+        if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
+            return;
         }
 
         $retirement = new MutationRetirement(null);
@@ -449,23 +453,45 @@ final class Container implements
     /** @return list<string> */
     private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
     {
-        $dependencies = [];
+        $candidates = [];
         $inspected = [];
         do {
-            $discovered = false;
             foreach ($this->delegators->deferredDependencies() as $dependencyId) {
                 if (isset($inspected[$dependencyId])) {
                     continue;
                 }
                 $inspected[$dependencyId] = true;
-                $discovered = true;
-                if ($this->externalContainers?->findOwning($dependencyId) !== null || !$container->has($dependencyId)) {
-                    continue;
+                do {
+                    $revision = $this->externalContainers->revision ?? 0;
+                    $owner = $this->externalContainers?->findOwning($dependencyId);
+                    if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
+                        return [];
+                    }
+                } while ($revision !== ($this->externalContainers->revision ?? 0));
+                if ($owner === null && $container->has($dependencyId)) {
+                    $candidates[] = $dependencyId;
                 }
-                $dependencies[] = $dependencyId;
+                if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
+                    return [];
+                }
             }
-            // Ownership callbacks can register more deferred dependencies.
-        } while ($discovered);
+
+            // Keep candidate answers, but prove ownership against the completed
+            // registry. Existing-owner callbacks can publish further containers.
+            $dependencies = [];
+            $revision = $this->externalContainers->revision ?? 0;
+            foreach ($candidates as $dependencyId) {
+                $owner = $this->externalContainers?->findOwning($dependencyId);
+                if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
+                    return [];
+                }
+                if ($owner === null) {
+                    $dependencies[] = $dependencyId;
+                }
+            }
+            // Either phase can also introduce new deferred dependency IDs.
+        } while ($revision !== ($this->externalContainers->revision ?? 0)
+            || count($inspected) !== count($this->delegators->deferredDependencies()));
         return $dependencies;
     }
 

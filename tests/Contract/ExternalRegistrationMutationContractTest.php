@@ -147,3 +147,155 @@ test('a newly discovered ownership failure rejects the external container and pr
         ->and($container->get('second'))->toEqual(new Product('second:local'))
         ->and($container->get('second.decorator'))->toBe($local);
 });
+
+test('external registration preserves results warmed by a nested owner registration', function (bool $sameCandidate): void {
+    $calls = 0;
+    $selected = static function (Product $entry) use (&$calls): Product {
+        ++$calls;
+        return new Product($entry->value . ':selected');
+    };
+    $container = (new ContainerBuilder())->addServices([
+        'entry' => new Product('base'),
+        'owner' => static fn(Product $entry): Product => new Product($entry->value . ':local'),
+    ])->addDelegator('entry', 'owner')->build();
+    expect($container->get('entry'))->toEqual(new Product('base:local'));
+
+    $earlier = new CallbackContainer(['owner' => $selected], static function (): void {});
+    $nested = false;
+    $warmed = null;
+    $candidate = null;
+    $candidate = new CallbackContainer([
+        'owner' => $sameCandidate
+            ? $selected
+            : static fn(Product $entry): Product => new Product($entry->value . ':later'),
+    ], static function (string $id) use ($container, $earlier, $sameCandidate, &$candidate, &$nested, &$warmed): void {
+        if ($id !== 'owner' || $nested) {
+            return;
+        }
+        $nested = true;
+        if (!$candidate instanceof CallbackContainer) {
+            throw new LogicException('The candidate must exist before ownership inspection.');
+        }
+        $container->addContainer($sameCandidate ? $candidate : $earlier);
+        $warmed = $container->get('entry');
+    });
+
+    $container->addContainer($candidate);
+    $current = $container->get('entry');
+
+    expect($nested)->toBeTrue()
+        ->and($current)->toEqual(new Product('base:selected'))
+        ->and($current)->toBe($warmed)
+        ->and($container->get('entry'))->toBe($current)
+        ->and($container->get('owner'))->toBe($selected)
+        ->and($calls)->toBe(1);
+})->with(['earlier owner' => false, 'same candidate' => true]);
+
+test('a later ownership callback can establish an earlier owner for an already inspected dependency', function (): void {
+    $calls = 0;
+    $selected = static function (Product $entry) use (&$calls): Product {
+        ++$calls;
+        return new Product($entry->value . ':selected');
+    };
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $container = (new ContainerBuilder())->addServices([
+        'entry' => new Product('base'),
+        'trigger' => new Product('trigger'),
+        'owner' => $local,
+        'trigger.owner' => $local,
+    ])->addDelegator('entry', 'owner')->addDelegator('trigger', 'trigger.owner')->build();
+    expect($container->get('entry'))->toEqual(new Product('base:local'));
+    $trigger = $container->get('trigger');
+    $earlier = new CallbackContainer(['owner' => $selected], static function (): void {});
+    $warmed = null;
+    $candidate = new CallbackContainer([
+        'owner' => static fn(Product $entry): Product => new Product($entry->value . ':later'),
+    ], static function (string $id) use ($container, $earlier, &$warmed): void {
+        if ($id === 'trigger.owner' && $warmed === null) {
+            $container->addContainer($earlier);
+            $warmed = $container->get('entry');
+        }
+    });
+
+    $container->addContainer($candidate);
+    $registrationQueries = $candidate->queries;
+    $current = $container->get('entry');
+
+    expect($current)->toEqual(new Product('base:selected'))
+        ->and($current)->toBe($warmed)
+        ->and($container->get('entry'))->toBe($current)
+        ->and($container->get('trigger'))->toBe($trigger)
+        ->and($calls)->toBe(1)
+        ->and($registrationQueries)->toBe(['owner' => 1, 'trigger.owner' => 1]);
+});
+
+test('external registration does not inspect a candidate for an already owned dependency', function (): void {
+    $selected = static fn(Product $entry): Product => new Product($entry->value . ':selected');
+    $container = (new ContainerBuilder())->addServices([
+        'entry' => new Product('base'),
+        'owner' => static fn(Product $entry): Product => new Product($entry->value . ':local'),
+    ])->addDelegator('entry', 'owner')->build();
+    $container->addContainer(new CallbackContainer(['owner' => $selected], static function (): void {}));
+    $warmed = $container->get('entry');
+    $candidate = new CallbackContainer(['owner' => $selected], static function (string $id): void {
+        if ($id === 'owner') {
+            throw new LogicException('The lower-priority candidate must not inspect this owned dependency.');
+        }
+    });
+
+    $container->addContainer($candidate);
+
+    expect($candidate->queries)->toBe([])
+        ->and($container->get('entry'))->toBe($warmed);
+});
+
+test('external ownership inspection preserves results warmed during successive nested registrations', function (): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $selected = static fn(Product $entry): Product => new Product($entry->value . ':selected');
+    $container = (new ContainerBuilder())->addServices([
+        'first' => new Product('first'),
+        'second' => new Product('second'),
+        'trigger' => new Product('trigger'),
+        'first.owner' => $local,
+        'second.owner' => $local,
+        'trigger.owner' => $local,
+    ])->addDelegator('first', 'first.owner')
+        ->addDelegator('second', 'second.owner')
+        ->addDelegator('trigger', 'trigger.owner')
+        ->build();
+    $firstOwner = new CallbackContainer(['first.owner' => $selected], static function (): void {});
+    $secondOwner = new CallbackContainer(['second.owner' => $selected], static function (): void {});
+    $inspection = new class () {
+        public bool $again = false;
+    };
+    $warmed = [];
+    $observer = new CallbackContainer([], static function (string $id) use ($container, $secondOwner, $inspection, &$warmed): void {
+        if ($id === 'trigger.owner' && $inspection->again) {
+            $inspection->again = false;
+            $container->addContainer($secondOwner);
+            $warmed['second'] = $container->get('second');
+        }
+    });
+    $container->addContainer($observer);
+    $candidate = new CallbackContainer([
+        'first.owner' => $local,
+        'second.owner' => $local,
+        'trigger.owner' => $local,
+    ], static function (string $id) use ($container, $firstOwner, $inspection, &$warmed): void {
+        if ($id === 'trigger.owner') {
+            $container->addContainer($firstOwner);
+            $warmed['first'] = $container->get('first');
+            $inspection->again = true;
+        }
+    });
+
+    $container->addContainer($candidate);
+
+    expect($candidate->queries)->toBe(['first.owner' => 1, 'second.owner' => 1, 'trigger.owner' => 1])
+        ->and($warmed['first'])->toEqual(new Product('first:selected'));
+    foreach ($warmed as $id => $entry) {
+        expect($container->get($id))->toBe($entry)
+            ->and($container->get($id))->toBe($entry);
+    }
+    expect($warmed['second'] ?? null)->toEqual(new Product('second:selected'));
+});
