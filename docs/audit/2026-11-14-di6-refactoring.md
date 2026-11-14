@@ -215,3 +215,23 @@ These measurements retain the remaining cost of the correctness boundaries and t
 ### Remaining release boundary
 
 The implementation-ready refactor, library verification and consumer/migration proof are complete. **E1 remains open** for an officially released stable PHP patch with the trait-callable correction, its tagged source and its exact binary acceptance. Final Composer floor, `6.0.x-dev` alias and supported-platform release checks follow that evidence. Conditional availability B2 and the possible request-to-DTO callback feature retain their separately deferred scopes. No DI 6 release has been published.
+
+<a id="continuation-verification"></a>
+## Continuation verification and completed hosted checks
+
+The continuation resumed at `9521bf0b56a5b05b9e386ad017a4d9c348a5bec0`. GitHub and a fresh Git fetch confirmed the same remote head. The working tree was clean, no local commits were ahead of remote branches, and historical DI workbenches contained no unique ready patches to recover. Their implementation changes were already integrated or superseded.
+
+The previously pending [hosted run 43611104866](https://github.com/componenta/di/actions/runs/43611104866) completed successfully on that exact commit at **2026-11-14 16:24:43 UTC**. Linux PHP 8.4/8.5, Windows PHP 8.4, static analysis, formatting, coverage and mutation checks passed. Its own coverage is **91.4%** and mutation score is **86.54%**: 3,549 tested, 38 timeout and 558 untested mutations. The optional manually triggered historical benchmark job was skipped. These results close the final hosted-check uncertainty recorded above.
+
+| Fresh continuation check | Result |
+| --- | --- |
+| Full suite, PHP 8.4.23, random seed `2026111401` | 1,368 passed; 18 expected native-PHP-8.5 skips; 23,578 assertions |
+| Full suite, PHP 8.5.8, random seed `2026111402` | 1,386 passed; 23,680 assertions |
+| Focused ownership/lifecycle contracts, PHP 8.4 / 8.5 | 204 / 210 passed; 6 expected native skips on 8.4 |
+| Original definition and cache-retirement reproductions, both runtimes | Retired factory/capture roots are released; committed failures leave `get()`, `make()` and all affected aliases on the new state |
+| Warm/cold mutation-history parity, each runtime | 1,200 mutations; 28,800 value comparisons; no divergence |
+| Isolated native PHP acceptance | PHP 8.5.8: 2/10; PHP 8.5.13RC1: 10/10 semantic cases, correctly rejected by stable-runtime acceptance |
+
+Independent source/contract reviews of definitions, mutation retirement, callbacks, `Transform`, `SetUp` and simple unions found no new confirmed defects or unfinished implementation-ready requirements. This continuation changes documentation only. The 169-file production fingerprint and 399-file source/test fingerprint are unchanged from the completed implementation. Exact commands, log hashes and fresh reproduction results are in `continuation_recheck`; exact hosted results are in `completion_recheck.hosted_final_gate` in the [evidence JSON](2026-11-14-di6-evidence.json).
+
+**E1 remains the release boundary.** Rechecking the official [downloads](https://www.php.net/downloads.php) and [prerelease](https://www.php.net/pre-release-builds.php) pages on November 14 still shows stable PHP 8.5.12 and candidate 8.5.13RC1. The [official announcement](https://news-web.php.net/php.internals/133012) expects stable 8.5.13 on **November 19, 2026**; that date is not proof of release or binary acceptance. Once a fixed stable release exists, its tagged source and exact binary must pass E1 before finalizing the Composer floor, branch alias and release-platform checks. No further library refactor is identified by this continuation.

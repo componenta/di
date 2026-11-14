@@ -2159,6 +2159,338 @@
     "hosted_final_status_url": "https://github.com/componenta/di/actions?query=branch%3Arefactor%2Fdi6-definitions-callbacks",
     "hosted_reporting": "Hosted results belong to their exact commit. Final completion is reported after the final branch run; earlier run metrics are not reassigned to changed source.",
     "E1_closed": false,
-    "release_boundary": "No DI6 tag, stable PHP floor or 6.0.x-dev alias is claimed. E1 still requires the official stable release, tagged-source correction and exact stable-binary acceptance."
+    "release_boundary": "No DI6 tag, stable PHP floor or 6.0.x-dev alias is claimed. E1 still requires the official stable release, tagged-source correction and exact stable-binary acceptance.",
+    "hosted_final_gate": {
+      "verified_commit": "9521bf0b56a5b05b9e386ad017a4d9c348a5bec0",
+      "run_id": 43611104866,
+      "url": "https://github.com/componenta/di/actions/runs/43611104866",
+      "metrics_from_job": 132496178420,
+      "coverage_percent": 91.4,
+      "mutation": {
+        "score_percent": 86.54,
+        "tested": 3549,
+        "timeout": 38,
+        "untested": 558,
+        "duration_seconds": 2674.46
+      },
+      "jobs": [
+        {
+          "id": 132496178029,
+          "name": "PHP 8.5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 132496178263,
+          "name": "PHP 8.4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 132496178346,
+          "name": "Windows PHP 8.4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 132496178420,
+          "name": "Coverage PHP 8.4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 132509398607,
+          "name": "v4.0.10 vs v5 benchmark",
+          "status": "completed",
+          "conclusion": "skipped"
+        }
+      ],
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-11-14T16:24:43Z"
+    }
+  },
+  "continuation_recheck": {
+    "checked_at_utc": "2026-11-14T20:14:01+00:00",
+    "resumed_at_head": "9521bf0b56a5b05b9e386ad017a4d9c348a5bec0",
+    "remote_head_verified_via_github_connector_and_git_fetch": "9521bf0b56a5b05b9e386ad017a4d9c348a5bec0",
+    "working_tree_at_start": "clean",
+    "unpublished_local_commits": [],
+    "unique_ready_patches_in_historical_workspaces": [],
+    "source_fingerprint": {
+      "file_count": 169,
+      "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+    },
+    "source_tests_fingerprint": {
+      "file_count": 399,
+      "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+    },
+    "production_and_test_files_changed": false,
+    "whole_library_passes": [
+      {
+        "runtime": "php84",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "-n",
+          "-d",
+          "memory_limit=1G",
+          "vendor/bin/pest",
+          "--compact",
+          "--colors=never",
+          "--order-by=random",
+          "--random-order-seed=2026111401",
+          "--do-not-cache-result"
+        ],
+        "exit_code": 0,
+        "duration_seconds": 9.783,
+        "log_sha256": "fef201339cf88b96ee502b5837a22d9ccbed15aac2aaa485cdc63edfa8ce0e6f",
+        "summary": [
+          "Tests:    18 skipped, 1368 passed (23578 assertions)",
+          "Duration: 9.36s",
+          "Random Order Seed: 2026111401"
+        ],
+        "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+      },
+      {
+        "runtime": "php85",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+          "-n",
+          "-d",
+          "memory_limit=1G",
+          "vendor/bin/pest",
+          "--compact",
+          "--colors=never",
+          "--order-by=random",
+          "--random-order-seed=2026111402",
+          "--do-not-cache-result"
+        ],
+        "exit_code": 0,
+        "duration_seconds": 11.954,
+        "log_sha256": "f67a228c9a154e8c4103bb5aca5e0a477ea687cd240930c6953030611adce450",
+        "summary": [
+          "Tests:    1386 passed (23680 assertions)",
+          "Duration: 11.59s",
+          "Random Order Seed: 2026111402"
+        ],
+        "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+      }
+    ],
+    "focused_definition_lifecycle_contracts": [
+      {
+        "runtime": "8.4.23",
+        "contract_files": 17,
+        "random_seed": 6490114,
+        "passed": 204,
+        "skipped": 6,
+        "assertions": 881,
+        "log_sha256": "d9a2a7c6ba2a289e6b41f9ec4bf4cfb1d88d5703c6c9fb889033e87bfd02aa78"
+      },
+      {
+        "runtime": "8.5.8",
+        "contract_files": 17,
+        "random_seed": 6490114,
+        "passed": 210,
+        "skipped": 0,
+        "assertions": 949,
+        "log_sha256": "d033e58432b81cbf36dc4d2022d9f30d39b9ca6937bded013359fd6f98c06eb4"
+      }
+    ],
+    "original_lifecycle_and_cache_reproductions": [
+      {
+        "runtime": "84",
+        "scenario": "DefinitionLifecycle",
+        "returncode": 0,
+        "observations": {
+          "php": "8.4.23",
+          "different_owner": {
+            "factory_and_capture_retained": [
+              false,
+              false
+            ],
+            "new_make_class": "stdClass",
+            "retained_after_container_disposal": [
+              false,
+              false
+            ]
+          },
+          "same_owner": {
+            "factory_and_capture_retained": [
+              false,
+              false
+            ],
+            "new_make_class": "stdClass",
+            "retained_after_container_disposal": [
+              false,
+              false
+            ]
+          },
+          "throwing_retirement": {
+            "failure": [
+              "Componenta\\DI\\Exception\\MutationRetirementException",
+              "retired factory destructor failed"
+            ],
+            "get": "new",
+            "make": "new",
+            "shared_is_old": false
+          }
+        },
+        "stderr": "",
+        "sha256": "202062c00ece12d64142e23987bceff787f9e3df52cd1a31b6dcbaa98625c057"
+      },
+      {
+        "runtime": "84",
+        "scenario": "CacheRetirement",
+        "returncode": 0,
+        "observations": {
+          "php": "8.4.23",
+          "before": [
+            "old",
+            "old"
+          ],
+          "failure": [
+            "Componenta\\DI\\Exception\\MutationRetirementException",
+            "The DI mutation for id \"source\" committed, but releasing retired values failed."
+          ],
+          "after": {
+            "a": "new",
+            "b": "new",
+            "source": "new"
+          }
+        },
+        "stderr": "",
+        "sha256": "81a787dc879cd18969387687e2e4953ec1720227d1ce9a762654f0733840fea5"
+      },
+      {
+        "runtime": "84",
+        "scenario": "MutationParity",
+        "returncode": 0,
+        "observations": {
+          "php": "8.4.23",
+          "operations": 1200,
+          "comparisons": 28800
+        },
+        "stderr": "",
+        "sha256": "30f7cce2cf6a856479f67575efb1858638cf1927c92cc3c2c72ebd79ffdbe050"
+      },
+      {
+        "runtime": "85",
+        "scenario": "DefinitionLifecycle",
+        "returncode": 0,
+        "observations": {
+          "php": "8.5.8",
+          "different_owner": {
+            "factory_and_capture_retained": [
+              false,
+              false
+            ],
+            "new_make_class": "stdClass",
+            "retained_after_container_disposal": [
+              false,
+              false
+            ]
+          },
+          "same_owner": {
+            "factory_and_capture_retained": [
+              false,
+              false
+            ],
+            "new_make_class": "stdClass",
+            "retained_after_container_disposal": [
+              false,
+              false
+            ]
+          },
+          "throwing_retirement": {
+            "failure": [
+              "Componenta\\DI\\Exception\\MutationRetirementException",
+              "retired factory destructor failed"
+            ],
+            "get": "new",
+            "make": "new",
+            "shared_is_old": false
+          }
+        },
+        "stderr": "",
+        "sha256": "7eea317e64c50363826837d4db9ace43468ede5f05c67fe788841dc77f5aa52d"
+      },
+      {
+        "runtime": "85",
+        "scenario": "CacheRetirement",
+        "returncode": 0,
+        "observations": {
+          "php": "8.5.8",
+          "before": [
+            "old",
+            "old"
+          ],
+          "failure": [
+            "Componenta\\DI\\Exception\\MutationRetirementException",
+            "The DI mutation for id \"source\" committed, but releasing retired values failed."
+          ],
+          "after": {
+            "a": "new",
+            "b": "new",
+            "source": "new"
+          }
+        },
+        "stderr": "",
+        "sha256": "1b64976aa7274818a9508599aaa5e55a48eb8ed7f10af9c3ece03bddc2f5680f"
+      },
+      {
+        "runtime": "85",
+        "scenario": "MutationParity",
+        "returncode": 0,
+        "observations": {
+          "php": "8.5.8",
+          "operations": 1200,
+          "comparisons": 28800
+        },
+        "stderr": "",
+        "sha256": "1e419d97c10b75c50980a8315e02a0644a2b596cc487ae76c9f8ac288e32c7b7"
+      }
+    ],
+    "independent_convergence_reviews": {
+      "definition_ownership_and_mutation_retirement": "Converged; no new confirmed defects or missing implementation-ready contracts.",
+      "callback_binder_transform_setup_and_simple_unions": "Converged; no new confirmed defects or missing implementation-ready contracts.",
+      "discarded_old_self_union_draft": "The duplicate self|declaring-class union is rejected by PHP itself; the old draft is not a missing valid regression test."
+    },
+    "native_platform_acceptance": [
+      {
+        "runtime": "8.5.8",
+        "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e",
+        "fixture_sha256": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+        "passed_cases": 2,
+        "total_cases": 10,
+        "semantic_acceptance_passed": false,
+        "stable_runtime_acceptance_passed": false,
+        "exit_code": 1,
+        "log_sha256": "99fe324d1b8a2f6fdf6554af7b1e0e408d4e7b5d7ca871962a50fa425bdf538b"
+      },
+      {
+        "runtime": "8.5.13RC1",
+        "binary_sha256": "e9b94a0ef0ffe103ebb3d21bb4e5111b2243a1158365b60bfa6408a251b05802",
+        "fixture_sha256": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+        "passed_cases": 10,
+        "total_cases": 10,
+        "semantic_acceptance_passed": true,
+        "stable_runtime_acceptance_passed": false,
+        "exit_code": 1,
+        "log_sha256": "c534df5c38fba05d96a9739d94371e1e50ef037a92fdb1fb3f775715069c364a"
+      }
+    ],
+    "E1": {
+      "closed": false,
+      "stable_php85_release_observed": "8.5.12",
+      "fixed_release_candidate_observed": "8.5.13RC1",
+      "expected_stable_date_from_official_announcement": "2026-11-19",
+      "expected_date_is_not_release_proof": true,
+      "sources": [
+        "https://www.php.net/downloads.php",
+        "https://www.php.net/pre-release-builds.php",
+        "https://news-web.php.net/php.internals/133012"
+      ],
+      "remaining_work": "After official stable release, verify its tagged source and exact binary, settle the supported PHP floor, then update Composer/alias/CI and run the release-platform checks."
+    }
   }
 }
