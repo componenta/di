@@ -71,31 +71,36 @@ final class BootstrapResolutionGuard
     {
         $this->active = false;
         try {
-            foreach ($this->attributeUses as $use) {
-                $current = CompletedAttributeGuard::semantics($this->plans->build($use['target']), $use['phase']);
-                if ($current !== $use['usages']) {
-                    throw new InvalidConfigurationException(sprintf(
-                        'DI bootstrap used %s before its required attribute extensions were registered. Register these extensions before factories that resolve this dependency.',
-                        self::targetName($use['target']),
-                    ));
-                }
-            }
-            foreach ($this->parameterUses as $use) {
-                $winner = $use['winner'];
-                foreach ($resolvers as $resolver) {
-                    if ($resolver === $winner) {
-                        break;
-                    }
-                    if (!in_array($resolver, $use['prefix'], true) && $resolver->supports($use['target'])) {
+            do {
+                $revision = $this->plans->revision;
+                foreach ($this->attributeUses as $use) {
+                    $current = CompletedAttributeGuard::semantics($this->plans->build($use['target']), $use['phase']);
+                    if ($current !== $use['usages']) {
                         throw new InvalidConfigurationException(sprintf(
-                            'DI bootstrap resolved %s before applicable parameter resolver %s was registered ahead of %s. Register this resolver before factories that resolve this dependency.',
-                            self::targetName($use['target']->reflection),
-                            $resolver::class,
-                            $winner === null ? 'native argument omission' : $winner::class,
+                            'DI bootstrap used %s before its required attribute extensions were registered. Register these extensions before factories that resolve this dependency.',
+                            self::targetName($use['target']),
                         ));
                     }
                 }
-            }
+                foreach ($this->parameterUses as $use) {
+                    $winner = $use['winner'];
+                    foreach ($resolvers as $resolver) {
+                        if ($resolver === $winner) {
+                            break;
+                        }
+                        if (!in_array($resolver, $use['prefix'], true) && $resolver->supports($use['target'])) {
+                            throw new InvalidConfigurationException(sprintf(
+                                'DI bootstrap resolved %s before applicable parameter resolver %s was registered ahead of %s. Register this resolver before factories that resolve this dependency.',
+                                self::targetName($use['target']->reflection),
+                                $resolver::class,
+                                $winner === null ? 'native argument omission' : $winner::class,
+                            ));
+                        }
+                    }
+                }
+                // Discovery and immutable resolver classification can autoload
+                // semantics on an earlier target. Recheck proof, never replay work.
+            } while ($revision !== $this->plans->revision);
         } finally {
             $this->attributeUses = [];
             $this->parameterUses = [];
