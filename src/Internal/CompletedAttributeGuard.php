@@ -41,6 +41,25 @@ final class CompletedAttributeGuard
         $this->completed[] = ['target' => $target, 'plan' => $plan, 'phase' => $phase];
     }
 
+    /** Combines completed phases for one attempt without changing a reusable earlier guard. */
+    public function with(self $other): self
+    {
+        if ($this->plans !== $other->plans) {
+            throw new \LogicException('Completed attribute guards must belong to the same plan builder.');
+        }
+        if ($other->completed === []) {
+            return $this;
+        }
+        if ($this->completed === []) {
+            return $other;
+        }
+
+        $combined = clone $this;
+        $combined->completed = [...$this->completed, ...$other->completed];
+        $combined->verifiedRevision = -1;
+        return $combined;
+    }
+
     public function assertUnchanged(): void
     {
         while (($revision = $this->plans->revision) !== $this->verifiedRevision) {

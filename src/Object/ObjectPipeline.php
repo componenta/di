@@ -126,10 +126,12 @@ final class ObjectPipeline
                 );
                 $this->resolutionParameters->attach($creation, $parameters);
                 $creation->initialize($entry);
-                $this->attributes->process($metadata->class, AttributePhase::AfterInstantiation, $creation);
+                $after = $this->attributes->processTracked($metadata->class, AttributePhase::AfterInstantiation, $creation);
             } else {
                 $this->attributes->recordBootstrapUse($metadata->class, AttributePhase::AfterInstantiation);
+                $after = $this->attributes->skippedAfterPhase($metadata->class);
             }
+            $completed = $completed->with($after);
             $completed->assertUnchanged();
             $configure?->__invoke($entry);
             $completed->assertUnchanged();
@@ -263,11 +265,12 @@ final class ObjectPipeline
 
         $completed->assertUnchanged();
         $creation->initialize($entry);
-        $this->attributes->process(
+        $after = $this->attributes->processTracked(
             $metadata->class,
             AttributePhase::AfterInstantiation,
             $creation,
         );
+        $completed = $completed->with($after);
         $completed->assertUnchanged();
         $configure?->__invoke($entry);
         $completed->assertUnchanged();
@@ -305,14 +308,15 @@ final class ObjectPipeline
 
                     $completed->assertUnchanged();
                     $attempt->initialize($entry);
-                    $this->attributes->process(
+                    $after = $this->attributes->processTracked(
                         $metadata->class,
                         AttributePhase::AfterInstantiation,
                         $attempt,
                     );
-                    $completed->assertUnchanged();
+                    $attemptCompleted = $completed->with($after);
+                    $attemptCompleted->assertUnchanged();
                     $configure?->__invoke($entry);
-                    $completed->assertUnchanged();
+                    $attemptCompleted->assertUnchanged();
                 } catch (Throwable $exception) {
                     $creation = $this->freshAttempt($creation, $resolveParameters);
                     throw $exception;

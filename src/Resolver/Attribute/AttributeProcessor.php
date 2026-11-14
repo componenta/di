@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -73,9 +74,34 @@ final class AttributeProcessor
      */
     public function skippedBeforePhase(ReflectionClass $class): CompletedAttributeGuard
     {
+        return $this->skippedPhase($class, AttributePhase::BeforeInstantiation);
+    }
+
+    /**
+     * Records validated metadata in the handlerless after phase.
+     * @internal
+     * @param ReflectionClass<object> $class
+     */
+    public function skippedAfterPhase(ReflectionClass $class): CompletedAttributeGuard
+    {
+        return $this->skippedPhase($class, AttributePhase::AfterInstantiation);
+    }
+
+    /** @param ReflectionClass<object> $class */
+    private function skippedPhase(ReflectionClass $class, AttributePhase $phase): CompletedAttributeGuard
+    {
         $guard = new CompletedAttributeGuard($this->plans);
-        foreach ($this->executionPlan($class)['before'] as $target) {
-            $guard->record($target, new AttributePlan($target, []), AttributePhase::BeforeInstantiation);
+        $targets = $this->executionPlan($class)[$phase === AttributePhase::BeforeInstantiation ? 'before' : 'after'];
+        foreach ($targets as $target) {
+            $usages = $phase === AttributePhase::AfterInstantiation
+                ? array_values(array_filter(
+                    $this->plans->build($target)->usages,
+                    static fn(AttributeUsage $usage): bool => !$usage->definition->handler instanceof AttributeHandlerInterface,
+                ))
+                : [];
+            // Discovery may reveal an object handler after the fast-path choice.
+            // Only metadata was validated here; no handler can count as completed.
+            $guard->record($target, new AttributePlan($target, $usages), $phase);
         }
         return $guard;
     }
