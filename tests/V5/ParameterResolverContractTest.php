@@ -89,3 +89,53 @@ it('rejects custom resolver values that violate the declared parameter type', fu
     expect(fn() => $container->call(static fn(string $value): string => $value))
         ->toThrow(ResolutionException::class, 'does not satisfy the declared type');
 });
+
+it(
+    'rejects malformed resolver tuples before invoking the callable and permits recovery',
+    /** @param array<mixed> $malformed */
+    function (array $malformed): void {
+        $resolver = new class () implements ParameterResolverInterface {
+            /** @var array<mixed> */
+            public array $result = [0, 'initial'];
+
+            public function supports(ParameterTarget $target): bool
+            {
+                return $target->name === 'value';
+            }
+
+            public function resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): array
+            {
+                // @phpstan-ignore return.type (A broken extension deliberately returns malformed tuples.)
+                return $this->result;
+            }
+        };
+        $receiver = new class () {
+            public int $calls = 0;
+
+            public function accept(string $value): string
+            {
+                ++$this->calls;
+                return $value;
+            }
+        };
+        $container = (new ContainerBuilder())->addParameterResolver($resolver, 2000)->build();
+        expect($container->call([$receiver, 'accept']))->toBe('initial');
+
+        $resolver->result = $malformed;
+
+        expect(fn() => $container->call([$receiver, 'accept']))
+            ->toThrow(ResolutionException::class, 'expected [position 0, value]');
+        expect($receiver->calls)->toBe(1);
+
+        $resolver->result = [0, 'recovered'];
+        expect($container->call([$receiver, 'accept']))->toBe('recovered')
+            ->and($receiver->calls)->toBe(2);
+    },
+)->with([
+    'empty result' => [[]],
+    'missing position' => [[1 => 'unexpected']],
+    'missing value' => [[0]],
+    'non-integer position' => [['0', 'unexpected']],
+    'extra numeric entry' => [[0, 'unexpected', 'ignored']],
+    'extra named entry' => [[0, 'unexpected', 'metadata' => 'ignored']],
+]);

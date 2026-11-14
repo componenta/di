@@ -50,6 +50,17 @@ test('request mapping retains array transport data for untyped mixed and array-u
     [static fn(#[MapQueryString] MappingBoundaryDto|array $data): MappingBoundaryDto|array => $data],
 ]);
 
+test('request mapping constructs the sole DTO type when the union has no array alternative', function (Closure $callback): void {
+    $request = (new ServerRequest('GET', '/'))->withQueryParams(['value' => 'mapped']);
+    $container = (new ContainerBuilder())->build();
+
+    expect($container->call($callback, [ServerRequestInterface::class => $request]))
+        ->toEqual(new MappingBoundaryDto('mapped'));
+})->with([
+    'DTO or false' => [static fn(#[MapQueryString] MappingBoundaryDto|false $data): MappingBoundaryDto|false => $data],
+    'DTO or nullable string' => [static fn(#[MapQueryString] MappingBoundaryDto|string|null $data): MappingBoundaryDto|string|null => $data],
+]);
+
 test('DTO request mapping rejects numeric keys both before and after custom transformation', function (bool $numericInput): void {
     $factory = (new ContainerBuilder())->build();
     $handler = new RequestAttributeHandler($factory, new TestCasterProvider());
