@@ -48,6 +48,7 @@ use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\Attribute\RequestAttribute;
 use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Definition\DefinitionInterface;
@@ -78,6 +79,7 @@ use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
+use Componenta\DI\Resolver\Attribute\Handler\TransformHandler;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
@@ -425,6 +427,12 @@ final class ContainerFactory
         $registry->register(new AttributeDefinition(
             Cast::class,
             $cast,
+            [ValueTransformer::class],
+            after: [ValueProvider::class],
+        ));
+        $registry->register(new AttributeDefinition(
+            Transform::class,
+            new TransformHandler($attributeCallbacks),
             [ValueTransformer::class],
             after: [ValueProvider::class],
         ));
