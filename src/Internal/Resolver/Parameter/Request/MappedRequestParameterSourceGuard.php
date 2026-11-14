@@ -115,19 +115,25 @@ final class MappedRequestParameterSourceGuard
             return self::$sourceCache[$class] = [];
         }
 
-        /** @var list<array{parameter:string,source:class-string,keys:list<string>}> $bindings */
-        $bindings = [];
-        $complete = true;
-        foreach ($constructor->getParameters() as $parameter) {
-            /** @var list<class-string> $typeNames */
-            $typeNames = TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass());
-            $source = self::declaredSource($parameter, $complete);
-            if ($source !== null) {
-                $bindings[] = self::binding($parameter->getName(), $source, $typeNames);
+        foreach ([true, false] as $autoload) {
+            /** @var list<array{parameter:string,source:class-string,keys:list<string>}> $bindings */
+            $bindings = [];
+            $complete = true;
+            foreach ($constructor->getParameters() as $parameter) {
+                /** @var list<class-string> $typeNames */
+                $typeNames = TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass());
+                $source = self::declaredSource($parameter, $complete, $autoload);
+                if ($source !== null) {
+                    $bindings[] = self::binding($parameter->getName(), $source, $typeNames);
+                }
             }
-        }
-        if ($complete) {
-            self::$sourceCache[$class] = $bindings;
+            if ($complete) {
+                self::$sourceCache[$class] = $bindings;
+                break;
+            }
+            // A later attribute can load an earlier skipped source, including
+            // on another parameter. Reinspect the loaded declarations without
+            // retrying unavailable names or executing another autoloader.
         }
 
         return $bindings;
@@ -163,12 +169,12 @@ final class MappedRequestParameterSourceGuard
     }
 
     /** @return class-string|null */
-    private static function declaredSource(ReflectionParameter $parameter, bool &$complete): ?string
+    private static function declaredSource(ReflectionParameter $parameter, bool &$complete, bool $autoload): ?string
     {
         foreach ($parameter->getAttributes() as $attribute) {
             /** @var class-string $attributeClass */
             $attributeClass = $attribute->getName();
-            if (!class_exists($attributeClass) && !interface_exists($attributeClass) && !class_exists($attributeClass, false)) {
+            if (!class_exists($attributeClass, $autoload) && !interface_exists($attributeClass, $autoload) && !class_exists($attributeClass, false)) {
                 $complete = false;
                 continue;
             }
