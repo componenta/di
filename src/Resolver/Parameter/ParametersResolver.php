@@ -193,14 +193,66 @@ final class ParametersResolver
         PreparedParameterPlan $plan,
         array $providedParameters = [],
     ): array {
+        return $this->resolvePreparedInvocation($plan, $providedParameters);
+    }
+
+    /**
+     * @internal
+     * @param array<string|int,mixed> $providedParameters
+     * @param class-string|null $diagnosticOwner
+     * @return array<string|int,mixed>
+     */
+    public function resolvePreparedSuffix(
+        PreparedParameterPlan $suffix,
+        ParameterTarget $firstTarget,
+        mixed $firstArgument,
+        array $providedParameters = [],
+        ?string $diagnosticOwner = null,
+    ): array {
+        if ($firstTarget->position !== 0) {
+            throw new InvalidConfigurationException('The semantic callback argument must be its first declaration.');
+        }
+
+        return $this->resolvePreparedInvocation(
+            $suffix,
+            $providedParameters,
+            [$firstArgument],
+            $firstTarget,
+            $diagnosticOwner,
+        );
+    }
+
+    /**
+     * @param array<string|int,mixed> $providedParameters
+     * @param list<mixed> $arguments
+     * @param class-string|null $diagnosticOwner
+     * @return array<string|int,mixed>
+     */
+    private function resolvePreparedInvocation(
+        PreparedParameterPlan $plan,
+        array $providedParameters,
+        array $arguments = [],
+        ?ParameterTarget $reservedTarget = null,
+        ?string $diagnosticOwner = null,
+    ): array {
         $plan = $this->refreshPlan($plan);
         $state = new ParameterResolutionContext(
-            ParameterResolutionBoundary::publicParameters($plan, $providedParameters),
+            ParameterResolutionBoundary::publicParameters($plan, $providedParameters, $diagnosticOwner),
+            $arguments,
         );
 
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
+        if ($reservedTarget !== null) {
+            $reserved = $this->plans->build($reservedTarget->reflection);
+            if ($reserved->usages !== []) {
+                throw new InvalidConfigurationException(sprintf(
+                    'The semantic callback parameter "$%s" must not declare DI attributes.',
+                    $reservedTarget->name,
+                ));
+            }
+            $completed->record($reservedTarget->reflection, $reserved);
+        }
 
-        $arguments = [];
         $omitted = false;
         foreach (array_keys($plan->parameters) as $index) {
             $result = $this->resolvePreparedParameter($plan->parameters[$index], $state, $completed, allowOmission: true);
@@ -209,7 +261,7 @@ final class ParametersResolver
             $current = $this->refreshPlan($plan);
             if ($current !== $plan) {
                 $plan = $current;
-                ParameterResolutionBoundary::publicParameters($plan, $providedParameters);
+                ParameterResolutionBoundary::publicParameters($plan, $providedParameters, $diagnosticOwner);
                 $completed->assertUnchanged();
             }
 

@@ -57,32 +57,36 @@ final class MappedRequestParameterSourceGuard
     /**
      * @param iterable<ParameterTarget> $targets
      * @param array<string|int,mixed> $context
+     * @param class-string|null $diagnosticOwner
      */
-    public static function assertTargetsContextNoConflicts(iterable $targets, array $context): void
-    {
+    public static function assertTargetsContextNoConflicts(
+        iterable $targets,
+        array $context,
+        ?string $diagnosticOwner = null,
+    ): void {
         $provenance = MappedRequestContext::get($context);
         if ($provenance === null) {
             return;
         }
         foreach ($targets as $target) {
-            self::assertTargetProvenanceNoConflicts($target, $provenance);
+            self::assertTargetProvenanceNoConflicts($target, $provenance, $diagnosticOwner);
         }
     }
 
+    /** @param class-string|null $diagnosticOwner */
     public static function assertTargetProvenanceNoConflicts(
         ParameterTarget $target,
         MappedRequestContext $provenance,
+        ?string $diagnosticOwner = null,
     ): void {
         $binding = self::targetBinding($target);
         if ($binding === null) {
             return;
         }
-        $declaringClass = $target->reflection->getDeclaringClass();
-        if ($declaringClass === null) {
+        $class = $diagnosticOwner ?? $target->reflection->getDeclaringClass()?->getName();
+        if ($class === null) {
             return;
         }
-        /** @var class-string $class */
-        $class = $declaringClass->getName();
         foreach ($binding['keys'] as $key) {
             if ($provenance->contains($key)) {
                 self::throwConflict($class, $binding, $key);

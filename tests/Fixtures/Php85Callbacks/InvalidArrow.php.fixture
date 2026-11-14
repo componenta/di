@@ -1,0 +1,5 @@
+<?php
+#[Attribute] final class Callback { public function __construct(public Closure $value) {} }
+#[Callback(static fn(): int => 1)] final class Target {}
+echo "compiled\n";
+(new ReflectionClass(Target::class))->getAttributes()[0]->newInstance();

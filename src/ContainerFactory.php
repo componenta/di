@@ -54,6 +54,7 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Internal\ContainerBootstrapState;
 use Componenta\DI\Internal\EntryCache;
@@ -267,6 +268,7 @@ final class ContainerFactory
         );
         $bootstrap->initialize($entryResolver, $executor);
 
+        $attributeCallbacks = new AttributeCallbackInvoker($parameters, $container);
         $handlers = $this->sharedAttributeHandlers($container, $proxyFactory, $plans);
 
         if (!$this->replaceAttributeDefinitions) {
@@ -275,6 +277,7 @@ final class ContainerFactory
                 $container,
                 $handlers,
                 $resolutionParameters,
+                $attributeCallbacks,
             );
         }
 
@@ -357,6 +360,7 @@ final class ContainerFactory
         Container $container,
         array $handlers,
         ObjectResolutionParameterStore $resolutionParameters,
+        AttributeCallbackInvoker $attributeCallbacks,
     ): void {
         /** @var CastHandler $cast */
         $cast = $handlers[CastHandler::class];
@@ -450,6 +454,7 @@ final class ContainerFactory
             new SetUpRunner(
                 $container,
                 $resolutionParameters,
+                $attributeCallbacks,
                 new ContainerValueUnwrapper(new ContainerValue($container, $this->config)),
                 new EntryIdUnwrapper($container),
                 new ConfigUnwrapper($container),

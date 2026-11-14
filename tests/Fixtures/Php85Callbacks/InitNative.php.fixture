@@ -1,0 +1,171 @@
+<?php
+
+declare(strict_types=1);
+
+use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeSet;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Init;
+use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+
+require $argv[1];
+$source = realpath($argv[2]);
+$sourceMap = [
+    'class' => realpath(new ReflectionClass(Componenta\DI\Container::class)->getFileName()) === $source . '/Container.php',
+    'functions' => realpath(new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible')->getFileName()) === $source . '/Internal/functions.php',
+];
+if (in_array(false, $sourceMap, true)) {
+    throw new RuntimeException('The fixture must load the selected checkout source.');
+}
+
+#[Attribute]
+final class UnusedMarker {}
+
+final class NoOpRule implements AttributeCompositionRuleInterface
+{
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
+}
+
+final readonly class Dependency
+{
+    public function __construct(public string $value) {}
+}
+
+function namedCounter(): int
+{
+    static $count = 0;
+    return ++$count;
+}
+
+function legacyInitializer(Dependency $dependency): string
+{
+    return $dependency->value;
+}
+
+final class Helpers
+{
+    public const COUNTER = static function (): int {
+        static $count = 0;
+        return ++$count;
+    };
+
+    public static function next(): int
+    {
+        static $count = 0;
+        return ++$count;
+    }
+
+    public static function legacy(Dependency $dependency): string
+    {
+        return $dependency->value;
+    }
+}
+
+final class InvokableInitializer
+{
+    public function __invoke(Dependency $dependency): string
+    {
+        return $dependency->value;
+    }
+}
+
+final class Target
+{
+    #[Init(static function (): int { static $count = 0; return ++$count; })]
+    public int $inline;
+
+    #[Init(namedCounter(...))]
+    public int $named;
+
+    #[Init(Helpers::next(...))]
+    public int $method;
+
+    #[Init(Helpers::COUNTER)]
+    public int $constant;
+
+    #[Init(self::initialize(...))]
+    public readonly string $private;
+
+    #[Init('legacyInitializer')]
+    public string $string;
+
+    #[Init([Helpers::class, 'legacy'])]
+    public string $array;
+
+    #[Init(new InvokableInitializer())]
+    public string $invokable;
+
+    private static function initialize(Dependency $dependency): string
+    {
+        return $dependency->value;
+    }
+}
+
+final class LifetimeTarget
+{
+    #[Init(static function (): WeakReference {
+        static $held;
+        $held ??= new stdClass();
+        return WeakReference::create($held);
+    })]
+    public WeakReference $reference;
+}
+
+final class Calls
+{
+    public static int $count = 0;
+}
+
+#[Lazy]
+final class Delayed
+{
+    #[Init(static function (): string { ++Calls::$count; return 'initialized'; })]
+    public string $value;
+}
+
+trait InlineScope
+{
+    #[Init(static function (): string { return self::who(); })]
+    public string $scope;
+}
+
+final class FirstScope
+{
+    use InlineScope;
+    public static function who(): string { return 'first'; }
+}
+
+final class SecondScope
+{
+    use InlineScope;
+    public static function who(): string { return 'second'; }
+}
+
+$builder = new ContainerBuilder();
+if ($argv[3] === 'uncached') {
+    $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
+}
+$container = $builder->build();
+$values = [];
+foreach (['one', 'two', 'three'] as $value) {
+    $container->set(Dependency::class, new Dependency($value));
+    $entry = $container->make(Target::class);
+    $values[] = [$entry->inline, $entry->named, $entry->method, $entry->constant, $entry->private, $entry->string, $entry->array, $entry->invokable];
+}
+$first = $container->get(Target::class);
+$second = $container->get(Target::class);
+$lifetime = $container->make(LifetimeTarget::class);
+$lazy = $container->make(Delayed::class);
+$before = Calls::$count;
+$lazyValue = $lazy->value;
+
+echo json_encode([
+    'source_map' => $sourceMap,
+    'values' => $values,
+    'shared' => $first === $second,
+    'inline_static_retained' => $lifetime->reference->get() !== null,
+    'lazy' => [$before, $lazyValue, Calls::$count],
+    'trait_inline_scope' => [$container->make(FirstScope::class)->scope, $container->make(SecondScope::class)->scope],
+], JSON_THROW_ON_ERROR);

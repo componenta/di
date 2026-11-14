@@ -1,0 +1,212 @@
+<?php
+
+declare(strict_types=1);
+
+use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeSet;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Inject;
+use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+
+require $argv[1];
+$source = realpath($argv[2]);
+$sourceMap = [
+    'class' => realpath(new ReflectionClass(Componenta\DI\Container::class)->getFileName()) === $source . '/Container.php',
+    'functions' => realpath(new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible')->getFileName()) === $source . '/Internal/functions.php',
+];
+if (in_array(false, $sourceMap, true)) {
+    throw new RuntimeException('The fixture must load the selected checkout source.');
+}
+
+#[Attribute]
+final class UnusedMarker {}
+
+final class NoOpRule implements AttributeCompositionRuleInterface
+{
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
+}
+
+final readonly class Dependency
+{
+    public function __construct(public string $value) {}
+}
+
+function namedSetup(Target $instance): void
+{
+    static $count = 0;
+    $instance->events[] = ++$count;
+}
+
+final class Helpers
+{
+    public const COUNTER = static function (Target $instance): void {
+        static $count = 0;
+        $instance->events[] = ++$count;
+    };
+
+    public static function next(Target $instance): void
+    {
+        static $count = 0;
+        $instance->events[] = ++$count;
+    }
+}
+
+#[SetUp(static function (Target $instance, Dependency $dependency): object {
+    static $count = 0;
+    static $held;
+    $held ??= new stdClass();
+    $instance->reference = WeakReference::create($held);
+    $instance->events = [++$count, $instance->injected->value, $dependency->value];
+    return new stdClass();
+})]
+#[SetUp(namedSetup(...))]
+#[SetUp(Helpers::next(...))]
+#[SetUp(Helpers::COUNTER)]
+final class Target
+{
+    public array $events = [];
+    public WeakReference $reference;
+
+    #[Inject]
+    public readonly Dependency $injected;
+}
+
+#[SetUp(self::initialize(...))]
+final class PrivateScope
+{
+    public string $value;
+
+    private static function initialize(self $instance, Dependency $dependency): void
+    {
+        $instance->value = __CLASS__ . ':' . $dependency->value;
+    }
+}
+
+final class Calls
+{
+    public static int $count = 0;
+}
+
+#[Lazy, SetUp(static function (Delayed $instance): void { ++Calls::$count; $instance->value = 'initialized'; })]
+final class Delayed
+{
+    public string $value;
+}
+
+final class Failures
+{
+    public static int $remaining = 0;
+    public static int $attempts = 0;
+    public static array $callbacks = [];
+    public static array $entries = [];
+    public static array $held = [];
+}
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final readonly class TrackedSetUp extends SetUp
+{
+    public function __construct(Closure $method)
+    {
+        Failures::$callbacks[] = WeakReference::create($method);
+        parent::__construct($method);
+    }
+}
+
+#[TrackedSetUp(static function (Retried $instance): void {
+    static $held;
+    $held ??= new stdClass();
+    Failures::$held[] = WeakReference::create($held);
+    Failures::$entries[] = WeakReference::create($instance);
+    ++Failures::$attempts;
+    if (Failures::$remaining-- > 0) {
+        throw new DomainException('retry setup');
+    }
+    $instance->value = 'ready';
+})]
+class Retried
+{
+    public string $value;
+}
+
+#[Lazy, TrackedSetUp(static function (DeferredRetry $instance): void {
+    static $held;
+    $held ??= new stdClass();
+    Failures::$held[] = WeakReference::create($held);
+    ++Failures::$attempts;
+    if (Failures::$remaining-- > 0) {
+        throw new DomainException('retry setup');
+    }
+    $instance->value = 'ready';
+})]
+final class DeferredRetry
+{
+    public string $value;
+}
+
+$builder = new ContainerBuilder();
+if ($argv[3] === 'uncached') {
+    $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
+}
+$container = $builder->build();
+$values = [];
+$references = [];
+foreach (['one', 'two', 'three'] as $value) {
+    $container->set(Dependency::class, new Dependency($value));
+    $entry = $container->make(Target::class);
+    $values[] = [$entry->events, $entry->reference->get() === null];
+    $references[] = WeakReference::create($entry);
+    unset($entry);
+}
+$first = $container->get(Target::class);
+$second = $container->get(Target::class);
+$private = $container->make(PrivateScope::class);
+$lazy = $container->make(Delayed::class);
+$before = Calls::$count;
+$lazyValue = $lazy->value;
+$discarded = $container->make(Delayed::class);
+$discardedReference = WeakReference::create($discarded);
+unset($discarded);
+
+Failures::$remaining = 1;
+try {
+    $container->get(Retried::class);
+    throw new RuntimeException('Expected the first setup attempt to fail.');
+} catch (ResolutionException $failure) {
+    $eagerCause = $failure->getPrevious() instanceof DomainException && $failure->getPrevious()->getMessage() === 'retry setup';
+}
+unset($failure);
+gc_collect_cycles();
+$failedEntryReleased = Failures::$entries[0]->get() === null;
+$retried = $container->get(Retried::class);
+$eager = [$eagerCause, $failedEntryReleased, Failures::$attempts, $retried->value, $container->get(Retried::class) === $retried];
+
+Failures::$remaining = 1;
+Failures::$attempts = 0;
+$deferred = $container->make(DeferredRetry::class);
+$deferredBefore = Failures::$attempts;
+try {
+    $unused = $deferred->value;
+    throw new RuntimeException('Expected the first lazy setup attempt to fail.');
+} catch (ResolutionException $failure) {
+    $lazyCause = $failure->getPrevious() instanceof DomainException;
+}
+unset($failure);
+$lazyRetry = [$deferredBefore, $lazyCause, new ReflectionClass($deferred)->isUninitializedLazyObject($deferred), $deferred->value, Failures::$attempts];
+gc_collect_cycles();
+
+echo json_encode([
+    'source_map' => $sourceMap,
+    'values' => $values,
+    'shared' => $first === $second,
+    'private_scope' => $private->value,
+    'lazy' => [$before, $lazyValue, Calls::$count, $discardedReference->get() === null],
+    'unshared_released' => array_map(static fn(WeakReference $reference): bool => $reference->get() === null, $references),
+    'eager_retry' => $eager,
+    'lazy_retry' => $lazyRetry,
+    'callbacks_released' => array_map(static fn(WeakReference $reference): bool => $reference->get() === null, Failures::$callbacks),
+    'static_locals_released' => array_map(static fn(WeakReference $reference): bool => $reference->get() === null, Failures::$held),
+], JSON_THROW_ON_ERROR);

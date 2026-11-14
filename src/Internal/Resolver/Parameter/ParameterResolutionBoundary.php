@@ -12,15 +12,18 @@ final class ParameterResolutionBoundary
 {
     /**
      * @param array<string|int,mixed> $provided
+     * @param class-string|null $diagnosticOwner
      * @return array<string|int,mixed>
      */
     public static function publicParameters(
         PreparedParameterPlan $plan,
         array $provided,
+        ?string $diagnosticOwner = null,
     ): array {
         MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
             $plan->targets,
             $provided,
+            $diagnosticOwner,
         );
 
         return ResolutionMetadata::publicParameters($provided);
