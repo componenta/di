@@ -527,6 +527,16 @@ final class ContainerFactory
 
     private function materializeExtension(mixed $spec, ContainerInterface $container): object
     {
+        if (is_array($spec)) {
+            // Own this invocation's routing before inspection or owner lookup
+            // can rebind caller references; keep actual factory objects live.
+            $snapshot = [];
+            foreach ($spec as $key => $value) {
+                $snapshot[$key] = $value;
+            }
+            $spec = $snapshot;
+        }
+
         if ($spec instanceof ParameterResolverInterface || $spec instanceof AttributeDefinition) {
             return $spec;
         }
