@@ -391,7 +391,7 @@ Use Pest public-contract tests and focused fixtures, with failing regressions be
 
 ## 10. Derived implementation plan
 
-**Library slices 1–5 are implemented on the authorized major branch. Slice 6 contains the remaining verification, documentation and release gates.** E1 blocks the final affected platform/support promise, not unrelated coding. None of these slices retroactively adds features to the published 5.0.5 tag.
+**Library slices 1–5 and the library verification, cost and migration work in slice 6 are complete on the authorized major branch.** The [completion recheck](../audit/2026-11-14-di6-refactoring.md#completion-recheck) records independent review, repeated whole-library runs, consumer checks and the corrected publication boundaries. Final supported-platform metadata and release remain subject to E1. E1 blocks the final affected platform/support promise, not unrelated coding. None of these slices retroactively adds features to the published 5.0.5 tag.
 
 Every completed slice must be reviewed, checked, committed and pushed. Slices 3 and 4 depend on the binder in slice 2; union work in slice 5 is independent of that binder. No slice should leave two competing resolution algorithms in place. The evidence requirements below define completion; release packaging remains subject to E1.
 

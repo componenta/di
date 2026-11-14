@@ -9,20 +9,45 @@ use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
+use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\Definition;
+use Componenta\DI\Exception\NotFoundException;
 use LogicException;
+use Psr\Container\ContainerInterface;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
 use RuntimeException;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
+// Run from the repository root: php -n docs/audit/reproductions/MutationParity.php
+// Twelve deterministic seeds compare 100 mutations across 24 warmed entries
+// with fresh containers that replay exactly the same mutation history.
 final readonly class Value
 {
-    public function __construct(public string $value) {}
+    public function __construct(public string $value = 'invokable') {}
 
     public function __invoke(self $entry): self
     {
         return new self($entry->value . '[' . $this->value . ']');
+    }
+}
+
+final readonly class ExternalValue implements ContainerInterface
+{
+    public function __construct(private string $id, private Value $value) {}
+
+    public function has(string $id): bool
+    {
+        return $id === $this->id;
+    }
+
+    public function get(string $id): Value
+    {
+        if (!$this->has($id)) {
+            throw new NotFoundException($id);
+        }
+        return $this->value;
     }
 }
 
@@ -52,6 +77,10 @@ function applyOperation(Container $container, array $operation): void
         'alias' => $container->alias($id, $value),
         'decorate' => $container->delegator($id, static fn(Value $entry): Value => new Value($entry->value . ':' . $value)),
         'defer' => $container->delegator($id, $value),
+        'factory' => $container->set($id, Definition::factory(static fn(): Value => new Value($value))),
+        'definition' => $container->set($id, ClassDefinition::create(Value::class)->constructor(['value' => $value])),
+        'invokable' => $container->set($id, Definition::invokable(Value::class)),
+        'external' => $container->addContainer(new ExternalValue($id, new Value($value))),
         default => throw new LogicException('Unexpected operation.'),
     };
 }
@@ -78,12 +107,12 @@ foreach (range(1, 12) as $seed) {
     $random = new Randomizer(new Mt19937($seed));
     $warm = initialContainer();
     $history = [];
-    for ($step = 0; $step < 50; ++$step) {
+    for ($step = 0; $step < 100; ++$step) {
         foreach ($ids as $id) {
             observed($warm, $id);
         }
         $index = $random->getInt(0, 7);
-        $action = $random->getInt(0, 5);
+        $action = $random->getInt(0, 9);
         $operation = match ($action) {
             0 => ['set', 'base.' . $index, "changed:$seed:$step"],
             1 => ['set', 'decorator.' . $index, "changed:$seed:$step"],
@@ -91,6 +120,10 @@ foreach (range(1, 12) as $seed) {
             3 => ['decorate', ($random->getInt(0, 1) ? 'alias.' : 'base.') . $index, "suffix:$seed:$step"],
             4 => ['defer', ($random->getInt(0, 1) ? 'alias.' : 'base.') . $index, 'decorator.' . $random->getInt(0, 7)],
             5 => ['decorate', 'decorator.' . $index, "transitive:$seed:$step"],
+            6 => ['factory', ($random->getInt(0, 1) ? 'decorator.' : 'base.') . $index, "factory:$seed:$step"],
+            7 => ['definition', ($random->getInt(0, 1) ? 'decorator.' : 'base.') . $index, "definition:$seed:$step"],
+            8 => ['invokable', ($random->getInt(0, 1) ? 'decorator.' : 'base.') . $index, 'invokable'],
+            9 => ['external', 'decorator.' . $index, "external:$seed:$step"],
         };
         applyOperation($warm, $operation);
         $history[] = $operation;

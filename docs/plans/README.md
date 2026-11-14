@@ -4,6 +4,8 @@
 
 Implementation was authorized on November 14, 2026, and is isolated on `refactor/di6-definitions-callbacks`, based on the compatible v5.0.6 release commit. Specifications define the contracts; the [implementation report](../audit/2026-11-14-di6-refactoring.md) records what is implemented, tested and still gated. DI 6 is not released.
 
+The implementation-ready library refactoring has converged with these contracts. The [completion recheck](../audit/2026-11-14-di6-refactoring.md#completion-recheck) covers three full passes on each local stable runtime, the release-candidate runtime, isolated consumer installations and extension migration. E1 remains a release/platform gate; the conditional B2 and possible 6.1 DTO work are separate future scopes.
+
 | Plan | English specification | Full Russian translation | Current status |
 | --- | --- | --- | --- |
 | Definition ownership and mutation retirement | [English](definition-owner-lifecycle.md) | [Русский](definition-owner-lifecycle.ru.md) | Implemented: central immutable bindings, registration-free strategies, snapshot composition and complete mutation retirement. Public extension migration belongs to the next major. [Migration](../migrations/di6-definitions.md). |

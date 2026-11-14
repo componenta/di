@@ -657,5 +657,1508 @@
       "run_id": 43593362160,
       "conclusion": "success"
     }
+  },
+  "completion_recheck": {
+    "initial_head": "35c5eb54db5979601d807a128385a23142684030",
+    "production_head": "064be206fab16ce0c5a9a75d96e85f92b71ffb24",
+    "implementation_ready_library_refactoring_complete": true,
+    "unresolved_implementation_ready_contracts": [],
+    "fixes": [
+      {
+        "name": "Semantic attribute definition reference ownership",
+        "commit": "40f61b0a8f7c9a52754069a409be2918e63265ff",
+        "test": "tests/Contract/AttributeDefinitionSnapshotContractTest.php",
+        "pre_fix_failed_cases": 6,
+        "controls": 1
+      },
+      {
+        "name": "Callable invocation route capture",
+        "commit": "8e36c7a7c84543ef46903a71769f6c1e0e230ed4",
+        "test": "tests/Contract/CallableInvocationSnapshotContractTest.php",
+        "pre_fix_failed_cases": 5
+      },
+      {
+        "name": "Completed after-phase proof through final configuration",
+        "commit": "378f3e43fcbc14a10701a4d4c01ebf9f1eb46ed0",
+        "test": "tests/Contract/CompletedAfterPhaseContractTest.php",
+        "pre_fix_failed_cases": 8,
+        "integration_correction": "The full suite exposed 9 metadata-only false positives before publication; skipped-phase proof now preserves validated metadata and excludes unexecuted object handlers.",
+        "additional_metadata_controls": 2
+      },
+      {
+        "name": "Avoid empty array work and duplicate validation of a common phase revision",
+        "commit": "064be206fab16ce0c5a9a75d96e85f92b71ffb24",
+        "qualification": "Existing assertion checkpoints and both-attempt registry polling retained. Common verified revision is reused only when equal; differing or unverified phases still require complete validation."
+      }
+    ],
+    "fingerprints": {
+      "commit": "064be206fab16ce0c5a9a75d96e85f92b71ffb24",
+      "archive_sha256": "9f8055eead6078c69e194479538989e6364524bc0b310370a09f0d0f83455541",
+      "src_fingerprint": {
+        "file_count": 169,
+        "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+      },
+      "src_tests_fingerprint": {
+        "file_count": 399,
+        "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+      },
+      "checkout_src_tests_fingerprint": {
+        "file_count": 399,
+        "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+      },
+      "consumer_src_fingerprint": {
+        "file_count": 169,
+        "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+      },
+      "app_src_fingerprint": {
+        "file_count": 169,
+        "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+      },
+      "checkout_src_tests_after": {
+        "file_count": 399,
+        "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+      }
+    },
+    "whole_library_passes": {
+      "84": {
+        "runtime": "84",
+        "fingerprint_before": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        },
+        "runs": [
+          {
+            "label": "reverse",
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "vendor/bin/pest",
+              "--compact",
+              "--colors=never",
+              "--order-by=reverse"
+            ],
+            "exit_code": 0,
+            "summary": "Tests:    18 skipped, 1368 passed (23578 assertions)",
+            "log": "/workspace/scratch/c1ee9cf6cd27/finish-qualified/php84-reverse.log",
+            "log_sha256": "a1ad992115c32dc94ff9f8ed8717d5ba2a506594ba53906797d8f6501c5736ed"
+          },
+          {
+            "label": "random",
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "vendor/bin/pest",
+              "--compact",
+              "--colors=never",
+              "--order-by=random",
+              "--random-order-seed=401684"
+            ],
+            "exit_code": 0,
+            "summary": "Tests:    18 skipped, 1368 passed (23578 assertions)",
+            "log": "/workspace/scratch/c1ee9cf6cd27/finish-qualified/php84-random.log",
+            "log_sha256": "4ee1107475a0cc83549485e8576e87b67ee1286b420d4c4ca2182be291423b4a"
+          },
+          {
+            "label": "opcache",
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "-d",
+              "opcache.enable_cli=1",
+              "-d",
+              "opcache.jit=0",
+              "vendor/bin/pest",
+              "--compact",
+              "--colors=never",
+              "--order-by=random",
+              "--random-order-seed=402684"
+            ],
+            "exit_code": 0,
+            "summary": "Tests:    18 skipped, 1368 passed (23578 assertions)",
+            "log": "/workspace/scratch/c1ee9cf6cd27/finish-qualified/php84-opcache.log",
+            "log_sha256": "cfda52331d3f118fd9e3318b40abc3ce9f99c0368df81f7d3827c4d88a5fb74c"
+          }
+        ],
+        "fingerprint_after": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        },
+        "unchanged": true
+      },
+      "85": {
+        "runtime": "85",
+        "fingerprint_before": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        },
+        "runs": [
+          {
+            "label": "reverse",
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "vendor/bin/pest",
+              "--compact",
+              "--colors=never",
+              "--order-by=reverse"
+            ],
+            "exit_code": 0,
+            "summary": "Tests:    1386 passed (23680 assertions)",
+            "log": "/workspace/scratch/c1ee9cf6cd27/finish-qualified/php85-reverse.log",
+            "log_sha256": "e1b9325b4dc67447922519aa9bfc06361f23098297f2ef9acfbb1b89026de462"
+          },
+          {
+            "label": "random",
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "vendor/bin/pest",
+              "--compact",
+              "--colors=never",
+              "--order-by=random",
+              "--random-order-seed=401685"
+            ],
+            "exit_code": 0,
+            "summary": "Tests:    1386 passed (23680 assertions)",
+            "log": "/workspace/scratch/c1ee9cf6cd27/finish-qualified/php85-random.log",
+            "log_sha256": "dc9a79f3613c931d15741ae8cb452988ff5792fc251bd1b1fd7bc94cbb7f3261"
+          },
+          {
+            "label": "opcache",
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "-d",
+              "opcache.enable_cli=1",
+              "-d",
+              "opcache.jit=0",
+              "vendor/bin/pest",
+              "--compact",
+              "--colors=never",
+              "--order-by=random",
+              "--random-order-seed=402685"
+            ],
+            "exit_code": 0,
+            "summary": "Tests:    1386 passed (23680 assertions)",
+            "log": "/workspace/scratch/c1ee9cf6cd27/finish-qualified/php85-opcache.log",
+            "log_sha256": "b69de0b256b78cd50e9546cdb123e5ae0654b1fcb1c01bf36820d366e7a14e90"
+          }
+        ],
+        "fingerprint_after": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        },
+        "unchanged": true
+      }
+    },
+    "phpstan_max": {
+      "result": "passed",
+      "log_sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1"
+    },
+    "style": {
+      "checked_php_files": 394,
+      "fixable_files": 0,
+      "log_sha256": "813a06e6b76d1401b1bdb7d1d565d900c58847f436ee1ba96095e53edfbfe5c3"
+    },
+    "composer_validate": {
+      "result": "passed",
+      "log_sha256": "43add299dc97ecbd90ec2dc456ef5a0bd824bb9abdae2a3d7cdb520e21f8e86d"
+    },
+    "dependency_audit": {
+      "advisories": [],
+      "abandoned": [],
+      "filter": [],
+      "cooldown": []
+    },
+    "dependency_lock_sha256": "6650b00c31a76c15ff59b0ba47fbbd060f681459ca78eddee6ed7cdb3c9ac337",
+    "parity_reproduction": {
+      "file": "docs/audit/reproductions/MutationParity.php",
+      "sha256": "a8db8ca29f198db48ebbc91e0860891b05ff15cb15c5c8809ea33e2856b5eb2d",
+      "seeds": 12,
+      "mutations_per_seed": 100,
+      "operations_per_runtime": 1200,
+      "comparisons_per_runtime": 28800,
+      "runtimes": [
+        "8.4.23",
+        "8.5.8"
+      ],
+      "new_operations": [
+        "factory",
+        "ClassDefinition",
+        "invokable",
+        "external container"
+      ],
+      "compares": "Warm service values against a fresh container replaying the same complete mutation history; not mutation-test score or a proof of exception identity."
+    },
+    "independent_reviews": [
+      {
+        "scope": "Definition/container/retirement/lifetime",
+        "files": 58,
+        "passed_tests_per_runtime": 371,
+        "assertions_per_runtime": 1586
+      },
+      {
+        "scope": "Callable/native magic/PreparedCallable/lifetime peer review",
+        "files": 13,
+        "passed_tests_per_runtime": 69,
+        "assertions_per_runtime": 726
+      },
+      {
+        "scope": "Completed phase, metadata-only, direct processor, lazy/proxy/lifetime cross-review",
+        "files": 19,
+        "passed_tests_per_runtime": 112,
+        "assertions_per_runtime": 620
+      },
+      {
+        "scope": "Request extraction, mapping, source provenance and diagnostics",
+        "passed_tests_php84": 156,
+        "assertions_php84": 579
+      }
+    ],
+    "consumer_and_candidate_runtime": {
+      "schema_version": 1,
+      "checked_utc": "2026-11-14T15:25:25.392197+00:00",
+      "source": {
+        "commit": "064be206fab16ce0c5a9a75d96e85f92b71ffb24",
+        "archive_sha256": "9f8055eead6078c69e194479538989e6364524bc0b310370a09f0d0f83455541",
+        "src_fingerprint": {
+          "file_count": 169,
+          "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+        },
+        "src_tests_fingerprint": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        },
+        "checkout_src_tests_fingerprint": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        },
+        "consumer_src_fingerprint": {
+          "file_count": 169,
+          "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+        },
+        "app_src_fingerprint": {
+          "file_count": 169,
+          "sha256": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+        },
+        "checkout_src_tests_after": {
+          "file_count": 399,
+          "sha256": "ab31e4a5b4f579d953ad040e672e8ce5f791d2bcdcd28a268734cadf76dcea05"
+        }
+      },
+      "source_mapping_method": "git archive of the exact pushed commit; fresh extraction; Composer path mirrors rather than symlinks; all production path/NUL/bytes/NUL fingerprints match; main src+tests fingerprint matched before and after the full RC suite",
+      "runtime": {
+        "version": "PHP 8.5.13RC1 (cli) (built: Nov 14 2026 16:04:35) (NTS)\nCopyright (c) The PHP Group\nZend Engine v4.5.13RC1, Copyright (c) Zend Technologies\n    with Zend OPcache v8.5.13RC1, Copyright (c), by Zend Technologies",
+        "binary": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+        "binary_sha256": "ff23a40265b960c3827f18151cc6731fdd4c08948c61f1761c984ec6e84d217e",
+        "official_php_source_url": "https://downloads.php.net/~edorian/php-8.5.13RC1.tar.xz",
+        "official_php_source_sha256": "dd6fa1450ecb0ca96c081adbb1b0691facf6e6492d9a127960f295ec20bdca8f",
+        "tagged_source_url": "https://github.com/php/php-src/blob/php-8.5.13RC1/Zend/zend_ast.c",
+        "tagged_zend_ast_blob_sha": "f7eb7ee05e6e7f9ec1bb9a05e05078fd078ba9c2",
+        "compiler": "gcc (Debian 14.2.0-19) 14.2.0",
+        "configure_script": "#! /bin/sh\n#\n# Created by configure\n\n'./configure' \\\n'--disable-all' \\\n'--disable-cgi' \\\n'--disable-phpdbg' \\\n'--without-pear' \\\n'--enable-cli' \\\n'--with-libxml' \\\n'--enable-dom' \\\n'--enable-xml' \\\n'--enable-xmlreader' \\\n'--enable-xmlwriter' \\\n'--enable-simplexml' \\\n'--enable-mbstring' \\\n'--disable-mbregex' \\\n'--enable-tokenizer' \\\n'--enable-ctype' \\\n'--enable-fileinfo' \\\n'--enable-filter' \\\n'--enable-phar' \\\n'--enable-posix' \\\n'--enable-pcntl' \\\n'--enable-pdo' \\\n'--with-iconv' \\\n'--with-openssl' \\\n'--with-zlib' \\\n'PKG_CONFIG_PATH=/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/libxml2/lib/pkgconfig' \\\n\"$@\"\n",
+        "make": [
+          "make",
+          "-j4"
+        ],
+        "modules": [
+          "Core",
+          "date",
+          "lexbor",
+          "openssl",
+          "pcre",
+          "zlib",
+          "ctype",
+          "uri",
+          "standard",
+          "fileinfo",
+          "filter",
+          "hash",
+          "iconv",
+          "json",
+          "mbstring",
+          "Zend OPcache",
+          "pcntl",
+          "libxml",
+          "SPL",
+          "PDO",
+          "Phar",
+          "posix",
+          "random",
+          "Reflection",
+          "SimpleXML",
+          "tokenizer",
+          "dom",
+          "xml",
+          "xmlreader",
+          "xmlwriter"
+        ],
+        "dependency_source": {
+          "libxml2_version": "2.15.4",
+          "source_url": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz",
+          "sha256_url": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.sha256sum",
+          "expected_sha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821",
+          "actual_sha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821",
+          "verified": true,
+          "php_archive_sha256": "dd6fa1450ecb0ca96c081adbb1b0691facf6e6492d9a127960f295ec20bdca8f"
+        },
+        "loaded_dependencies": "\tlinux-vdso.so.1 (0x00007f5f73065000)\n\tlibssl.so.3 => /lib/x86_64-linux-gnu/libssl.so.3 (0x00007f5f72f2a000)\n\tlibcrypto.so.3 => /lib/x86_64-linux-gnu/libcrypto.so.3 (0x00007f5f70dc5000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007f5f72f0a000)\n\tlibxml2.so.16 => /workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/libxml2/lib/libxml2.so.16 (0x00007f5f70c85000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f5f70b95000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f5f70b68000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f5f70974000)\n\tlibzstd.so.1 => /lib/x86_64-linux-gnu/libzstd.so.1 (0x00007f5f708aa000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f5f73067000)\n",
+        "installed_globally": false,
+        "original_minimal_binary_preserved": true,
+        "build_logs": [
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/libxml2-configure.log",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/libxml2-make.log",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/libxml2-install.log",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-full-configure.log",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-full-make.log"
+        ]
+      },
+      "verification": {
+        "whole_library_rc": {
+          "passed_tests": 1386,
+          "assertions": 23680,
+          "random_order_seed": 20261114,
+          "exit_code": 0,
+          "log": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/rc-full-suite.stdout.log"
+        },
+        "clean_consumer": {
+          "development_dependencies_installed": false,
+          "version_alias_used": false,
+          "optimized_authoritative_autoload": true,
+          "runtimes": [
+            "8.4.23",
+            "8.5.8",
+            "8.5.13RC1"
+          ],
+          "all_smokes_passed": true,
+          "script": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer/smoke.php",
+          "manifest": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer/composer.json",
+          "lock_sha256": "f59b3fb48c83610f9472121e267bf17af306c6dfee30fce4bedb9ff97b9898ac",
+          "behavioral_coverage": [
+            "production source mapping and absent development helpers",
+            "configuration and environment object identity",
+            "shared get, fresh make and raw-set semantics",
+            "direct strategy migration",
+            "custom stable normalizer, standalone snapshots and attached mutation authority",
+            "runtime-constant callback forms and Transform suffix isolation",
+            "simple union unique selection and ambiguity before instantiation",
+            "post-commit retirement exception and new service visibility"
+          ],
+          "locked_companion_dependencies": [
+            {
+              "name": "componenta/arrayable",
+              "version": "v1.0.0",
+              "source_reference": "482acfddffa3b1b85e982d1bf4ab6c007d084a8a"
+            },
+            {
+              "name": "componenta/caster",
+              "version": "v1.0.0",
+              "source_reference": "383455d00c5ab8a1067b4916e11d11dae7c4a58c"
+            },
+            {
+              "name": "componenta/clock",
+              "version": "v1.1.0",
+              "source_reference": "a97b782bd17e413864ba24d90d86b75297b7b99d"
+            },
+            {
+              "name": "componenta/config",
+              "version": "v3.0.0",
+              "source_reference": "dcd218904f7336a61d059363ae1b336f54ad7453"
+            },
+            {
+              "name": "componenta/mimetype-detector",
+              "version": "v1.0.0",
+              "source_reference": "88cb85b51e95eb8695eaaa1f3c315dd7a7dd8ee9"
+            },
+            {
+              "name": "componenta/reflection",
+              "version": "v2.0.1",
+              "source_reference": "62aca6575934f119277236bb5dec7953063d69da"
+            },
+            {
+              "name": "componenta/validation",
+              "version": "v3.0.1",
+              "source_reference": "8f888784bbe12069f8f9dc75703c5dd66c43e53f"
+            }
+          ],
+          "smoke_reports": {
+            "8.4.23": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php84.stdout.log",
+            "8.5.8": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php85.stdout.log",
+            "8.5.13RC1": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php8513rc1.stdout.log"
+          },
+          "installed_composer_dev_mode": false,
+          "installed_dev_package_names": []
+        },
+        "documentation_examples": {
+          "runs": 32,
+          "passed_runs": 32,
+          "languages": [
+            "EN",
+            "RU"
+          ],
+          "runtimes": [
+            "8.4.23",
+            "8.5.8",
+            "8.5.13RC1"
+          ],
+          "native_callback_examples_executed_on_php84": false,
+          "scope": "All six definition migration blocks; five executable callback migration examples; README quick-start; API declaration snippets are intentionally excluded. EN/RU executable migration code equality checked after removing whole-line translated comments.",
+          "verifier": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/verify_migration_examples.py",
+          "results": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/migration-example-results.json"
+        },
+        "app_consumer": {
+          "source_commit": "49025670f902c596af886ee4493e114c8b44303b",
+          "source_url": "https://codeload.github.com/componenta/app/tar.gz/49025670f902c596af886ee4493e114c8b44303b",
+          "archive_sha256": "63c403391ad1a31173e61979555d942ddb54878dd5de64702fc3e8af596669c1",
+          "manifest_override": {
+            "original_di_constraint": "^5.0.3",
+            "temporary_di_constraint": "dev-refactor/di6-definitions-callbacks as 5.0.99",
+            "scope": "runtime compatibility probe only; does not establish normal dependency solver compatibility"
+          },
+          "runtimes": {
+            "8.4.23": {
+              "tests": 52,
+              "assertions": 220,
+              "exit_code": 0,
+              "log": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/app-php84.stdout.log"
+            },
+            "8.5.13RC1": {
+              "tests": 52,
+              "assertions": 220,
+              "exit_code": 0,
+              "log": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/app-php8513rc1.stdout.log"
+            }
+          },
+          "original_manifest_file": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/app-upstream-composer.json",
+          "original_manifest_git_blob_sha": "c3f52921527e1a2a5148924f11b568b36e0bacf0",
+          "installed_di_matches_frozen_source": true,
+          "source_repositories_modified": false,
+          "temporary_manifest_scope": "isolated extracted App archive only; original ^5.0.3 dependency does not ordinarily accept DI 6"
+        },
+        "command_records": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/checks.json",
+        "reproduction_script": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/verify_final_consumers.py",
+        "reproduction_command": [
+          "python3",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/verify_final_consumers.py",
+          "--commit",
+          "064be206fab16ce0c5a9a75d96e85f92b71ffb24"
+        ]
+      },
+      "platform_e1": {
+        "closed": false,
+        "rc_native_command_exit_code": 1,
+        "semantic_acceptance_passed": true,
+        "stable_runtime_acceptance_passed": false,
+        "passed_cases": 10,
+        "total_cases": 10,
+        "raw_runner_report": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/rc-native-platform-gate.stdout.log",
+        "stable_release_at_check": {
+          "version": "8.5.12",
+          "release_url": "https://www.php.net/releases/8_5_12.php",
+          "current_downloads_url": "https://www.php.net/downloads.php?source=Y",
+          "source_url": "https://github.com/php/php-src/blob/php-8.5.12/Zend/zend_ast.c",
+          "source_blob_sha": "03ce073808adc3a0728a3be0709504f5e1d51823",
+          "required_correction_present": false,
+          "binary_tested": false
+        },
+        "note": "RC whole-library and native semantic success does not establish a released stable PHP minimum. The checker intentionally returns nonzero for this prerelease. Official release and tagged source provenance are independently recorded, not inferred by the executable checker."
+      },
+      "downstream_adoption": {
+        "inspected_manifests_file": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/external-manifests.json",
+        "constraints": [
+          {
+            "package": "componenta/app",
+            "commit": "49025670f902c596af886ee4493e114c8b44303b",
+            "di_constraint": "^5.0.3",
+            "url": "https://github.com/componenta/app/blob/49025670f902c596af886ee4493e114c8b44303b/composer.json",
+            "validation": "actual full runtime suite with explicit diagnostic temporary alias"
+          },
+          {
+            "package": "componenta/auth",
+            "commit": "f983a4587013d74e99cc93597a6167047a8e761b",
+            "di_constraint": "^5.0.0",
+            "url": "https://github.com/componenta/auth/blob/f983a4587013d74e99cc93597a6167047a8e761b/composer.json",
+            "validation": "manifest and lazy factory public interface source inspection only"
+          },
+          {
+            "package": "componenta/skeleton",
+            "commit": "870e21080a0292d8c25a54a9b96e5e96e388f413",
+            "di_constraint": "^5.0.3",
+            "url": "https://github.com/componenta/skeleton/blob/870e21080a0292d8c25a54a9b96e5e96e388f413/composer.json",
+            "validation": "manifest inspection only"
+          }
+        ],
+        "required_for_normal_di6_adoption": "Deliberate downstream dependency constraint migration after the DI 6 release contract is established.",
+        "exhaustive_consumer_enumeration": false,
+        "known_legacy_owner_interface_usage_found": false,
+        "legacy_usage_inspection_scope": "DI production/tests; actual App consumer archive; sampled Auth factory; not a claim about all external or private extensions"
+      },
+      "remaining_plan": {
+        "definition_owner_lifecycle": "Approved library implementation complete; clean installed consumer proves direct/custom strategy migration and ownership behavior.",
+        "php85_callbacks_slices_1_to_5": "Approved library implementation complete; final frozen source passes full RC suite and documented consumer examples.",
+        "slice_6_independent_library_validation": "Consumer and RC verification completed here. Root owns repeated supported-runtime runs, static/style checks, final benchmarks, report and CI checks.",
+        "e1_release_gated": [
+          "Verify first official stable PHP patch with tagged correction and actual binary fixtures",
+          "Set verified Composer PHP floor and 6.0.x-dev alias",
+          "Align final supported-platform CI and migration metadata",
+          "Run release acceptance and tag/publish only after gates are complete"
+        ],
+        "request_to_dto": "Explicit separately deferred possible 6.1 feature; no approved executable slice remains in this refactor.",
+        "attribute_availability_b2": "Conditional future investigation requiring workload justification and revised synchronization contract; not an unfinished approved optimization slice. Retain corrected polling."
+      },
+      "limits": [
+        "PHP 8.5.12 was inspected at tagged-source level only; no 8.5.12 binary claim is made.",
+        "PHP 8.5.8 is the existing negative native-platform control, not the latest stable release.",
+        "Actual App runtime proof uses an explicitly recorded test-only version alias; normal dependency solver compatibility is not established.",
+        "No full Auth or Skeleton test suite was executed.",
+        "The full-extension RC binary was built for correctness testing; these elapsed times are not performance measurements."
+      ],
+      "preceding_checkpoint": {
+        "commit": "378f3e43fcbc14a10701a4d4c01ebf9f1eb46ed0",
+        "evidence": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-378f3e43/consumer-convergence-evidence.json",
+        "source_archive": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-378f3e43/source.tar",
+        "source_tree": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/package-378f3e43",
+        "reason_for_final_recheck": "Two measured, behavior-preserving performance corrections in AttributeDefinition empty-array snapshots and CompletedAttributeGuard common verifiedRevision propagation."
+      }
+    },
+    "consumer_commands": [
+      {
+        "name": "rc-full-suite",
+        "command": [
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+          "-n",
+          "vendor/bin/pest",
+          "--colors=never",
+          "--compact",
+          "--order-by=random",
+          "--random-order-seed=20261114"
+        ],
+        "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/rc-full-suite.stdout.log",
+            "sha256": "5b2aa8ba0b284b1e47f02b0ea15a7c26f41c6127059b4388c62d07cb4c8ae953"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/rc-full-suite.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "app-php84",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "-n",
+          "vendor/bin/pest",
+          "--colors=never",
+          "--compact",
+          "--order-by=random",
+          "--random-order-seed=20261114"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/app-49025670f902c596af886ee4493e114c8b44303b",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/app-php84.stdout.log",
+            "sha256": "1aae48a8d15bec0a2c9a7e7c30a1b88d5166c9ada569e5fe25e03e63ba7739bd"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/app-php84.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "consumer-platform-reqs",
+        "command": [
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+          "-n",
+          "/workspace/scratch/8f6c1df8ef3b/runtime/composer.phar",
+          "check-platform-reqs",
+          "--no-dev"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-platform-reqs.stdout.log",
+            "sha256": "4ac029af066efcf6e1bd683400ed651601664543a450ecfebe8e9d833dd078fc"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-platform-reqs.stderr.log",
+            "sha256": "85ef950278c7173e7dc798235745ad555cf19e82f86a4f339cb0708e7b598b57"
+          }
+        }
+      },
+      {
+        "name": "rc-native-platform-gate",
+        "command": [
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+          "-n",
+          "tests/php85-platform.php"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/package",
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/rc-native-platform-gate.stdout.log",
+            "sha256": "a4fb756f377d2721a3219b068f7aa64c99b79ded21e2d4a8de8adac4ffd0bd7f"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/rc-native-platform-gate.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "consumer-smoke-php84",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "-n",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer/smoke.php"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php84.stdout.log",
+            "sha256": "e4fc18a6e4b5454dff6b7ec7440c81ff55ebb62e01fd624a824af6589aa5aee8"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php84.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "consumer-smoke-php85",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+          "-n",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer/smoke.php"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php85.stdout.log",
+            "sha256": "b9e708c55faa4dafc08b125e0566ed861712c41d5c6a8388d86625973b24aea7"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php85.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "consumer-smoke-php8513rc1",
+        "command": [
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+          "-n",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer/smoke.php"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php8513rc1.stdout.log",
+            "sha256": "ad6708368f59770d4313f7fc56256d5d6d2b9ed5847762832860ae4e08e5155b"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/consumer-smoke-php8513rc1.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "migration-examples",
+        "command": [
+          "python3",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/verify_migration_examples.py",
+          "--repo",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/package",
+          "--autoload",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/consumer/vendor/autoload.php",
+          "--php",
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "--php",
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+          "--php",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+          "--output",
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/migration-example-results.json"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/migration-examples.stdout.log",
+            "sha256": "b382c2f94a353f8cb5a4ffcc162c92da5c711c91e97e1646fecb063a7776d5a4"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/migration-examples.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "app-php8513rc1",
+        "command": [
+          "/workspace/scratch/c1ee9cf6cd27/di6-convergence/runtime/php-8.5.13RC1/sapi/cli/php",
+          "-n",
+          "vendor/bin/pest",
+          "--colors=never",
+          "--compact",
+          "--order-by=reverse"
+        ],
+        "cwd": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/app-49025670f902c596af886ee4493e114c8b44303b",
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "passed": true,
+        "logs": {
+          "stdout": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/app-php8513rc1.stdout.log",
+            "sha256": "6346ef64986ad933b8ae0a5b984b95bdece9f0e3ae918319070ac84da2dfdafa"
+          },
+          "stderr": {
+            "path": "/workspace/scratch/c1ee9cf6cd27/di6-convergence/final-064be206/app-php8513rc1.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      }
+    ],
+    "consumer_fixture": {
+      "recorded_source": "<?php\n\ndeclare(strict_types=1);\n\nrequire __DIR__ . '/vendor/autoload.php';\n\nuse Componenta\\Config\\Config;\nuse Componenta\\Config\\ContainerValue;\nuse Componenta\\Config\\DependencyDefinitions;\nuse Componenta\\Config\\Environment;\nuse Componenta\\DI\\Attribute\\Init;\nuse Componenta\\DI\\Attribute\\SetUp;\nuse Componenta\\DI\\Attribute\\Transform;\nuse Componenta\\DI\\Container;\nuse Componenta\\DI\\ContainerFactory;\nuse Componenta\\DI\\Definition\\ClassDefinition;\nuse Componenta\\DI\\Definition\\Definition;\nuse Componenta\\DI\\Definition\\DefinitionInterface;\nuse Componenta\\DI\\Exception\\InvalidConfigurationException;\nuse Componenta\\DI\\Exception\\MutationRetirementException;\nuse Componenta\\DI\\Exception\\ResolutionException;\nuse Componenta\\DI\\Internal\\AliasResolver;\nuse Componenta\\DI\\ProxyFactory;\nuse Componenta\\DI\\Resolver\\Entry\\CompositeResolver;\nuse Componenta\\DI\\Resolver\\Entry\\DefinitionResolverInterface;\nuse Componenta\\DI\\Resolver\\Entry\\FactoryResolver;\nuse Componenta\\DI\\Resolver\\Entry\\InvokableResolver;\nuse Composer\\InstalledVersions;\n\nfunction verify(bool $condition, string $description): void\n{\n    if (!$condition) {\n        throw new RuntimeException($description);\n    }\n}\n\n$installedSource = realpath(__DIR__ . '/vendor/componenta/di/src');\nverify($installedSource !== false, 'The test requires an installed consumer package.');\n$sourceMap = [\n    'Container' => (new ReflectionClass(Container::class))->getFileName(),\n    'Transform' => (new ReflectionClass(Transform::class))->getFileName(),\n    'Internal functions' => (new ReflectionFunction('Componenta\\\\DI\\\\Internal\\\\is_entry_class_eligible'))->getFileName(),\n];\nforeach ($sourceMap as $name => $path) {\n    verify($path !== false && str_starts_with($path, $installedSource . '/'), $name . ' loaded from outside the installed package.');\n}\nverify(!class_exists('Componenta\\\\DI\\\\Tests\\\\Support\\\\ContainerBuilder'), 'Development test helpers must not be autoloaded in a production consumer.');\nverify(!interface_exists('Componenta\\\\DI\\\\Resolver\\\\Entry\\\\DefinitionAwareResolverInterface'), 'The superseded mutable definition interface must not remain.');\n\nfinal readonly class Message\n{\n    public function __construct(public string $text) {}\n}\n\nfinal class ConsumerNormalizer\n{\n    public function normalize(string $value): string\n    {\n        return strtoupper(trim($value));\n    }\n}\n\nfunction initialLabel(): string\n{\n    return ' seed ';\n}\n\ndefine('DI_CONSUMER_TRANSFORM', static function (string $value, ConsumerNormalizer $normalizer): string {\n    return $normalizer->normalize($value);\n});\ndefine('DI_CONSUMER_SETUP', static function (CallbackObject $object, ConsumerNormalizer $normalizer): void {\n    $object->setup = $normalizer->normalize($object->name . ':' . $object->initial);\n});\n\n#[SetUp(DI_CONSUMER_SETUP)]\nfinal class CallbackObject\n{\n    #[Init('initialLabel')]\n    #[Transform(DI_CONSUMER_TRANSFORM)]\n    public readonly string $initial;\n\n    public string $setup;\n\n    public function __construct(#[Transform(DI_CONSUMER_TRANSFORM)] public string $name) {}\n}\n\n$environment = new Environment([]);\n$config = new Config(['application' => 'consumer'], $environment);\n$value = (new ContainerFactory())->create($config, new DependencyDefinitions([\n    'factories' => ['message' => Definition::factory(static fn(ContainerValue $context, array $params): Message => new Message($params['text'] ?? $context->config->string('application')))],\n]));\n$container = $value->container;\nverify($container instanceof Container, 'The default factory must return the public container.');\nverify($value->config === $config && $container->get(Config::class) === $config && $container->get(Environment::class) === $environment, 'Configuration and environment identity changed.');\n$shared = $container->get('message');\nverify($shared instanceof Message && $shared->text === 'consumer' && $container->get('message') === $shared, 'Factory ABI or shared identity changed.');\n$fresh = $container->make('message', ['text' => 'fresh']);\nverify($fresh instanceof Message && $fresh->text === 'fresh' && $fresh !== $shared, 'Fresh construction must honor runtime parameters.');\n$override = new Message('override');\n$container->set('message', $override);\nverify($container->get('message') === $override && $container->make('message')->text === 'consumer', 'Raw set must retain the underlying fresh definition.');\n\n$container->set('reference', new Message('old'));\n$container->set('defined', ClassDefinition::create(Message::class)->constructor(['text' => 'configured']));\nverify($container->make('defined')->text === 'configured' && $container->make('defined', ['text' => 'literal'])->text === 'literal', 'ClassDefinition construction or literal override failed.');\n$container->set('reference-copy', Definition::factory(static fn(ContainerValue $context): Message => $context->container->get('reference')));\n$oldReference = $container->make('reference-copy');\n$container->set('reference', new Message('new'));\nverify($container->make('reference-copy')->text === 'new' && $oldReference->text === 'old', 'Fresh factories must observe current referenced services.');\n\n$strategy = new FactoryResolver($container, new ProxyFactory());\n$validated = $strategy->validateDefinition('direct', Definition::factory(static fn(): Message => new Message('direct')));\nverify($strategy->resolveDefinition('direct', $validated)->text === 'direct', 'The direct factory strategy migration failed.');\n$invokable = new InvokableResolver();\n$validated = $invokable->validateDefinition('object', Definition::invokable(stdClass::class));\nverify($invokable->resolveDefinition('object', $validated) instanceof stdClass, 'The direct invokable strategy migration failed.');\n\nfinal readonly class TextDefinition implements DefinitionInterface\n{\n    public function __construct(public string $value) {}\n}\n\nfinal readonly class ValidatedText implements DefinitionInterface\n{\n    public function __construct(public string $value) {}\n}\n\nfinal class TextStrategy implements DefinitionResolverInterface\n{\n    public function supportsDefinition(DefinitionInterface $definition): bool\n    {\n        return $definition instanceof TextDefinition;\n    }\n\n    public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface\n    {\n        if (!$definition instanceof TextDefinition || trim($definition->value) === '') {\n            throw new InvalidConfigurationException('A nonempty text definition is required.');\n        }\n\n        return new ValidatedText(trim($definition->value));\n    }\n\n    public function resolveDefinition(string $id, DefinitionInterface $validated, array $params = []): mixed\n    {\n        if (!$validated instanceof ValidatedText) {\n            throw new LogicException('Execution received an unvalidated definition.');\n        }\n\n        return $validated->value;\n    }\n}\n\n$child = new CompositeResolver(new TextStrategy());\n$child->setDefinition('text', new TextDefinition(' original '));\n$snapshot = new CompositeResolver($child);\n$child->setDefinition('text', new TextDefinition('changed'));\nverify($snapshot->resolve('text') === 'original' && $child->resolve('text') === 'changed', 'A nested composition must preserve its independent snapshot.');\n$attached = new Container($snapshot, new AliasResolver(), $container);\n$attached->set('text', new TextDefinition('attached update'));\nverify($attached->get('text') === 'attached update', 'A custom definition strategy must work through the public container.');\ntry {\n    $snapshot->setDefinition('text', new TextDefinition('invalid authority'));\n    throw new LogicException('Direct mutation of an attached root must fail.');\n} catch (InvalidConfigurationException) {\n    verify($attached->get('text') === 'attached update', 'An attached-root rejection must retain the current shared service.');\n}\n\n$object = $container->make(CallbackObject::class, ['name' => ' alice ', 'object' => new stdClass()]);\nverify($object instanceof CallbackObject && $object->name === 'ALICE' && $object->initial === 'SEED' && $object->setup === 'ALICE:SEED', 'Installed callback composition, property staging or reserved setup argument failed.');\n$transformed = $container->call(static fn(#[Transform(DI_CONSUMER_TRANSFORM)] string $value): string => $value, ['value' => ' isolated ', 'normalizer' => 'outer input']);\nverify($transformed === 'ISOLATED', 'Transform suffix resolution must not inherit the caller input bag.');\n\ninterface FirstService {}\ninterface SecondService {}\nfinal class FirstImplementation implements FirstService {}\nfinal class SecondImplementation implements SecondService {}\nfinal readonly class UnionConsumer\n{\n    public function __construct(public FirstService|SecondService $service) {}\n}\n\n$first = new FirstImplementation();\n$container->set(FirstService::class, $first);\nverify($container->make(UnionConsumer::class)->service === $first, 'The sole available union service must be selected.');\n$secondCalls = 0;\n$container->set(SecondService::class, Definition::factory(static function () use (&$secondCalls): SecondImplementation {\n    ++$secondCalls;\n\n    return new SecondImplementation();\n}));\ntry {\n    $container->make(UnionConsumer::class);\n    throw new LogicException('Two available service arms must be rejected.');\n} catch (ResolutionException) {\n    verify($secondCalls === 0, 'Ambiguity must be detected before constructing candidates.');\n}\n\nfinal class RetiredValue\n{\n    public function __destruct()\n    {\n        throw new RuntimeException('consumer retirement');\n    }\n}\n\n$container->set('retired', Definition::factory(static fn(): RetiredValue => new RetiredValue()));\n$container->get('retired');\ntry {\n    $container->set('retired', Definition::factory(static fn(): Message => new Message('committed')));\n    throw new LogicException('The synchronous retirement failure must be reported.');\n} catch (MutationRetirementException $failure) {\n    verify($failure->id === 'retired' && count($failure->causes) === 1 && $failure->getPrevious()?->getMessage() === 'consumer retirement', 'The committed-outcome diagnostic lost its context or cause.');\n    verify($container->get('retired')->text === 'committed' && $container->make('retired')->text === 'committed', 'Shared and fresh lookup must agree after a retirement failure.');\n}\n\necho json_encode([\n    'php' => PHP_VERSION,\n    'package_version' => InstalledVersions::getPrettyVersion('componenta/di'),\n    'source_map' => $sourceMap,\n    'no_dev_helpers' => true,\n    'construction_and_config_identity' => true,\n    'raw_set_and_fresh_definition' => true,\n    'direct_strategy_migration' => true,\n    'custom_strategy_snapshot_and_authority' => true,\n    'callbacks_and_transform_isolation' => true,\n    'union_selection_and_ambiguity' => true,\n    'committed_retirement_outcome' => true,\n], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), \"\\n\";\n",
+      "execution_context": "Standalone file in the clean consumer project beside its vendor directory; no development dependencies or DI test helpers."
+    },
+    "cost_qualification": {
+      "initial_unqualified": {
+        "baseline_commit": "35c5eb54db5979601d807a128385a23142684030",
+        "final_production_commit": "378f3e43fcbc14a10701a4d4c01ebf9f1eb46ed0",
+        "source_sha256": {
+          "baseline": "6847f590dc1104088caa23dea0f72a4b909c0e6b7ef07c9063f8854ee69032ed",
+          "final": "3f33df911ed8bbd7b357266e6c8e2fff392da5a249341241ebbea8c83a848f6e"
+        },
+        "source_hash_algorithm": "sorted src-relative path + NUL + contents + NUL",
+        "settings": {
+          "iterations": 20000,
+          "build_iterations": 5000,
+          "rounds_per_process": 7,
+          "process_order_per_runtime": [
+            "baseline",
+            "final",
+            "final",
+            "baseline"
+          ],
+          "ini": "-n",
+          "cases": [
+            "build/default",
+            "get/shared",
+            "make/no-arguments",
+            "make/autowire",
+            "call/reused-closure",
+            "call/fresh-closure",
+            "call/method-array",
+            "transform/one",
+            "setup/method",
+            "setup/callback"
+          ],
+          "timing_unit": "nanoseconds per operation"
+        },
+        "dependencies": {
+          "mode": "same installed companion-workspace graph for both sources",
+          "lock_sha256": "6650b00c31a76c15ff59b0ba47fbbd060f681459ca78eddee6ed7cdb3c9ac337"
+        },
+        "runs": [
+          {
+            "runtime": "84",
+            "variant": "baseline",
+            "position": 1,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 77494.2,
+              "get/shared": 200.7,
+              "make/no-arguments": 5487.7,
+              "make/autowire": 14441.1,
+              "call/reused-closure": 18301.8,
+              "call/fresh-closure": 17447.0,
+              "call/method-array": 7317.2,
+              "transform/one": 16772.5,
+              "setup/method": 21227.9,
+              "setup/callback": 39254.9
+            },
+            "log": "php84-1-baseline.log",
+            "log_sha256": "6a2590693ba9a31dbe45961eec73e9305d55f0971162b99a2bff15215660564b",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "84",
+            "variant": "final",
+            "position": 2,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 99969.5,
+              "get/shared": 201.3,
+              "make/no-arguments": 5606.4,
+              "make/autowire": 12127.6,
+              "call/reused-closure": 18820.4,
+              "call/fresh-closure": 18630.0,
+              "call/method-array": 8190.5,
+              "transform/one": 18009.4,
+              "setup/method": 27338.3,
+              "setup/callback": 42307.1
+            },
+            "log": "php84-2-final.log",
+            "log_sha256": "0716da61f74491217e5be07cb1f4744ff30fa4e86f1c2c4eea0809f1b477c9e1",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "84",
+            "variant": "final",
+            "position": 3,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 94990.8,
+              "get/shared": 188.2,
+              "make/no-arguments": 5498.2,
+              "make/autowire": 11786.1,
+              "call/reused-closure": 18780.0,
+              "call/fresh-closure": 18640.6,
+              "call/method-array": 8062.8,
+              "transform/one": 17977.3,
+              "setup/method": 29249.3,
+              "setup/callback": 45358.2
+            },
+            "log": "php84-3-final.log",
+            "log_sha256": "9fe61b2bf1cea14559958c496649a83e4feb2e854aaa7b142407766ab87e0548",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "84",
+            "variant": "baseline",
+            "position": 4,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 71298.6,
+              "get/shared": 196.9,
+              "make/no-arguments": 5265.5,
+              "make/autowire": 12228.1,
+              "call/reused-closure": 18474.6,
+              "call/fresh-closure": 18003.0,
+              "call/method-array": 7309.3,
+              "transform/one": 16185.8,
+              "setup/method": 23820.6,
+              "setup/callback": 40635.1
+            },
+            "log": "php84-4-baseline.log",
+            "log_sha256": "39391a533050045f1225479cda7e76cde630e4a22aabf23e602ba63f4097f910",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "85",
+            "variant": "baseline",
+            "position": 1,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 77717.1,
+              "get/shared": 205.6,
+              "make/no-arguments": 5716.4,
+              "make/autowire": 12611.7,
+              "call/reused-closure": 19922.1,
+              "call/fresh-closure": 19735.9,
+              "call/method-array": 9072.1,
+              "transform/one": 19178.9,
+              "setup/method": 25184.5,
+              "setup/callback": 45635.9
+            },
+            "log": "php85-1-baseline.log",
+            "log_sha256": "dbf3e31cff19c2580e64ae138f804f098fb4b37eeaa02c5c9c5760548afb7bd4",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          },
+          {
+            "runtime": "85",
+            "variant": "final",
+            "position": 2,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 113912.0,
+              "get/shared": 259.4,
+              "make/no-arguments": 6115.9,
+              "make/autowire": 12960.3,
+              "call/reused-closure": 21184.1,
+              "call/fresh-closure": 20131.8,
+              "call/method-array": 9328.6,
+              "transform/one": 19822.7,
+              "setup/method": 28226.7,
+              "setup/callback": 47383.7
+            },
+            "log": "php85-2-final.log",
+            "log_sha256": "557cadc0e3b64ce5057a835139e50d5fe1207d1aa3cd177bb0d54d75367401a0",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          },
+          {
+            "runtime": "85",
+            "variant": "final",
+            "position": 3,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 111863.5,
+              "get/shared": 185.8,
+              "make/no-arguments": 6078.0,
+              "make/autowire": 13301.0,
+              "call/reused-closure": 19673.7,
+              "call/fresh-closure": 20752.7,
+              "call/method-array": 8268.2,
+              "transform/one": 18348.3,
+              "setup/method": 29290.6,
+              "setup/callback": 46898.3
+            },
+            "log": "php85-3-final.log",
+            "log_sha256": "2e90f822a31b55dd248d9569a5c24321ef3435e9bfeee0f9b3a06d3208517ffc",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          },
+          {
+            "runtime": "85",
+            "variant": "baseline",
+            "position": 4,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 74201.8,
+              "get/shared": 192.7,
+              "make/no-arguments": 5712.7,
+              "make/autowire": 12937.3,
+              "call/reused-closure": 19522.7,
+              "call/fresh-closure": 18481.8,
+              "call/method-array": 7843.1,
+              "transform/one": 17385.9,
+              "setup/method": 24625.7,
+              "setup/callback": 42953.1
+            },
+            "log": "php85-4-baseline.log",
+            "log_sha256": "6355b785239d1b0c5e559cf6e9324e234b98343b052815c3b3b188d43618793e",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          }
+        ],
+        "summary": {
+          "84": {
+            "build/default": {
+              "baseline": 74396.4,
+              "final": 97480.15,
+              "change_percent": 31.028047056040343
+            },
+            "get/shared": {
+              "baseline": 198.8,
+              "final": 194.75,
+              "change_percent": -2.0372233400402506
+            },
+            "make/no-arguments": {
+              "baseline": 5376.6,
+              "final": 5552.299999999999,
+              "change_percent": 3.267864449652169
+            },
+            "make/autowire": {
+              "baseline": 13334.6,
+              "final": 11956.85,
+              "change_percent": -10.3321434463726
+            },
+            "call/reused-closure": {
+              "baseline": 18388.199999999997,
+              "final": 18800.2,
+              "change_percent": 2.2405673203467646
+            },
+            "call/fresh-closure": {
+              "baseline": 17725.0,
+              "final": 18635.3,
+              "change_percent": 5.1356840620592425
+            },
+            "call/method-array": {
+              "baseline": 7313.25,
+              "final": 8126.65,
+              "change_percent": 11.12227805695143
+            },
+            "transform/one": {
+              "baseline": 16479.15,
+              "final": 17993.35,
+              "change_percent": 9.188580721699836
+            },
+            "setup/method": {
+              "baseline": 22524.25,
+              "final": 28293.8,
+              "change_percent": 25.61483734197587
+            },
+            "setup/callback": {
+              "baseline": 39945.0,
+              "final": 43832.649999999994,
+              "change_percent": 9.732507197396401
+            }
+          },
+          "85": {
+            "build/default": {
+              "baseline": 75959.45000000001,
+              "final": 112887.75,
+              "change_percent": 48.61580751308756
+            },
+            "get/shared": {
+              "baseline": 199.14999999999998,
+              "final": 222.6,
+              "change_percent": 11.775043936731123
+            },
+            "make/no-arguments": {
+              "baseline": 5714.549999999999,
+              "final": 6096.95,
+              "change_percent": 6.691690509313952
+            },
+            "make/autowire": {
+              "baseline": 12774.5,
+              "final": 13130.65,
+              "change_percent": 2.787976046029206
+            },
+            "call/reused-closure": {
+              "baseline": 19722.4,
+              "final": 20428.9,
+              "change_percent": 3.582221230681859
+            },
+            "call/fresh-closure": {
+              "baseline": 19108.85,
+              "final": 20442.25,
+              "change_percent": 6.977918608393496
+            },
+            "call/method-array": {
+              "baseline": 8457.6,
+              "final": 8798.400000000001,
+              "change_percent": 4.0295119182746975
+            },
+            "transform/one": {
+              "baseline": 18282.4,
+              "final": 19085.5,
+              "change_percent": 4.3927493108125715
+            },
+            "setup/method": {
+              "baseline": 24905.1,
+              "final": 28758.65,
+              "change_percent": 15.472935262255527
+            },
+            "setup/callback": {
+              "baseline": 44294.5,
+              "final": 47141.0,
+              "change_percent": 6.4263057490207665
+            }
+          }
+        }
+      },
+      "final": {
+        "baseline_commit": "35c5eb54db5979601d807a128385a23142684030",
+        "final_production_commit": "064be206fab16ce0c5a9a75d96e85f92b71ffb24",
+        "source_sha256": {
+          "baseline": "6847f590dc1104088caa23dea0f72a4b909c0e6b7ef07c9063f8854ee69032ed",
+          "final": "daf04d5b4696dce962d27292ca55d57419a5be570fa34628497df0c604249f30"
+        },
+        "source_hash_algorithm": "sorted src-relative path + NUL + contents + NUL",
+        "settings": {
+          "iterations": 20000,
+          "build_iterations": 5000,
+          "rounds_per_process": 7,
+          "process_order_per_runtime": [
+            "baseline",
+            "final",
+            "final",
+            "baseline"
+          ],
+          "ini": "-n",
+          "cases": [
+            "build/default",
+            "get/shared",
+            "make/no-arguments",
+            "make/autowire",
+            "call/reused-closure",
+            "call/fresh-closure",
+            "call/method-array",
+            "transform/one",
+            "setup/method",
+            "setup/callback"
+          ],
+          "timing_unit": "nanoseconds per operation"
+        },
+        "dependencies": {
+          "mode": "same installed companion-workspace graph for both sources",
+          "lock_sha256": "6650b00c31a76c15ff59b0ba47fbbd060f681459ca78eddee6ed7cdb3c9ac337"
+        },
+        "runs": [
+          {
+            "runtime": "84",
+            "variant": "baseline",
+            "position": 1,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 71597.8,
+              "get/shared": 183.9,
+              "make/no-arguments": 5084.7,
+              "make/autowire": 12063.8,
+              "call/reused-closure": 19104.6,
+              "call/fresh-closure": 17382.9,
+              "call/method-array": 7628.8,
+              "transform/one": 16399.1,
+              "setup/method": 21911.7,
+              "setup/callback": 38252.5
+            },
+            "log": "php84-1-baseline.log",
+            "log_sha256": "df03c35919ace1e52123969d4ff7452596fea9405c3aeba50f8db3caa672c872",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "84",
+            "variant": "final",
+            "position": 2,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 85070.8,
+              "get/shared": 184.1,
+              "make/no-arguments": 5603.8,
+              "make/autowire": 12885.4,
+              "call/reused-closure": 18299.1,
+              "call/fresh-closure": 18131.5,
+              "call/method-array": 7692.0,
+              "transform/one": 17145.0,
+              "setup/method": 23592.7,
+              "setup/callback": 37795.3
+            },
+            "log": "php84-2-final.log",
+            "log_sha256": "e5fd376490681c00b147d95dcda0116217bfb30ac3ea5a8ef65f4a257312bca3",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "84",
+            "variant": "final",
+            "position": 3,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 85781.2,
+              "get/shared": 185.2,
+              "make/no-arguments": 5746.8,
+              "make/autowire": 12120.9,
+              "call/reused-closure": 18318.5,
+              "call/fresh-closure": 18729.5,
+              "call/method-array": 8154.4,
+              "transform/one": 17152.6,
+              "setup/method": 24039.6,
+              "setup/callback": 39484.9
+            },
+            "log": "php84-3-final.log",
+            "log_sha256": "5bdb11acce35c7f1a389200a39a4fde47c5fa80222b628ec26f5f311bfb80fff",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "84",
+            "variant": "baseline",
+            "position": 4,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 66307.8,
+              "get/shared": 202.6,
+              "make/no-arguments": 5485.6,
+              "make/autowire": 11899.6,
+              "call/reused-closure": 18199.8,
+              "call/fresh-closure": 17491.8,
+              "call/method-array": 7058.7,
+              "transform/one": 16476.6,
+              "setup/method": 21030.1,
+              "setup/callback": 37742.9
+            },
+            "log": "php84-4-baseline.log",
+            "log_sha256": "2992879542f67c510602a2ce2af47e6f5366ba9aefbb697a89ff160428b498b3",
+            "binary_sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54"
+          },
+          {
+            "runtime": "85",
+            "variant": "baseline",
+            "position": 1,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 77846.7,
+              "get/shared": 221.2,
+              "make/no-arguments": 5807.1,
+              "make/autowire": 12900.5,
+              "call/reused-closure": 18836.2,
+              "call/fresh-closure": 19930.7,
+              "call/method-array": 8345.1,
+              "transform/one": 19338.0,
+              "setup/method": 25578.0,
+              "setup/callback": 41852.2
+            },
+            "log": "php85-1-baseline.log",
+            "log_sha256": "36d53b73e2103b81dae56ad43885019c34772df5d327ee3553dcf16f4f7e677c",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          },
+          {
+            "runtime": "85",
+            "variant": "final",
+            "position": 2,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 95242.1,
+              "get/shared": 199.7,
+              "make/no-arguments": 6458.6,
+              "make/autowire": 13357.2,
+              "call/reused-closure": 19331.0,
+              "call/fresh-closure": 20211.7,
+              "call/method-array": 8467.8,
+              "transform/one": 17874.0,
+              "setup/method": 23892.4,
+              "setup/callback": 40464.6
+            },
+            "log": "php85-2-final.log",
+            "log_sha256": "d32d860d044de42a4a57e78c73f9fe48c8f8d4e2b71089ec6ee61b6499642c90",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          },
+          {
+            "runtime": "85",
+            "variant": "final",
+            "position": 3,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 93466.2,
+              "get/shared": 197.5,
+              "make/no-arguments": 6309.4,
+              "make/autowire": 13052.5,
+              "call/reused-closure": 18671.8,
+              "call/fresh-closure": 18632.2,
+              "call/method-array": 8411.1,
+              "transform/one": 17794.6,
+              "setup/method": 25778.1,
+              "setup/callback": 42242.5
+            },
+            "log": "php85-3-final.log",
+            "log_sha256": "0e043c2f425835d0d96f1cd3c9b441b8d433ed961f2a1511e78bb5f02078110d",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          },
+          {
+            "runtime": "85",
+            "variant": "baseline",
+            "position": 4,
+            "command": [
+              "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+              "-n",
+              "benchmarks/RuntimeBench.php"
+            ],
+            "medians_ns": {
+              "build/default": 73561.0,
+              "get/shared": 193.7,
+              "make/no-arguments": 5295.5,
+              "make/autowire": 12076.2,
+              "call/reused-closure": 18606.0,
+              "call/fresh-closure": 18711.1,
+              "call/method-array": 7362.8,
+              "transform/one": 16535.5,
+              "setup/method": 22796.4,
+              "setup/callback": 38827.8
+            },
+            "log": "php85-4-baseline.log",
+            "log_sha256": "c342b15d13bb5b774b2a5f2242995ac1dd3f051f42edb229e4da254964e8ab49",
+            "binary_sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e"
+          }
+        ],
+        "summary": {
+          "84": {
+            "build/default": {
+              "baseline": 68952.8,
+              "final": 85426.0,
+              "change_percent": 23.890545416574803
+            },
+            "get/shared": {
+              "baseline": 193.25,
+              "final": 184.64999999999998,
+              "change_percent": -4.450194049159128
+            },
+            "make/no-arguments": {
+              "baseline": 5285.15,
+              "final": 5675.3,
+              "change_percent": 7.382004295053135
+            },
+            "make/autowire": {
+              "baseline": 11981.7,
+              "final": 12503.15,
+              "change_percent": 4.352053548327861
+            },
+            "call/reused-closure": {
+              "baseline": 18652.199999999997,
+              "final": 18308.8,
+              "change_percent": -1.84106968614961
+            },
+            "call/fresh-closure": {
+              "baseline": 17437.35,
+              "final": 18430.5,
+              "change_percent": 5.695532864798847
+            },
+            "call/method-array": {
+              "baseline": 7343.75,
+              "final": 7923.2,
+              "change_percent": 7.890382978723398
+            },
+            "transform/one": {
+              "baseline": 16437.85,
+              "final": 17148.8,
+              "change_percent": 4.3250790097245195
+            },
+            "setup/method": {
+              "baseline": 21470.9,
+              "final": 23816.15,
+              "change_percent": 10.922923584945199
+            },
+            "setup/callback": {
+              "baseline": 37997.7,
+              "final": 38640.100000000006,
+              "change_percent": 1.6906286433126416
+            }
+          },
+          "85": {
+            "build/default": {
+              "baseline": 75703.85,
+              "final": 94354.15,
+              "change_percent": 24.635867264346523
+            },
+            "get/shared": {
+              "baseline": 207.45,
+              "final": 198.6,
+              "change_percent": -4.266088214027475
+            },
+            "make/no-arguments": {
+              "baseline": 5551.3,
+              "final": 6384.0,
+              "change_percent": 15.000090068992854
+            },
+            "make/autowire": {
+              "baseline": 12488.35,
+              "final": 13204.85,
+              "change_percent": 5.737347207597487
+            },
+            "call/reused-closure": {
+              "baseline": 18721.1,
+              "final": 19001.4,
+              "change_percent": 1.4972410809193981
+            },
+            "call/fresh-closure": {
+              "baseline": 19320.9,
+              "final": 19421.95,
+              "change_percent": 0.5230087625317514
+            },
+            "call/method-array": {
+              "baseline": 7853.950000000001,
+              "final": 8439.45,
+              "change_percent": 7.454847560781519
+            },
+            "transform/one": {
+              "baseline": 17936.75,
+              "final": 17834.3,
+              "change_percent": -0.571173707611472
+            },
+            "setup/method": {
+              "baseline": 24187.2,
+              "final": 24835.25,
+              "change_percent": 2.6793097175365377
+            },
+            "setup/callback": {
+              "baseline": 40340.0,
+              "final": 41353.55,
+              "change_percent": 2.5125185919682824
+            }
+          }
+        }
+      },
+      "interpretation": "Paired serial microbenchmarks with the same binary/dependency graph and benchmark harness. Raw process medians are retained. Source changes are combined; results do not isolate one fix or establish application throughput. Earlier cost tables remain historical."
+    },
+    "previous_complete_hosted_gate": {
+      "commit": "35c5eb54db5979601d807a128385a23142684030",
+      "run_id": 43604203062,
+      "conclusion": "success",
+      "coverage_percent": 91.3,
+      "mutation_score_percent": 86.66,
+      "mutations": {
+        "tested": 3531,
+        "timeout": 36,
+        "untested": 549
+      }
+    },
+    "hosted_final_status_url": "https://github.com/componenta/di/actions?query=branch%3Arefactor%2Fdi6-definitions-callbacks",
+    "hosted_reporting": "Hosted results belong to their exact commit. Final completion is reported after the final branch run; earlier run metrics are not reassigned to changed source.",
+    "E1_closed": false,
+    "release_boundary": "No DI6 tag, stable PHP floor or 6.0.x-dev alias is claimed. E1 still requires the official stable release, tagged-source correction and exact stable-binary acceptance."
   }
 }

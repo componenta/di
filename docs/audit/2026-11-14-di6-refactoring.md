@@ -2,7 +2,7 @@
 
 [Полная русская версия](2026-11-14-di6-refactoring.ru.md) · [Machine-readable evidence](2026-11-14-di6-evidence.json)
 
-**Continuation:** the [follow-up below](#follow-up-owned-array-snapshots-and-e1-acceptance) records three additional corrections, current local checks and the PHP 8.5.13RC1 evidence. Earlier sections retain the initial implementation measurements and verification; they are not substituted for checks of the follow-up source.
+**Continuation:** the [completion recheck](#completion-recheck) records final production source, three complete passes on each stable local runtime, candidate-runtime and consumer evidence. Earlier sections retain their own historical measurements and verification.
 
 ## Outcome and version boundaries
 
@@ -151,3 +151,67 @@ These checks cover the three corrections and the new platform runner. The `conti
 `composer test-platform` now runs an isolated, DI-independent acceptance fixture for the ten required trait/default/property/attribute scope and visibility scenarios. PHP 8.5.8 passes only the two unaffected controls. A minimal CLI built from the official, checksum-verified **PHP 8.5.13RC1** archive passes **10/10 semantic cases**. The command still exits nonzero for that RC because it is not a stable PHP 8.5 release; PHP 8.4 is rejected before the native fixture executes. [Platform evidence](2026-11-14-di6-platform-evidence.json) includes the exact source and binary hashes, build options and individual outcomes.
 
 The RC source contains the upstream correction; the current stable 8.5.12 tag does not. No 8.5.12 binary result is claimed. **E1 remains open** until an officially released stable patch, its tagged source and its exact binary satisfy the same proof. The final Composer floor, branch alias and DI 6 release remain governed by that condition. Conditional availability optimization and request-to-DTO callbacks retain their separately deferred scope.
+
+## Completion recheck
+
+The request to finish the refactor re-entered at `35c5eb54`. Independent passes compared every implementation-ready definition/lifecycle and callback contract with its runtime paths and consumers. The library refactoring has converged: central definition ownership, mutation retirement, one shared callback parameter loop, `Transform`, callback `SetUp`, deterministic simple unions and their migration are implemented. Final production source is [`064be206`](https://github.com/componenta/di/commit/064be206fab16ce0c5a9a75d96e85f92b71ffb24); the evidence JSON records its 169-file production fingerprint and the unchanged 399-file source/test fingerprint across the final runs. E1 still governs final platform metadata and release.
+
+### Additional corrections and review
+
+| Correction | Commit | Contract preserved |
+| --- | --- | --- |
+| Semantic attribute definition arrays | [`40f61b0`](https://github.com/componenta/di/commit/40f61b0a8f7c9a52754069a409be2918e63265ff) | Caller references cannot change any of the six capability/selector/rule arrays, even during validation autoload. Original handler/rule objects retain identity and current state. |
+| Callable invocation routing | [`8e36c7a`](https://github.com/componenta/di/commit/8e36c7a7c84543ef46903a71769f6c1e0e230ed4) | Reflection, argument resolution and invocation use one captured owner/method route. A later invocation may observe the caller's updated route; mutable owner business state remains live. |
+| Final object-phase completion | [`378f3e4`](https://github.com/componenta/di/commit/378f3e43fcbc14a10701a4d4c01ebf9f1eb46ed0) | Both completed phases remain guarded through final configuration. A newly discovered skipped handler fails without replay or successful shared publication; a lazy/proxy retry owns fresh after-phase proof. |
+| Cost correction | [`064be20`](https://github.com/componenta/di/commit/064be206fab16ce0c5a9a75d96e85f92b71ffb24) | Empty arrays need no copied slots. Combining two already verified phases retains their common revision; the next assertion still polls, and a changed/different revision validates both phases. No availability checkpoint or fallback autoload attempt was removed. |
+
+The first three defects were reproduced before their fixes: six semantic-array failures, five callable-route failures and eight completed-phase failures. The full-suite integration pass also exposed nine metadata-only false positives in the unpublished first phase correction. The final skipped-phase proof retains validated metadata while excluding all unexecuted object handlers. Two additional positive metadata controls cover class, property and method targets under cold/warm and cached/non-memoized execution. In total, the recheck adds 23 public-contract cases across three test files.
+
+Independent review covered definition strategies, nested snapshots and attachment, canonical-ID capture, external ownership callbacks, all four mutators, suspended invocations and retirement, object lifetime, the ordinary and semantic-prefix parameter paths, type/explicit/default/variadic resolution, union selection, staged properties, callbacks, request provenance, native callable dispatch and plan lifetime. No further actionable defect or unimplemented ready contract remained. The existing [mutation parity reproduction](reproductions/MutationParity.php) now includes factory, ClassDefinition, invokable and external-container changes: **1,200 mutations / 28,800 warm-versus-cold value comparisons per runtime**, with 12 deterministic seeds. This is separate from mutation testing.
+
+### Repeated final verification
+
+| Final source check | Result |
+| --- | --- |
+| PHP 8.4.23, reverse order | 1,368 passed; 18 expected PHP-8.5-native skips; 23,578 assertions |
+| PHP 8.4.23, random seed 401684 | Same passing counts |
+| PHP 8.4.23, OPcache enabled/JIT off, seed 402684 | Same passing counts |
+| PHP 8.5.8, reverse order | 1,386 passed; 23,680 assertions |
+| PHP 8.5.8, random seed 401685 | Same passing counts |
+| PHP 8.5.8, OPcache enabled/JIT off, seed 402685 | Same passing counts |
+| PHP 8.5.13RC1, full library, seed 20261114 | 1,386 passed; 23,680 assertions |
+| PHPStan max / formatting | No errors; 394 PHP files require no formatting changes |
+| Composer metadata / locked dependencies | Strict validation passes; no advisories or abandoned packages |
+
+The three stable-runtime passes were repeated after the cost corrections, on identical source and test bytes. Source fingerprints, exact commands, random seeds, log hashes and dependency identity are in `completion_recheck` in the [evidence JSON](2026-11-14-di6-evidence.json). The earlier complete hosted run for `35c5eb54` is [43604203062](https://github.com/componenta/di/actions/runs/43604203062): Linux PHP 8.4/8.5, Windows PHP 8.4, **91.3% coverage** and **86.66% mutation score** (3,531 tested, 36 timeout, 549 untested). Those scores belong to that earlier source. [Current branch Actions](https://github.com/componenta/di/actions?query=branch%3Arefactor%2Fdi6-definitions-callbacks) records subsequent exact-commit results.
+
+### Consumer and candidate-runtime proof
+
+A clean Composer consumer installs the frozen branch archive without development dependencies or a version alias, with optimized authoritative autoloading. Its smoke succeeds on PHP 8.4.23, 8.5.8 and 8.5.13RC1. The installed 169 production files match the archive exactly. **32/32** process runs of the English/Russian README and migration examples pass; native-only examples execute on the PHP 8.5 runtimes.
+
+The actual `componenta/app` suite at `49025670f902c596af886ee4493e114c8b44303b` also passes: **52 tests / 220 assertions** on PHP 8.4.23 and the RC. This bounded runtime-compatibility test uses an explicit temporary `dev-refactor/di6-definitions-callbacks as 5.0.99` alias in an extracted test project. App's original `^5.0.3` constraint remains unchanged. Auth (`^5.0.0`) and Skeleton (`^5.0.3`) were inspected at manifest/public integration boundaries; their full suites were not run. Their ordinary adoption of DI 6 needs deliberate downstream constraint changes after the release contract is settled.
+
+The separately built full-extension RC uses the verified official PHP archive and a checksum-verified libxml2 build. Its source/configure/compiler/module/binary provenance is retained in the evidence. The binary passes the full library and **10/10** pure-engine semantics, while `test-platform` correctly exits **1** because stable-runtime acceptance is false. The original minimal RC evidence remains intact. No stable 8.5.12 binary result is inferred from tagged-source inspection.
+
+### Final cost qualification
+
+The initial paired comparison detected avoidable empty-array allocation and duplicate same-generation phase validation. Both local operations were removed while preserving the required ownership and synchronization boundaries. The final comparison below uses immutable `35c5eb54` as the pre-recheck baseline and `064be206` as the final source, the same installed dependencies and binary, `-n`, seven rounds per process, 20,000 ordinary operations or 5,000 builds per round. Each runtime runs baseline–final–final–baseline serially; the table reports the median of its two process medians. Full initial/final process results are retained separately in the evidence.
+
+| Case | PHP 8.4 baseline → final, µs | Change | PHP 8.5 baseline → final, µs | Change |
+| --- | ---: | ---: | ---: | ---: |
+| `build/default` | 68.953 → 85.426 | +23.9% | 75.704 → 94.354 | +24.6% |
+| `get/shared` | 0.193 → 0.185 | -4.5% | 0.207 → 0.199 | -4.3% |
+| `make/no-arguments` | 5.285 → 5.675 | +7.4% | 5.551 → 6.384 | +15.0% |
+| `make/autowire` | 11.982 → 12.503 | +4.4% | 12.488 → 13.205 | +5.7% |
+| `call/reused-closure` | 18.652 → 18.309 | -1.8% | 18.721 → 19.001 | +1.5% |
+| `call/fresh-closure` | 17.437 → 18.430 | +5.7% | 19.321 → 19.422 | +0.5% |
+| `call/method-array` | 7.344 → 7.923 | +7.9% | 7.854 → 8.439 | +7.5% |
+| `transform/one` | 16.438 → 17.149 | +4.3% | 17.937 → 17.834 | -0.6% |
+| `setup/method` | 21.471 → 23.816 | +10.9% | 24.187 → 24.835 | +2.7% |
+| `setup/callback` | 37.998 → 38.640 | +1.7% | 40.340 → 41.354 | +2.5% |
+
+These measurements retain the remaining cost of the correctness boundaries and their observed spread. They describe the combined changes; they do not isolate one fix as the sole cause or establish application throughput. Earlier pre-feature timings are historical and have not been relabelled as measurements of this final source.
+
+### Remaining release boundary
+
+The implementation-ready refactor, library verification and consumer/migration proof are complete. **E1 remains open** for an officially released stable PHP patch with the trait-callable correction, its tagged source and its exact binary acceptance. Final Composer floor, `6.0.x-dev` alias and supported-platform release checks follow that evidence. Conditional availability B2 and the possible request-to-DTO callback feature retain their separately deferred scopes. No DI 6 release has been published.
