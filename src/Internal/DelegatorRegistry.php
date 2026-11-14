@@ -44,7 +44,7 @@ final class DelegatorRegistry
     }
 
     /** @param PreparedDelegator $prepared */
-    public function register(string $id, array $prepared): void
+    public function register(string $id, array $prepared, MutationRetirement $retirement): void
     {
         $this->raw[$id][] = $prepared['delegator'];
 
@@ -52,11 +52,14 @@ final class DelegatorRegistry
             $this->dependents[$dependencyId][$id] = true;
         }
 
-        $this->invalidate($id);
+        $this->invalidate($id, $retirement);
     }
 
-    public function invalidate(string $id): void
+    public function invalidate(string $id, MutationRetirement $retirement): void
     {
+        if (isset($this->callables[$id])) {
+            $retirement->retain($this->callables[$id]);
+        }
         unset($this->callables[$id]);
         $this->revisions[$id] = ($this->revisions[$id] ?? 0) + 1;
     }
@@ -81,7 +84,7 @@ final class DelegatorRegistry
      * @param iterable<string> $dependencyIds
      * @return list<string>
      */
-    public function invalidateDependencies(iterable $dependencyIds): array
+    public function invalidateDependencies(iterable $dependencyIds, MutationRetirement $retirement): array
     {
         /** @var list<string> $queue */
         $queue = [];
@@ -111,7 +114,7 @@ final class DelegatorRegistry
                 $entry = (string) $entry;
                 if (!isset($entries[$entry])) {
                     $entries[$entry] = true;
-                    $this->invalidate($entry);
+                    $this->invalidate($entry, $retirement);
                 }
 
                 if (!isset($queued[$entry])) {

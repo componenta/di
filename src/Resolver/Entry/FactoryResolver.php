@@ -11,9 +11,10 @@ use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Entry\ConfiguredFactoryDefinition;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Internal\Resolver\Entry\PreparedFactoryDefinition;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
@@ -27,62 +28,33 @@ use ReflectionParameter;
 use ReflectionReference;
 use Throwable;
 
-/** Resolves configured factories and class definitions. */
-final class FactoryResolver implements DefinitionAwareResolverInterface
+/** Validates and executes factory definitions without owning registrations. */
+final class FactoryResolver implements DefinitionResolverInterface
 {
-    /** @var array<string,true> */
-    private array $validateResolvedFactories = [];
-
     private readonly AutowireByTypeResolver $autowire;
     private readonly ParameterTargetFactory $targets;
 
-    /** @param array<string,mixed> $factories */
     public function __construct(
-        private array $factories,
         private readonly ContainerInterface $container,
         private readonly ProxyFactoryInterface $proxyFactory,
     ) {
         $this->autowire = new AutowireByTypeResolver($container);
         $this->targets = new ParameterTargetFactory();
 
-        foreach ($this->factories as $id => $factory) {
-            if (!is_string($id) || $id === '') {
-                throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
-            }
-
-            if (is_string($factory) || !is_callable($factory)) {
-                $this->validateResolvedFactories[$id] = true;
-            }
-
-            FactorySpecificationValidator::assertValid($id, $factory);
-            if ($factory instanceof FactoryDefinition) {
-                $this->factories[$id] = $factory->value;
-                if (is_string($factory->value) || !is_callable($factory->value)) {
-                    $this->validateResolvedFactories[$id] = true;
-                }
-            }
-        }
-    }
-
-    public function can(string $id): bool
-    {
-        return array_key_exists($id, $this->factories);
     }
 
     /** @param array<string|int, mixed> $params */
-    public function resolve(string $id, array $params = []): mixed
+    public function resolveDefinition(string $id, DefinitionInterface $validated, array $params = []): mixed
     {
-        if (!$this->can($id)) {
-            throw NotFoundException::forService($id);
-        }
-
         try {
-            $definition = $this->factories[$id];
-            if ($definition instanceof ClassDefinition) {
-                return $this->classDefinition($definition, $params);
+            if ($validated instanceof ClassDefinition) {
+                return $this->classDefinition($validated, $params);
+            }
+            if (!$validated instanceof PreparedFactoryDefinition) {
+                throw InvalidConfigurationException::forUnsupportedDefinition($validated, self::class);
             }
 
-            $factory = $this->resolveFactory($id);
+            $factory = $this->resolveFactory($id, $validated);
             $container = $this->container->get(ContainerValue::class);
             if (!$container instanceof ContainerValue) {
                 throw new InvalidConfigurationException('ContainerValue bootstrap service is unavailable.');
@@ -237,10 +209,9 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return $resolved;
     }
 
-    private function resolveFactory(string $id): callable|LazyServiceFactoryInterface
+    private function resolveFactory(string $id, PreparedFactoryDefinition $definition): callable|LazyServiceFactoryInterface
     {
-        $factory = $this->factories[$id];
-        $validateResolved = isset($this->validateResolvedFactories[$id]);
+        $factory = $definition->factory;
 
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
@@ -260,7 +231,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 get_debug_type($factory),
             ));
         }
-        if ($validateResolved
+        if ($definition->validateResolvedCallable
             && !$factory instanceof LazyServiceFactoryInterface
         ) {
             FactorySpecificationValidator::assertResolvedCallable($id, $factory);
@@ -269,28 +240,26 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         return $factory;
     }
 
-    public function setDefinition(string $id, DefinitionInterface $definition): void
+    public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface
     {
-        if (!$this->supportsDefinition($definition)) {
-            throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
+        if ($definition instanceof ClassDefinition) {
+            FactorySpecificationValidator::assertValid($id, $definition);
+            return $definition;
         }
-
-        FactorySpecificationValidator::assertValid($id, $definition);
-        $this->factories[$id] = $definition instanceof FactoryDefinition
-            ? $definition->value
-            : $definition;
-        unset($this->validateResolvedFactories[$id]);
-
-        if ($definition instanceof FactoryDefinition
-            && (is_string($definition->value) || !is_callable($definition->value))
-        ) {
-            $this->validateResolvedFactories[$id] = true;
-        }
+        $factory = match (true) {
+            $definition instanceof FactoryDefinition => $definition->value,
+            $definition instanceof ConfiguredFactoryDefinition => $definition->factory,
+            default => throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class),
+        };
+        $validateResolved = is_string($factory) || !is_callable($factory);
+        FactorySpecificationValidator::assertValid($id, $factory);
+        return new PreparedFactoryDefinition($factory, $validateResolved);
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
     {
         return $definition instanceof FactoryDefinition
-            || $definition instanceof ClassDefinition;
+            || $definition instanceof ClassDefinition
+            || $definition instanceof ConfiguredFactoryDefinition;
     }
 }

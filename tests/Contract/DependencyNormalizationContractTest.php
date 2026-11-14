@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract;
 
 use Componenta\DI\Configuration\DependencyConfiguration;
+use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class NormalizationDelegator
 {
@@ -27,18 +29,19 @@ test('normalization omits unused dependency sections and retains explicit replac
     ]))->toBe(['parameter_resolvers_replace' => true]);
 });
 
-test('normalization unwraps factories without collapsing compatible alias chains', function (): void {
+test('normalization preserves definitions without collapsing compatible alias chains', function (): void {
     $factory = static fn(): object => new \stdClass();
+    $definition = new FactoryDefinition($factory);
     $delegator = static fn(object $entry): object => $entry;
     $reference = new ReferenceDefinition('source');
 
     expect(DependencyConfiguration::normalize([
         'invokables' => ['entry' => \stdClass::class, \stdClass::class],
         'aliases' => ['entry' => 'intermediate', 'intermediate' => \stdClass::class],
-        'factories' => ['product' => new FactoryDefinition($factory), 'copy' => $reference],
+        'factories' => ['product' => $definition, 'copy' => $reference],
         'delegators' => ['product' => $delegator],
     ], ['default' => 'product']))->toBe([
-        'factories' => ['product' => $factory, 'copy' => $reference],
+        'factories' => ['product' => $definition, 'copy' => $reference],
         'invokables' => [\stdClass::class],
         'aliases' => [
             'default' => 'product',
@@ -63,15 +66,40 @@ test('normalization rejects malformed extension pairs before resolving services'
     'empty specification' => [''],
 ]);
 
-test('normalization rejects incompatible raw and wrapped factory signatures', function (bool $wrapped): void {
+test('normalization leaves factory signature validation to container admission', function (bool $wrapped): void {
     $factory = static fn(string $container): string => $container;
-    expect(fn() => DependencyConfiguration::normalize([
-        'factories' => ['broken' => $wrapped ? new FactoryDefinition($factory) : $factory],
-    ]))->toThrow(
-        InvalidConfigurationException::class,
-        'Factory "broken" parameter #1 ($container) type "string" is incompatible with runtime argument Componenta\\Config\\ContainerValue.',
-    );
+    $input = $wrapped ? new FactoryDefinition($factory) : $factory;
+    $normalized = DependencyConfiguration::normalize(['factories' => ['broken' => $input]]);
+
+    expect($normalized)->toBe(['factories' => ['broken' => $input]])
+        ->and(fn() => (new ContainerBuilder())->addFactory('broken', $input)->build())->toThrow(
+            InvalidConfigurationException::class,
+            'Factory "broken" parameter #1 ($container) type "string" is incompatible with runtime argument Componenta\\Config\\ContainerValue.',
+        );
 })->with([true, false]);
+
+test('normalization does not autoload class definitions before semantic admission', function (): void {
+    /** @var class-string $class */
+    $class = __NAMESPACE__ . '\\NotYetAvailable_' . bin2hex(random_bytes(5));
+    $definition = ClassDefinition::create($class);
+    $loads = 0;
+    $loader = static function (string $requested) use ($class, &$loads): void {
+        if ($requested === $class) {
+            ++$loads;
+        }
+    };
+    spl_autoload_register($loader);
+    try {
+        expect(DependencyConfiguration::normalize(['factories' => ['product' => $definition]]))
+            ->toBe(['factories' => ['product' => $definition]])
+            ->and($loads)->toBe(0)
+            ->and(fn() => (new ContainerBuilder())->addDefinition('product', $definition)->build())
+            ->toThrow(InvalidConfigurationException::class, 'unknown class')
+            ->and($loads)->toBeGreaterThan(0);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+});
 
 test('normalization rejects cycles formed by combining default and configured aliases', function (): void {
     expect(fn() => DependencyConfiguration::normalize(

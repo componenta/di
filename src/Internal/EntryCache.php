@@ -53,6 +53,14 @@ final class EntryCache
         $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
     }
 
+    public function replaceBase(string $id, mixed $value, MutationRetirement $retirement): void
+    {
+        if (array_key_exists($id, $this->base)) {
+            $retirement->retain($this->base[$id]);
+        }
+        $this->putBase($id, $value);
+    }
+
     public function baseRevision(string $id): int
     {
         return $this->baseRevisions[$id] ?? 0;
@@ -63,8 +71,11 @@ final class EntryCache
         return $this->resolvedRevisions[$id] ?? 0;
     }
 
-    public function removeBase(string $id): void
+    public function removeBase(string $id, MutationRetirement $retirement): void
     {
+        if (array_key_exists($id, $this->base)) {
+            $retirement->retain($this->base[$id]);
+        }
         unset($this->base[$id]);
         $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
     }
@@ -93,36 +104,39 @@ final class EntryCache
         }
     }
 
-    public function invalidate(string $requestedId, ?string $canonicalId = null): void
+    public function invalidate(string $requestedId, ?string $canonicalId, MutationRetirement $retirement): void
     {
-        $this->invalidateResolved($requestedId);
+        $this->invalidateResolved($requestedId, $retirement);
 
         $canonical = $canonicalId ?? $requestedId;
 
         if ($canonical !== $requestedId) {
-            $this->invalidateResolved($canonical);
+            $this->invalidateResolved($canonical, $retirement);
         }
 
         if (isset($this->reverseIndex[$canonical])) {
             foreach ($this->reverseIndex[$canonical] as $sibling => $_) {
-                $this->invalidateResolved((string) $sibling);
+                $this->invalidateResolved((string) $sibling, $retirement);
             }
             unset($this->reverseIndex[$canonical]);
         }
     }
 
     /** Invalidates one requested pipeline without changing its shared source. */
-    public function invalidateRequested(string $requestedId, string $canonicalId): void
+    public function invalidateRequested(string $requestedId, string $canonicalId, MutationRetirement $retirement): void
     {
-        $this->invalidateResolved($requestedId);
+        $this->invalidateResolved($requestedId, $retirement);
         unset($this->reverseIndex[$canonicalId][$requestedId]);
         if (($this->reverseIndex[$canonicalId] ?? []) === []) {
             unset($this->reverseIndex[$canonicalId]);
         }
     }
 
-    private function invalidateResolved(string $id): void
+    private function invalidateResolved(string $id, MutationRetirement $retirement): void
     {
+        if (array_key_exists($id, $this->resolved)) {
+            $retirement->retain($this->resolved[$id]);
+        }
         unset($this->resolved[$id]);
         $this->resolvedRevisions[$id] = $this->resolvedRevision($id) + 1;
     }

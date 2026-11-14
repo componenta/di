@@ -50,12 +50,15 @@ use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\Configuration\DependencyConfiguration;
+use Componenta\DI\Definition\DefinitionInterface;
+use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Internal\ContainerBootstrapState;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ProtectedServiceIds;
+use Componenta\DI\Internal\Resolver\Entry\ConfiguredFactoryDefinition;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Internal\Resolver\Parameter\Request\LazyCasterProvider;
 use Componenta\DI\Internal\Resolver\Parameter\Request\LazyFactory;
@@ -313,15 +316,24 @@ final class ContainerFactory
         ProxyFactoryInterface $proxyFactory,
         ObjectPipeline $objects,
     ): EntryResolverInterface {
-        return new CompositeResolver(
+        $resolver = new CompositeResolver(
             new EntryFactoryResolver(
-                $this->factories,
                 $container,
                 $proxyFactory,
             ),
-            new InvokableResolver($this->invokables),
+            new InvokableResolver(),
             new ReflectionResolver($objects, [\Componenta\Config\DependencyDefinitions::class]),
         );
+        foreach ($this->factories as $id => $factory) {
+            $resolver->setDefinition(
+                $id,
+                $factory instanceof DefinitionInterface ? $factory : new ConfiguredFactoryDefinition($factory),
+            );
+        }
+        foreach ($this->invokables as $class) {
+            $resolver->setDefinition($class, new InvokableDefinition($class));
+        }
+        return $resolver;
     }
 
     /** @return list<array{0:ParameterResolverInterface,1:int}> */

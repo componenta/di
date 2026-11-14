@@ -7,42 +7,20 @@ namespace Componenta\DI\Resolver\Entry;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use ReflectionClass;
 use Throwable;
 
-/** Resolves explicitly registered zero-argument invokable classes. */
-final class InvokableResolver implements DefinitionAwareResolverInterface
+/** Validates and executes zero-argument class definitions without registrations. */
+final class InvokableResolver implements DefinitionResolverInterface
 {
-    /** @var array<string, class-string> */
-    private array $invokables = [];
-
-    /** @param list<class-string|InvokableDefinition> $invokables */
-    public function __construct(array $invokables = [])
-    {
-        foreach ($invokables as $invokable) {
-            $class = $invokable instanceof InvokableDefinition ? $invokable->value : $invokable;
-            if (!is_string($class) || $class === '') {
-                throw new InvalidConfigurationException('Invokable class must be a non-empty class-string.');
-            }
-
-            $this->invokables[$class] = self::validatedClass($class);
-        }
-    }
-
-    public function can(string $id): bool
-    {
-        return isset($this->invokables[$id]);
-    }
-
     /** @param array<string|int, mixed> $params */
-    public function resolve(string $id, array $params = []): object
+    public function resolveDefinition(string $id, DefinitionInterface $validated, array $params = []): object
     {
-        if (!$this->can($id)) {
-            throw NotFoundException::forService($id);
+        if (!$validated instanceof InvokableDefinition) {
+            throw InvalidConfigurationException::forUnsupportedDefinition($validated, self::class);
         }
-        $class = $this->invokables[$id];
+        $class = $validated->value;
         try {
             return new $class();
         } catch (Throwable $e) {
@@ -50,13 +28,13 @@ final class InvokableResolver implements DefinitionAwareResolverInterface
         }
     }
 
-    public function setDefinition(string $id, DefinitionInterface $definition): void
+    public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface
     {
         if (!$definition instanceof InvokableDefinition) {
             throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
         }
 
-        $this->invokables[$id] = self::validatedClass($definition->value);
+        return new InvokableDefinition(self::validatedClass($definition->value));
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool

@@ -7,17 +7,14 @@ namespace Componenta\DI\Configuration;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\Definition\ClassDefinition;
-use Componenta\DI\Definition\DefinitionInterface;
-use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
-use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
 /**
- * Validates and canonicalizes declarative DI configuration.
+ * Validates configuration shape and canonicalizes ids, aliases and extension lists.
+ * Factory ABI and class eligibility are validated by definition admission.
  *
  * Integer parameter-resolver keys are semantic priorities and are never
  * reindexed by this class.
@@ -148,7 +145,7 @@ final class DependencyConfiguration
         }
 
         self::normalizeInvokablesAndAliases($dependencies);
-        self::validateFactories($dependencies);
+        self::validateFactoryIds($dependencies);
         self::validateDelegators($dependencies);
         self::validateServices($dependencies);
         self::validateParameterResolvers($dependencies);
@@ -197,26 +194,13 @@ final class DependencyConfiguration
     }
 
     /** @param array<array-key,mixed> $dependencies */
-    private static function validateFactories(array &$dependencies): void
+    private static function validateFactoryIds(array $dependencies): void
     {
         $input = self::section($dependencies, ConfigKey::FACTORIES);
-        $factories = [];
-        foreach ($input as $id => $factory) {
+        foreach ($input as $id => $_factory) {
             if (!is_string($id) || $id === '') {
                 throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
             }
-            if ($factory instanceof FactoryDefinition) {
-                FactorySpecificationValidator::assertValid($id, $factory);
-                $factory = $factory->value;
-            } elseif (!$factory instanceof DefinitionInterface
-                || $factory instanceof ClassDefinition
-            ) {
-                FactorySpecificationValidator::assertValid($id, $factory);
-            }
-            $factories[$id] = $factory;
-        }
-        if ($factories !== []) {
-            $dependencies[ConfigKey::FACTORIES] = $factories;
         }
     }
 

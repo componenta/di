@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\FactoryClassAvailability;
 
 use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final readonly class Product
@@ -49,3 +50,29 @@ test('class definitions accept a class loaded by the interface fallback probe', 
         spl_autoload_unregister($loader);
     }
 })->with(['runtime registration' => true, 'declarative registration' => false]);
+
+final class IncompatibleStaticFactory
+{
+    public static function create(mixed $first, mixed $second, mixed $third): object
+    {
+        throw new \LogicException('An incompatible factory must not execute.');
+    }
+}
+
+test('factory admission validates a static callable discovered by its later availability probe', function (): void {
+    $class = __NAMESPACE__ . '\\LaterFactory_' . bin2hex(random_bytes(5));
+    $attempts = 0;
+    $loader = static function (string $requested) use ($class, &$attempts): void {
+        if ($requested === $class && ++$attempts === 2) {
+            class_alias(IncompatibleStaticFactory::class, $class);
+        }
+    };
+    spl_autoload_register($loader);
+
+    try {
+        expect(fn() => (new ContainerBuilder())->addFactory('product', [$class, 'create'])->build())
+            ->toThrow(InvalidConfigurationException::class, 'requires 3 arguments');
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+});

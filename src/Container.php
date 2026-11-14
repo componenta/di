@@ -14,9 +14,10 @@ use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
+use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
-use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
+use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
@@ -36,10 +37,12 @@ final class Container implements
     private ?CycleGuard $lookupGuard = null;
     private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
+    private readonly CompositeResolver $resolver;
+    private readonly object $definitionAuthority;
 
     /** @param array<array-key, mixed> $bootstrapServices */
     public function __construct(
-        private readonly EntryResolverInterface $resolver,
+        EntryResolverInterface $resolver,
         private readonly AliasResolver $aliases,
         private readonly CallableExecutorInterface $callableExecutor,
         ?EntryCache $cache = null,
@@ -76,6 +79,10 @@ final class Container implements
             }
             $validated[$id] = $service;
         }
+
+        $this->resolver = $resolver instanceof CompositeResolver ? $resolver : new CompositeResolver($resolver);
+        $this->definitionAuthority = new \stdClass();
+        $this->resolver->attach($this->definitionAuthority);
 
         $this->cache = $cache ?? new EntryCache();
         foreach ($core + $validated as $id => $service) {
@@ -209,14 +216,10 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot replace protected DI id "%s".', $id));
         }
 
+        $binding = null;
         if ($entry instanceof DefinitionInterface) {
             try {
-                if (!$this->resolver instanceof DefinitionAwareResolverInterface
-                    || !$this->resolver->supportsDefinition($entry)
-                ) {
-                    throw InvalidConfigurationException::forInvalidDefinition($entry);
-                }
-                $this->resolver->setDefinition($canonical, $entry);
+                $binding = $this->resolver->prepareDefinition($canonical, $entry);
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -225,15 +228,20 @@ final class Container implements
                     previous: $e,
                 );
             }
-            $this->cache->removeBase($canonical);
-        } else {
-            $this->cache->putBase($canonical, $entry);
         }
 
         // Registration may autoload code that retargets deferred dependencies.
         $affected = $this->deferredDependenciesResolvingTo($canonical);
-        $this->invalidate($id, $canonical);
-        $this->invalidateDeferredDelegators($affected);
+        $retirement = new MutationRetirement($canonical);
+        if ($binding !== null) {
+            $this->resolver->publishDefinition($binding, $retirement, $this->definitionAuthority);
+            $this->cache->removeBase($canonical, $retirement);
+        } else {
+            $this->cache->replaceBase($canonical, $entry, $retirement);
+        }
+        $this->invalidate($id, $retirement, $canonical);
+        $this->invalidateDeferredDelegators($affected, $retirement);
+        $retirement->release();
     }
 
     /**
@@ -312,8 +320,10 @@ final class Container implements
             );
         }
 
+        $retirement = new MutationRetirement(null);
         ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
-        $this->invalidateDeferredDelegators($affected);
+        $this->invalidateDeferredDelegators($affected, $retirement);
+        $retirement->release();
     }
 
     public function alias(string $alias, string $target): void
@@ -340,9 +350,10 @@ final class Container implements
 
         $changedTargets = $this->aliases->changedTargets($candidate);
         $before = $this->deferredDependencyTargets();
+        $retirement = new MutationRetirement($alias);
         $this->aliases->set($alias, $target);
         foreach ($changedTargets as $changedId => $previousTarget) {
-            $this->invalidateRequested((string) $changedId, $previousTarget);
+            $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
         }
 
         $changed = [];
@@ -357,7 +368,8 @@ final class Container implements
                 $changed[] = $dependencyId;
             }
         }
-        $this->invalidateDeferredDelegators($changed);
+        $this->invalidateDeferredDelegators($changed, $retirement);
+        $retirement->release();
     }
 
     /** @param callable|string|array{0: object|string, 1: string} $delegator */
@@ -376,7 +388,6 @@ final class Container implements
             if (ProtectedServiceIds::contains($canonical)) {
                 throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
             }
-            $this->delegators->register($id, $prepared);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -385,8 +396,11 @@ final class Container implements
                 previous: $e,
             );
         }
-        $this->invalidateRequested($id, $canonical);
-        $this->invalidateDeferredDelegators([$id]);
+        $retirement = new MutationRetirement($id);
+        $this->delegators->register($id, $prepared, $retirement);
+        $this->invalidateRequested($id, $canonical, $retirement);
+        $this->invalidateDeferredDelegators([$id], $retirement);
+        $retirement->release();
     }
 
     private static function assertMutableId(string $id, string $kind): void
@@ -396,7 +410,7 @@ final class Container implements
         }
     }
 
-    private function invalidate(string $id, ?string $knownCanonical = null): void
+    private function invalidate(string $id, MutationRetirement $retirement, ?string $knownCanonical = null): void
     {
         try {
             $canonical = $knownCanonical ?? $this->aliases->resolve($id);
@@ -404,17 +418,17 @@ final class Container implements
             $canonical = $id;
         }
 
-        $this->cache->invalidate($id, $canonical);
-        $this->delegators->invalidate($id);
+        $this->cache->invalidate($id, $canonical, $retirement);
+        $this->delegators->invalidate($id, $retirement);
         if ($canonical !== $id) {
-            $this->delegators->invalidate($canonical);
+            $this->delegators->invalidate($canonical, $retirement);
         }
     }
 
-    private function invalidateRequested(string $id, string $canonical): void
+    private function invalidateRequested(string $id, string $canonical, MutationRetirement $retirement): void
     {
-        $this->cache->invalidateRequested($id, $canonical);
-        $this->delegators->invalidate($id);
+        $this->cache->invalidateRequested($id, $canonical, $retirement);
+        $this->delegators->invalidate($id, $retirement);
     }
 
     /** @return list<string> */
@@ -470,15 +484,15 @@ final class Container implements
     }
 
     /** @param iterable<string> $dependencyIds */
-    private function invalidateDeferredDelegators(iterable $dependencyIds): void
+    private function invalidateDeferredDelegators(iterable $dependencyIds, MutationRetirement $retirement): void
     {
-        foreach ($this->delegators->invalidateDependencies($dependencyIds) as $entryId) {
+        foreach ($this->delegators->invalidateDependencies($dependencyIds, $retirement) as $entryId) {
             try {
                 $canonical = $this->aliases->resolve($entryId);
             } catch (Throwable) {
                 $canonical = $entryId;
             }
-            $this->invalidateRequested($entryId, $canonical);
+            $this->invalidateRequested($entryId, $canonical, $retirement);
         }
     }
 }
