@@ -2,6 +2,8 @@
 
 [Полная русская версия](2026-11-14-di6-refactoring.ru.md) · [Machine-readable evidence](2026-11-14-di6-evidence.json)
 
+**Later review:** the [full-library recheck](2026-11-14-di6-full-library-recheck.md) records three additional boundary corrections and strengthened tests on the final branch tree. The measurements below retain their original source and date.
+
 **Continuation:** the [completion recheck](#completion-recheck) records final production source, three complete passes on each stable local runtime, candidate-runtime and consumer evidence. Earlier sections retain their own historical measurements and verification.
 
 ## Outcome and version boundaries

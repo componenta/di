@@ -2,6 +2,8 @@
 
 [Русская версия](README.ru.md)
 
+The [subsequent full-library review](../audit/2026-11-14-di6-full-library-recheck.md) records three local consistency corrections, behavior-test improvements and complete source coverage. These fixes preserve the selected architecture and the E1/B2 boundaries.
+
 Implementation was authorized on November 14, 2026, and is isolated on `refactor/di6-definitions-callbacks`, based on the compatible v5.0.6 release commit. Specifications define the contracts; the [implementation report](../audit/2026-11-14-di6-refactoring.md) records what is implemented, tested and still gated. DI 6 is not released.
 
 The implementation-ready library refactoring has converged with these contracts. The [completion recheck](../audit/2026-11-14-di6-refactoring.md#completion-recheck) covers three full passes on each local stable runtime, the release-candidate runtime, isolated consumer installations and extension migration. E1 remains a release/platform gate; the conditional B2 and possible 6.1 DTO work are separate future scopes.
