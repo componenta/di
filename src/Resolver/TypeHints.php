@@ -59,6 +59,40 @@ final class TypeHints
         return array_keys($classes);
     }
 
+    /**
+     * Returns stable service candidates only for unions of named types.
+     * Intersections retain their separate explicit-value contract.
+     *
+     * @param ReflectionClass<object>|null $declaringClass
+     * @return list<class-string>
+     */
+    public static function simpleUnionClassNames(
+        ?ReflectionType $type,
+        ?ReflectionClass $declaringClass = null,
+    ): array {
+        if (!$type instanceof ReflectionUnionType) {
+            return [];
+        }
+
+        $candidates = [];
+        foreach ($type->getTypes() as $member) {
+            if (!$member instanceof ReflectionNamedType) {
+                return [];
+            }
+            $class = self::classOf($member, $declaringClass);
+            if ($class !== null) {
+                $candidates[] = $class;
+            }
+        }
+
+        sort($candidates, SORT_STRING);
+        $unique = [];
+        foreach ($candidates as $candidate) {
+            $unique[strtolower($candidate)] ??= $candidate;
+        }
+        return array_values($unique);
+    }
+
     /** @param ReflectionClass<object>|null $declaringClass */
     public static function matches(
         ?ReflectionType $type,
