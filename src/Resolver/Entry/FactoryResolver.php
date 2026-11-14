@@ -243,6 +243,13 @@ final class FactoryResolver implements DefinitionResolverInterface
     public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface
     {
         if ($definition instanceof ClassDefinition) {
+            $snapshots = [];
+            $definition = new ClassDefinition(
+                $definition->value,
+                self::snapshotDefinitionArray($definition->constructorParams, $snapshots),
+                self::snapshotDefinitionArray($definition->methodCalls, $snapshots),
+                $definition->autowire,
+            );
             FactorySpecificationValidator::assertValid($id, $definition);
             return $definition;
         }
@@ -263,6 +270,40 @@ final class FactoryResolver implements DefinitionResolverInterface
         $validateResolved = is_string($factory) || !is_callable($factory);
         FactorySpecificationValidator::assertValid($id, $factory);
         return new PreparedFactoryDefinition($factory, $validateResolved);
+    }
+
+    /**
+     * @template T of array<array-key, mixed>
+     * @param T $values
+     * @param array<string, array<array-key, mixed>> $snapshots
+     * @return T
+     */
+    private static function snapshotDefinitionArray(array $values, array &$snapshots): array
+    {
+        $snapshot = [];
+        foreach ($values as $key => $value) {
+            if (!is_array($value)) {
+                $snapshot[$key] = $value;
+                continue;
+            }
+            $reference = ReflectionReference::fromArrayElement($values, $key);
+            if ($reference === null) {
+                $snapshot[$key] = self::snapshotDefinitionArray($value, $snapshots);
+                continue;
+            }
+
+            $referenceId = $reference->getId();
+            if (!array_key_exists($referenceId, $snapshots)) {
+                // Preserve cycles inside the owned graph. They remain errors only
+                // when resolved, so runtime overrides can bypass unused defaults.
+                $snapshots[$referenceId] = [];
+                $snapshots[$referenceId] = self::snapshotDefinitionArray($value, $snapshots);
+            }
+            $snapshot[$key] = &$snapshots[$referenceId];
+        }
+
+        /** @var T $snapshot Array shape and values are unchanged; only reference ownership differs. */
+        return $snapshot;
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
