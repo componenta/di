@@ -240,6 +240,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     private function resolveFactory(string $id): callable|LazyServiceFactoryInterface
     {
         $factory = $this->factories[$id];
+        $validateResolved = isset($this->validateResolvedFactories[$id]);
 
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
@@ -259,7 +260,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 get_debug_type($factory),
             ));
         }
-        if (isset($this->validateResolvedFactories[$id])
+        if ($validateResolved
             && !$factory instanceof LazyServiceFactoryInterface
         ) {
             FactorySpecificationValidator::assertResolvedCallable($id, $factory);

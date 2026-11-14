@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\DeferredFactoryRecovery;
 
 use Componenta\Config\ContainerValue;
+use Componenta\DI\Container;
+use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Psr\Container\ContainerInterface;
 
 final class IncompatibleFactory
 {
@@ -74,3 +77,68 @@ test('deferred factories reject invalid owners and recover after replacement', f
     'incompatible service signature' => [false, true],
     'incompatible service method signature' => [true, true],
 ]);
+
+final class ReplacingFactoryOwnerContainer implements ContainerInterface
+{
+    private bool $armed = true;
+
+    public function __construct(
+        private readonly Container $container,
+        private readonly IncompatibleFactory $owner,
+        private readonly bool $replaceOnHas,
+        private readonly object $replacement,
+    ) {}
+
+    public function has(string $id): bool
+    {
+        if ($id !== 'factory.owner') {
+            return false;
+        }
+        if ($this->replaceOnHas) {
+            $this->replace();
+        }
+        return true;
+    }
+
+    public function get(string $id): mixed
+    {
+        if ($id !== 'factory.owner') {
+            throw new \LogicException('Unexpected external owner lookup: ' . $id);
+        }
+        if (!$this->replaceOnHas) {
+            $this->replace();
+        }
+        return $this->owner;
+    }
+
+    private function replace(): void
+    {
+        if (!$this->armed) {
+            return;
+        }
+        $this->armed = false;
+        $replacement = $this->replacement;
+        $this->container->set('product', new FactoryDefinition(static fn(): object => $replacement));
+    }
+}
+
+test('deferred validation follows the in-flight factory when owner lookup replaces its registration', function (
+    bool $method,
+    bool $fresh,
+    bool $replaceOnHas,
+): void {
+    $owner = new IncompatibleFactory();
+    $replacement = new \stdClass();
+    $container = (new ContainerBuilder())
+        ->addFactory('product', $method ? ['factory.owner', '__invoke'] : 'factory.owner')
+        ->build();
+    $container->addContainer(new ReplacingFactoryOwnerContainer($container, $owner, $replaceOnHas, $replacement));
+
+    expect(fn() => $fresh ? $container->make('product') : $container->get('product'))
+        ->toThrow(InvalidConfigurationException::class, 'parameter #1')
+        ->and($owner->calls)->toBe(0)
+        ->and($container->get('product'))->toBe($replacement)
+        ->and($container->make('product'))->toBe($replacement);
+})->with(['service' => false, 'service method' => true])
+    ->with(['get' => false, 'make' => true])
+    ->with(['replacement in get' => false, 'replacement in has' => true]);
