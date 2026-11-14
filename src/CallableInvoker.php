@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Throwable;
 
 /**
  * Thin callable-invocation wrapper.
@@ -31,8 +33,14 @@ final class CallableInvoker implements CallableInvokerInterface
      */
     public function call(mixed $callable, array $params = []): mixed
     {
-        if (!is_callable($callable)) {
-            throw InvalidCallableException::forValue($callable);
+        try {
+            if (!is_callable($callable)) {
+                throw InvalidCallableException::forValue($callable);
+            }
+        } catch (ExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw InvalidCallableException::forValue($callable, $e);
         }
 
         return call_user_func_array($callable, $params);
