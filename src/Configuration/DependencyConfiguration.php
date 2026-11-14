@@ -295,6 +295,16 @@ final class DependencyConfiguration
     /** @return callable|string|array{object|string,string} */
     public static function normalizeDelegatorSpecification(mixed $delegator, string $id): mixed
     {
+        if (is_array($delegator)) {
+            // Routing and its dependency index must share one value snapshot,
+            // even if validation autoloads code that changes caller references.
+            $snapshot = [];
+            foreach ($delegator as $key => $value) {
+                $snapshot[$key] = $value;
+            }
+            $delegator = $snapshot;
+        }
+
         if (is_string($delegator) && $delegator !== '') {
             return $delegator;
         }
