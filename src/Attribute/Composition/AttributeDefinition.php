@@ -12,6 +12,19 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 /** Immutable semantic definition of one DI attribute class. */
 final readonly class AttributeDefinition
 {
+    /** @var list<class-string<AttributeCapabilityInterface>> */
+    public array $capabilities;
+    /** @var list<class-string> */
+    public array $requires;
+    /** @var list<class-string> */
+    public array $forbids;
+    /** @var list<class-string> */
+    public array $before;
+    /** @var list<class-string> */
+    public array $after;
+    /** @var list<AttributeCompositionRuleInterface> */
+    public array $rules;
+
     /**
      * Selectors in requires/forbids/before/after may reference either another
      * attribute class or an AttributeCapabilityInterface class.
@@ -30,14 +43,23 @@ final readonly class AttributeDefinition
     public function __construct(
         public string $attribute,
         public AttributeHandlerInterface|ParameterAttributeHandlerInterface|null $handler = null,
-        public array $capabilities = [],
-        public array $requires = [],
-        public array $forbids = [],
-        public array $before = [],
-        public array $after = [],
-        public array $rules = [],
+        array $capabilities = [],
+        array $requires = [],
+        array $forbids = [],
+        array $before = [],
+        array $after = [],
+        array $rules = [],
         public AttributePhase $phase = AttributePhase::AfterInstantiation,
     ) {
+        // Validation can autoload user code. Own every array slot before that
+        // code can rebind a caller reference; rule objects retain their identity.
+        $this->capabilities = self::snapshot($capabilities);
+        $this->requires = self::snapshot($requires);
+        $this->forbids = self::snapshot($forbids);
+        $this->before = self::snapshot($before);
+        $this->after = self::snapshot($after);
+        $this->rules = self::snapshot($rules);
+
         if (!class_exists($attribute) && !interface_exists($attribute) && !class_exists($attribute, false)) {
             throw new InvalidConfigurationException(sprintf(
                 'Attribute definition target "%s" is not available.',
@@ -45,7 +67,7 @@ final readonly class AttributeDefinition
             ));
         }
 
-        foreach ($capabilities as $capability) {
+        foreach ($this->capabilities as $capability) {
             if (!is_a($capability, AttributeCapabilityInterface::class, true)) {
                 throw new InvalidConfigurationException(sprintf(
                     'Capability "%s" for attribute "%s" must implement %s.',
@@ -56,7 +78,7 @@ final readonly class AttributeDefinition
             }
         }
 
-        foreach ($rules as $rule) {
+        foreach ($this->rules as $rule) {
             if (!$rule instanceof AttributeCompositionRuleInterface) {
                 throw new InvalidConfigurationException(sprintf(
                     'Composition rule for attribute "%s" must implement %s; got %s.',
@@ -67,10 +89,20 @@ final readonly class AttributeDefinition
             }
         }
 
-        self::assertSelectors($requires, 'requires');
-        self::assertSelectors($forbids, 'forbids');
-        self::assertSelectors($before, 'before');
-        self::assertSelectors($after, 'after');
+        self::assertSelectors($this->requires, 'requires');
+        self::assertSelectors($this->forbids, 'forbids');
+        self::assertSelectors($this->before, 'before');
+        self::assertSelectors($this->after, 'after');
+    }
+
+    /**
+     * @template T
+     * @param list<T> $values
+     * @return list<T>
+     */
+    private static function snapshot(array $values): array
+    {
+        return array_map(static fn(mixed $value): mixed => $value, $values);
     }
 
     /** @param list<class-string> $selectors */
