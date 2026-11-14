@@ -114,12 +114,20 @@ final class AttributeDefinitionRegistry
             return $this->definitions[$attributeClass];
         }
 
+        $available = class_exists($attributeClass, false) || interface_exists($attributeClass, false);
         /** @var array<class-string, AttributeDefinition> $matches */
         $matches = [];
         foreach ($this->definitions as $registered => $definition) {
             if (is_a($attributeClass, $registered, true)) {
                 $matches[$registered] = $definition;
             }
+        }
+
+        // A later is_a() probe may load the class after an earlier matching
+        // definition was skipped. Select again with its complete ancestry.
+        // This transition happens once; unavailable classes do not retry.
+        if (!$available && (class_exists($attributeClass, false) || interface_exists($attributeClass, false))) {
+            return $this->definition($attributeClass);
         }
 
         if ($matches === []) {
