@@ -2,9 +2,9 @@
 
 [Русская версия](di6-callbacks.ru.md)
 
-This guide describes the implementation on the DI 6 development branch, following the DI 5.0.6 baseline. It is not a DI 6 release announcement. The implementation remains parseable on PHP 8.4; inline callbacks and first-class callable references written directly in attribute arguments require PHP 8.5.
+This guide describes the implementation on the DI 6 development branch, following the DI 5.0.6 baseline. It is not a DI 6 release announcement. The library retains PHP `^8.4`; inline callbacks and first-class callable references written directly in attribute arguments require PHP 8.5.
 
-**The final supported PHP patch floor is unresolved.** E1 in the [callback specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) blocks the affected platform support promise and final DI 6 release packaging. PHP 8.5.8 has a reproduced native defect in trait-relative first-class references. This branch does not raise the Composer requirement, declare every PHP 8.5 patch supported, or emulate PHP lexical scope. See [platform limits](#8-platform-limits) below.
+**The package floor and native-expression support are separate.** E1 in the [callback specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) limits the support promise for affected trait first-class references; it does not block the DI 6 release or raise its PHP `^8.4` requirement. PHP 8.5.8 has a reproduced native defect in these forms. DI preserves native scope and documents the limitation rather than emulating it. See [platform limits](#8-platform-limits) below.
 
 ## 1. Changes to review before upgrading
 
@@ -216,9 +216,9 @@ Native state is preserved. A freshly materialized inline static closure has fres
 
 The tested PHP 8.5.8 engine incorrectly reuses the first consuming trait scope for some attribute first-class references using `self::` or `parent::`; a named private reference can likewise retain the first consumer's visibility result. The native inline-static-closure control resolves each consumer correctly. The defect reproduces without DI.
 
-E1 remains open until a released PHP patch passes the correct per-consumer scope and visibility fixtures and establishes the supported minimum. DI does not rebind callbacks to hide that defect. Capture-free inline static closures and fully qualified public-helper references are within the verified alternatives; do not infer support for every affected trait-relative expression from their success.
+E1 remains open for these affected forms until a released PHP patch passes the correct per-consumer scope and visibility fixtures. The resulting minimum applies to the feature support declaration, not automatically to the whole package. DI does not rebind callbacks to hide that defect. Capture-free inline static closures and fully qualified public-helper references are within the verified alternatives; do not infer support for every affected trait-relative expression from their success.
 
-The branch's PHP 8.4 compatibility tests cover the library implementation and runtime-created closures. PHP 8.5 subprocess tests cover the new attribute syntax and materialization failures. They are separate evidence from a final platform support declaration.
+The PHP 8.4 suites cover library behavior and runtime-created closures. PHP 8.5 subprocess tests cover the new attribute syntax and materialization failures. Keep both in ordinary verification. The separate `composer test-platform` runner currently checks affected semantics plus a stable PHP 8.5.x version; its nonzero result on PHP 8.4, a release candidate or PHP 8.6+ is not a general library compatibility verdict.
 
 ## 9. Verification references
 

@@ -2,6 +2,8 @@
 
 [Русская версия](2026-11-14-di6-full-library-recheck.ru.md)
 
+**Platform policy superseded (2026-11-15):** [the current specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) retains PHP `^8.4` for DI 6 and scopes E1 only to affected native expression forms. Earlier statements below that made E1 a whole-release gate record the previous planning decision. Executable results retain their original source identities.
+
 **Date:** November 14, 2026. **Branch:** `refactor/di6-definitions-callbacks`.
 
 The fresh review of the complete library found **three reproducible production defects** and several gaps in tests of otherwise correct behavior. The fixes and strengthened tests are integrated in code/test head [`3f03d0c`](https://github.com/componenta/di/commit/3f03d0c5d6f26162f6641428408e0e63702cc5ad). Final local and hosted library checks pass, including full coverage and mutation testing. Performance and current-source consumer verification are complete and recorded below. **E1 remains open. The DI 6 release awaits stable-platform acceptance.**

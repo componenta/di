@@ -2,6 +2,8 @@
 
 [Полная русская версия](2026-11-14-di6-refactoring.ru.md) · [Machine-readable evidence](2026-11-14-di6-evidence.json)
 
+**Platform policy superseded (2026-11-15):** [the current specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) retains PHP `^8.4` for DI 6 and scopes E1 only to affected native expression forms. Earlier statements below that made E1 a whole-release gate record the previous planning decision. Executable results retain their original source identities.
+
 **Later review:** the [full-library recheck](2026-11-14-di6-full-library-recheck.md) records three additional boundary corrections and strengthened tests on the final branch tree. The measurements below retain their original source and date.
 
 **Continuation:** the [completion recheck](#completion-recheck) records final production source, three complete passes on each stable local runtime, candidate-runtime and consumer evidence. Earlier sections retain their own historical measurements and verification.
