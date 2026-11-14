@@ -102,6 +102,9 @@ final readonly class AttributeDefinition
      */
     private static function snapshot(array $values): array
     {
+        if ($values === []) {
+            return [];
+        }
         return array_map(static fn(mixed $value): mixed => $value, $values);
     }
 

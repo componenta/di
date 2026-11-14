@@ -56,7 +56,11 @@ final class CompletedAttributeGuard
 
         $combined = clone $this;
         $combined->completed = [...$this->completed, ...$other->completed];
-        $combined->verifiedRevision = -1;
+        // Combining proofs of the same generation does not invalidate them.
+        // The next assertion still polls and validates both if it changes.
+        $combined->verifiedRevision = $this->verifiedRevision === $other->verifiedRevision
+            ? $this->verifiedRevision
+            : -1;
         return $combined;
     }
 
