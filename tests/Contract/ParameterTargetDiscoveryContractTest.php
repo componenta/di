@@ -35,6 +35,11 @@ final class Metadata {}
 
 trait InvalidMetadata {}
 
+final class MetadataTraitConsumer
+{
+    use InvalidMetadata;
+}
+
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
     public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
