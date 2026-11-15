@@ -8,35 +8,42 @@ use function Componenta\DI\Tests\Support\container;
 
 final class CaseVariantCallable
 {
-    public static function value(int $value): int
+    public static function caseVariantMethod(int $value): int
     {
         return $value;
     }
 }
 
-test('case variants of one native static callable do not retain duplicate execution plans', function (): void {
+test('case variants of one native static callable do not retain duplicate execution plans', function (string $form): void {
     $container = container();
-    $container->call([CaseVariantCallable::class, 'value'], [0]);
+    $baseName = $form === 'array method' ? 'casevariantmethod' : 'casevariantcallable';
+    $callable = static fn(string $name): array|string => match ($form) {
+        'array class' => [__NAMESPACE__ . '\\' . $name, 'caseVariantMethod'],
+        'array method' => [CaseVariantCallable::class, $name],
+        'static string' => __NAMESPACE__ . '\\' . $name . '::caseVariantMethod',
+        default => throw new \LogicException('Unknown callable form.'),
+    };
+    $container->call($callable($baseName), [0]);
     gc_collect_cycles();
     $before = memory_get_usage();
 
     $total = 0;
     $count = 8192;
     for ($variant = 0; $variant < $count; ++$variant) {
-        $class = 'casevariantcallable';
+        $name = $baseName;
         for ($bit = 0; $bit < 13; ++$bit) {
             if (($variant >> $bit) & 1) {
-                $class[$bit] = strtoupper($class[$bit]);
+                $name[$bit] = strtoupper($name[$bit]);
             }
         }
-        $result = $container->call([__NAMESPACE__ . '\\' . $class, 'value'], [$variant]);
+        $result = $container->call($callable($name), [$variant]);
         if (!is_int($result)) {
             throw new \LogicException('The native callable must return the integer argument.');
         }
         $total += $result;
     }
 
-    unset($class);
+    unset($name);
     gc_collect_cycles();
     $growth = memory_get_usage() - $before;
 
@@ -44,4 +51,4 @@ test('case variants of one native static callable do not retain duplicate execut
     // Allow allocator and native lookup overhead, but not thousands of plans
     // for the same PHP declaration. Keep the container alive for this check.
     expect($growth)->toBeLessThan(2 * 1024 * 1024);
-});
+})->with(['array class', 'array method', 'static string']);
