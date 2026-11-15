@@ -16,7 +16,7 @@ final readonly class Value
     public function __construct(public string $label) {}
 }
 
-test('a suspended source cannot republish its base after a new definition is installed', function (): void {
+test('a suspended source cannot republish its base after a new definition is installed', function (bool $replaceRaw): void {
     $di = container([
         ConfigKey::FACTORIES => [
             'source' => static function (): Value {
@@ -30,14 +30,18 @@ test('a suspended source cannot republish its base after a new definition is ins
 
     expect($fiber->start())->toBe('old factory selected');
     $di->set('source', Definition::factory(static fn(): Value => new Value('new')));
+    if ($replaceRaw) {
+        $di->set('source', new Value('raw'));
+    }
     $fiber->resume();
     $current = $di->get('second');
 
     expect($fiber->getReturn())->toEqual(new Value('old'))
-        ->and($current)->toEqual(new Value('new'))
+        ->and($current)->toEqual(new Value($replaceRaw ? 'raw' : 'new'))
         ->and($di->get('first'))->toBe($current)
-        ->and($di->get('source'))->toBe($current);
-});
+        ->and($di->get('source'))->toBe($current)
+        ->and($di->make('source'))->toEqual(new Value('new'));
+})->with(['definition only' => false, 'definition then shared override' => true]);
 
 test('a null decorated value is shared until its source is replaced', function (): void {
     $calls = 0;

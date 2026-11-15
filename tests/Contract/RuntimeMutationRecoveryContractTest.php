@@ -65,13 +65,17 @@ test('adding external containers preserves earlier providers and first-owner pre
         ->and($container->has('second'))->toBeTrue();
 });
 
-test('a service cycle inside a Fiber reports the complete chain and permits recovery', function (bool $fresh): void {
+test('a service cycle inside a Fiber reports the complete chain and permits recovery', function (bool $fresh, bool $completedLeaf): void {
     $container = container();
     $attempts = 0;
+    $container->set('leaf', Definition::factory(static fn(): object => new \stdClass()));
     $read = static fn(): mixed => $fresh ? $container->make('first') : $container->get('first');
-    $container->set('first', Definition::factory(static function () use ($container, $fresh, &$attempts): mixed {
+    $container->set('first', Definition::factory(static function () use ($container, $fresh, $completedLeaf, &$attempts): mixed {
         if (++$attempts > 3) {
             throw new LogicException('The cycle was not detected.');
+        }
+        if ($completedLeaf) {
+            $fresh ? $container->make('leaf') : $container->get('leaf');
         }
         return $fresh ? $container->make('second') : $container->get('second');
     }));
@@ -97,7 +101,8 @@ test('a service cycle inside a Fiber reports the complete chain and permits reco
     $recovery = new Fiber(static fn(): mixed => $read());
     $recovery->start();
     expect($recovery->getReturn())->toBe($replacement);
-})->with(['shared' => false, 'fresh' => true]);
+})->with(['shared' => false, 'fresh' => true])
+    ->with(['direct cycle' => false, 'after a completed nested resolution' => true]);
 
 test('external recursion is detected and the lookup guard is cleared after failure', function (): void {
     $container = container();
