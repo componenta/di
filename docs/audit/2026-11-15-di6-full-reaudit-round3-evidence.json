@@ -1,0 +1,1892 @@
+{
+  "schema_version": 1,
+  "repository": "componenta/di",
+  "branch": "refactor/di6-definitions-callbacks",
+  "baseline": "2eb36241787a971e1a8185149aaa08b90304d426",
+  "validated_code_head": "19584c03f77036045184d5eef4b992a9e86aaad6",
+  "scope": {
+    "path": "2026-11-15-di6-full-reaudit-round3-scope.json",
+    "sha256": "0776f3022bab9db15bb440e61c2f7b6f0c85709b9b6019182cb7bb0740d11c28",
+    "summary": {
+      "inventory_files": 444,
+      "inventory_scope_counts": {
+        "configuration": 8,
+        "benchmarks": 6,
+        "reproductions": 18,
+        "production": 169,
+        "tests/support": 233,
+        "native fixtures": 10
+      },
+      "unique_primary_review_files": 444,
+      "primary_file_records": 444,
+      "initial_aggregation_scope_files_still_present": 443,
+      "initial_aggregation_scope_counts": {
+        "configuration": 8,
+        "benchmarks": 6,
+        "reproductions": 18,
+        "production": 169,
+        "tests/support": 232,
+        "native fixtures": 10
+      },
+      "current_ast_files": 233,
+      "current_ast_declarations": 762,
+      "unique_primary_review_declarations": 762,
+      "junit": {
+        "PHP84": {
+          "cases": 1528,
+          "statuses": {
+            "passed": 1510,
+            "skipped": 18
+          },
+          "joined_cases": 1528,
+          "assertions": 24189
+        },
+        "PHP85": {
+          "cases": 1528,
+          "statuses": {
+            "passed": 1527,
+            "skipped": 1
+          },
+          "joined_cases": 1528,
+          "assertions": 24296
+        }
+      },
+      "catalogue_survivors": 552,
+      "classified_survivor_records": 552,
+      "unique_classified_survivor_ids": 552,
+      "survivor_verdict_counts": {
+        "equivalent-under-contract": 179,
+        "diagnostic-specificity-only": 5,
+        "defensive-outside-supported-input": 46,
+        "meaningful gap": 172,
+        "redundant path": 96,
+        "needs architecture decision": 54
+      },
+      "executed_pest_tdd_unique_declarations": 37,
+      "executed_unique_fault_ids": 61,
+      "executed_fault_kind_counts": {
+        "catalogued_production_mutant": 57,
+        "bespoke_production_mutant": 1,
+        "confirmed_source_bug": 3
+      },
+      "catalogue_ids_with_executed_pest_witness": 57,
+      "meaningful_gap_catalogue_ids_without_executed_witness": 115,
+      "reviewed_declarations_without_executed_pest_tdd": 725,
+      "static_analysis_evidence_groups_separate_from_pest": 2,
+      "error_count": 0,
+      "warning_count": 0
+    }
+  },
+  "archive": {
+    "path": "2026-11-15-di6-full-reaudit-round3-evidence.tar.gz",
+    "bytes": 6714670,
+    "sha256": "45234a65680731de407fc1c29f3b9133cd89b36a6c28450853ca260ba07bcd6f",
+    "entries": 1916,
+    "uncompressed_bytes": 45584374,
+    "round_trip_verified": true,
+    "high_confidence_secret_scan_matches": 0,
+    "manifest_sha256": "eaa704fc809a80cf9badfe929c3667f0ab04924ea71bc1c497e1c465a930587d"
+  },
+  "canonical_evidence_index": {
+    "archive_member": "aggregate-evidence-files.json",
+    "sha256": "60f349e50bf848a1ec4e382140036d3b8870d1d139b0a3bf3072a5961342b715",
+    "summary": {
+      "archive_input_files": 1260,
+      "archive_input_bytes": 26074947,
+      "unique_local_canonical_pest_output_files": 408,
+      "local_pest_phases": {
+        "old_production_GREEN": 86,
+        "old_mutant_GREEN": 114,
+        "improved_mutant_RED": 114,
+        "restored_production_GREEN": 84,
+        "original_production_RED": 2,
+        "fixed_production_GREEN": 2,
+        "improved_production_control_GREEN": 6
+      },
+      "local_pest_runtime_counts": {
+        "PHP84": 208,
+        "PHP85": 200
+      },
+      "platform_ci_red_green_pairs": 2,
+      "test_path_sha256_preimages_required": 65,
+      "test_path_sha256_preimages_materialized": 65,
+      "whole_baseline_suite_controls": 6,
+      "whole_baseline_test_files_materialized": 240,
+      "missing_references": 0
+    }
+  },
+  "ci": {
+    "head": "19584c03f77036045184d5eef4b992a9e86aaad6",
+    "run_id": 43715494696,
+    "url": "https://github.com/componenta/di/actions/runs/43715494696",
+    "conclusion": "success",
+    "platforms": {
+      "linux84": {
+        "job_id": 132816082593,
+        "version": "8.4.27",
+        "passed": 1510,
+        "skipped": 18,
+        "assertions": 24189,
+        "log_sha256": "43c0e21a1af4a56eef9e5e782cbb10aa4568cf85ccc0f009fbd96005eac13206",
+        "archive_member": "final-ci/132816082593.log"
+      },
+      "linux85": {
+        "job_id": 132816082528,
+        "version": "8.5.12",
+        "passed": 1527,
+        "skipped": 1,
+        "assertions": 24296,
+        "log_sha256": "8ef62f21d7fa885ce6fea40b3c8b97372a97912b14f97ca996b5f48a99661e25",
+        "archive_member": "final-ci/132816082528.log"
+      },
+      "windows84": {
+        "job_id": 132816082355,
+        "version": "8.4.27",
+        "passed": 1509,
+        "skipped": 19,
+        "assertions": 24187,
+        "log_sha256": "4ee85b61ecc66595f886a21fc58c05f55bba8210d42efa87c07d68a5aa9ba82d",
+        "archive_member": "final-ci/132816082355.log"
+      }
+    },
+    "coverage": {
+      "percent": 92.0,
+      "minimum": 80,
+      "job_id": 132816082600,
+      "artifact": {
+        "id": 14163781906,
+        "name": "coverage-php-8.4",
+        "size_in_bytes": 33981,
+        "url": "https://api.github.com/repos/componenta/di/actions/artifacts/14163781906",
+        "archive_download_url": "https://api.github.com/repos/componenta/di/actions/artifacts/14163781906/zip",
+        "expired": false,
+        "created_at": "2026-11-15T13:25:19Z",
+        "expires_at": "2027-02-13T12:45:54Z",
+        "updated_at": "2026-11-15T13:25:19Z",
+        "digest": "sha256:394bb2f8ead1a3d1286060b906ad62c76f017040fb4057396b3b198cc2c19554",
+        "workflow_run": {
+          "id": 43715494696,
+          "repository_id": 1267726949,
+          "head_repository_id": 1267726949,
+          "head_branch": "refactor/di6-definitions-callbacks",
+          "head_sha": "19584c03f77036045184d5eef4b992a9e86aaad6"
+        }
+      },
+      "clover_zip_bytes_in_bundle": true,
+      "qualification": "Percent and per-file coverage output preserved in decoded job log; exact downloaded Clover ZIP digest matches GitHub artifact metadata and XML preserved.",
+      "clover_proof": {
+        "artifact_id": 14163781906,
+        "zip_sha256": "394bb2f8ead1a3d1286060b906ad62c76f017040fb4057396b3b198cc2c19554",
+        "zip_bytes": 33981,
+        "clover_sha256": "ec3f8c56ebad17dc86f33dd1955dd4df60b873e1f7cad56e71b7cc8ee939733b",
+        "clover_bytes": 390887,
+        "project_metrics": {
+          "files": "169",
+          "loc": "13484",
+          "ncloc": "11909",
+          "classes": "128",
+          "methods": "557",
+          "coveredmethods": "437",
+          "conditionals": "0",
+          "coveredconditionals": "0",
+          "statements": "4823",
+          "coveredstatements": "4441",
+          "elements": "5380",
+          "coveredelements": "4878"
+        },
+        "members": [
+          "coverage.xml"
+        ]
+      },
+      "displayed_metric": "Pest Total coverage",
+      "clover_statement_fraction_percent": 92.07961849471283
+    },
+    "mutation": {
+      "total": 4248,
+      "tested": 3699,
+      "timeouts": 57,
+      "untested": 492,
+      "score_percent": 88.42,
+      "completed_kill_percent": 87.07627118644068,
+      "minimum": 85,
+      "duration_seconds": 2194.68,
+      "parallel_processes": 4,
+      "qualification": "Engine Tested includes completed failing mutation runs; timeouts count toward MSI but neither category alone establishes a semantic assertion."
+    },
+    "coverage_mutation_log": {
+      "job_id": 132816082600,
+      "archive_member": "final-ci/132816082600.log",
+      "decoded_utf8_sha256": "d2389f9e23ced5f361d1e9645f936b8716c56f745bbe6194391d5f441f2dcc76"
+    },
+    "required_jobs": [
+      {
+        "id": 132816082355,
+        "name": "Windows PHP 8.4",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43715494696,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use companion workspaces",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 20
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 21
+          }
+        ]
+      },
+      {
+        "id": 132816082528,
+        "name": "PHP 8.5",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43715494696,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11
+          },
+          {
+            "name": "Audit dependencies",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 12
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13
+          },
+          {
+            "name": "Smoke benchmark harness",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29
+          }
+        ]
+      },
+      {
+        "id": 132816082593,
+        "name": "PHP 8.4",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43715494696,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11
+          },
+          {
+            "name": "Audit dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13
+          },
+          {
+            "name": "Smoke benchmark harness",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29
+          }
+        ]
+      },
+      {
+        "id": 132816082600,
+        "name": "Coverage PHP 8.4",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43715494696,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11
+          },
+          {
+            "name": "Enforce coverage and generate Clover report",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12
+          },
+          {
+            "name": "Check mutation score",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13
+          },
+          {
+            "name": "Upload coverage artifact",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29
+          }
+        ]
+      }
+    ],
+    "expected_skipped_jobs": [
+      {
+        "id": 132826407297,
+        "name": "v4.0.10 vs v5 benchmark",
+        "status": "completed",
+        "conclusion": "skipped",
+        "run_id": 43715494696,
+        "logs_url": null,
+        "steps": null
+      }
+    ],
+    "survivor_reconciliation": {
+      "archive_member": "final-ci/survivor-reconciliation.json",
+      "sha256": "5949dfa9a1239e8a5091085baf73e01801cc4a77aec0bd977cffd3632ce5c5ee",
+      "summary": {
+        "status": "complete",
+        "baseline_untested_count": 552,
+        "actual_final_untested_count": 492,
+        "match_counts": {
+          "matched_same_id": 462,
+          "matched_reidentified": 30,
+          "ambiguous": 0,
+          "unmatched_to_baseline_untested": 0
+        },
+        "witness_status_counts": {
+          "absent_from_final_untested": 57
+        },
+        "all_57_validated_witnesses_absent_from_untested": true,
+        "reconciliation_totals": {
+          "baseline_untested": 552,
+          "final_untested": 492,
+          "same_ids": 462,
+          "reidentified_ids": 30,
+          "ambiguous": 0,
+          "unmatched_to_previous_untested": 0,
+          "baseline_ids_absent_after_reconciliation": 60,
+          "validated_witness_ids_absent": 57,
+          "additional_absent_without_prior_witness": 3,
+          "literal_id_removals_before_reconciliation": 90,
+          "literal_new_ids_before_reconciliation": 30
+        }
+      },
+      "final_catalogue_archive_member": "final-ci/survivors-final.json",
+      "final_catalogue_sha256": "7b26061d9a772c638e2aa4b8b350f07137be160bd459563cefce44da5a37b591"
+    }
+  },
+  "local_gates": [
+    {
+      "label": "final84",
+      "head_at_start": "19584c03f77036045184d5eef4b992a9e86aaad6",
+      "started_utc": "2026-11-15T12:46:19.086248+00:00",
+      "duration_seconds": 14.00687892800488,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=1",
+        "-d",
+        "opcache.jit_buffer_size=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111544",
+        "--log-junit=/workspace/scratch/fa8384e69042/reaudit-round3/final84.xml"
+      ],
+      "exit_code": 0,
+      "sha256": "130f95ba1dcf54a52e72f1e976861563063499b4eb5c340ee4e4f19d4ccc3417",
+      "source_test_fingerprint": "aa98e184e40db01ea81f1f8b1b2abd3d55abc41d114de24e63a9031e3f609c37",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/final84.log",
+      "archive_member": "checks/final84.json",
+      "metadata_sha256": "e4d4c742c6a493fbe5b8e2dde219824edc2ff9cb5670a7fbb076e983f1875698"
+    },
+    {
+      "label": "final85",
+      "head_at_start": "19584c03f77036045184d5eef4b992a9e86aaad6",
+      "started_utc": "2026-11-15T12:46:19.089277+00:00",
+      "duration_seconds": 18.664949908998096,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111545",
+        "--log-junit=/workspace/scratch/fa8384e69042/reaudit-round3/final85.xml"
+      ],
+      "exit_code": 0,
+      "sha256": "66569290cde4dd928a5202a8852bc0f4ef68400e7bdf401db33069789de1f312",
+      "source_test_fingerprint": "aa98e184e40db01ea81f1f8b1b2abd3d55abc41d114de24e63a9031e3f609c37",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/final85.log",
+      "archive_member": "checks/final85.json",
+      "metadata_sha256": "377cca534b91a694a3aa6fdd677cbc04ddc5792c380a3ec08d73ed5cf9e4adce"
+    },
+    {
+      "label": "final-phpstan",
+      "head_at_start": "19584c03f77036045184d5eef4b992a9e86aaad6",
+      "started_utc": "2026-11-15T12:46:19.094129+00:00",
+      "duration_seconds": 3.3405357870069565,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "vendor/bin/phpstan",
+        "analyse",
+        "src",
+        "tests",
+        "--level=max",
+        "--no-progress",
+        "--memory-limit=1G"
+      ],
+      "exit_code": 0,
+      "sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1",
+      "source_test_fingerprint": "aa98e184e40db01ea81f1f8b1b2abd3d55abc41d114de24e63a9031e3f609c37",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/final-phpstan.log",
+      "archive_member": "checks/final-phpstan.json",
+      "metadata_sha256": "94b503d2144523451a261917ec5a5c7e776eea051a77e523d46befd25757cb96"
+    },
+    {
+      "label": "final-style",
+      "head_at_start": "19584c03f77036045184d5eef4b992a9e86aaad6",
+      "started_utc": "2026-11-15T12:46:19.079016+00:00",
+      "duration_seconds": 4.1700636640016455,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/php-cs-fixer",
+        "fix",
+        "--dry-run",
+        "--diff",
+        "--using-cache=no"
+      ],
+      "exit_code": 0,
+      "sha256": "10316197ebc9d9aff09d2bf1a990336ee2b225fb6667002768bfeec8c3a72b83",
+      "source_test_fingerprint": "aa98e184e40db01ea81f1f8b1b2abd3d55abc41d114de24e63a9031e3f609c37",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/final-style.log",
+      "archive_member": "checks/final-style.json",
+      "metadata_sha256": "0c2db5a630d08014d30b5436d092bcc0afe2fd264f3a7e7a0c89042293172487"
+    },
+    {
+      "label": "final-composer-validate",
+      "head_at_start": "19584c03f77036045184d5eef4b992a9e86aaad6",
+      "started_utc": "2026-11-15T12:46:19.078964+00:00",
+      "duration_seconds": 0.9604360359953716,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "/workspace/scratch/8f6c1df8ef3b/runtime/composer.phar",
+        "validate",
+        "--strict"
+      ],
+      "exit_code": 0,
+      "sha256": "43add299dc97ecbd90ec2dc456ef5a0bd824bb9abdae2a3d7cdb520e21f8e86d",
+      "source_test_fingerprint": "aa98e184e40db01ea81f1f8b1b2abd3d55abc41d114de24e63a9031e3f609c37",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/final-composer-validate.log",
+      "archive_member": "checks/final-composer-validate.json",
+      "metadata_sha256": "cf5bd49e6ce1984a744dc29baa8778e053b85ab02c97898e940f0168833b6145"
+    },
+    {
+      "label": "composer-audit",
+      "head_at_start": "2eb36241787a971e1a8185149aaa08b90304d426",
+      "started_utc": "2026-11-15T11:23:51.545450+00:00",
+      "duration_seconds": 13.467101133996039,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "/workspace/scratch/8f6c1df8ef3b/runtime/composer.phar",
+        "audit",
+        "--no-interaction",
+        "--format=json"
+      ],
+      "exit_code": 0,
+      "sha256": "0046e84f375c11ed2bdc90e758acd0530b66a6905121613e20e9fac2525684f2",
+      "source_test_fingerprint": "6d6a7c36846d199123d7db1fd5dbb85b4d267817bf9d1289f092620927dcd359",
+      "unchanged_during_run": false,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/composer-audit.log",
+      "archive_member": "checks/composer-audit.json",
+      "metadata_sha256": "0a9dc35f188367a73ebcdb0ab68a780fa0e1efc94b5fd6fc8571d00509fcff65"
+    },
+    {
+      "label": "mutation-parity84",
+      "head_at_start": "b687d521ad57e0b0e2f7ad853838dec50f466b68",
+      "started_utc": "2026-11-15T11:32:06.082648+00:00",
+      "duration_seconds": 1.3786271059943829,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "docs/audit/reproductions/MutationParity.php"
+      ],
+      "exit_code": 0,
+      "sha256": "30f7cce2cf6a856479f67575efb1858638cf1927c92cc3c2c72ebd79ffdbe050",
+      "source_test_fingerprint": "117f6f478b5ff284b53ff5c98298b1c2f45eee8879533641d9ebfd158a4d28c6",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/mutation-parity84.log",
+      "archive_member": "checks/mutation-parity84.json",
+      "metadata_sha256": "31ae60b0ccfb495505e5490919480689c87c37b9567f32fb0faa37f2110348ae"
+    },
+    {
+      "label": "mutation-parity85",
+      "head_at_start": "b687d521ad57e0b0e2f7ad853838dec50f466b68",
+      "started_utc": "2026-11-15T11:34:11.901607+00:00",
+      "duration_seconds": 1.355465083004674,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "docs/audit/reproductions/MutationParity.php"
+      ],
+      "exit_code": 0,
+      "sha256": "1e419d97c10b75c50980a8315e02a0644a2b596cc487ae76c9f8ac288e32c7b7",
+      "source_test_fingerprint": "ee1bc65c4b6991272d3f39bda4267ce06ab5451aeb2035259a08f00552b39d60",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/mutation-parity85.log",
+      "archive_member": "checks/mutation-parity85.json",
+      "metadata_sha256": "a8be261b58d6381d887ca57477af89c0d3b8c733874f7491a4b3aff120dfac8f"
+    },
+    {
+      "label": "native-platform85",
+      "head_at_start": "850f33b9384d28677304f925d4acad9f6de5f721",
+      "started_utc": "2026-11-15T11:39:26.629118+00:00",
+      "duration_seconds": 0.7695752189902123,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "tests/php85-platform.php"
+      ],
+      "exit_code": 1,
+      "sha256": "99fe324d1b8a2f6fdf6554af7b1e0e408d4e7b5d7ca871962a50fa425bdf538b",
+      "source_test_fingerprint": "eb0d895ae494b0946969f165d5184a2df71229f753d7077928fd59b92bf087af",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/native-platform85.log",
+      "archive_member": "checks/native-platform85.json",
+      "metadata_sha256": "20377ccea389d12dcca78562bdc9e61b6845789b3f3d1cb25af3474bde58de5e"
+    },
+    {
+      "label": "windows-path-style-final",
+      "head_at_start": "141feff3d4747a70a2d4ac4c3841de53eb55fa73",
+      "started_utc": "2026-11-15T12:35:01.378738+00:00",
+      "duration_seconds": 0.9759864770021522,
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/php-cs-fixer",
+        "fix",
+        "--config=.php-cs-fixer.dist.php",
+        "--dry-run",
+        "--diff",
+        "docs/audit/reproductions/autoload-selected-source.php",
+        "docs/audit/reproductions/WorkloadNecessity.php"
+      ],
+      "exit_code": 0,
+      "sha256": "355f03f33721b86c1c15ee069c20cb2ba8a60401cea44193eaeb138c3c6d99c3",
+      "source_test_fingerprint": "849bf6baf79f2e3a32bde0eb12e6c6f8bc4af9b0f53665b91cd4c25d27fbf895",
+      "unchanged_during_run": true,
+      "output_file": "/workspace/scratch/fa8384e69042/reaudit-round3/checks/windows-path-style-final.log",
+      "archive_member": "checks/windows-path-style-final.json",
+      "metadata_sha256": "b2e4aa24f5af4d9817667ff89c1968e1a782325de72c894c036a3243950336c9"
+    }
+  ],
+  "production_runtime_token_proof": {
+    "final_code_head": "19584c03f77036045184d5eef4b992a9e86aaad6",
+    "previous_token_comparison_source_snapshot": "141feff3d4747a70a2d4ac4c3841de53eb55fa73",
+    "src_paths_changed_since_token_comparison": [],
+    "runtime_comparison_evidence": {
+      "runtime-token-comparison84.json": "790226961a5484dbcecca08b390f6ea4d80ba764e38998bf0daffeaaf0dea4e8",
+      "runtime-token-comparison85.json": "f48ac0eb7003589d82a12846d0d8d82de88edd548c4b1d338a2c1fe387708cfc"
+    },
+    "current_production_files": {
+      "src/Attribute/Cast.php": "34c5025b4bdc674aef1593682e1760880853b6ae2bd8861756bd034a9e0c1539",
+      "src/Attribute/Composition/AttributeCapabilityInterface.php": "0fcb5e9a1906825f21f297a60f0efb4c9c2b148f2513d9adf90893d3b492ee92",
+      "src/Attribute/Composition/AttributeCompositionRuleInterface.php": "a46a71f00f516dc68c7066012d067ad5028d383c24abd03913e8b0ae2631d1b8",
+      "src/Attribute/Composition/AttributeDefinition.php": "7382c1027c02e0fa6db3938473d10fe304fc5ef0b5e6ffcce6d417c8dc121aca",
+      "src/Attribute/Composition/AttributeDefinitionRegistry.php": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+      "src/Attribute/Composition/AttributePlan.php": "feca843113742858b0bd05f885d17f88ef969d8de386b5e5784f1887c006b853",
+      "src/Attribute/Composition/AttributePlanBuilder.php": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb",
+      "src/Attribute/Composition/AttributeSet.php": "8c0defa0450ed23b41230ee3f39f862aea9864503cb23b9e91794895eb504adb",
+      "src/Attribute/Composition/AttributeUsage.php": "09bbcb1c52b722b99a31d19f0d07b6ef0dd2702d69a04a276c668a79b284702d",
+      "src/Attribute/Composition/Capability/AuthoritativeValueProvider.php": "353aeb72b25af6bf240099283052cd35c6885806b9992eb4fadff0f116d314ef",
+      "src/Attribute/Composition/Capability/ConstructorPolicy.php": "0ad394eada603b9aedae824bd1889b72d6f8570a22eaffec28a93301b173ae35",
+      "src/Attribute/Composition/Capability/CreationStrategy.php": "390ab6ebb2e5616b41f43afb886d37353c313ab4961541a5a656f11a7bf227fd",
+      "src/Attribute/Composition/Capability/InvocationOnlyValueProvider.php": "5e9f9e17508e99b943b4898e368b56df8bd5ba7745bf94c5a50ec1c889931301",
+      "src/Attribute/Composition/Capability/LifecycleHook.php": "afb40d56abc33863cdaee31f68d3a19c9afdec4cf57cf8c1eb41c52837e7e2f0",
+      "src/Attribute/Composition/Capability/ValueProvider.php": "baf96570026b35569593e32a4a801bf9d196a68333e4ecfe1ace0a71496a72b4",
+      "src/Attribute/Composition/Capability/ValueTransformer.php": "e42ba2f2d3899fec244d2a512afff889a1a79640357095f490ed1f8874379dc8",
+      "src/Attribute/Composition/CapabilityPolicy.php": "340d1f4b3b772895c5c6d379e04346b0ee12b7f979fb12576fe37e265b73b3dc",
+      "src/Attribute/Composition/Rule/ProxyCompositionRule.php": "6dfb16c8598c090ac5c953ae9de06af75d6aa115d1a02a80b95d5097f7b3d30d",
+      "src/Attribute/Config.php": "214555c996e41dd1b082a913bac685eb9cb2ae414c1f62f67b00180c99607ed1",
+      "src/Attribute/Cookie.php": "7c2423a9bb43274a31588da660673d9c6715e382936a3c854042fd37575c1aa5",
+      "src/Attribute/CurrentRequest.php": "affb563cec651615979a9e4f6ca22a20de1c68f8c837ef64c73b526f0d1be12b",
+      "src/Attribute/CurrentUri.php": "d7fdc7b8c3f75f46e7c79d79f7f0e968c2833e5c4983ca18c2e27e1a14bea9b5",
+      "src/Attribute/EntryId.php": "8ae524066aa777bed624cddafc50b1a0d048ea7900b5c6b7926ef62bec736220",
+      "src/Attribute/Env.php": "5c82229eda347960839a78092036b187bf2b8aeed167a85d321e4475a15adbfd",
+      "src/Attribute/ExtractsRequestData.php": "37877b5c076f1306a92a9df708b617767c2b422740100633f42940331108ee57",
+      "src/Attribute/Header.php": "3891e1f5ccc3a5be9f7231caee4d0e575637b4aaa38e481fc2571fdd489e2c4b",
+      "src/Attribute/Init.php": "09f90548cf12f92a8811af42523fd5e22fa9a1875a7ab243feee027c40f786b0",
+      "src/Attribute/Inject.php": "b94eac7085fe47cf929b3e9fcc65f6bda3e67b04ceebda0ba6c37e8c96fb76be",
+      "src/Attribute/Lazy.php": "7e4a85162dd2048090cd8dc55c92287df3efaa7c473a81de98f59ad95e6a1409",
+      "src/Attribute/Make.php": "e2304ecb372242cce177034ae22b92969b6c01ee5cea7a7af3e115836d3ba933",
+      "src/Attribute/MapCookies.php": "eb6c160bc276261ce7bec5e527725d80cf397f50f55e3c92274f1ad56f3172f0",
+      "src/Attribute/MapHeaders.php": "0df9599f7658d897ef53937bdf40ee9d5f7899a8bba5bf0a2a2e6cec0462d63e",
+      "src/Attribute/MapQueryString.php": "f19e4a8aa7b9184737d99e4d2e5793d00eebf335d61f37e8899b3bc728e656ad",
+      "src/Attribute/MapRequest.php": "876c861dc12490759bfc300f3ab9f65a1812d216ca4cd53ed9d1b036d4341518",
+      "src/Attribute/MapRequestAttributes.php": "c700db232626ec2b40ce7550445624500d6f59808dc45080964e04dc8157631e",
+      "src/Attribute/MapRequestPayload.php": "1d6a6d105166acee55a1d7e2610dcf2c63e2491db2395027dbd1dba2037a5756",
+      "src/Attribute/MapServerParams.php": "9178cf00172f431d7a1ea4b73e720d541b56b4afed4afec0a942a8e07c48b5f5",
+      "src/Attribute/MapUploadedFiles.php": "d018c57e21711fc4dd14c2f3e6c9bc54e1db6a5f7f7af5562c880979f0839e9f",
+      "src/Attribute/NoConstructor.php": "bae7347a3f43d9444c869a3cad5d8040c50b615e317b27de33cc5e319ed3b373",
+      "src/Attribute/PayloadParam.php": "8431354a5ac24a855b2b198d792fbf41d6dd9a7dd32e5be94d7c33d2fb00179a",
+      "src/Attribute/Proxy.php": "3298ab883e2e6a4c7f1e9e43412e63cd508d979f81bb27fe2eb747de6af49bad",
+      "src/Attribute/QueryParam.php": "cf3f3a910a92eaff2f90b8fc06714e7755e05525809ea395ea02e2f13807145f",
+      "src/Attribute/RequestAttribute.php": "8d5ff81936e227e45af123bf874db0bd8052d847872829742cc7054026fdc75f",
+      "src/Attribute/RequestDataSource.php": "3984ade94063e8cc1f99a4472821df297372a016dd8ef43706c58af40c12ab09",
+      "src/Attribute/RequestMapper.php": "bd3fae5a0ef5c92a921657cbd5332027dadb3621d8920d2c164f469137d08851",
+      "src/Attribute/ServerParam.php": "cf89b8a88eb7079460db5edf183cb83a7940d27e1886f90ef0f059a001574774",
+      "src/Attribute/SetUp.php": "73746fa9ae536fa75810799952f5984d1509fdc1e6e337a86af76450eae78068",
+      "src/Attribute/Transform.php": "67d95e9ecb51131195342c86ef9e12463df1d4175bb2404e7184129d3fc562d3",
+      "src/Attribute/UploadedFile.php": "e4bc4b1851f58c4e8bdc8894ef52fc6c41962fa429d8d45085827cbed2daa380",
+      "src/CallableExecutor.php": "24d80c87f68a299c32159b881583046e9f940397e0d56a946614b83eb907190d",
+      "src/CallableExecutorInterface.php": "577d6bc5c9387946939fe0b6e776eeda7773eb33c0659dca3a8f6900ebf9fb0c",
+      "src/CallableInvoker.php": "67d3e810d06b4e115a276635498b05082d6e79a169aca9c000adbda0a73dde3e",
+      "src/CallableInvokerInterface.php": "b655122d4988ade658859274552e3bd037e4487887ebcb1ffcaf739e944af8de",
+      "src/CallableResolver.php": "bbc11f5f9afd9406e14449df0603b9150b488b567aaf3a04bf6f26cb32fac131",
+      "src/CallableResolverInterface.php": "47ca21a523ddc4274f16d05c73c60de15a62b121057cadbedf602f45795b0eb0",
+      "src/ConfigKey.php": "53b0427f2d5ee86f5c4683d86dc7392d76b4296c02a25cdcdce99bf95578a5c6",
+      "src/Configuration/DependencyConfiguration.php": "05dd7ca192c6c215a83f115c2ac9468b20bc7486bf1ae80b971e507bea75adee",
+      "src/Container.php": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235",
+      "src/ContainerFactory.php": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450",
+      "src/Definition/ClassDefinition.php": "3fb2b068cedeb58fa9b750d6a5a5cc4f5deb216392c81cb6fabe747f1dbbb920",
+      "src/Definition/Definition.php": "2984d92e8ad674a58ef01243610551cc173adc9876849d16ccf168149a6fff0b",
+      "src/Definition/DefinitionInterface.php": "1307086dce9c96fbe27770ef826a8051a45a7fb02d901ca0082afcc2e556b4d2",
+      "src/Definition/FactoryDefinition.php": "02baed2daba9c4abd69afbdfbf2d786116426e7f3cf50333f06f6e0740110520",
+      "src/Definition/InvokableDefinition.php": "b8cb7112bdff4455392df0f09dd407bd44922a0276148047a787736bf323721a",
+      "src/Definition/ReferenceDefinition.php": "65e0c3c4360a704a7fcd2d5b865c2f17476c5490d1641125f20a844ea815f75a",
+      "src/Exception/AttributeCompositionException.php": "a8f9f62b6531e055e241477f4afd1adffce2e3ca3541908436fea6add0f0cf70",
+      "src/Exception/CircularDependencyException.php": "1b4afde22a604b2085526ae2fd3049a879942c0e9012710b1662902d04ca8937",
+      "src/Exception/ConcurrentResolutionException.php": "bafd50085e7f06d00a1eb5bf8305621210b76cc18f86b577fbb127bbbd76b2b6",
+      "src/Exception/DelegatorException.php": "a93f31bb930bf40638cf1d362cf80a6bffeb028feb8f17fc1441c38d2717a8cd",
+      "src/Exception/ExceptionInterface.php": "a06d01669964e5674ed6f8d5df3c0c1fe996f84938a29f588f99c8b0cadffa77",
+      "src/Exception/InvalidCallableException.php": "71254cfd560f2f03880c00beb5242365864c1de8feeae21eef645f32076309fe",
+      "src/Exception/InvalidConfigurationException.php": "567abb68a34a534c5f19ab0008d46333c5af75eec20e24b59a57af924d546006",
+      "src/Exception/MutationRetirementException.php": "8ea823c2dc4d479e4f9c0e10aaa853b0a472eafbdedbbdcd3a44afaac6ed3d02",
+      "src/Exception/NotFoundException.php": "954bab0097f3ee3d1385677a66a60bbb6c6b5ea1840603f23e6d8b3035223b35",
+      "src/Exception/ParameterDiagnostic.php": "f05b8a325c609cc08b18a3c01077809787bf55492bc4fd1eee260dd33b415252",
+      "src/Exception/PropertyDiagnostic.php": "2ac0220ec6c84be9f6bb008d7ed310fcbe6805a482bfa63b15df83d7d2f6d186",
+      "src/Exception/RequestDataConflictException.php": "6abc7d0b242831293b7beaa668034b83e996e6a8ea7762f03b3d283658d273e2",
+      "src/Exception/RequestParameterSourceConflictException.php": "ccf8a945a72fba8a8d1fb2a5de8b0df767965537c4683a7ba6f055ebe7025150",
+      "src/Exception/ResolutionException.php": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8",
+      "src/FactoryInterface.php": "5567e93ba06fe37c384546b7adeaebfa8577de8dc959e46fc37271ad14e55dbe",
+      "src/Internal/AliasResolver.php": "2f7f0713f51a60761332ed3b3555f91c783b0a4239075e6de2ee650e885a558c",
+      "src/Internal/AttributeCallbackInvoker.php": "0bb1f304a0d72f4ff80d9014df581e290ba3d99e20ffea1c44aae43d5d38429a",
+      "src/Internal/AttributeExecutionOrder.php": "8741b545566139e867e1ccd0364facd41661e7a7b47bcd9501e639b144db0c67",
+      "src/Internal/BootstrapResolutionGuard.php": "38620a406e1bc24fc7956ff2b6d376f244aa5dcdfc86e4773911a7302ac14ebb",
+      "src/Internal/CompletedAttributeGuard.php": "55c6f2951174e8d857d6109955f53c2c4618054752bca78b19a03ca98b7bbae6",
+      "src/Internal/ContainerBootstrapState.php": "8de48d0c7af715fd8b809046798777c9e725e196ac4457284a17850405af07a5",
+      "src/Internal/CycleGuard.php": "897cad0ad73eae675638dcb86fdb7daf3b047de2a62be04823fdbe566b82c3eb",
+      "src/Internal/DelegatorRegistry.php": "b80fcf9a2f0690b01dc70f485d75c14d1d58a1085238b30e67357c9017f5e800",
+      "src/Internal/EntryCache.php": "e5bff064ef1abbc7ccaebb6bb29a05733357eab51b2a77cb17d2023b1800b2ce",
+      "src/Internal/ExternalContainerRegistry.php": "873d1c894555a1c8f53ba47706af45d511ed90b24db01915e69f85d42e3ca84e",
+      "src/Internal/MutationRetirement.php": "3deedf3f92d5737025d7a2aef42041efef9661f08ec34a1b783b9f0ceefe6333",
+      "src/Internal/ObjectAttributeSequence.php": "5f90c1819b023dbc6528eec161a608fe40f8b5275a73da90ad135907dae0add2",
+      "src/Internal/ProtectedServiceIds.php": "6d97c2defab9d9cafe1a518a23bbed5a875377f92f60f1cc987478e97338b21b",
+      "src/Internal/ResolutionMetadata.php": "7097e3fd8ab7108d5cd9da7dbc9acf5d2429bc4c4f65357cbf4ac811b594c92a",
+      "src/Internal/Resolver/Entry/ConfiguredFactoryDefinition.php": "e2fdd8fd38630b775f026db7c8f88d5a85a7fe9963823a14d6d317e8c006efeb",
+      "src/Internal/Resolver/Entry/DefinitionBinding.php": "b4e4b76e2cc8914a9442c7eab204623f8c69e55c512702c7be6247e34ac825ae",
+      "src/Internal/Resolver/Entry/EntryResolverContext.php": "f0c4e1a75b67549bb9970b3abd8146586d3ee19691b581783485bbd4658e108d",
+      "src/Internal/Resolver/Entry/FactorySpecificationValidator.php": "6b75d39bf22f77a050f1d0a980e752a419f0980d4082d3e1399483b475c16ce6",
+      "src/Internal/Resolver/Entry/ObjectResolutionParameterStore.php": "9f5a8f1865528b86b2664402708ac22e4386307fcb6b3d43d8d138a36199f26f",
+      "src/Internal/Resolver/Entry/PreparedFactoryDefinition.php": "1e168700ebbf50826081b1b050ea1235c9270cdb81d0fe90717e386186ab2930",
+      "src/Internal/Resolver/Parameter/ParameterResolutionBoundary.php": "f429c77b293ec35c4ac6e9601504854a33567b4559d7099f19ec891da1bfbb7c",
+      "src/Internal/Resolver/Parameter/PreparedParameter.php": "cf4173e40aa1745b7a4efb4ff6e488d26628ad68a9a8e83a569d065344ee2fe4",
+      "src/Internal/Resolver/Parameter/PreparedParameterPlan.php": "5193e66e22ab58269c63e7fbf33773b21da6b8e2b1609e2e112c93e56c8fe71e",
+      "src/Internal/Resolver/Parameter/Request/LazyCasterProvider.php": "bb6ef3f892ca8e2c7d5b4aa1280394977ac083b04b89c3a5c57ef39936d74ecf",
+      "src/Internal/Resolver/Parameter/Request/LazyFactory.php": "f7de25f77dda2b7127eb2efb20eab70a4b80a26b7103c558ae8ea569e1541df3",
+      "src/Internal/Resolver/Parameter/Request/LazyValidationProvider.php": "552f33c0a871d93b72e9cd073a82bb2b3bceafe83a1fb30ebbcc4d764e9d2120",
+      "src/Internal/Resolver/Parameter/Request/MappedRequestContext.php": "d87ec87e2ec647cfbf209058f99ee090f5b25a5fa4379f01149614d218d473c1",
+      "src/Internal/Resolver/Parameter/Request/MappedRequestParameterSourceGuard.php": "972d35235dfeb41d887e078b153680af0112a0a2ecb09687d0cbc7cdf4ac9633",
+      "src/Internal/Resolver/Parameter/Request/RequestParameter.php": "584ef266d903e8066fc53587a3f7367307fc92fb67e04e1888d69d0bbb6512aa",
+      "src/Internal/Resolver/Parameter/VariadicArguments.php": "d8d72c8223b86c879d65b2e7700664bf0b64ca288cd253c8ff2da5620967eb68",
+      "src/Internal/functions.php": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b",
+      "src/LazyObjectFactoryInterface.php": "eb3168f23213e82d4718e9bb33b68e526e2c0f80c7fcadf648289cbb7bd13aa5",
+      "src/LazyServiceFactoryInterface.php": "29aa2dfe7a8f430db1f5666c88ffbef6ac72efed3db1a0e83d1e2ed7a1ff83c8",
+      "src/Object/CreationStrategy.php": "0562c97e8a9b70cde2364d0be2d8f53d7b008d26ed02f3dd380b2eaab7b2eb88",
+      "src/Object/ObjectMetadata.php": "d0432ea24c83b23e8a4d2fc800663c84e20eb5911bae37708d58bb7b5e22de0d",
+      "src/Object/ObjectPipeline.php": "0eac36e84193c0c700ac942969e5807778c3a306d2d512ea78fc0029e952a0ee",
+      "src/PreparedCallable.php": "7efe45c3ca386c0f0a85256361fc50978dec2c4866f2796f9f5de17b3161d82a",
+      "src/ProxyFactory.php": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e",
+      "src/ProxyFactoryInterface.php": "2ba2187bd5efde171c1039fc0cc05bbaeba1d89da4b425d899ae5ba4cf68a792",
+      "src/Resolver/Attribute/AttributeHandlerInterface.php": "c0a64a9509df6e11a34eb1b4576af50f09cb4d1755f869be4743576ef1f07bff",
+      "src/Resolver/Attribute/AttributePhase.php": "91af60062222ba10923926064fcc7079689c1a951e9cc2fb703d24d2c1ac0742",
+      "src/Resolver/Attribute/AttributeProcessor.php": "a1ea7f53a6e6ecac76e1c1c292de57cba2b78ca5e6727a2aa65c256e5c8da784",
+      "src/Resolver/Attribute/Handler/CastHandler.php": "ddcec28316ac4fada88746cf8d1e606baac9b857bdc4a4986e174e535b5324f4",
+      "src/Resolver/Attribute/Handler/ConfigHandler.php": "4a746797b1c8e8af9d5468ec23483a8fa485558ce2a44c8fca52251629f6093d",
+      "src/Resolver/Attribute/Handler/EntryIdHandler.php": "c6c5556f71b0aef7ec17a480829ce8b6330728fafe0cb284623d64b7213a91f1",
+      "src/Resolver/Attribute/Handler/EnvHandler.php": "2578c88dd1094e51d912e77b109ffaf2aa0db40858884ebb2aacc38f6c1df10e",
+      "src/Resolver/Attribute/Handler/InitHandler.php": "dd08154223d58a55193943474de54de9482f6f41081dc328560bac3a09bd7557",
+      "src/Resolver/Attribute/Handler/InjectHandler.php": "5c020787c75b73cc7ba420827885354b60f479d2bf288dada91717c67518fe29",
+      "src/Resolver/Attribute/Handler/LazyHandler.php": "c4014429d2c62ad25cf85def678cdea4ef9790b6275466af2256a5eb8c49e4ba",
+      "src/Resolver/Attribute/Handler/MakeHandler.php": "a04ba77251022ee169fdb2e06b5b4a22d7ce7ae242534a932d491d894ec91e75",
+      "src/Resolver/Attribute/Handler/NoConstructorHandler.php": "e28ffbf0959e922583252b9152b173dce973f2dd9f1fa02ffdfd86999fe3f17c",
+      "src/Resolver/Attribute/Handler/RequestAttributeHandler.php": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+      "src/Resolver/Attribute/Handler/TransformHandler.php": "213b97cfce8f199757ea0c0c4c29320b976243b5b98d8c8b5c17078182c42a79",
+      "src/Resolver/Attribute/ParameterAttributeHandlerInterface.php": "7cf1b9cb118fcfac3d10b47244ab620d62e5a15cdb35818a6ae1c893ea7044aa",
+      "src/Resolver/Entry/CompositeResolver.php": "ffdf28f98fe9ce7cb48c838b2f00d0869b3d2f642e2bdd9c5bef4752475c576c",
+      "src/Resolver/Entry/DefinitionResolverInterface.php": "e577a449698e850383f3145fe8edeac3a07b9e82942812f1f26865c17f15beab",
+      "src/Resolver/Entry/EntryResolverInterface.php": "aee3a17d69e757a314402f02cb57d84613657040a8dec70a0a19f2deeb3d8c4e",
+      "src/Resolver/Entry/FactoryResolver.php": "054354cc86f8a9f272362162990cf348b311d818304a61d9896b6602ee7c6fd9",
+      "src/Resolver/Entry/InstanceCreator.php": "c36174e4743ada0c7a76954edc97b3e4ac8a58f5e169fc2dd7ab6c3b61fde0cb",
+      "src/Resolver/Entry/InvokableResolver.php": "c2f35c42ae2fd9bdb6e52ef85e34c7bd26c7f64c2b7cf1db505117f50093f054",
+      "src/Resolver/Entry/ObjectCreationContext.php": "f9c83e7d4a470380155e4de5a84480165defc7e7d24686bc682896dd7560e762",
+      "src/Resolver/Entry/ReflectionResolver.php": "48523570610a22b93d59e77a8164462fb812ba0dd98540a95fb09de3e5a18fde",
+      "src/Resolver/Entry/SetUp/ConfigUnwrapper.php": "d6c44a5662ebc4e2de99a476a7dbc2092fe7dc825457ed53b0ce960a31045438",
+      "src/Resolver/Entry/SetUp/ContainerValueUnwrapper.php": "ba786a1e71cd9bd76c97ceba13a4f4e3855d955ec367c462cbc59890031aa792",
+      "src/Resolver/Entry/SetUp/EntryIdUnwrapper.php": "06817f24bb5c6e26f19afa37edfec1337b461c45e126b891ed102868d3c68f64",
+      "src/Resolver/Entry/SetUp/EnvUnwrapper.php": "9de2fa7200dfe4ef4ac87d5c4be945dbeba84d0817c9e16a307100c700c1092d",
+      "src/Resolver/Entry/SetUp/SetUpValueUnwrapperInterface.php": "4d626f726660263736eed74f2a102b2944580fef053ca3beffa12626cde33b63",
+      "src/Resolver/Entry/SetUpRunner.php": "f0af89019bc3ede95ba1023793e5ea6f0d6c91a36f271873f472b2d78af06022",
+      "src/Resolver/Parameter/ArrayResolver.php": "10a5e5592739312dda96f7f1a039beb01d149f16d6560c8d03fdc1083f51efd9",
+      "src/Resolver/Parameter/ArrayTypedResolver.php": "15b750d75bfc7db3b2acccfe5191a29497be37ac87cc34c9c9e51c540ec3ab36",
+      "src/Resolver/Parameter/AttributeParameterResolver.php": "bfebd1b5c21a49e95877d9acef51c75787e8705b0fb5f45e68e067536f8209ea",
+      "src/Resolver/Parameter/AutowireByTypeResolver.php": "625bfd70fdfdc0772ff86c45ffdcafcfa58334a98de14b0105da936f4401ec2a",
+      "src/Resolver/Parameter/DefaultValueResolver.php": "9db3f42dcc223c6ef301e0b0d739672885b25020b014f4fca915825ab7e3acbb",
+      "src/Resolver/Parameter/NullableResolver.php": "47fca218ee460d17ad58c0f78baf30a344496a6e6bbe4634f2006c4b08129012",
+      "src/Resolver/Parameter/ParameterAttributeValue.php": "bc1a1e3c756a148c96d4fef8a289f888149d1122e870bbf15761340f9f997bac",
+      "src/Resolver/Parameter/ParameterResolutionContext.php": "aeb634741d61fe5717a4802c7db922856fd9353272e207c1684c37de6aaa18c8",
+      "src/Resolver/Parameter/ParameterResolverInterface.php": "3b09e70deb497e8d8b131e48d1af742c4a7d9a5083991ae71d48c0f40b9607b4",
+      "src/Resolver/Parameter/ParameterSourceAttributeInterface.php": "679c7e6133d358ba053a108f051490771ef164bcde44b890a06219475cc2fa4d",
+      "src/Resolver/Parameter/ParametersResolver.php": "ddb2dcd9b394a680210dea19871c7b713e8e88a6935c8afdb703637780491448",
+      "src/Resolver/Parameter/Request/CastableInterface.php": "9eb56589ed049d717760f7034fa8daa98c4dfbf5e4eb860ff77c0bb276939ec7",
+      "src/Resolver/Parameter/Request/ExtractorInterface.php": "249615461e711127f3fb38bf0b6f69c51fe68b80f7adf3bdf244e42ecdee5757",
+      "src/Resolver/Parameter/Request/MapperInterface.php": "7cd4b6269415491531cd762abef937a3adb0921dc166cf767fe5c86c35e5ab29",
+      "src/Resolver/Parameter/Request/ParameterNameAwareExtractorInterface.php": "36d0f62a759765581e2a8d738218c40fc7de96c11076b735388001dd6cd49a02",
+      "src/Resolver/Parameter/Request/RequestDataConflictPolicy.php": "e54e0c6aa3c3c137be5fba5883b4d128d5e2b4693d85e8e5cf8d0bf6fc0e6e1e",
+      "src/Resolver/Parameter/Request/RequestDataExtractorInterface.php": "da3ea08ba6f536037369e75a2df6f90b5c5cf4fc6240c3bd4caf2c480e08ccda",
+      "src/Resolver/Target/ParameterTarget.php": "e64150a24593bcc8bcac4b0e47f004df14e8be1252d74ee31003bd0c468d3286",
+      "src/Resolver/Target/ParameterTargetFactory.php": "484293e9194e6def1c42cd1300b62295ed72b45044425b60edcea6d33f2f0925",
+      "src/Resolver/TypeHints.php": "96fbf01f7a633009522412092ac51ab3b374dab0bedcd6c974315860c646ecd9",
+      "src/VirtualProxyFactoryInterface.php": "e1e1dbcfbbe62aab0f080b9816b4e110e29cba22ffe67e012409444bf1464295"
+    }
+  },
+  "static_analysis_separate_from_pest": [
+    {
+      "manifest": "parameters/review.json",
+      "finding": "assertShape inaccurate type assertion",
+      "red": "/workspace/scratch/fa8384e69042/reaudit-round3/parameters/shape-contract-static-proof/red.json",
+      "green": "/workspace/scratch/fa8384e69042/reaudit-round3/parameters/shape-contract-static-proof/green-gates.json",
+      "kind": "PHPStan consumer/type-contract RED and full-project GREEN, not a runtime mutation kill"
+    },
+    {
+      "manifest": "parameters/review.json",
+      "finding": "ObjectPipeline concrete ReflectionClass generic input",
+      "proof": "/workspace/scratch/fa8384e69042/reaudit-round3/core/object-pipeline-generic-proof/proof.json",
+      "owner": "core_audit",
+      "kind": "PHPStan static RED/GREEN, separate from the trait positive runtime mutant"
+    }
+  ],
+  "executed_pest_declarations": [
+    {
+      "id": "tests/Contract/AuditSourceSelectionContractTest.php::availability observations use the selected source through the public CLI",
+      "path": "tests/Contract/AuditSourceSelectionContractTest.php",
+      "name": "availability observations use the selected source through the public CLI",
+      "line": 9,
+      "fault_ids": [
+        "R3-ROOT-WINDOWS-AVAILABILITY"
+      ]
+    },
+    {
+      "id": "tests/Contract/BenchmarkStatisticsContractTest.php::workload reports use the median for single even and odd sample counts",
+      "path": "tests/Contract/BenchmarkStatisticsContractTest.php",
+      "name": "workload reports use the median for single even and odd sample counts",
+      "line": 8,
+      "fault_ids": [
+        "R3-ROOT-MEDIAN",
+        "R3-ROOT-WINDOWS-SOURCE-PATHS"
+      ]
+    },
+    {
+      "id": "tests/Contract/AttributeParameterPlanIdentityContractTest.php::parameter attribute plans keep class and method boundaries distinct in either warmup order",
+      "path": "tests/Contract/AttributeParameterPlanIdentityContractTest.php",
+      "name": "parameter attribute plans keep class and method boundaries distinct in either warmup order",
+      "line": 29,
+      "fault_ids": [
+        "d65a6e1e64a158b3",
+        "4ee7976ff00e11a1"
+      ]
+    },
+    {
+      "id": "tests/Contract/InheritedPropertyIdentityContractTest.php::inherited property injection keeps owner and property name boundaries distinct",
+      "path": "tests/Contract/InheritedPropertyIdentityContractTest.php",
+      "name": "inherited property injection keeps owner and property name boundaries distinct",
+      "line": 74,
+      "fault_ids": [
+        "1d6cfa6279fb43b9",
+        "6d14b6b0ee74a098",
+        "e71f5d6b520c53c2"
+      ]
+    },
+    {
+      "id": "tests/Contract/AttributeCallbackInvocationContractTest.php::semantic callback first arguments reject incompatible types",
+      "path": "tests/Contract/AttributeCallbackInvocationContractTest.php",
+      "name": "semantic callback first arguments reject incompatible types",
+      "line": 154,
+      "fault_ids": [
+        "82012d3cdf628c1b",
+        "97b58f08a201452d",
+        "546ca70a56274c89"
+      ]
+    },
+    {
+      "id": "tests/Contract/AttributeCapabilityPolicyContractTest.php::core capability policies expose singular providers and repeatable transformations and lifecycle hooks",
+      "path": "tests/Contract/AttributeCapabilityPolicyContractTest.php",
+      "name": "core capability policies expose singular providers and repeatable transformations and lifecycle hooks",
+      "line": 25,
+      "fault_ids": [
+        "6692af229221aa47"
+      ]
+    },
+    {
+      "id": "tests/Contract/AttributeExecutionOrderContractTest.php::does not impose execution phases on metadata without a runtime handler",
+      "path": "tests/Contract/AttributeExecutionOrderContractTest.php",
+      "name": "does not impose execution phases on metadata without a runtime handler",
+      "line": 269,
+      "fault_ids": [
+        "8cf8c5ce93196367"
+      ]
+    },
+    {
+      "id": "tests/Contract/AttributeExecutionOrderContractTest.php::examines every phase-order branch after handler boundaries and repeated metadata nodes",
+      "path": "tests/Contract/AttributeExecutionOrderContractTest.php",
+      "name": "examines every phase-order branch after handler boundaries and repeated metadata nodes",
+      "line": 452,
+      "fault_ids": [
+        "fafde72e22578511",
+        "5c261ea54702220d"
+      ]
+    },
+    {
+      "id": "tests/Contract/AttributePlanSingleSelectionContractTest.php::singular plan selection refuses two usages even when the capability permits repetition",
+      "path": "tests/Contract/AttributePlanSingleSelectionContractTest.php",
+      "name": "singular plan selection refuses two usages even when the capability permits repetition",
+      "line": 77,
+      "fault_ids": [
+        "a547d82118dc5e1e"
+      ]
+    },
+    {
+      "id": "tests/Contract/BootstrapLateAttributesContractTest.php::rejects bootstrap dependencies created through a definition replaced by a later more specific registration",
+      "path": "tests/Contract/BootstrapLateAttributesContractTest.php",
+      "name": "rejects bootstrap dependencies created through a definition replaced by a later more specific registration",
+      "line": 169,
+      "fault_ids": [
+        "74afcb61d3acb937"
+      ]
+    },
+    {
+      "id": "tests/V5/AttributeCompositionTest.php::parameter source conflicts remain visible after metadata and transformer usages",
+      "path": "tests/V5/AttributeCompositionTest.php",
+      "name": "parameter source conflicts remain visible after metadata and transformer usages",
+      "line": 142,
+      "fault_ids": [
+        "74e2ebe61e898ddf",
+        "b1b58e292ed47c31"
+      ]
+    },
+    {
+      "id": "tests/V5/AttributeTargetContractTest.php::promotion keeps valid attributes following a copy for the other target",
+      "path": "tests/V5/AttributeTargetContractTest.php",
+      "name": "promotion keeps valid attributes following a copy for the other target",
+      "line": 78,
+      "fault_ids": [
+        "87c5cf293f31fd04"
+      ]
+    },
+    {
+      "id": "tests/V5/CompositionArchitectureTest.php::plan memoization invalidates when registry semantics change",
+      "path": "tests/V5/CompositionArchitectureTest.php",
+      "name": "plan memoization invalidates when registry semantics change",
+      "line": 177,
+      "fault_ids": [
+        "032b473414545e17"
+      ]
+    },
+    {
+      "id": "tests/V5/InvocationOnlyValueProviderTest.php::custom invocation-only capabilities are rejected outside callable parameters",
+      "path": "tests/V5/InvocationOnlyValueProviderTest.php",
+      "name": "custom invocation-only capabilities are rejected outside callable parameters",
+      "line": 64,
+      "fault_ids": [
+        "0860dab69116b715"
+      ]
+    },
+    {
+      "id": "tests/V5/ProxyCompositionRegressionTest.php::Proxy cannot compete with another value source on one injection point",
+      "path": "tests/V5/ProxyCompositionRegressionTest.php",
+      "name": "Proxy cannot compete with another value source on one injection point",
+      "line": 107,
+      "fault_ids": [
+        "ae25b50329c6c7be",
+        "0d13064718a9fa23",
+        "b8d233fd3bb0146a",
+        "25ac7dafdf61be97"
+      ]
+    },
+    {
+      "id": "tests/Contract/CallableFailureDiagnosticsContractTest.php::method classification remains specific to both declaring class and method across repeated failures",
+      "path": "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+      "name": "method classification remains specific to both declaring class and method across repeated failures",
+      "line": 105,
+      "fault_ids": [
+        "1aa048e634f76b90"
+      ]
+    },
+    {
+      "id": "tests/Contract/InternalCallableDefaultsContractTest.php::internal optional gaps reject positional variadic tails before native invocation",
+      "path": "tests/Contract/InternalCallableDefaultsContractTest.php",
+      "name": "internal optional gaps reject positional variadic tails before native invocation",
+      "line": 91,
+      "fault_ids": [
+        "1af089b51096de95"
+      ]
+    },
+    {
+      "id": "tests/Contract/MagicCallableSyntaxContractTest.php::string and array callable syntax preserve magic arguments",
+      "path": "tests/Contract/MagicCallableSyntaxContractTest.php",
+      "name": "string and array callable syntax preserve magic arguments",
+      "line": 45,
+      "fault_ids": [
+        "5bf872b4a8dcfb14"
+      ]
+    },
+    {
+      "id": "tests/Contract/UnionAutowiringContractTest.php::PHP 8.4 contextual union aliases select one deterministic service id",
+      "path": "tests/Contract/UnionAutowiringContractTest.php",
+      "name": "PHP 8.4 contextual union aliases select one deterministic service id",
+      "line": 389,
+      "fault_ids": [
+        "fcf12128966e0713",
+        "c1ffad0f029a994b"
+      ]
+    },
+    {
+      "id": "tests/Contract/VariadicResolutionContractTest.php::attributes provide and transform a variadic collection once per invocation",
+      "path": "tests/Contract/VariadicResolutionContractTest.php",
+      "name": "attributes provide and transform a variadic collection once per invocation",
+      "line": 131,
+      "fault_ids": [
+        "de65523c18587937"
+      ]
+    },
+    {
+      "id": "tests/V5/CallableResolutionContractTest.php::public resolve reports invalid callable specifications precisely",
+      "path": "tests/V5/CallableResolutionContractTest.php",
+      "name": "public resolve reports invalid callable specifications precisely",
+      "line": 95,
+      "fault_ids": [
+        "0cd0167a2912883e"
+      ]
+    },
+    {
+      "id": "tests/V5/CurrentRequestContextTest.php::bare request and URI types do not imply the current HTTP context",
+      "path": "tests/V5/CurrentRequestContextTest.php",
+      "name": "bare request and URI types do not imply the current HTTP context",
+      "line": 92,
+      "fault_ids": [
+        "52d3fcbd3fe0d2ce"
+      ]
+    },
+    {
+      "id": "tests/V5/RequestMappingTest.php::MapRequest exposes every declared PSR-7 source through one public mapping",
+      "path": "tests/V5/RequestMappingTest.php",
+      "name": "MapRequest exposes every declared PSR-7 source through one public mapping",
+      "line": 413,
+      "fault_ids": [
+        "2929d8501519f199"
+      ]
+    },
+    {
+      "id": "tests/V5/RequestMappingTest.php::MapRequest preserves source order and later fields after accepted duplicate keys",
+      "path": "tests/V5/RequestMappingTest.php",
+      "name": "MapRequest preserves source order and later fields after accepted duplicate keys",
+      "line": 459,
+      "fault_ids": [
+        "0d1d22d0fdcba5f6",
+        "beeee44b92664646"
+      ]
+    },
+    {
+      "id": "tests/V5/ValueResolutionParityTest.php::explicit parameters including null keep precedence over Config parameter resolution",
+      "path": "tests/V5/ValueResolutionParityTest.php",
+      "name": "explicit parameters including null keep precedence over Config parameter resolution",
+      "line": 196,
+      "fault_ids": [
+        "cd0705a6501480d8"
+      ]
+    },
+    {
+      "id": "tests/V5/ValueResolutionParityTest.php::HTTP request transport is not a generic attributed typed override",
+      "path": "tests/V5/ValueResolutionParityTest.php",
+      "name": "HTTP request transport is not a generic attributed typed override",
+      "line": 210,
+      "fault_ids": [
+        "d8dbfa0f48f3f83d"
+      ]
+    },
+    {
+      "id": "tests/V5/ValueResolutionParityTest.php::attributed typed overrides must satisfy the type named by their key",
+      "path": "tests/V5/ValueResolutionParityTest.php",
+      "name": "attributed typed overrides must satisfy the type named by their key",
+      "line": 233,
+      "fault_ids": [
+        "94ae902799b1db08"
+      ]
+    },
+    {
+      "id": "tests/Contract/AliasPipelineInvalidationContractTest.php::changing one alias pipeline preserves independent shared decorations",
+      "path": "tests/Contract/AliasPipelineInvalidationContractTest.php",
+      "name": "changing one alias pipeline preserves independent shared decorations",
+      "line": 22,
+      "fault_ids": [
+        "645741cb54a634ec"
+      ]
+    },
+    {
+      "id": "tests/Contract/DependencyConfigurationContractTest.php::container factory rejects invalid dependency definitions at its public boundary",
+      "path": "tests/Contract/DependencyConfigurationContractTest.php",
+      "name": "container factory rejects invalid dependency definitions at its public boundary",
+      "line": 32,
+      "fault_ids": [
+        "acff8d220fe83337",
+        "ede184da61b1fb43"
+      ]
+    },
+    {
+      "id": "tests/Contract/DependencyConfigurationContractTest.php::shape validation canonicalizes the caller dependency array by reference",
+      "path": "tests/Contract/DependencyConfigurationContractTest.php",
+      "name": "shape validation canonicalizes the caller dependency array by reference",
+      "line": 152,
+      "fault_ids": [
+        "029be1b769417bfb",
+        "f4368db14107b8c1"
+      ]
+    },
+    {
+      "id": "tests/Contract/DependencyConfigurationContractTest.php::direct shape validation rejects malformed alias graphs and empty delegator specifications",
+      "path": "tests/Contract/DependencyConfigurationContractTest.php",
+      "name": "direct shape validation rejects malformed alias graphs and empty delegator specifications",
+      "line": 169,
+      "fault_ids": [
+        "79f85603282597fb",
+        "fd7122208c0e83b4"
+      ]
+    },
+    {
+      "id": "tests/Contract/EntryCacheIsolationContractTest.php::null and false factory results remain shared through warmed aliases",
+      "path": "tests/Contract/EntryCacheIsolationContractTest.php",
+      "name": "null and false factory results remain shared through warmed aliases",
+      "line": 117,
+      "fault_ids": [
+        "ec3a27adcd137792"
+      ]
+    },
+    {
+      "id": "tests/Contract/EntryCachePublicationContractTest.php::a suspended source cannot republish its base after a new definition is installed",
+      "path": "tests/Contract/EntryCachePublicationContractTest.php",
+      "name": "a suspended source cannot republish its base after a new definition is installed",
+      "line": 19,
+      "fault_ids": [
+        "3b72a5fed56f647f",
+        "036d2689b2bbe2ab"
+      ]
+    },
+    {
+      "id": "tests/Contract/FactoryClassAvailabilityContractTest.php::implicit entries reject ineligible class kinds even when constructor policy would permit allocation",
+      "path": "tests/Contract/FactoryClassAvailabilityContractTest.php",
+      "name": "implicit entries reject ineligible class kinds even when constructor policy would permit allocation",
+      "line": 101,
+      "fault_ids": [
+        "16e3675d1baadf49",
+        "bf8ecc7eb3275097",
+        "4673ece5edb23559",
+        "f596254bf44df6a4",
+        "9e7ce1a2b28df62a",
+        "165273e57fdff011"
+      ]
+    },
+    {
+      "id": "tests/Contract/FactoryClassAvailabilityContractTest.php::implicit entries can create concrete consumers of traits",
+      "path": "tests/Contract/FactoryClassAvailabilityContractTest.php",
+      "name": "implicit entries can create concrete consumers of traits",
+      "line": 118,
+      "fault_ids": [
+        "bespoke:reject-concrete-trait-consumers"
+      ]
+    },
+    {
+      "id": "tests/Contract/RuntimeMutationRecoveryContractTest.php::a service cycle inside a Fiber reports the complete chain and permits recovery",
+      "path": "tests/Contract/RuntimeMutationRecoveryContractTest.php",
+      "name": "a service cycle inside a Fiber reports the complete chain and permits recovery",
+      "line": 68,
+      "fault_ids": [
+        "87fa7a782e3b546c",
+        "91ce753c5495667b",
+        "c984b4652b0940d5"
+      ]
+    },
+    {
+      "id": "tests/Contract/StandaloneContainerContractTest.php::standalone lazy and proxy creation uses the supplied proxy factory",
+      "path": "tests/Contract/StandaloneContainerContractTest.php",
+      "name": "standalone lazy and proxy creation uses the supplied proxy factory",
+      "line": 127,
+      "fault_ids": [
+        "62799d36f56971f5"
+      ]
+    }
+  ],
+  "canonical_platform_pairs": [
+    {
+      "proof": "/workspace/scratch/fa8384e69042/reaudit-round3/availability-windows-proof/proof.json",
+      "red_job": 132814580199,
+      "green": {
+        "head": "19584c03f77036045184d5eef4b992a9e86aaad6",
+        "run_id": 43715494696,
+        "job_id": 132816082355,
+        "conclusion": "success",
+        "log_file": "/workspace/scratch/fa8384e69042/reaudit-round3/final-ci/132816082355.log",
+        "raw_log_sha256": "4ee85b61ecc66595f886a21fc58c05f55bba8210d42efa87c07d68a5aa9ba82d"
+      },
+      "meaningful_failure": "Two unchanged public CLI cases fail before observations at selected-source precheck on actual Windows. Linux controls pass.",
+      "red_log": "/workspace/scratch/fa8384e69042/reaudit-round3/ci-intermediate-failures/132814580199.log",
+      "red_log_verified_sha256": "76983939314e39051fd75c38fb8bdef1d8734ec09628cf635066bb274bc4007a",
+      "green_log": "/workspace/scratch/fa8384e69042/reaudit-round3/final-ci/132816082355.log",
+      "green_log_verified_sha256": "4ee85b61ecc66595f886a21fc58c05f55bba8210d42efa87c07d68a5aa9ba82d",
+      "test_unchanged": true,
+      "qualification": "Actual platform CI RED/GREEN attested in canonical proof, not a local mutant run."
+    },
+    {
+      "proof": "/workspace/scratch/fa8384e69042/reaudit-round3/windows-path-proof/proof.json",
+      "red_job": 132810525605,
+      "green": {
+        "head": "e4ba52e790f038aceec3f2bac9df68215c1abed9",
+        "run_id": 43714710416,
+        "job_id": 132813668651,
+        "conclusion": "success",
+        "raw_log_sha256": "8d6feb4f8c520bce05984e4e6124df629e014bb8c220062732de16fa154f19c5"
+      },
+      "meaningful_failure": "Unchanged full-report test fails at strict source-remapping guard on actual Windows, before clock samples are recorded; 3 cases fail.",
+      "red_log": "/workspace/scratch/fa8384e69042/reaudit-round3/ci-intermediate-failures/132810525605.log",
+      "red_log_verified_sha256": "8ab8bbe75dab0ae5b42f796f07a48fec7b98b37fc73ca463fc637ff74b10c30d",
+      "green_log": "/workspace/scratch/fa8384e69042/reaudit-round3/windows-path-proof/windows-green-132813668651.log",
+      "green_log_verified_sha256": "8d6feb4f8c520bce05984e4e6124df629e014bb8c220062732de16fa154f19c5",
+      "test_unchanged": true,
+      "qualification": "Actual platform CI RED/GREEN attested in canonical proof, not a local mutant run."
+    }
+  ],
+  "code_commits": [
+    {
+      "sha": "660fe404a2335f73e975fd6000719398680a6d4d",
+      "subject": "test(di): cover attribute selection and registry revision boundaries",
+      "paths": [
+        "tests/Contract/AttributeCapabilityPolicyContractTest.php",
+        "tests/Contract/AttributePlanSingleSelectionContractTest.php",
+        "tests/V5/CompositionArchitectureTest.php"
+      ]
+    },
+    {
+      "sha": "b687d521ad57e0b0e2f7ad853838dec50f466b68",
+      "subject": "fix(benchmarks): report the median for even sample counts",
+      "paths": [
+        "docs/audit/reproductions/WorkloadNecessity.php",
+        "tests/Contract/BenchmarkStatisticsContractTest.php"
+      ]
+    },
+    {
+      "sha": "fe746c013e1741c371a446a5bcf6bf7a5abbf6e6",
+      "subject": "test(di): validate configuration entries after valid instances",
+      "paths": [
+        "tests/Contract/DependencyConfigurationContractTest.php"
+      ]
+    },
+    {
+      "sha": "850f33b9384d28677304f925d4acad9f6de5f721",
+      "subject": "test(di): preserve magic dispatch for invoke method names",
+      "paths": [
+        "tests/Contract/MagicCallableSyntaxContractTest.php"
+      ]
+    },
+    {
+      "sha": "0d758da5fc5f7dfcfb1bd82ad7c3267f59855245",
+      "subject": "test(di): cover null request bodies and duplicate source tails",
+      "paths": [
+        "tests/V5/RequestMappingTest.php"
+      ]
+    },
+    {
+      "sha": "01eb3a7e47d591b55d040ea2922e905208be81f6",
+      "subject": "test(di): preserve nested Fiber stacks and cache publication revisions",
+      "paths": [
+        "tests/Contract/EntryCachePublicationContractTest.php",
+        "tests/Contract/RuntimeMutationRecoveryContractTest.php"
+      ]
+    },
+    {
+      "sha": "f48d7fc5c9787a399df7671ce77e8d336c00575d",
+      "subject": "test(di): distinguish attribute parameter plans across method owners",
+      "paths": [
+        "tests/Contract/AttributeParameterPlanIdentityContractTest.php"
+      ]
+    },
+    {
+      "sha": "5bc9756a3848dd8be62859635fce6157fe7dc7b9",
+      "subject": "test(di): cover attribute target and source composition boundaries",
+      "paths": [
+        "tests/V5/AttributeCompositionTest.php",
+        "tests/V5/AttributeTargetContractTest.php",
+        "tests/V5/InvocationOnlyValueProviderTest.php",
+        "tests/V5/ProxyCompositionRegressionTest.php"
+      ]
+    },
+    {
+      "sha": "ed2e37ebf3ec6c0d38ce12314d4f48ce3b8e907b",
+      "subject": "test(di): preserve cache identity for numeric string service ids",
+      "paths": [
+        "tests/Contract/AliasPipelineInvalidationContractTest.php",
+        "tests/Contract/EntryCacheIsolationContractTest.php"
+      ]
+    },
+    {
+      "sha": "b88c079a1a62312a5f4f7bb2f335385627998a81",
+      "subject": "test(di): cover variadic collection keys and callback diagnostics",
+      "paths": [
+        "tests/Contract/AttributeCallbackInvocationContractTest.php",
+        "tests/Contract/VariadicResolutionContractTest.php"
+      ]
+    },
+    {
+      "sha": "8b0177445d5ba8b48111aaea64e817f0a0364d5a",
+      "subject": "test(di): reject ineligible implicit entry class kinds",
+      "paths": [
+        "tests/Contract/FactoryClassAvailabilityContractTest.php"
+      ]
+    },
+    {
+      "sha": "1b9042ec69414e5e9a4604a0a6fa8df32fa054a4",
+      "subject": "test(di): cover callable diagnostics and contextual union aliases",
+      "paths": [
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "tests/Contract/UnionAutowiringContractTest.php",
+        "tests/V5/CallableResolutionContractTest.php"
+      ]
+    },
+    {
+      "sha": "7d771478d170ac594a8c9872c119f00bb7f32059",
+      "subject": "test(di): preserve inherited property identity across name boundaries",
+      "paths": [
+        "tests/Contract/InheritedPropertyIdentityContractTest.php"
+      ]
+    },
+    {
+      "sha": "3b79dd2579a4c395d8beb3fcbd15d5e22b5f90db",
+      "subject": "test(di): preserve explicit request union arms and null overrides",
+      "paths": [
+        "tests/V5/CurrentRequestContextTest.php",
+        "tests/V5/ValueResolutionParityTest.php"
+      ]
+    },
+    {
+      "sha": "4757867c9c820ca1497a77ae721b7826372ab4ad",
+      "subject": "test(di): retain inline decorator and variadic-only variants",
+      "paths": [
+        "tests/Contract/AliasPipelineInvalidationContractTest.php",
+        "tests/Contract/VariadicResolutionContractTest.php"
+      ]
+    },
+    {
+      "sha": "3ca6ca3ac987ebc71ddedcfdc7fa6f6696941f85",
+      "subject": "fix(di): accept concrete reflection types in object pipeline",
+      "paths": [
+        "src/Object/ObjectPipeline.php",
+        "tests/Contract/FactoryClassAvailabilityContractTest.php"
+      ]
+    },
+    {
+      "sha": "d69b614ffb1109cc62c1f3d21a66c5e82ef15c4e",
+      "subject": "test(di): honor supplied standalone proxy factories",
+      "paths": [
+        "tests/Contract/StandaloneContainerContractTest.php"
+      ]
+    },
+    {
+      "sha": "b90b58fdecc211284ad06703c167d16e39b195b7",
+      "subject": "test(di): reject variadic tails after native argument omission",
+      "paths": [
+        "tests/Contract/InternalCallableDefaultsContractTest.php"
+      ]
+    },
+    {
+      "sha": "cc8ee82b65d3b066e3d02af148d832f848d2bfdc",
+      "subject": "fix(di): correct in-place configuration validation type contract",
+      "paths": [
+        "src/Configuration/DependencyConfiguration.php",
+        "tests/Contract/DependencyConfigurationContractTest.php"
+      ]
+    },
+    {
+      "sha": "95bfa68907dde860ee307ebf74de491f10c0c419",
+      "subject": "test(di): preserve declared request source precedence",
+      "paths": [
+        "tests/V5/RequestMappingTest.php"
+      ]
+    },
+    {
+      "sha": "141feff3d4747a70a2d4ac4c3841de53eb55fa73",
+      "subject": "test(di): cover phase graph branches and bootstrap definition identity",
+      "paths": [
+        "tests/Contract/AttributeExecutionOrderContractTest.php",
+        "tests/Contract/BootstrapLateAttributesContractTest.php"
+      ]
+    },
+    {
+      "sha": "e4ba52e790f038aceec3f2bac9df68215c1abed9",
+      "subject": "fix(audit): normalize selected source paths on Windows",
+      "paths": [
+        "docs/audit/reproductions/WorkloadNecessity.php",
+        "docs/audit/reproductions/autoload-selected-source.php"
+      ]
+    },
+    {
+      "sha": "fddf029c272b836b82ff0548a8e12343ca2f6d01",
+      "subject": "test(audit): cover portable availability observation CLI",
+      "paths": [
+        "tests/Contract/AuditSourceSelectionContractTest.php"
+      ]
+    },
+    {
+      "sha": "19584c03f77036045184d5eef4b992a9e86aaad6",
+      "subject": "fix(audit): preserve source origin checks across platforms",
+      "paths": [
+        "docs/audit/reproductions/AttributeAvailabilityObservations.php"
+      ]
+    }
+  ],
+  "report_peer_review": {
+    "schema_version": 1,
+    "reviewer": "/root/parameters_audit",
+    "reviewed_utc": "2026-11-15T13:07:14.731880+00:00",
+    "status": "clean_with_limits",
+    "scope": "Independent read-only peer QA of both complete round3 report templates against frozen aggregate manifests and already completed domain evidence; no new source investigation, tests, mutation runs or repository edits.",
+    "reviewed_inputs": [
+      {
+        "path": "/workspace/scratch/fa8384e69042/reaudit-round3/report-round3.ru.template.md",
+        "sha256": "cd30fd35f52c73455a1eeb072febea34e7cbb912368cd8eb28dcabf8273ebb6a",
+        "bytes": 38894,
+        "lines": 202,
+        "read_extent": "full prose"
+      },
+      {
+        "path": "/workspace/scratch/fa8384e69042/reaudit-round3/report-round3.en.template.md",
+        "sha256": "43f264a5e33c455cbdb2363c966a376fee89482e58b61133430727d3e45e9edd",
+        "bytes": 14828,
+        "lines": 115,
+        "read_extent": "full prose"
+      },
+      {
+        "path": "/workspace/scratch/fa8384e69042/reaudit-round3/aggregate-review.json",
+        "sha256": "0776f3022bab9db15bb440e61c2f7b6f0c85709b9b6019182cb7bb0740d11c28",
+        "bytes": 4227951,
+        "lines": 73120,
+        "read_extent": "schema, summaries, primary records relevant to claims, canonical evidence, exclusions and referenced-artifact hashes"
+      },
+      {
+        "path": "/workspace/scratch/fa8384e69042/reaudit-round3/aggregate-evidence-files.json",
+        "sha256": "60f349e50bf848a1ec4e382140036d3b8870d1d139b0a3bf3072a5961342b715",
+        "bytes": 1378137,
+        "lines": 27879,
+        "read_extent": "schema, summaries, primary records relevant to claims, canonical evidence, exclusions and referenced-artifact hashes"
+      },
+      {
+        "path": "/workspace/scratch/fa8384e69042/reaudit-round3/parameters/domain-conclusions.md",
+        "sha256": "255d4b12c583101b6193a31bfd695b7dc6ea68272a41f2ba5ebf39377982a8b6",
+        "bytes": 12671,
+        "lines": 79,
+        "read_extent": "full prose"
+      },
+      {
+        "path": "/workspace/scratch/fa8384e69042/reaudit-round3/parameters/precise-byref-typing-plan.md",
+        "sha256": "1b9571190f6528f88bf1918e975801b693867f869a900be95a35afa384e1c791",
+        "bytes": 5418,
+        "lines": 44,
+        "read_extent": "full prose"
+      }
+    ],
+    "findings": [],
+    "verified_claims": [
+      {
+        "topic": "Inventory and counting units",
+        "report_anchors": [
+          "RU:23-35",
+          "EN:11-15"
+        ],
+        "evidence": "aggregate-review.json summary/files/declarations; current-test-declarations.json; baseline84.xml and baseline85.xml",
+        "result": {
+          "unique_files": 444,
+          "production_php": 169,
+          "test_support_php": 233,
+          "native_fixtures": 10,
+          "benchmarks": 6,
+          "reproductions": 18,
+          "configuration": 8,
+          "baseline_declarations": 747,
+          "current_declarations": 762,
+          "baseline_runtime_cases_each": 1467,
+          "current_runtime_cases_each": 1528,
+          "added_declarations": 15
+        },
+        "judgment": "Counts and denominators agree. Dataset cases are distinguished from declarations; assertion totals across repeated runs are not added."
+      },
+      {
+        "topic": "Every-test review versus actually executed TDD",
+        "report_anchors": [
+          "RU:13,35-48,202",
+          "EN:15-19,115"
+        ],
+        "evidence": "aggregate-review.json executed_pest_tdd and summary",
+        "result": {
+          "reviewed_declarations": 762,
+          "executed_pest_tdd_declarations": 37,
+          "reviewed_without_individual_executed_pest_tdd": 725,
+          "unique_executed_faults": 61,
+          "catalogued_mutants": 57,
+          "bespoke_mutants": 1,
+          "actual_tool_defects": 3,
+          "separate_static_proof_groups": 2
+        },
+        "judgment": "The templates explicitly reject an individual executed RED claim for every existing test. Real tool bugs, semantic mutation witnesses and static PHPStan failures remain separate."
+      },
+      {
+        "topic": "Canonical executions and exact preimages",
+        "report_anchors": [
+          "RU:44-48",
+          "EN:17-19"
+        ],
+        "evidence": "aggregate-evidence-files.json summary/canonical_pest_run_outputs/exact_test_preimages/whole_baseline_suite_controls",
+        "result": {
+          "unique_local_log_paths": 408,
+          "php84_outputs": 208,
+          "php85_outputs": 200,
+          "platform_ci_pairs": 2,
+          "exact_test_path_sha_versions": 65,
+          "whole_baseline_suite_controls": 6,
+          "whole_baseline_test_support_fixture_preimages": 240
+        },
+        "judgment": "The numeric census matches the saved canonical records, including shared-control deduplication. Full-suite versus whole-file controls are qualified correctly."
+      },
+      {
+        "topic": "PHPDoc fixes and architecture tradeoff",
+        "report_anchors": [
+          "RU:72-86,170-182",
+          "EN:39-47,97-101"
+        ],
+        "evidence": "parameters/domain-conclusions.md; parameters/precise-byref-typing-plan.md; aggregate-review.json static_analysis_evidence_not_pest_tdd",
+        "judgment": "ObjectPipeline generic ReflectionClass input is a static contract fix. assertShape removes the false @phpstan-assert, does not replace it with an accepted @param-out, retains runtime canonicalization and points to typed normalize(). The rejected param-out experiment, partial mutation on failure and future copying/reference ownership decision are represented faithfully. The English companion is shorter but does not contradict the detailed Russian plan."
+      },
+      {
+        "topic": "Own semantic witnesses and exclusions",
+        "report_anchors": [
+          "RU:90-112",
+          "EN:51-57"
+        ],
+        "evidence": "parameters domain notes; aggregate-review.json survivors and excluded_or_superseded",
+        "judgment": "The mixed-list addition is described as observed continuation/diagnostics, not an exploit or a current runtime defect. Cache/eligibility/proxy/shape additions test already-correct production behavior. The three alias-shape message-only mutant IDs have no accepted executed witness and remain excluded. Trait unused-fixture CI failure is attributed to the audit test, not original production. Original inline-decorator and pure-variadic variants are explicitly preserved in final proofs."
+      },
+      {
+        "topic": "Survivor conclusions are not bug counts",
+        "report_anchors": [
+          "RU:184-190",
+          "EN:103-107"
+        ],
+        "evidence": "aggregate-review.json survivors",
+        "result": {
+          "classified_ids": 552,
+          "meaningful_without_executed_witness_by_reviewer": {
+            "/root/core_audit": 67,
+            "/root/parameters_audit": 48
+          }
+        },
+        "judgment": "The stated 67 reasoned/unexecuted core candidates match the core reviewer records. They are distinct from this domain's 67 meaningful IDs, of which 19 have an accepted own-domain catalogue witness. Neither is presented as 67 confirmed production bugs."
+      },
+      {
+        "topic": "Skips, timeouts and failed controls",
+        "report_anchors": [
+          "RU:44,112,132-134,190",
+          "EN:17,57,77,107"
+        ],
+        "evidence": "aggregate-review.json current JUnit join, limits, excluded_or_superseded; domain harness review",
+        "result": {
+          "php84_passed": 1510,
+          "php84_skipped": 18,
+          "php84_assertions": 24189,
+          "php85_passed": 1527,
+          "php85_skipped": 1,
+          "php85_assertions": 24296
+        },
+        "judgment": "Local skips are recorded separately. Native PHP85 fixtures explain PHP84 skips; the PHP85 contextual self union case is separately skipped. Timeout/setup/fixture failures are explicitly not semantic REDs. Engine outcomes are not treated as proof of an intended assertion."
+      },
+      {
+        "topic": "Snapshot identity and retained evidence",
+        "report_anchors": [
+          "RU:5,44,48,186,200",
+          "EN:5,17-19,105,115"
+        ],
+        "evidence": "aggregate-review.json method/input_artifacts and aggregate-evidence-files.json files/limits",
+        "result": {
+          "audit_baseline": "2eb36241787a971e1a8185149aaa08b90304d426",
+          "final_code_head": "19584c03f77036045184d5eef4b992a9e86aaad6",
+          "aggregate_input_hashes_checked": 53,
+          "archive_entry_hashes_checked": 1260,
+          "missing_or_hash_mismatches": 0
+        },
+        "judgment": "All 53 referenced aggregate input hashes and all 1260 archive entries match actual saved files. Historical proof snapshots are not relabelled as final-head executions. The text does not mislabel the checkpoint-fddf029 AST as a 141feff AST. Mutable vendor/runtime/checkouts are not implied to be immutable archived source evidence."
+      },
+      {
+        "topic": "Security and performance claim boundaries",
+        "report_anchors": [
+          "RU:138-152,202",
+          "EN:79-85,115"
+        ],
+        "evidence": "parameters/domain-conclusions.md sections6-8; aggregate-review.json limits",
+        "judgment": "No universal vulnerability absence, hostile-PHP sandbox, automatic Codex Security scan or performance-equivalence claim is made. Trusted application callbacks and exception-chain/side-effect limits are explicit. Smoke verification and benchmark statistic correction are not described as an application throughput gain."
+      },
+      {
+        "topic": "Architecture recommendations",
+        "report_anchors": [
+          "RU:154-196",
+          "EN:87-111"
+        ],
+        "evidence": "aggregate survivor reachability verdicts; parameters precise-byref-typing-plan.md",
+        "judgment": "Support decisions for low-level APIs remain decisions rather than unsupported declarations of dead code. Benefits, consumer compatibility, partial-state/reference semantics and measurement requirements are bounded. Native E1 remains feature-local and is not used to raise the component PHP requirement."
+      }
+    ],
+    "publication_conditions": [
+      {
+        "kind": "expected_pending_placeholder",
+        "details": "Final CI/coverage/mutation placeholders are intentionally unresolved in the reviewed templates. The future-tense completion claims in RU13 and the final validation sections are acceptable only when root fills them from the actual final code-head run and verifies its result; this QA does not turn pending CI into GREEN."
+      },
+      {
+        "kind": "metric_rendering",
+        "details": "Populate TDD_DECLARATIONS with37 from this frozen aggregate. Preserve separate engine timeout/completed-kill caveats when filling MUTATION_CAVEAT, and keep skips separate from passed counts."
+      }
+    ],
+    "limits": [
+      "This is report consistency QA, not a fresh source/security audit and not a rerun of any source, test, static analyzer, native fixture, benchmark or CI job.",
+      "All report prose was read in full; large JSONs were reviewed structurally and through specific relevant records, not attested as a new line-by-line domain audit.",
+      "The truth of every other reviewer's semantic interpretation is not independently re-proved by matching hashes or counts. Root-owned global runtime-token equivalence, dependency audit, parity/benchmark gates and native E1 observations remain attributed to their saved evidence.",
+      "External PHPStan documentation links were not re-researched during this read-only QA.",
+      "The English text is explicitly an abbreviated companion; it need not repeat every Russian plan detail, including the nested-reference-slot acceptance note, provided the detailed report remains linked.",
+      "Only this scratch QA JSON was written. Repository code, tests, report templates, manifests and proofs were not modified."
+    ]
+  },
+  "limitations": [
+    "Only 37 declarations have newly executed individual meaningful RED/GREEN; 725 have individual manual review and whole-suite validation.",
+    "The 552 baseline survivor decisions are distinct from the final engine outcome; 115 meaningful candidates remain reasoned/unexecuted.",
+    "Timeouts count in engine MSI but do not establish a semantic oracle.",
+    "Native E1 on available PHP 8.5.8 is 2/10 with unverified release/source provenance; feature-local only.",
+    "The required Codex Security server tool was unavailable; no automated Codex Security scan is claimed.",
+    "Absolute workspace paths are historical provenance, not portable commands without root substitution.",
+    "Archive preserves excluded attempts. Inclusion alone does not make a result canonical."
+  ]
+}
