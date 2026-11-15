@@ -98,15 +98,23 @@ test('Proxy supplies its value before Cast transforms it', function (): void {
     expect($target->value->label)->toBe('source:cast');
 });
 
-test('Proxy cannot compete with another value source on one injection point', function (): void {
+final class ProxyConflictingPropertyTarget
+{
+    #[Proxy, ConfigAttribute('value')]
+    public ProxyCompositionValue $value;
+}
+
+test('Proxy cannot compete with another value source on one injection point', function (bool $property): void {
     $container = ContainerBuilder::configure(new Config(
         ['value' => new ProxyCompositionValue()],
         new Environment([]),
     ))->build();
 
-    expect(fn() => $container->make(ProxyConflictingSourceTarget::class))
-        ->toThrow(AttributeCompositionException::class, 'multiple parameter source handlers');
-});
+    expect(fn() => $container->make($property ? ProxyConflictingPropertyTarget::class : ProxyConflictingSourceTarget::class))
+        ->toThrow(AttributeCompositionException::class, $property
+            ? 'cannot be combined with value provider'
+            : 'multiple parameter source handlers');
+})->with(['parameter' => false, 'property' => true]);
 
 test('Proxy values can be transformed before initializing a readonly property', function (): void {
     $constructorCalls = 0;

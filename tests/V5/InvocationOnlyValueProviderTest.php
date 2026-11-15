@@ -12,7 +12,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionFunction;
 
-#[Attribute(Attribute::TARGET_PARAMETER)]
+#[Attribute(Attribute::TARGET_ALL)]
 final readonly class InvocationOnlyFixture {}
 
 final readonly class InvocationOnlyConstructorFixture
@@ -46,9 +46,32 @@ test('custom invocation-only capabilities are valid on callable parameters', fun
         ->and($plans->build($parameter)->has(InvocationOnlyValueProvider::class))->toBeTrue();
 });
 
-test('custom invocation-only capabilities are rejected on constructor parameters', function (): void {
+#[InvocationOnlyFixture]
+final readonly class InvocationOnlyClassFixture {}
+
+final class InvocationOnlyPropertyFixture
+{
+    #[InvocationOnlyFixture]
+    public string $value = 'default';
+}
+
+final class InvocationOnlyMethodFixture
+{
+    #[InvocationOnlyFixture]
+    public function marker(): void {}
+}
+
+test('custom invocation-only capabilities are rejected outside callable parameters', function (string $class, string $message): void {
+    if (!class_exists($class)) {
+        throw new \LogicException('Expected an invocation-only target fixture.');
+    }
     $container = invocationOnlyBuilder()->build();
 
-    expect(fn() => $container->make(InvocationOnlyConstructorFixture::class))
-        ->toThrow(AttributeCompositionException::class, 'is invocation-only and cannot target constructor parameter');
-});
+    expect(fn() => $container->make($class))
+        ->toThrow(AttributeCompositionException::class, $message);
+})->with([
+    'constructor parameter' => [InvocationOnlyConstructorFixture::class, 'is invocation-only and cannot target constructor parameter'],
+    'class' => [InvocationOnlyClassFixture::class, 'is invocation-only and can target callable parameters only'],
+    'property' => [InvocationOnlyPropertyFixture::class, 'is invocation-only and can target callable parameters only'],
+    'method' => [InvocationOnlyMethodFixture::class, 'is invocation-only and can target callable parameters only'],
+]);

@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Header;
@@ -124,3 +125,31 @@ test('third party capabilities can define their own cardinality without runtime 
     expect(fn() => $container->make(CustomCapabilityConflict::class))
         ->toThrow(AttributeCompositionException::class);
 });
+
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class SourceScanMetadata {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class SourceScanTransformer {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class SourceScanFirst {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class SourceScanSecond {}
+
+test('parameter source conflicts remain visible after metadata and transformer usages', function (bool $transformer): void {
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(SourceScanMetadata::class))
+        ->addAttributeDefinition(new AttributeDefinition(SourceScanTransformer::class, new CustomValueHandler(), [ValueTransformer::class]))
+        ->addAttributeDefinition(new AttributeDefinition(SourceScanFirst::class, new CustomValueHandler()))
+        ->addAttributeDefinition(new AttributeDefinition(SourceScanSecond::class, new CustomValueHandler()))
+        ->build();
+    $callable = $transformer
+        ? static fn(#[SourceScanTransformer, SourceScanFirst, SourceScanSecond] string $value): string => $value
+        : static fn(#[SourceScanMetadata, SourceScanFirst, SourceScanSecond] string $value): string => $value;
+
+    expect(fn() => $container->call($callable))
+        ->toThrow(AttributeCompositionException::class, 'multiple parameter source handlers');
+})->with(['metadata first' => false, 'transformer first' => true]);

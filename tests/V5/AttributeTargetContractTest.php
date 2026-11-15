@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\V5;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -44,3 +46,46 @@ test('promotion rejects attributes that allow neither parameters nor properties'
     expect(fn() => (new ContainerBuilder())->build()->make($class))
         ->toThrow(AttributeCompositionException::class, 'cannot target parameter');
 });
+
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final readonly class PromotedPropertyMetadata {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class PromotedParameterMetadata {}
+
+final class PromotedFollowingParameterAttribute
+{
+    public function __construct(
+        #[PromotedPropertyMetadata, ConfigAttribute('value')]
+        public string $value = 'constructor',
+    ) {}
+}
+
+final class PromotedFollowingPropertyAttribute
+{
+    public function __construct(
+        #[PromotedParameterMetadata, Init([self::class, 'initialize'])]
+        public string $value = 'constructor',
+    ) {}
+
+    public static function initialize(): string
+    {
+        return 'property';
+    }
+}
+
+test('promotion keeps valid attributes following a copy for the other target', function (bool $property): void {
+    $container = ContainerBuilder::configure(new \Componenta\Config\Config(
+        ['value' => 'parameter'],
+        new \Componenta\Config\Environment([]),
+    ))
+        ->addAttributeDefinition(new AttributeDefinition(PromotedPropertyMetadata::class))
+        ->addAttributeDefinition(new AttributeDefinition(PromotedParameterMetadata::class))
+        ->build();
+    $entry = $property
+        ? $container->make(PromotedFollowingPropertyAttribute::class)
+        : $container->make(PromotedFollowingParameterAttribute::class);
+
+    expect($entry->value)->toBe($property ? 'property' : 'parameter');
+})->with(['parameter target' => false, 'property target' => true]);
