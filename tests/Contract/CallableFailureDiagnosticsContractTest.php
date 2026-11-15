@@ -25,6 +25,11 @@ final class CallableWithoutService
 
 final class OtherCallableWithoutService
 {
+    public function hiddenCallable(): string
+    {
+        return 'instance';
+    }
+
     public function hidden(): string
     {
         return 'instance';
@@ -100,12 +105,22 @@ test('unresolvable methods distinguish a missing service from a missing or inacc
 test('method classification remains specific to both declaring class and method across repeated failures', function (): void {
     $resolver = new CallableResolver(new EmptyCallableContainer());
 
+    $suffix = bin2hex(random_bytes(5));
+    $staticOwner = 'CallableDiagnosticOwner_' . $suffix;
+    $instanceOwner = 'DiagnosticOwner_' . $suffix;
+    class_alias(CallableWithoutService::class, $staticOwner);
+    class_alias(OtherCallableWithoutService::class, $instanceOwner);
+
     foreach ([1, 2] as $_attempt) {
         expect(fn() => $resolver->resolve([CallableWithoutService::class, 'hidden']))
             ->toThrow(InvalidCallableException::class, 'Method "' . CallableWithoutService::class . '::hidden()" does not exist.')
             ->and(fn() => $resolver->resolve([CallableWithoutService::class, 'instance']))
             ->toThrow(InvalidCallableException::class, 'Service "' . CallableWithoutService::class . '" is not defined in the container.')
             ->and(fn() => $resolver->resolve([OtherCallableWithoutService::class, 'hidden']))
-            ->toThrow(InvalidCallableException::class, 'Service "' . OtherCallableWithoutService::class . '" is not defined in the container.');
+            ->toThrow(InvalidCallableException::class, 'Service "' . OtherCallableWithoutService::class . '" is not defined in the container.')
+            ->and(fn() => $resolver->resolve([$staticOwner, 'hidden']))
+            ->toThrow(InvalidCallableException::class, 'Method "' . $staticOwner . '::hidden()" does not exist.')
+            ->and(fn() => $resolver->resolve([$instanceOwner, 'hiddenCallable']))
+            ->toThrow(InvalidCallableException::class, 'Service "' . $instanceOwner . '" is not defined in the container.');
     }
 });

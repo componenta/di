@@ -104,6 +104,7 @@ test('public resolve reports invalid callable specifications precisely', functio
         ->toThrow(InvalidCallableException::class, $message);
 })->with([
     'non-callable service' => ['not.callable', 'is not invokable'],
+    'missing method on service object' => [['not.callable', 'missing'], 'does not exist'],
     'non-invokable class service' => [CallableResolutionService::class, 'is not invokable'],
     'missing class method' => [CallableResolutionService::class . '::missing', 'does not exist'],
     'private static method' => [CallableResolutionService::class . '::hiddenStatic', 'does not exist'],

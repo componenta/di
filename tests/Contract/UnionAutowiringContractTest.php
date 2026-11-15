@@ -384,3 +384,26 @@ test('variadic intersection and DNF types keep their existing explicit-value con
         ->and($container->call($dnf))->toBeNull()
         ->and($container->call($dnf, [Other::class => $other]))->toBe($other);
 });
+
+
+test('PHP 8.4 contextual union aliases select one deterministic service id', function (): void {
+    $shortName = 'ContextualCaseUnion_' . bin2hex(random_bytes(5));
+    $lowerName = strtolower(__NAMESPACE__ . '\\' . $shortName);
+    $fixture = eval(sprintf(
+        'namespace %s; final class %s { public function select(self|\\%s $value): object { return $value; } } return new %s();',
+        __NAMESPACE__,
+        $shortName,
+        $lowerName,
+        $shortName,
+    ));
+    if (!is_object($fixture)) {
+        throw new LogicException('Expected a contextual union fixture.');
+    }
+    $other = clone $fixture;
+    $container = builder()
+        ->addService($fixture::class, $fixture)
+        ->addService($lowerName, $other)
+        ->build();
+
+    expect($container->call([$fixture, 'select']))->toBe($fixture);
+})->skip(PHP_VERSION_ID >= 80500, 'PHP 8.5 rejects redundant contextual union declarations natively.');
