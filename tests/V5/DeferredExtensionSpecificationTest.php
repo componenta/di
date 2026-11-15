@@ -169,7 +169,7 @@ test('container factory materializes closure function and service-id extension f
     $config = new Config([], new Environment([]));
     $dependencies = new DependencyDefinitions([
         ConfigKey::SERVICES => [
-            'deferred.resolver.service' => new DeferredValueResolver(),
+            'deferred.resolver.service' => new DeferredConventionResolver(),
         ],
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             static fn(ContainerInterface $container): AttributeDefinition => new AttributeDefinition(
@@ -188,7 +188,10 @@ test('container factory materializes closure function and service-id extension f
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    expect($container->make(DeferredClosureDto::class)->value)->toBe('from-service-method');
+    $dto = $container->make(DeferredExtensionDto::class);
+
+    expect($dto->value)->toBe('from-service-method')
+        ->and($dto->fallback)->toBe('from-deferred-resolver');
 });
 
 test(
