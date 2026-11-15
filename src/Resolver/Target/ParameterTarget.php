@@ -111,40 +111,39 @@ final class ParameterTarget
      */
     public function firstAttribute(string $attributeClass): ?object
     {
-        $reflector = $this->attributeReflectors($attributeClass)[0] ?? null;
+        $reflector = null;
+        $needsRefresh = false;
+        foreach ($this->attributeReflectors as $attribute) {
+            $class = $attribute->getName();
+            if (!self::isAvailable($class)) {
+                $needsRefresh = true;
+            }
+            if (is_a($class, $attributeClass, true)) {
+                $reflector ??= $attribute;
+            }
+        }
+
+        if ($needsRefresh) {
+            // Complete discovery before selecting again in declaration order.
+            // Loaded-only checks cannot execute another autoloader.
+            $reflector = null;
+            foreach ($this->attributeReflectors as $attribute) {
+                $class = $attribute->getName();
+                if (self::isAvailable($class) && is_a($class, $attributeClass, true)) {
+                    $reflector = $attribute;
+                    break;
+                }
+            }
+        }
 
         if ($reflector === null) {
             return null;
         }
 
-        /** @var T $attribute */
-        $attribute = $reflector->newInstance();
+        /** @var T $instance */
+        $instance = $reflector->newInstance();
 
-        return $attribute;
-    }
-
-    /** @return list<ReflectionAttribute<object>> */
-    private function attributeReflectors(string $attributeClass, bool $autoload = true): array
-    {
-        $attributes = [];
-        $needsRefresh = false;
-
-        foreach ($this->attributeReflectors as $attribute) {
-            $class = $attribute->getName();
-            if (!self::isAvailable($class)) {
-                if (!$autoload) {
-                    continue;
-                }
-                $needsRefresh = true;
-            }
-            if (is_a($class, $attributeClass, true)) {
-                $attributes[] = $attribute;
-            }
-        }
-
-        // Select in declaration order after every discovery callback has
-        // finished. The loaded-only pass cannot trigger further discovery.
-        return $needsRefresh ? $this->attributeReflectors($attributeClass, false) : $attributes;
+        return $instance;
     }
 
     private static function isAvailable(string $attributeClass): bool
