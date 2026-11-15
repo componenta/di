@@ -83,6 +83,11 @@ interface IneligibleInterface {}
 #[\Componenta\DI\Attribute\NoConstructor]
 trait IneligibleTrait {}
 
+final class EligibleTraitConsumer
+{
+    use IneligibleTrait;
+}
+
 #[\Componenta\DI\Attribute\NoConstructor]
 abstract class IneligibleAbstract {}
 
@@ -109,3 +114,18 @@ test('implicit entries reject ineligible class kinds even when constructor polic
     'abstract class with constructor policy' => [IneligibleAbstract::class],
     'enum with constructor policy' => [IneligibleEnum::class],
 ]);
+
+test('implicit entries can create concrete consumers of traits', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $pipeline = $container->get(\Componenta\DI\Object\ObjectPipeline::class);
+
+    expect($pipeline->canCreate(new \ReflectionClass(EligibleTraitConsumer::class)))->toBeTrue()
+        ->and($container->has(EligibleTraitConsumer::class))->toBeTrue();
+
+    $shared = $container->get(EligibleTraitConsumer::class);
+    $fresh = $container->make(EligibleTraitConsumer::class);
+
+    expect($shared)->toBeInstanceOf(EligibleTraitConsumer::class)
+        ->and($fresh)->toBeInstanceOf(EligibleTraitConsumer::class)
+        ->and($fresh)->not->toBe($shared);
+});

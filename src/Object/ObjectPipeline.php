@@ -53,13 +53,19 @@ final class ObjectPipeline
         return $this->instances->parameters();
     }
 
-    /** @param class-string|ReflectionClass<object> $class */
+    /**
+     * @template T of object
+     * @param class-string<T>|ReflectionClass<T> $class
+     */
     public function prepare(string|ReflectionClass $class): void
     {
         $this->metadata($class);
     }
 
-    /** @param class-string|ReflectionClass<object> $class */
+    /**
+     * @template T of object
+     * @param class-string<T>|ReflectionClass<T> $class
+     */
     public function canCreate(string|ReflectionClass $class): bool
     {
         $metadata = $this->metadata($class);
@@ -86,7 +92,8 @@ final class ObjectPipeline
     }
 
     /**
-     * @param class-string|ReflectionClass<object> $class
+     * @template T of object
+     * @param class-string<T>|ReflectionClass<T> $class
      * @return list<ParameterTarget>
      */
     public function constructorTargets(string|ReflectionClass $class): array
@@ -95,7 +102,8 @@ final class ObjectPipeline
     }
 
     /**
-     * @param class-string|ReflectionClass<object> $class
+     * @template T of object
+     * @param class-string<T>|ReflectionClass<T> $class
      * @param array<string|int,mixed> $params
      * @param Closure(object):void|null $configure Runs after constructor and attribute initialization.
      * @param Closure():array<string|int,mixed>|null $resolveParameters Materializes declared parameter sources on demand.
@@ -171,7 +179,10 @@ final class ObjectPipeline
         };
     }
 
-    /** @param class-string|ReflectionClass<object> $class */
+    /**
+     * @template T of object
+     * @param class-string<T>|ReflectionClass<T> $class
+     */
     private function metadata(string|ReflectionClass $class): ObjectMetadata
     {
         $cacheable = !$class instanceof ReflectionObject;
