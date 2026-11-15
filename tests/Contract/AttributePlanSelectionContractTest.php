@@ -33,7 +33,7 @@ final class LastSelectionAttribute {}
 final class SelectionTarget
 {
     public function ordered(
-        #[FirstSelectionAttribute, MiddleSelectionAttribute, LastSelectionAttribute]
+        #[FirstSelectionAttribute, LastSelectionAttribute, MiddleSelectionAttribute]
         string $value,
     ): void {}
 
