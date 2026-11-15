@@ -156,3 +156,35 @@ Passing the already-computed authoritative-provider boolean to the private param
 ## 8. Publication scope
 
 The three code commits use the existing `refactor/di6-definitions-callbacks` branch. Reports, evidence and reproduction scripts form a separate change under `docs/audit` only. The production sources, tests, Composer configuration, CI workflow and standard benchmark files remain byte-identical to the successfully tested code head `874d76f`. The hosted result above belongs to that exact code head, independently of the later documentation commit. All measurements and verification results retain their original source identities.
+
+## 9. Follow-up recheck of the published changes
+
+A further review on 15 November examined published head **`736b7f15f6eafe9428f889174d580bd542517888`**, whose production code is still **`874d76f`**. All **169 production files** were read again across disjoint core, parameter and attribute inventories (59/37/73). Related contracts and tests were inspected; this is not a claim that every test file was manually reviewed. The [follow-up evidence](2026-11-15-di6-optimization-recheck.json) retains the inventories, commands, logs, diagnostic programs, source identities and limitations.
+
+**No new production defect or regression was confirmed.** No additional optimization acquired sufficient evidence to justify a code change. The existing unmeasured opportunity in §7 remains unimplemented. Production files and repository tests were unchanged during this pass.
+
+| Fresh check | Result |
+|---|---|
+| PHP 8.4.23, randomized order, seed `202611151` | 1,434 passed, 18 expected PHP-8.5-only skips; 23,884 assertions. |
+| PHP 8.5.8, reverse order, CLI OPcache enabled/JIT disabled | 1,452 passed; 23,986 assertions. |
+| PHPStan max, `src tests`, `--debug` without result-cache reuse | No errors. |
+| PHP CS Fixer, cache disabled | 0 fixes among 403 files. |
+| PHP 8.4 production syntax | 169/169 files passed. |
+| Strict Composer validation | Passed. |
+| Mutation-history parity, each runtime | 1,200 operations and 28,800 warm/fresh comparisons passed. |
+
+The before/after fingerprint of all 408 recorded `src/tests` files is unchanged in every broad command. The current and pre-optimization source trees used for diagnostics were also independently compared with their Git archives.
+
+Ten additional standalone processes executed **322 diagnostic assertions**, separate from the Pest counts above:
+
+| Area | Runs | Behavior checked |
+|---|---|---|
+| Core | 48 assertions × baseline/current × PHP 8.4/8.5 | Numeric string IDs, exact cycle paths, bounded factory calls, recovery after `Fiber::throw()` while the terminated Fiber is still strongly referenced, abandoned Fiber cleanup, null/false values and alias retargeting. |
+| Parameters | 16 assertions × baseline/current × PHP 8.4/8.5 | An autoloader reveals a query alias without defining its requested name; reentrant discovery reveals an earlier attribute; two Fibers finish through one warm named plan in reverse order; variadic order, native default-object identity and closure-capture release. |
+| Attributes and objects | 33 assertions × current source × PHP 8.4/8.5 | Discovery from destructors and property hooks, completed-handler ordering, fresh setup arguments on lazy/proxy retries, `ReflectionObject` lifetime and strict request-source conflicts. |
+
+All ten processes passed. Core and parameter observations agree between pre-optimization baseline `39eca84` and current source. The attribute diagnostic initially retained its caught exception, which retained the failed attempt's argument through the trace. Releasing that caller-owned reference corrected the diagnostic; production code did not change. The evidence records this fixture correction.
+
+The previously completed [hosted run `43657065521`](https://github.com/componenta/di/actions/runs/43657065521) was read back as successful for exact code commit `874d76f`. The only 13 changed paths between that commit and the reviewed head are under `docs/audit`; runtime, test and workflow bytes are identical. Its coverage and mutation results remain the earlier results in §3, not new measurements from this follow-up. A separate snapshot of the documentation-only head's still-running CI is retained without labeling it completed. App integration and the full mutation campaign were not rerun locally in this pass.
+
+No new performance numbers or broader throughput claim are introduced. PHP remains **`^8.4`** and the release policy is unchanged. This follow-up adds only the evidence file and this section in both report languages; it creates no production patch, test-suite additions, release or tag.
