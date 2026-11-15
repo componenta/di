@@ -11,6 +11,24 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
 
+#[\Attribute(\Attribute::TARGET_CLASS)]
+final class DependencyConfigurationMarker {}
+
+final class DependencyConfigurationResolver implements \Componenta\DI\Resolver\Parameter\ParameterResolverInterface
+{
+    public function supports(\Componenta\DI\Resolver\Target\ParameterTarget $target): bool
+    {
+        return false;
+    }
+
+    public function resolveParameter(
+        \Componenta\DI\Resolver\Target\ParameterTarget $target,
+        \Componenta\DI\Resolver\Parameter\ParameterResolutionContext $context,
+    ): ?array {
+        return null;
+    }
+}
+
 test(
     'container factory rejects invalid dependency definitions at its public boundary',
     function (
@@ -75,12 +93,27 @@ test(
         [ConfigKey::PARAMETER_RESOLVERS => [100 => new \stdClass()]],
         'Parameter resolver specification must be an instance, callable, non-empty service id or [service-id, method]',
     ],
+    'invalid resolver after valid instance' => [
+        [ConfigKey::PARAMETER_RESOLVERS => [100 => new DependencyConfigurationResolver(), 90 => new \stdClass()]],
+        'Parameter resolver specification must be an instance, callable, non-empty service id or [service-id, method]',
+    ],
+    'invalid resolver priority after valid instance' => [
+        [ConfigKey::PARAMETER_RESOLVERS => [100 => new DependencyConfigurationResolver(), 'later' => new DependencyConfigurationResolver()]],
+        'Parameter resolver priority must be int; got string',
+    ],
     'associative attribute definitions' => [
         [ConfigKey::ATTRIBUTE_DEFINITIONS => ['named' => 'definition']],
         'Attribute definitions must be configured as a list',
     ],
     'invalid attribute definition specification' => [
         [ConfigKey::ATTRIBUTE_DEFINITIONS => [new \stdClass()]],
+        'Attribute definition specification must be an instance, callable, non-empty service id or [service-id, method]',
+    ],
+    'invalid attribute definition after valid instance' => [
+        [ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            new \Componenta\DI\Attribute\Composition\AttributeDefinition(DependencyConfigurationMarker::class),
+            new \stdClass(),
+        ]],
         'Attribute definition specification must be an instance, callable, non-empty service id or [service-id, method]',
     ],
     'associative capability policies' => [
