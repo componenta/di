@@ -131,6 +131,8 @@ test('invalid variadic inputs fail before the callable body', function (array $p
 test('attributes provide and transform a variadic collection once per invocation', function (): void {
     $caster = new class () implements CasterInterface {
         public int $calls = 0;
+        /** @var list<array<array-key,mixed>> */
+        public array $collections = [];
         public string $name { get => 'upper-parts'; }
         public function cast(mixed $value): mixed
         {
@@ -138,6 +140,7 @@ test('attributes provide and transform a variadic collection once per invocation
             if (!is_array($value)) {
                 throw new \LogicException('Expected a collection.');
             }
+            $this->collections[] = $value;
             $result = [];
             foreach ($value as $key => $part) {
                 if (!is_string($part)) {
@@ -157,13 +160,14 @@ test('attributes provide and transform a variadic collection once per invocation
     };
     $di = ContainerBuilder::configure(new Config(['parts' => ['config']], new Environment([])))
         ->addService(CasterProviderInterface::class, $provider)->build();
-    $callable = static fn(#[ConfigAttribute('parts'), Cast('upper-parts')] string ...$parts): array => $parts;
+    $callable = static fn(int $prefix = 0, #[ConfigAttribute('parts'), Cast('upper-parts')] string ...$parts): array => $parts;
 
     expect($di->call($callable))->toBe(['CONFIG'])
-        ->and($di->call($callable, ['one', 'two']))->toBe(['ONE', 'TWO'])
+        ->and($di->call($callable, [7, 'one', 'two']))->toBe(['ONE', 'TWO'])
         ->and($di->call($callable, ['parts' => []]))->toBe([])
         ->and($di->call(static fn(#[Cast('upper-parts')] string ...$parts): array => $parts))->toBe([])
-        ->and($caster->calls)->toBe(4);
+        ->and($caster->calls)->toBe(4)
+        ->and($caster->collections)->toBe([['config'], ['one', 'two'], [], []]);
 });
 
 test('custom parameter resolvers can provide a variadic collection', function (): void {

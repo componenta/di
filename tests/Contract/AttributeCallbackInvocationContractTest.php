@@ -155,8 +155,16 @@ test('semantic callback first arguments reject incompatible types', function ():
     $container = (new ContainerBuilder())->build();
     $callbacks = new AttributeCallbackInvoker($container->get(ParametersResolver::class), $container);
 
-    expect(fn() => $callbacks->invoke(static fn(int $semantic): int => $semantic, '7'))
-        ->toThrow(ResolutionException::class, '$semantic');
+    try {
+        $callbacks->invoke(static fn(int $semantic): int => $semantic, '7');
+        \PHPUnit\Framework\Assert::fail('The incompatible semantic argument must be rejected.');
+    } catch (ResolutionException $exception) {
+        expect($exception->getMessage())->toContain('$semantic')
+            ->and($exception->parameterName)->toBe('semantic')
+            ->and($exception->parameterPosition)->toBe(0)
+            ->and($exception->parameterType)->toBe('int')
+            ->and($exception->resolvedParameterTypes)->toBe([0 => 'string']);
+    }
 });
 
 test('semantic callbacks reject unsupported first parameter ABI', function (Closure $callback): void {
