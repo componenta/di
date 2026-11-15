@@ -153,8 +153,18 @@ test('availability polling preserves an exception from the fallback autoload att
 
     spl_autoload_register($loader);
     try {
-        expect(fn(): int => $registry->revision)->toThrow($failure);
-        expect($loads)->toBe(2);
+        $caught = null;
+        try {
+            $revision = $registry->revision;
+            throw new LogicException('Expected an autoload failure, got revision ' . $revision . '.');
+        } catch (RuntimeException $exception) {
+            $caught = $exception;
+        }
+
+        expect($caught)->toBeInstanceOf(RuntimeException::class)
+            ->and($caught)->toBe($failure)
+            ->and($caught->getMessage())->toBe('fallback autoload failure')
+            ->and($loads)->toBe(2);
     } finally {
         spl_autoload_unregister($loader);
     }
