@@ -19,11 +19,29 @@ final readonly class PreparedCallable
 
     public function __construct(callable $callable)
     {
-        $this->callable = $callable;
+        $this->callable = is_array($callable) ? self::snapshotCallable($callable) : $callable;
     }
 
     public function __invoke(mixed ...$arguments): mixed
     {
         return call_user_func_array($this->callable, $arguments);
+    }
+
+    /**
+     * @template T of array<array-key,mixed>
+     * @param T $callable
+     * @return T
+     */
+    private static function snapshotCallable(array $callable): array
+    {
+        // Retain the validated route even when the caller later changes an
+        // array's reference slots. The callable object itself keeps its identity.
+        $snapshot = [];
+        foreach ($callable as $key => $value) {
+            $snapshot[$key] = $value;
+        }
+
+        /** @var T $snapshot */
+        return $snapshot;
     }
 }

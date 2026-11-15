@@ -49,3 +49,55 @@ test('prepared calls preserve omitted defaults and the target exception instance
     }
     expect($caught)->toBe($failure);
 });
+
+final class ReferencedOwner
+{
+    public function __construct(private readonly string $value) {}
+
+    public function original(): string
+    {
+        return $this->value;
+    }
+
+    public function redirected(): string
+    {
+        return 'redirected';
+    }
+}
+
+test('prepared callables preserve the original owner and method from referenced array slots', function (): void {
+    $container = container();
+    $original = new ReferencedOwner('original');
+    $owner = $original;
+    $method = 'original';
+    $callable = [&$owner, &$method];
+    $prepared = new PreparedCallable($callable);
+
+    $owner = new ReferencedOwner('replacement');
+    $method = 'redirected';
+
+    expect($prepared->callable)->toBe([$original, 'original'])
+        ->and($container->call($prepared))->toBe('original')
+        ->and($prepared())->toBe('original');
+
+    $method = 'missing';
+    expect($container->call($prepared))->toBe('original');
+});
+
+test('prepared callables preserve native object identity and state', function (): void {
+    $container = container();
+    $owner = new class () {
+        public string $value = 'first';
+
+        public function read(string $suffix = 'default'): string
+        {
+            return $this->value . ':' . $suffix;
+        }
+    };
+    $prepared = new PreparedCallable([$owner, 'read']);
+
+    expect($prepared->callable)->toBe([$owner, 'read'])
+        ->and($container->call($prepared))->toBe('first:default');
+    $owner->value = 'second';
+    expect($container->call($prepared, ['suffix' => 'current']))->toBe('second:current');
+});
