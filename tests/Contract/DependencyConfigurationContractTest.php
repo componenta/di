@@ -148,3 +148,33 @@ test('null replacement flags are rejected rather than treated as false', functio
         new DependencyDefinitions([$section => null]),
     ))->toThrow(InvalidConfigurationException::class, sprintf('Container dependency "%s" must be bool; got null', $section));
 })->with([ConfigKey::PARAMETER_RESOLVERS_REPLACE, ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE]);
+
+test('shape validation canonicalizes the caller dependency array by reference', function (): void {
+    $delegator = static fn(object $entry): object => $entry;
+    $dependencies = [
+        ConfigKey::INVOKABLES => ['alias' => new \Componenta\DI\Definition\InvokableDefinition(\stdClass::class)],
+        ConfigKey::DELEGATORS => ['product' => $delegator],
+    ];
+
+    \Componenta\DI\Configuration\DependencyConfiguration::assertShape($dependencies);
+
+    expect($dependencies)->toBe([
+        ConfigKey::INVOKABLES => [\stdClass::class],
+        ConfigKey::DELEGATORS => ['product' => [$delegator]],
+        ConfigKey::ALIASES => ['alias' => \stdClass::class],
+    ]);
+});
+
+/** @param array<array-key,mixed> $dependencies */
+test('direct shape validation rejects malformed alias graphs and empty delegator specifications', function (array $dependencies, string $exception = InvalidConfigurationException::class): void {
+    /** @var class-string<\Throwable> $exception */
+    expect(static function () use (&$dependencies): void {
+        \Componenta\DI\Configuration\DependencyConfiguration::assertShape($dependencies);
+    })->toThrow($exception);
+})->with([
+    'numeric alias key' => [[ConfigKey::ALIASES => [7 => 'entry']]],
+    'empty alias key' => [[ConfigKey::ALIASES => ['' => 'entry']]],
+    'non-string alias target' => [[ConfigKey::ALIASES => ['alias' => 7]]],
+    'cyclic aliases' => [[ConfigKey::ALIASES => ['first' => 'second', 'second' => 'first']], \Componenta\DI\Exception\CircularDependencyException::class],
+    'empty delegator specification' => [[ConfigKey::DELEGATORS => ['entry' => '']]],
+]);

@@ -100,8 +100,10 @@ final class DependencyConfiguration
     }
 
     /**
+     * Validates and canonicalizes the supplied array in place.
+     * Use normalize() when a statically typed DependencyShape result is needed.
+     *
      * @param array<array-key,mixed> $dependencies
-     * @phpstan-assert DependencyShape $dependencies
      */
     public static function assertShape(array &$dependencies): void
     {
