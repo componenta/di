@@ -17839,8 +17839,8 @@
     },
     "ci-windows84": {
       "original_path": "/workspace/scratch/fa8384e69042/checks/ci-windows84.log",
-      "decoded_log_sha256": "066fb4c7c8f3a68573c3eca702bac89299cda322728af124d26cf910bf90f83e",
-      "decoded_log_bytes": 330970,
+      "decoded_log_sha256": "f5bdf9c9e514e76ce1c5e76a0a25c926aff1cb5b9fac29d8a48ef1021e6172b6",
+      "decoded_log_bytes": 333382,
       "selected_lines_ansi_removed": [
         "2026-11-15T09:01:57.1179435Z √ PHP Installed PHP 8.4.27 ",
         "2026-11-15T09:01:58.7787907Z ##[group]Run composer validate --strict",
@@ -17852,7 +17852,8 @@
         "2026-11-15T09:02:41.5371534Z   Tests:    18 skipped, 1444 passed (23931 assertions)",
         "2026-11-15T09:02:41.5371916Z   Duration: 7.10s"
       ],
-      "full_log_retrieval": "GitHub Actions job logs for the job id in hosted_ci; full decoded logs hashed, not duplicated as verbose report payload."
+      "full_log_retrieval": "GitHub Actions job logs for the job id in hosted_ci; full decoded logs hashed, not duplicated as verbose report payload.",
+      "encoding": "UTF-8 of the exact connector-decoded string; original CRLF preserved."
     }
   },
   "reproductions": {
