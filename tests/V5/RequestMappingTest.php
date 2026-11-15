@@ -397,7 +397,7 @@ test('PayloadParam reports a required nested value hidden behind a scalar', func
     ))->toThrow(\Componenta\DI\Exception\ResolutionException::class, 'profile.name');
 });
 
-test('MapRequest exposes every declared PSR-7 source through one public mapping', function (): void {
+test('MapRequest exposes every declared PSR-7 source through one public mapping', function (bool $withPayload): void {
     $uploadedFile = new NyholmUploadedFile(Stream::create('file'), 4, UPLOAD_ERR_OK);
     $request = (new ServerRequest(
         'POST',
@@ -407,7 +407,7 @@ test('MapRequest exposes every declared PSR-7 source through one public mapping'
         '1.1',
         ['server' => 'server-value'],
     ))
-        ->withParsedBody(['payload' => 'payload-value'])
+        ->withParsedBody($withPayload ? ['payload' => 'payload-value'] : null)
         ->withQueryParams(['query' => 'query-value'])
         ->withCookieParams(['cookie' => 'cookie-value'])
         ->withAttribute('attribute', 'attribute-value')
@@ -419,7 +419,7 @@ test('MapRequest exposes every declared PSR-7 source through one public mapping'
     )->data;
 
     expect($data)->toBe([
-        'payload' => 'payload-value',
+        ...($withPayload ? ['payload' => 'payload-value'] : []),
         'query' => 'query-value',
         'X-Source' => 'header',
         'cookie' => 'cookie-value',
@@ -427,7 +427,7 @@ test('MapRequest exposes every declared PSR-7 source through one public mapping'
         'server' => 'server-value',
         'file' => $uploadedFile,
     ]);
-});
+})->with(['parsed payload' => true, 'absent parsed body' => false]);
 
 test('MapRequest wildcard selection includes all explicit attribute and file values', function (): void {
     $uploadedFile = new NyholmUploadedFile(Stream::create('file'), 4, UPLOAD_ERR_OK);
@@ -443,18 +443,18 @@ test('MapRequest wildcard selection includes all explicit attribute and file val
     expect($data)->toBe(['route' => 17, 'avatar' => $uploadedFile]);
 });
 
-test('MapRequest FirstWins keeps the first provider value for duplicate source keys', function (): void {
+test('MapRequest preserves later fields after accepted duplicate source keys', function (bool $firstWins): void {
     $request = (new ServerRequest('POST', '/'))
         ->withParsedBody(['id' => 'payload'])
-        ->withQueryParams(['id' => 'query']);
+        ->withQueryParams(['id' => $firstWins ? 'query' : 'payload', 'after' => 'kept']);
 
     $data = requestContainer()->make(
-        FirstWinsRequestSourcesTarget::class,
+        $firstWins ? FirstWinsRequestSourcesTarget::class : MultiSourceEnvelope::class,
         [ServerRequestInterface::class => $request],
     )->data;
 
-    expect($data)->toBe(['id' => 'payload']);
-});
+    expect($data)->toBe(['id' => 'payload', 'after' => 'kept']);
+})->with(['FirstWins conflict' => true, 'identical values under Reject' => false]);
 
 test(
     'MapRequest rejects duplicate sources and ambiguous wildcard selectors',
