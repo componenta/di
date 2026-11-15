@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract\CallableCaseCacheRetention;
 
+use Componenta\DI\CallableResolver;
+use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
+use Componenta\DI\Exception\InvalidCallableException;
+use Psr\Container\ContainerInterface;
 
 use function Componenta\DI\Tests\Support\container;
 
@@ -65,3 +69,81 @@ test('case variants of one native static callable do not retain duplicate execut
     // for the same PHP declaration. Keep the new container alive for this check.
     expect($growth)->toBeLessThan(2 * 1024 * 1024);
 })->with(['array class', 'array method', 'static string']);
+
+final class UnavailableCaseVariantCallable
+{
+    public function caseVariantInstanceMethod(): void {}
+}
+
+final class MissingCaseVariantServices implements ContainerInterface
+{
+    public function has(string $id): bool
+    {
+        return false;
+    }
+
+    public function get(string $id): mixed
+    {
+        throw new \LogicException('No service is available.');
+    }
+}
+
+test('rejected case variants of one method do not retain duplicate native classifications', function (string $form): void {
+    $baseName = $form === 'method' ? 'casevariantinstancemethod' : 'unavailablecasevariantcallable';
+    $count = 16384;
+    $rejectVariants = static function (CallableResolver $resolver) use ($baseName, $form, $count): int {
+        $rejected = 0;
+        for ($variant = 0; $variant < $count; ++$variant) {
+            $name = $baseName;
+            for ($bit = 0; $bit < 14; ++$bit) {
+                if (($variant >> $bit) & 1) {
+                    $name[$bit] = strtoupper($name[$bit]);
+                }
+            }
+            $candidate = $form === 'method'
+                ? [UnavailableCaseVariantCallable::class, $name]
+                : [__NAMESPACE__ . '\\' . $name, 'caseVariantInstanceMethod'];
+            try {
+                $resolver->resolve($candidate);
+            } catch (InvalidCallableException) {
+                ++$rejected;
+            }
+        }
+        return $rejected;
+    };
+
+    // Warm PHP's spelling lookups before measuring a fresh resolver's retained
+    // metadata. The rejected method is the same declaration in every case.
+    $warmup = new CallableResolver(new MissingCaseVariantServices());
+    expect($rejectVariants($warmup))->toBe($count);
+    unset($warmup);
+    gc_collect_cycles();
+
+    $resolver = new CallableResolver(new MissingCaseVariantServices());
+    $before = memory_get_usage();
+    $rejected = $rejectVariants($resolver);
+    gc_collect_cycles();
+    $growth = memory_get_usage() - $before;
+
+    // Native classification needs one stable entry. This workload budget leaves
+    // room for allocator overhead without retaining thousands of spelling keys;
+    // it does not impose a capacity limit on legitimate cached declarations.
+    expect($rejected)->toBe($count)
+        ->and($growth)->toBeLessThan(1024 * 1024);
+})->with(['class', 'method']);
+
+test('native method classification does not fold opaque callable service ids', function (): void {
+    $upper = static fn(): string => 'upper';
+    $lower = static fn(): string => 'lower';
+    $container = container([ConfigKey::SERVICES => [
+        'Opaque.Callable' => $upper,
+        'opaque.callable' => $lower,
+    ]]);
+
+    foreach ([1, 2] as $_attempt) {
+        expect($container->resolve('Opaque.Callable'))->toBe($upper)
+            ->and($container->resolve('opaque.callable'))->toBe($lower)
+            ->and($container->call(['Opaque.Callable', '__invoke']))->toBe('upper')
+            ->and($container->call(['opaque.callable', '__invoke']))->toBe('lower');
+    }
+});

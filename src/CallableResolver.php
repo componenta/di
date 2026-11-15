@@ -145,7 +145,7 @@ class CallableResolver implements CallableResolverInterface
 
     private function isStaticMethod(string $class, string $method): bool
     {
-        $key = $class . '::' . $method;
+        $key = strtolower($class . '::' . $method);
         if (!array_key_exists($key, $this->staticCache)) {
             $this->staticCache[$key] = new \ReflectionMethod($class, $method)->isStatic();
         }
