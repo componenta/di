@@ -49,10 +49,16 @@ $source = $hasSource ? $source : $repository . '/src';
 if (!is_file($autoload) || !is_dir($source)) {
     throw new RuntimeException('The selected DI autoloader or source directory does not exist.');
 }
-$source = realpath($source);
+$canonicalPath = static function (string $path): string|false {
+    $canonical = realpath($path);
+    return $canonical === false ? false : str_replace(DIRECTORY_SEPARATOR, '/', $canonical);
+};
+$source = $canonicalPath($source);
 require $autoload;
-if (realpath((new ReflectionClass(Container::class))->getFileName()) !== $source . '/Container.php'
-    || realpath((new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible'))->getFileName()) !== $source . '/Internal/functions.php'
+$containerFile = (new ReflectionClass(Container::class))->getFileName();
+$functionFile = (new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible'))->getFileName();
+if (!is_string($source) || !is_string($containerFile) || $canonicalPath($containerFile) !== $source . '/Container.php'
+    || !is_string($functionFile) || $canonicalPath($functionFile) !== $source . '/Internal/functions.php'
 ) {
     throw new RuntimeException('The selected autoloader loaded DI classes or functions from another snapshot.');
 }
@@ -239,7 +245,8 @@ foreach ([...get_declared_classes(), ...get_declared_interfaces(), ...get_declar
         continue;
     }
     $file = (new ReflectionClass($class))->getFileName();
-    if (!is_string($file) || !str_starts_with(realpath($file), $source . '/')) {
+    $canonicalFile = is_string($file) ? $canonicalPath($file) : false;
+    if (!is_string($canonicalFile) || !str_starts_with($canonicalFile, $source . '/')) {
         throw new RuntimeException('DI declaration was loaded from another snapshot: ' . $class);
     }
     ++$checkedDeclarations;
