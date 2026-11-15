@@ -14,12 +14,18 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use ReflectionProperty;
 use RuntimeException;
+use WeakReference;
 
 final class ExceptionPayloadProperties
 {
     public string $typed;
     /** @var mixed */
     public $untyped;
+}
+
+final readonly class ExceptionPayloadCapture
+{
+    public function __construct(public object $value) {}
 }
 
 test('circular dependency diagnostics retain a complete chain and default exception metadata', function (): void {
@@ -63,6 +69,45 @@ test('callable diagnostics describe closures and object method owners without re
 })->with([
     [static fn(): int => 1, 'Closure', Closure::class],
     [[new ExceptionPayloadProperties(), 'missing'], ExceptionPayloadProperties::class . '::missing', 'array'],
+]);
+
+test('callable diagnostics release runtime objects while the exception remains alive', function (Closure $make, string $type, string $description): void {
+    $previous = ini_set('zend.exception_ignore_args', '1');
+    if ($previous === false) {
+        throw new LogicException('The test must isolate DI metadata from native exception trace arguments.');
+    }
+
+    try {
+        $captured = new \stdClass();
+        $reference = WeakReference::create($captured);
+        $value = $make($captured);
+        $error = InvalidCallableException::forValue($value);
+
+        unset($value, $captured);
+        gc_collect_cycles();
+
+        expect($reference->get())->toBeNull()
+            ->and($error->callableType)->toBe($type)
+            ->and($error->callableDescription)->toBe($description);
+    } finally {
+        ini_set('zend.exception_ignore_args', $previous);
+    }
+})->with([
+    'closure capture' => [
+        static fn(object $value): Closure => static fn(): object => $value,
+        Closure::class,
+        'Closure',
+    ],
+    'rejected object' => [
+        static fn(object $value): ExceptionPayloadCapture => new ExceptionPayloadCapture($value),
+        ExceptionPayloadCapture::class,
+        'object ' . ExceptionPayloadCapture::class,
+    ],
+    'object method array' => [
+        static fn(object $value): array => [new ExceptionPayloadCapture($value), 'missing'],
+        'array',
+        ExceptionPayloadCapture::class . '::missing',
+    ],
 ]);
 
 test('missing-service failures use a neutral exception code and preserve the requested id', function (): void {
