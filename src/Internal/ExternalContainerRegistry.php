@@ -37,12 +37,23 @@ final class ExternalContainerRegistry
 
     public function findOwning(string $id): ?ContainerInterface
     {
-        foreach ($this->containers as $container) {
-            if ($container->has($id)) {
-                return $container;
+        $containers = $this->containers;
+        $inspected = count($containers);
+        while (true) {
+            foreach ($containers as $container) {
+                if ($container->has($id)) {
+                    return $container;
+                }
             }
-        }
 
-        return null;
+            if ($inspected === count($this->containers)) {
+                return null;
+            }
+
+            // Ownership callbacks may append providers, including while a Fiber
+            // is suspended. Visit the new suffix without replaying earlier has().
+            $containers = array_slice($this->containers, $inspected);
+            $inspected += count($containers);
+        }
     }
 }
