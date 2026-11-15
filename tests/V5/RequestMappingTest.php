@@ -176,6 +176,19 @@ final readonly class FirstWinsRequestSourcesTarget
     ) {}
 }
 
+final readonly class QueryThenSelectedAttributesTarget
+{
+    /** @param array<string|int,mixed> $data */
+    public function __construct(
+        #[MapRequest(
+            sources: [RequestDataSource::Query, RequestDataSource::Attributes],
+            attributes: ['id'],
+            conflictPolicy: RequestDataConflictPolicy::FirstWins,
+        )]
+        public array $data,
+    ) {}
+}
+
 final readonly class DuplicateRequestSourcesTarget
 {
     /** @param array<string|int,mixed> $data */
@@ -443,18 +456,30 @@ test('MapRequest wildcard selection includes all explicit attribute and file val
     expect($data)->toBe(['route' => 17, 'avatar' => $uploadedFile]);
 });
 
-test('MapRequest preserves later fields after accepted duplicate source keys', function (bool $firstWins): void {
-    $request = (new ServerRequest('POST', '/'))
-        ->withParsedBody(['id' => 'payload'])
-        ->withQueryParams(['id' => $firstWins ? 'query' : 'payload', 'after' => 'kept']);
+test(
+    'MapRequest preserves source order and later fields after accepted duplicate keys',
+    function (bool $firstWins, bool $selectedAttributes, string $expectedFirst): void {
+        $target = $selectedAttributes
+            ? QueryThenSelectedAttributesTarget::class
+            : ($firstWins ? FirstWinsRequestSourcesTarget::class : MultiSourceEnvelope::class);
+        $request = (new ServerRequest('POST', '/'))
+            ->withParsedBody(['id' => 'payload'])
+            ->withQueryParams(['id' => $firstWins ? 'query' : 'payload', 'after' => 'kept'])
+            ->withAttribute('id', 'attribute')
+            ->withAttribute('unselected', 'excluded');
 
-    $data = requestContainer()->make(
-        $firstWins ? FirstWinsRequestSourcesTarget::class : MultiSourceEnvelope::class,
-        [ServerRequestInterface::class => $request],
-    )->data;
+        $data = requestContainer()->make(
+            $target,
+            [ServerRequestInterface::class => $request],
+        )->data;
 
-    expect($data)->toBe(['id' => 'payload', 'after' => 'kept']);
-})->with(['FirstWins conflict' => true, 'identical values under Reject' => false]);
+        expect($data)->toBe(['id' => $expectedFirst, 'after' => 'kept']);
+    },
+)->with([
+    'FirstWins payload then query' => [true, false, 'payload'],
+    'identical values under Reject' => [false, false, 'payload'],
+    'FirstWins query then selected attributes' => [true, true, 'query'],
+]);
 
 test(
     'MapRequest rejects duplicate sources and ambiguous wildcard selectors',
