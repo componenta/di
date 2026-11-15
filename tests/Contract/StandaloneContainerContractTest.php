@@ -88,3 +88,60 @@ test('standalone container bootstrap refuses ids outside the supported core serv
         bootstrapServices: [$id => new \stdClass()],
     ))->toThrow(InvalidConfigurationException::class, 'Unsupported bootstrap service id "' . $id . '".');
 })->with(['application', Container::class, 7]);
+
+final class StandaloneProxyProduct
+{
+    public string $value = 'default';
+}
+
+final class StandaloneProxyFactory implements \Componenta\DI\ProxyFactoryInterface
+{
+    /** @var list<string> */
+    public array $calls = [];
+
+    /**
+     * @template T of object
+     * @param class-string<T> $class
+     * @param callable(T):void $initializer
+     * @return T
+     */
+    public function makeLazy(string $class, callable $initializer): object
+    {
+        $this->calls[] = 'lazy';
+        return (new \Componenta\DI\ProxyFactory())->makeLazy($class, $initializer);
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $class
+     * @param callable(T):T $factory
+     * @return T
+     */
+    public function makeProxy(string $class, callable $factory): object
+    {
+        $this->calls[] = 'proxy';
+        return (new \Componenta\DI\ProxyFactory())->makeProxy($class, $factory);
+    }
+}
+
+test('standalone lazy and proxy creation uses the supplied proxy factory', function (): void {
+    $factory = new StandaloneProxyFactory();
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(),
+        (new ContainerBuilder())->build(),
+        proxyFactory: $factory,
+    );
+    $lazy = $container->makeLazy(StandaloneProxyProduct::class, static function (StandaloneProxyProduct $entry): void {
+        $entry->value = 'initialized';
+    });
+    $proxy = $container->makeProxy(StandaloneProxyProduct::class, static function (): StandaloneProxyProduct {
+        $entry = new StandaloneProxyProduct();
+        $entry->value = 'factory';
+        return $entry;
+    });
+
+    expect($factory->calls)->toBe(['lazy', 'proxy'])
+        ->and($lazy->value)->toBe('initialized')
+        ->and($proxy->value)->toBe('factory');
+});
