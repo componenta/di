@@ -115,6 +115,11 @@ test('composition imports identical bindings once and deduplicates shared defini
     expect($composed->resolve('shared'))->toBe('shared-value')
         ->and($strategy->validationCalls)->toBe(1);
     $strategy->supportsCalls = 0;
+    expect(fn() => $composed->setDefinition('unsupported', new class () implements DefinitionInterface {}))
+        ->toThrow(InvalidConfigurationException::class, 'is not supported')
+        ->and($strategy->supportsCalls)->toBe(1)
+        ->and($strategy->validationCalls)->toBe(1);
+    $strategy->supportsCalls = 0;
     $composed->setDefinition('new', new SnapshotDefinition('new-value'));
 
     expect($strategy->supportsCalls)->toBe(1)
@@ -139,6 +144,10 @@ test('shared hybrid providers retain fallback occurrences while deduplicating th
 
     expect($composed->can('missing'))->toBeFalse()
         ->and($hybrid->fallbackQueries)->toBe(2);
+    expect(fn() => $composed->setDefinition('unsupported', new class () implements DefinitionInterface {}))
+        ->toThrow(InvalidConfigurationException::class, 'is not supported')
+        ->and($hybrid->classifications)->toBe(1);
+    $hybrid->classifications = 0;
     $composed->setDefinition('entry', new SnapshotDefinition('explicit'));
 
     expect($hybrid->classifications)->toBe(1)
