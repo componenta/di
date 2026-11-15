@@ -169,11 +169,33 @@ test('cached and uncached object plans preserve native arguments across traits i
                 if ($entry instanceof FirstFixture) {
                     expect($entry->childState())->toBe('child');
                 }
-                foreach ($entry->events as [$scope, $owner, $_member, $value]) {
+                $expectedMembers = $entry instanceof FirstFixture ? [
+                    [FirstFixture::class, FirstFixture::class],
+                    [FirstFixture::class, 'sameName'],
+                    [FirstFixture::class, 'traitProperty'],
+                    [ParentFixture::class, 'sameName'],
+                    [FirstFixture::class, 'sameMethod'],
+                    [FirstFixture::class, 'traitMethod'],
+                    [FirstFixture::class, 'aliasedTraitMethod'],
+                    [ParentFixture::class, 'sameMethod'],
+                ] : [
+                    [SecondFixture::class, SecondFixture::class],
+                    [SecondFixture::class, 'traitProperty'],
+                    [ParentFixture::class, 'sameName'],
+                    [SecondFixture::class, 'traitMethod'],
+                    [ParentFixture::class, 'sameMethod'],
+                ];
+                $observedMembers = [];
+                foreach ($entry->events as [$scope, $owner, $member, $value]) {
                     expect($scope)->toBe($owner)->and($value)->toBe($index + 1);
+                    $observedMembers[] = [$owner, $member];
                 }
+                // Reflection member order is not the inventory contract; each declared usage must survive.
+                sort($expectedMembers);
+                sort($observedMembers);
+                expect($observedMembers)->toBe($expectedMembers);
                 $results[(int) $uncached][] = $entry->events;
-                $expectedInstances += count($entry->events);
+                $expectedInstances += count($expectedMembers);
                 $objectReference = WeakReference::create($entry);
                 unset($entry);
                 gc_collect_cycles();
