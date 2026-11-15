@@ -108,6 +108,11 @@ test('normalization rejects cycles formed by combining default and configured al
     ))->toThrow(CircularDependencyException::class);
 });
 
+test('normalization rejects an empty default alias before merging it into the dependency graph', function (): void {
+    expect(fn() => DependencyConfiguration::normalize([], ['' => 'source']))
+        ->toThrow(InvalidConfigurationException::class);
+});
+
 test('delegator normalization preserves deferred service methods and callable object methods', function (): void {
     $object = new NormalizationDelegator();
     expect(DependencyConfiguration::normalizeDelegatorSpecification(['future-service', 'decorate'], 'entry'))

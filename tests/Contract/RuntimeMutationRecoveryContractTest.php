@@ -162,3 +162,32 @@ test('runtime registration rejects empty service ids', function (bool $delegator
         }
     })->toThrow(InvalidConfigurationException::class, 'empty DI id');
 })->with(['value' => false, 'delegator' => true]);
+
+test('empty alias endpoints are rejected without invalidating warmed entries and allow later recovery', function (bool $emptyAlias): void {
+    $container = container();
+    $source = new \stdClass();
+    $replacement = new \stdClass();
+    $container->set('source', $source);
+    $container->set('replacement', $replacement);
+    $container->alias('selected', 'source');
+    $calls = 0;
+    $container->delegator('selected', static function (object $entry) use (&$calls): object {
+        ++$calls;
+        return $entry;
+    });
+    expect($container->get('selected'))->toBe($source);
+
+    expect(fn() => $container->alias($emptyAlias ? '' : 'selected', $emptyAlias ? 'source' : ''))
+        ->toThrow(InvalidConfigurationException::class)
+        ->and($container->get('selected'))->toBe($source)
+        ->and($container->get('source'))->toBe($source)
+        ->and($container->has(''))->toBeFalse()
+        ->and($calls)->toBe(1);
+
+    $container->alias('selected', 'replacement');
+
+    expect($container->get('selected'))->toBe($replacement)
+        ->and($container->get('selected'))->toBe($replacement)
+        ->and($container->get('source'))->toBe($source)
+        ->and($calls)->toBe(2);
+})->with(['empty alias id' => true, 'empty target id' => false]);
