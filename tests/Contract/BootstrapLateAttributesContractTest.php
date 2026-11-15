@@ -9,7 +9,10 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use LogicException;
+use Reflector;
 
 use function Componenta\DI\Tests\Support\container;
 
@@ -136,4 +139,54 @@ it('rejects a parameter attribute loaded by a resolver that did not execute it',
             },
         ],
     ]))->toThrow(InvalidConfigurationException::class, $class);
+});
+
+
+interface BootstrapGenericDefinition {}
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final readonly class BootstrapSpecificDefinition implements BootstrapGenericDefinition {}
+
+#[BootstrapSpecificDefinition]
+final class BootstrapDefinitionIdentityTarget {}
+
+final class BootstrapDefinitionIdentityLog
+{
+    /** @var list<string> */
+    public array $events = [];
+}
+
+final readonly class BootstrapDefinitionIdentityHandler implements AttributeHandlerInterface
+{
+    public function __construct(private BootstrapDefinitionIdentityLog $log, private string $label) {}
+
+    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+    {
+        $this->log->events[] = $this->label;
+    }
+}
+
+it('rejects bootstrap dependencies created through a definition replaced by a later more specific registration', function (): void {
+    $log = new BootstrapDefinitionIdentityLog();
+
+    expect(fn() => container([
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            new AttributeDefinition(
+                BootstrapGenericDefinition::class,
+                new BootstrapDefinitionIdentityHandler($log, 'generic'),
+            ),
+            static function (Container $container) use ($log): AttributeDefinition {
+                $dependency = $container->get(BootstrapDefinitionIdentityTarget::class);
+                if (!$dependency instanceof BootstrapDefinitionIdentityTarget) {
+                    throw new LogicException('Expected the bootstrap definition identity fixture.');
+                }
+
+                return new AttributeDefinition(
+                    BootstrapSpecificDefinition::class,
+                    new BootstrapDefinitionIdentityHandler($log, 'specific'),
+                );
+            },
+        ],
+    ]))->toThrow(InvalidConfigurationException::class, 'DI bootstrap used ' . BootstrapDefinitionIdentityTarget::class)
+        ->and($log->events)->toBe(['generic']);
 });

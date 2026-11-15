@@ -266,26 +266,27 @@ it('keeps parameter ordering independent of the handlers object phases', functio
     expect($result)->toBe('value:second:first')->and($log->events)->toBe(['second', 'first']);
 });
 
-it('does not impose execution phases on metadata without a runtime handler', function (): void {
+it('does not impose execution phases on metadata without a runtime handler', function (bool $metadataPrecedes): void {
     $log = new AttributeOrderLog();
     $container = (new ContainerBuilder())
         ->addService(AttributeOrderLog::class, $log)
         ->addAttributeDefinition(new AttributeDefinition(
             OrderedFirst::class,
-            phase: AttributePhase::BeforeInstantiation,
+            before: $metadataPrecedes ? [OrderedSecond::class] : [],
+            phase: $metadataPrecedes ? AttributePhase::AfterInstantiation : AttributePhase::BeforeInstantiation,
         ))
         ->addAttributeDefinition(new AttributeDefinition(
             OrderedSecond::class,
             new OrderedHandler($log, 'second'),
-            before: [OrderedFirst::class],
-            phase: AttributePhase::AfterInstantiation,
+            before: $metadataPrecedes ? [] : [OrderedFirst::class],
+            phase: $metadataPrecedes ? AttributePhase::BeforeInstantiation : AttributePhase::AfterInstantiation,
         ))
         ->build();
 
     $container->make(PhasedOrderTarget::class);
 
-    expect($log->events)->toBe(['constructor', 'second']);
-});
+    expect($log->events)->toBe($metadataPrecedes ? ['second', 'constructor'] : ['constructor', 'second']);
+})->with(['metadata follows the handler' => false, 'metadata precedes the handler' => true]);
 
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_PARAMETER)]
 final class PhaseOrderMarker {}
@@ -446,3 +447,37 @@ it('orders parameter transformers through metadata independently of object phase
     expect($result)->toBe('value:second:first')
         ->and($log->events)->toBe(['second', 'first']);
 });
+
+
+it('examines every phase-order branch after handler boundaries and repeated metadata nodes', function (bool $convergingMetadata): void {
+    $log = new AttributeOrderLog();
+    $container = (new ContainerBuilder())
+        ->addService(AttributeOrderLog::class, $log)
+        ->addAttributeDefinition(new AttributeDefinition(
+            OrderedFirst::class,
+            new OrderedHandler($log, 'first'),
+            phase: AttributePhase::BeforeInstantiation,
+        ))
+        ->addAttributeDefinition(new AttributeDefinition(
+            PhaseOrderMarker::class,
+            $convergingMetadata ? null : new OrderedHandler($log, 'bridge'),
+            phase: AttributePhase::Both,
+        ))
+        ->addAttributeDefinition(new AttributeDefinition(
+            PhaseOrderSecondMarker::class,
+            before: $convergingMetadata ? [PhaseOrderMarker::class] : [],
+        ))
+        ->addAttributeDefinition(new AttributeDefinition(
+            OrderedSecond::class,
+            new OrderedHandler($log, 'second'),
+            before: $convergingMetadata
+                ? [OrderedFirst::class, PhaseOrderMarker::class, PhaseOrderSecondMarker::class]
+                : [OrderedFirst::class, PhaseOrderMarker::class],
+            phase: AttributePhase::AfterInstantiation,
+        ))
+        ->build();
+
+    expect(fn() => $container->make(LongerMetadataPhaseOrderTarget::class))
+        ->toThrow(AttributeCompositionException::class, 'execution phases')
+        ->and($log->events)->toBe([]);
+})->with(['handler boundary' => false, 'converging metadata' => true]);
