@@ -86,3 +86,18 @@ test('ordinary callable defaults still resolve to their declared value', functio
     expect($container->call(static fn(?string $value = 'default'): ?string => $value))->toBe('default')
         ->and($container->call(static fn(?string $value = 'default'): ?string => $value, ['value' => null]))->toBeNull();
 });
+
+
+test('internal optional gaps reject positional variadic tails before native invocation', function (): void {
+    $pdo = new \PDO('sqlite::memory:');
+    $statement = $pdo->query('SELECT 1 AS value');
+    if (!$statement instanceof \PDOStatement) {
+        throw new \LogicException('Expected the native PDO statement fixture.');
+    }
+
+    expect(fn() => container()->call([$statement, 'fetchAll'], ['args' => ['invalid-mode']]))
+        ->toThrow(ResolutionException::class, 'Positional variadic arguments cannot follow omitted native arguments.');
+})->skip(
+    !class_exists(\PDO::class) || !in_array('sqlite', \PDO::getAvailableDrivers(), true),
+    'PDO SQLite is required to exercise a native optional parameter followed by a variadic tail.',
+);
