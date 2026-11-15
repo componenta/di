@@ -250,6 +250,18 @@ The runtime mutation methods `set()`, `alias()`, `delegator()`, and `addContaine
 
 If a factory or delegator changes a binding while an earlier `get()` is running (including a suspended Fiber), that call may finish with its earlier value. Later lookups observe the changed binding; the in-flight result cannot restore invalidated cache entries.
 
+## Lazy objects and virtual proxies
+
+`makeLazy()` defers the supplied initializer; `makeProxy()` defers the supplied backing factory. Reflection-created services use these strategies through `#[Lazy]` or `#[Proxy]`, and `#[Proxy]` also supports explicit injection points. For supported targets, creation does not invoke the callback. Initialization retains the existing constructor, property-injection and setup order, callback failure identity, retry behavior, and native ghost/proxy identities. `#[NoConstructor]` suppresses only the constructor.
+
+The default native `ProxyFactory` requires at least one **non-static backed instance property**. An inherited private property, a backed get/set hook, or a readonly/promoted backed property qualifies. A class with no properties, only static properties, or only virtual hooks does not. Empty `stdClass` and empty descendants also fail this requirement; a user subclass of `stdClass` with a backed property can remain lazy.
+
+An otherwise native-eligible target without such a property throws `ResolutionException` before target allocation. Its `serviceId` is the canonical target class name; the message identifies `lazy ghost` or `virtual proxy`, the missing backed properties, and eager construction as the migration path. No initializer, factory, constructor, setup, setter or destructor runs because of target allocation, and no incomplete result is shared. This intentional rejection has no artificial previous exception. PHP's other restrictions retain their existing error path and native previous exception, including interfaces, traits, abstract classes, enums, and unsupported internal classes or their descendants. Class autoload and earlier application extension effects are not rolled back.
+
+For ordinary eager reflection creation, remove the relevant class or injection-point lazy/proxy marker. Calling `make()` instead of `get()` does not disable those attributes. An explicit ordinary factory or `ClassDefinition` provides another eager path under its existing contract: a factory owns its result's initialization, while `ClassDefinition` executes its constructor and explicit `call()` instructions and does not execute DI attributes such as `SetUp`. Configure any required initialization through that chosen path. A class-level `#[Proxy]` does not by itself wrap an opaque application factory's result.
+
+The property requirement belongs to the default native adapter. User-supplied `ProxyFactoryInterface` implementations can use other supported mechanisms and remain responsible for the deferred-callback contracts. Direct caller-supplied callbacks on supported targets still own their later exceptions unless they re-enter a DI resolution boundary. The adapter does not introduce an eager fallback or a container-wide capability check. The [accepted propertyless-lazy plan](docs/plans/propertyless-lazy-lifecycle.md) records the rationale, compatibility boundary and verification requirements.
+
 ## Attributes and request mapping
 
 Built-in object and parameter attributes include:
@@ -310,6 +322,7 @@ The [architecture plan index](docs/plans/README.md) links the reviewed specifica
 - **Attribute availability:** retain corrected polling in current 5.x. B2 remains conditional on application cost and a specified synchronization contract; C is not selected.
 - **Definition ownership:** implemented in this branch. `CompositeResolver` owns immutable bindings; strategies execute supplied definitions without registration maps; all registration mutations complete before retired roots are released.
 - **Callbacks and unions:** implemented in this branch, with a shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and deterministic simple-union autowiring. The package retains PHP `^8.4`; E1 limits only the affected native trait-callable support promise. Request-to-DTO callbacks remain deferred.
+- **Propertyless native laziness:** [D1/A](docs/plans/propertyless-lazy-lifecycle.md) was accepted on November 16, 2026: the default adapter rejects unsupported propertyless targets before allocation and preserves deferred callbacks for supported targets. Implementation and verification are in progress; no further policy confirmation is required.
 
 The [November 15 repeated review](docs/audit/2026-11-15-di6-repeat-review.md) records two further consistency fixes, complete source review, current-source verification and the corrected PHP platform policy. The library retains PHP `^8.4`; E1 limits support for affected native expressions and does not block the whole DI 6 release.
 

@@ -1,12 +1,12 @@
 # Lazy construction without backed instance properties
 
-**Readiness:** blocked by **D1**, the public policy for classes that PHP cannot keep lazy. **Recommendation:** reject the request in the default native `ProxyFactory` before allocating an object. This document is a design proposal; production behavior has not changed.
+**Decision:** **D1/A accepted on November 16, 2026**, following the user's instruction “Доделывай” to finish the recommended repair. The default native `ProxyFactory` must reject an otherwise native-eligible target without backed instance properties before allocating an object. **Implementation and verification are in progress.** No further policy confirmation is required.
 
-Repository baseline: `897f8b10ca6537e7b2f96d20b2e00ed52571ff6f`, branch `refactor/di6-definitions-callbacks`. [Русская версия](propertyless-lazy-lifecycle.ru.md).
+Audit baseline: `897f8b10ca6537e7b2f96d20b2e00ed52571ff6f`. Implementation baseline: `fe435db72d60fc3b042f1a5def815bf1fdb91980`, branch `refactor/di6-definitions-callbacks`. The original audit and recorded observations remain historical evidence; this document now records the accepted target. [Русская версия](propertyless-lazy-lifecycle.ru.md).
 
 ## 1. Confirmed defect and significance
 
-`ProxyFactory::makeLazy()` and `makeProxy()` return the result of PHP's native allocation methods without checking whether the returned object is actually lazy. For native-eligible target classes, PHP deliberately returns an ordinary object when the class has no backed instance property: this includes classes with no properties, only static properties, or only virtual property hooks. The initializer or backing factory is then never called. Calling `ReflectionClass::initializeLazyObject()` afterward does not repair that result.
+At the audited baseline, `ProxyFactory::makeLazy()` and `makeProxy()` returned the result of PHP's native allocation methods without checking whether the returned object was actually lazy. For native-eligible target classes, PHP deliberately returns an ordinary object when the class has no backed instance property: this includes classes with no properties, only static properties, or only virtual property hooks. The initializer or backing factory is then never called. Calling `ReflectionClass::initializeLazyObject()` afterward does not repair that result.
 
 Consequently, the reflection DI pipeline can successfully return and share a `#[Lazy]` or `#[Proxy]` object whose constructor and `#[SetUp]` hooks never ran. `#[NoConstructor]` does not make the result correct: the constructor should be omitted, but its configured setup still disappears. An injection point using `#[Make('id'), Proxy(Target::class)]` can return an object without ever invoking the registered product factory. This is a lifecycle correctness defect, not merely an ineffective optimization.
 
@@ -24,13 +24,13 @@ The source references below are fixed to the audited baseline:
 
 ### Reproduction and independent controls
 
-Run [PropertylessLazyObservation.php](../audit/reproductions/PropertylessLazyObservation.php) from a Composer-installed checkout:
+The original [PropertylessLazyObservation.php](../audit/reproductions/PropertylessLazyObservation.php) reproduces the defect from a Composer-installed checkout before this repair:
 
 ```sh
 php docs/audit/reproductions/PropertylessLazyObservation.php
 ```
 
-The script uses the public `ContainerFactory`, `Container`, and `ProxyFactory`, verifies their loaded source paths and SHA-256 hashes, and records outcomes. It does not add a failing test or encode the current omission as desired behavior. Another installation can be selected using the documented paired environment variables; mismatched loaded source is rejected. The [recorded evidence](../audit/2026-11-15-propertyless-lazy-evidence.json) contains both runtime observations, selected baseline-suite results and the fail-closed source-selection check.
+The script uses the public `ContainerFactory`, `Container`, and `ProxyFactory`, verifies their loaded source paths and SHA-256 hashes, and records outcomes. It does not add a failing test or encode the omission as desired behavior. Another installation can be selected using the documented paired environment variables; mismatched loaded source is rejected. The [recorded evidence](../audit/2026-11-15-propertyless-lazy-evidence.json) contains both runtime observations, selected baseline-suite results and the fail-closed source-selection check. These observations describe the pre-repair source; the accepted target instead rejects the unsupported public requests. The script is historical evidence, not a replacement for the post-repair acceptance tests.
 
 The script produced the same observations on local PHP **8.4.23** and **8.5.8**:
 
@@ -65,12 +65,12 @@ The prototype is a separate function in the observation script; it did not modif
 
 | Option | Public outcome | Ownership / compatibility consequences | Assessment |
 |---|---|---|---|
-| **A. Reject before native allocation** | A DI exception identifies the unsupported target and strategy; no target instance or callback is created | Default native adapter owns its limitation; deferred contracts and custom implementations stay intact | **Recommended smallest coherent repair** |
-| B. Eager fallback in high-level DI object/factory flows | Constructor/setup/factory run immediately, with no unused proxy placeholder | Requires an explicit timing policy, high-level versus direct-factory API distinction, identity and failure semantics; several callers must change together | Possible separate design if support is required |
+| **A. Reject before native allocation** | A DI exception identifies the unsupported target and strategy; no target instance is allocated and no callback is invoked | Default native adapter owns its limitation; deferred contracts and custom implementations stay intact | **Accepted target** |
+| B. Eager fallback in high-level DI object/factory flows | Constructor/setup/factory run immediately, with no unused proxy placeholder | Requires an explicit timing policy, high-level versus direct-factory API distinction, identity and failure semantics; several callers must change together | Not selected; separate design if later required |
 | C. Universal eager fallback inside `ProxyFactory` | Callback runs immediately with an allocated placeholder | Violates deferred contract and adds the demonstrated destructor hazard | Reject |
 | D. Keep successful omission and document it | Apparently valid but incompletely initialized service | Does not meet lifecycle requirements | Reject |
 
-The minimum decision is **A or B**. Existing evidence establishes the defect and rules out C; it cannot infer that consumers want an exception rather than eager execution. The user's audit instruction requires a plan when such a policy must be chosen. No production slice is executable until D1 is recorded in the accepted target. No further broad audit or speculative API is required to choose.
+**D1 is resolved in favor of A.** The original audit correctly left the rejection-versus-eager policy open because either outcome changes observable behavior. After the recommendation and its tradeoffs were presented, the user's instruction to finish the work accepted A. Implementation may proceed against sections 4–6 without another confirmation. B is outside this change; C and D remain rejected for the reasons above.
 
 ## 4. Settled requirements and preserved behavior
 
@@ -82,9 +82,9 @@ The minimum decision is **A or B**. Existing evidence establishes the defect and
 - **P4:** `ClassDefinition` remains eager and does not execute class/property/parameter attributes. Ordinary application factories continue to own their own product initialization. This issue concerns reflection strategies, explicit proxy injection, and factories that themselves call the lazy factory API; a class-level `#[Proxy]` alone does not reinterpret an opaque factory product.
 - **P5:** class autoload and pre-existing before-instantiation extension effects are not rolled back. The repair must avoid **new target allocation and callback effects** at the native adapter boundary; it cannot promise global side-effect-free resolution.
 
-## 5. Fully specified candidate target for option A
+## 5. Accepted target for option A
 
-This section defines the recommended policy if D1 selects A. It does not approve its implementation.
+This section defines the accepted D1/A contract. The implementation must remain within this default-adapter boundary and preserve the requirements in section 4.
 
 ### Ownership and boundary
 
@@ -104,21 +104,23 @@ The metadata rule is necessary for the default adapter, not a guarantee that PHP
 
 ### Failure contract
 
-Throw `ResolutionException` with `serviceId` set to the canonical target class name. The message must identify the requested ghost/proxy strategy, the absence of backed instance properties, and the available ordinary eager construction path. A dedicated new exception subtype is unnecessary. This deliberate eligibility rejection needs no fabricated native `previous` exception. It must not retain the callback, a reflection object or a service object in diagnostic payload fields.
+Throw `ResolutionException` with `serviceId` set to the canonical target class name. Use the message `Cannot create native %s for class "%s": no backed instance properties; use eager construction instead.`, substituting the strategy `lazy ghost` or `virtual proxy` and the canonical class name. A dedicated new exception subtype is unnecessary. This deliberate eligibility rejection has no fabricated native `previous` exception. It must not retain the callback, a reflection object or a service object in diagnostic payload fields.
 
-Diagnostic payload ownership is distinct from PHP's native exception trace. With `zend.exception_ignore_args=0`, a retained exception can keep callback arguments alive through its trace. This proposal does not sanitize traces or promise collection in that configuration while the exception is retained. A lifetime test retaining the exception must set `zend.exception_ignore_args=1` and restore the prior value; alternatively release both the exception and caller references before testing collection.
+Diagnostic payload ownership is distinct from PHP's native exception trace. With `zend.exception_ignore_args=0`, a retained exception can keep callback arguments alive through its trace. This contract does not sanitize traces or promise collection in that configuration while the exception is retained. A lifetime test retaining the exception must set `zend.exception_ignore_args=1` and restore the prior value; alternatively release both the exception and caller references before testing collection.
 
 No initializer, backing factory, target constructor, setup hook, property setter, or target destructor may run **because of adapter allocation** in this rejection. A failed container resolution must not publish a shared value; a later ordinary eager construction or explicitly selected custom factory can still succeed. Direct callbacks for supported lazy targets continue raising their later exceptions at initialization with their original identity; do not wrap them in a new callback solely for this check.
 
 ### Compatibility and benefit
 
-Applications currently requesting native laziness for these classes will receive a deterministic failure instead of an incomplete successful service. Migration consists of removing native laziness for that service, using an explicit ordinary factory/definition, or selecting an implementation with an independently tested supported mechanism. Adding a meaningless property just to manufacture a lazy trigger is not the recommended migration.
+Applications currently requesting native laziness for these classes will receive a deterministic failure instead of an incomplete successful service. For eager reflection creation, remove the relevant class or injection-point lazy/proxy marker. Changing `get()` to `make()` alone does not disable attributes or select eager creation. This reflection path retains its ordinary property injection and setup contract, with `NoConstructor` still suppressing only the constructor.
+
+Alternatively, use an explicit ordinary application factory or `ClassDefinition`. The factory owns its result's initialization; `ClassDefinition` eagerly invokes its constructor and explicit `call()` instructions, and ignores DI attributes, including `SetUp`. Move any required initialization into the chosen factory or explicit calls. A class-level `#[Proxy]` does not itself wrap an opaque factory product. A custom `ProxyFactoryInterface` implementation with an independently tested supported mechanism is also valid, provided it keeps the deferred-callback contracts. Adding a meaningless property just to manufacture a lazy trigger is not the recommended migration.
 
 The benefit is lifecycle correctness and a diagnosable native capability boundary. It is not a performance optimization. The production change is local; integration verification is broader because the same adapter serves multiple public routes. No numerical speedup or memory saving is claimed.
 
-## 6. Candidate change surface and acceptance mapping
+## 6. Change surface and acceptance mapping
 
-These are the files and proofs required by option A after D1; they are not executable production slices while D1 remains open.
+These files and proofs implement the accepted option A. The implementation and its verification are in progress; the table defines the required evidence, not completed results.
 
 | Surface | Required responsibility |
 |---|---|
@@ -142,12 +144,12 @@ These are the files and proofs required by option A after D1; they are not execu
 | Diagnostics / lifetime | Stored DI payload contains only target/strategy metadata; after caller release, prove capture collection with retained exception only under temporarily enabled `zend.exception_ignore_args=1`, or release the exception too; no trace-sanitization claim |
 | Production verification | Focused RED/GREEN on PHP 8.4/8.5; existing complete suite, PHPStan max and style; applicable CI matrix including Windows |
 
-After acceptance, establish the rejection tests' RED first, change the shared adapter boundary with its contract documentation, then run the focused supported/unsupported matrix and existing integration gates. Review actual code against R1–R2 and P1–P5, especially preallocation timing, custom-factory bypass and absence of a leftover eager fallback. Do not measure correctness through private cache counters or add an arbitrary timing threshold.
+Establish the rejection tests' RED first, change the shared adapter boundary with its contract documentation, then run the focused supported/unsupported matrix and existing integration gates. Review actual code against R1–R2 and P1–P5, especially preallocation timing, custom-factory bypass and absence of a leftover eager fallback. Do not measure correctness through private cache counters or add an arbitrary timing threshold.
 
-## 7. Bounded remaining decision work
+## 7. Implementation and verification status
 
-**D1:** confirm A's rejection policy or explicitly require B's eager support. The deciding evidence is already available: native callback omission, explicit public deferred contracts, the default adapter's callers, and the unsafe fallback's duplicate destructor. No additional production experiment is needed.
+**D1/A is accepted; implementation and verification are in progress.** Remaining work consists of the shared adapter check, its public contract documentation, direct and integration RED/GREEN proof, and the repository's applicable validation gates. Final implementation commits and verification results must be recorded after those gates finish; the historical audit's test counts are not evidence for this new implementation.
 
-If B is selected, first revise the target to settle high-level versus direct API behavior, factory/ghost identity, constructor and setup timing, exception normalization, failed-attempt retry and custom implementation interaction. A high-level implementation must choose eager construction **before any placeholder is allocated**, reuse the existing eager object pipeline or application factory, and cover every relevant caller. These responsibilities cannot be completed by merely adding `if (!isUninitializedLazyObject(...))` to the current adapter. Until those contracts are explicit, B is not implementation-ready.
+Option B is not selected. Any later proposal for eager support would separately need to settle high-level versus direct API behavior, factory/ghost identity, constructor and setup timing, exception normalization, failed-attempt retry and custom implementation interaction. It would have to choose eager construction **before any placeholder is allocated**, reuse the existing eager object pipeline or application factory, and cover every relevant caller. Merely adding `if (!isUninitializedLazyObject(...))` to the adapter does not satisfy those obligations and is not part of D1/A.
 
-Production files and normal test expectations are unchanged by this proposal. The observation script is retained as a reproduction; the naive prototype is explicitly marked rejected and must not migrate into `src/`.
+The original audit reports and observation evidence remain unchanged. The observation script is retained as a pre-repair reproduction; the naive prototype is explicitly marked rejected and must not migrate into `src/`.
