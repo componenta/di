@@ -17,19 +17,20 @@ if (!is_string($autoload) || !is_file($autoload)
 ) {
     throw new RuntimeException('Set COMPONENTA_DI_BENCH_AUTOLOAD and COMPONENTA_DI_BENCH_SOURCE.');
 }
-$autoload = realpath($autoload);
-$source = realpath($source);
+$canonicalPath = static fn(string $path): string => str_replace(DIRECTORY_SEPARATOR, '/', realpath($path) ?: $path);
+$autoload = $canonicalPath($autoload);
+$source = $canonicalPath($source);
 $vendor = dirname($autoload);
 $psr4 = require $vendor . '/composer/autoload_psr4.php';
 $originalSources = array_map(
-    static fn(string $path): string => realpath($path) ?: $path,
+    $canonicalPath,
     $psr4['Componenta\\DI\\'] ?? [],
 );
 if ($originalSources === []) {
     throw new RuntimeException('The selected Composer installation has no Componenta DI source mapping.');
 }
-$remap = static function (string $path) use ($originalSources, $source): string {
-    $path = realpath($path) ?: $path;
+$remap = static function (string $path) use ($originalSources, $source, $canonicalPath): string {
+    $path = $canonicalPath($path);
     foreach ($originalSources as $original) {
         if ($path === $original) {
             return $source;
@@ -68,8 +69,10 @@ foreach (require $vendor . '/composer/autoload_files.php' as $identifier => $fil
         require $remap($file);
     }
 }
-if (realpath((new ReflectionClass(Componenta\DI\Container::class))->getFileName()) !== $source . '/Container.php'
-    || realpath((new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible'))->getFileName()) !== $source . '/Internal/functions.php'
+$containerFile = (new ReflectionClass(Componenta\DI\Container::class))->getFileName();
+$functionFile = (new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible'))->getFileName();
+if (!is_string($containerFile) || $canonicalPath($containerFile) !== $source . '/Container.php'
+    || !is_string($functionFile) || $canonicalPath($functionFile) !== $source . '/Internal/functions.php'
 ) {
     throw new RuntimeException('DI class/function source precheck failed.');
 }

@@ -118,7 +118,8 @@ function assertProductionSources(string $source): array
         }
         ++$declarations;
         $file = (new ReflectionClass($name))->getFileName();
-        if (!is_string($file) || !str_starts_with(realpath($file), $source . '/')) {
+        $canonicalFile = is_string($file) ? realpath($file) : false;
+        if (!is_string($canonicalFile) || !str_starts_with(str_replace(DIRECTORY_SEPARATOR, '/', $canonicalFile), $source . '/')) {
             $violations[$name] = $file;
         }
     }
@@ -128,7 +129,8 @@ function assertProductionSources(string $source): array
         }
         ++$functions;
         $file = (new \ReflectionFunction($name))->getFileName();
-        if (!is_string($file) || !str_starts_with(realpath($file), $source . '/')) {
+        $canonicalFile = is_string($file) ? realpath($file) : false;
+        if (!is_string($canonicalFile) || !str_starts_with(str_replace(DIRECTORY_SEPARATOR, '/', $canonicalFile), $source . '/')) {
             $violations[$name] = $file;
         }
     }
