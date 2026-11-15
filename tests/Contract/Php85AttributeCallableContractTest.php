@@ -45,18 +45,22 @@ test('native Init expressions preserve legacy callables lexical scope state and 
 })->with(['cached', 'uncached'])
     ->skip(PHP_VERSION_ID < 80500, 'Native callback expressions require PHP 8.5.');
 
-test('unsupported native callback forms fail at their engine owned boundary', function (string $fixture, bool $compiled): void {
+test('unsupported native callback forms fail at their engine owned boundary', function (string $fixture, bool $compiled, string $reason): void {
     $result = nativeFixture($fixture);
     expect($result['code'])->not->toBe(0)
         ->and(str_contains($result['stdout'], "compiled\n"))->toBe($compiled)
-        ->and($result['stdout'] . $result['stderr'])->toContain('Fatal error');
+        ->and($result['stdout'] . $result['stderr'])->toContain('Fatal error', $reason);
 })->with([
-    ['InvalidArrow', false],
-    ['InvalidCapture', false],
-    ['InvalidNonStatic', false],
-    ['InvalidDynamicReference', false],
-    ['InvalidObjectReference', false],
-    ['InvalidMagicReference', true],
+    'arrow function' => ['InvalidArrow', false, 'Constant expression contains invalid operations'],
+    'captured variable' => ['InvalidCapture', false, 'Cannot use(...) variables in constant expression'],
+    'non-static closure' => ['InvalidNonStatic', false, 'Closures in constant expressions must be static'],
+    'dynamic function name' => ['InvalidDynamicReference', false, 'Cannot use dynamic function name in constant expression'],
+    'object method reference' => ['InvalidObjectReference', false, 'Constant expression contains invalid operations'],
+    'magic method reference' => [
+        'InvalidMagicReference',
+        true,
+        'Creating a callable for the magic __callStatic() method is not supported in constant expressions',
+    ],
 ])->skip(PHP_VERSION_ID < 80500, 'Native callback expressions require PHP 8.5.');
 
 test('native setup callbacks preserve scope state lazy retries and runtime lifetimes', function (string $mode): void {
