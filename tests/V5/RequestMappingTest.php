@@ -221,8 +221,10 @@ final readonly class NumericKeyRequestDtoTarget
     ) {}
 }
 
-final readonly class HighPriorityTokenResolver implements ParameterResolverInterface
+final class HighPriorityTokenResolver implements ParameterResolverInterface
 {
+    public int $calls = 0;
+
     public function supports(ParameterTarget $target): bool
     {
         return $target->name === 'token';
@@ -232,6 +234,7 @@ final readonly class HighPriorityTokenResolver implements ParameterResolverInter
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): array {
+        ++$this->calls;
         return [$target->position, 'custom-high-priority'];
     }
 }
@@ -339,15 +342,21 @@ test('mapped source guard runs before a higher-priority custom resolver', functi
     $request = (new ServerRequest('POST', '/'))
         ->withHeader('X-Token', 'trusted')
         ->withParsedBody(['token' => 'attacker']);
+    $resolver = new HighPriorityTokenResolver();
     $container = (new ContainerBuilder())
         ->addService(CasterProviderInterface::class, new TestCasterProvider())
-        ->addParameterResolver(new HighPriorityTokenResolver(), 5000)
+        ->addParameterResolver($resolver, 5000)
         ->build();
 
     expect(fn() => $container->make(
         HeaderProtectedEnvelope::class,
         [ServerRequestInterface::class => $request],
     ))->toThrow(RequestParameterSourceConflictException::class);
+    expect($resolver->calls)->toBe(0);
+
+    expect($container->make(HeaderProtectedMappedDto::class)->token)
+        ->toBe('custom-high-priority')
+        ->and($resolver->calls)->toBe(1);
 });
 
 test('MapRequest rejects conflicting values from multiple sources by default', function (): void {
