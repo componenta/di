@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -181,7 +182,8 @@ test('plan memoization invalidates when registry semantics change', function ():
 
     expect($plans->build($parameter)->usages)->toHaveCount(1);
 
-    $registry->register(new AttributeDefinition(RuleB::class));
+    $registry->defineCapability(new CapabilityPolicy(AuditSelectorCapability::class, 2));
+    $registry->register(new AttributeDefinition(RuleB::class, capabilities: [AuditSelectorCapability::class]));
 
     expect($plans->build($parameter)->usages)->toHaveCount(2);
 });

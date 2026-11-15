@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -80,7 +81,9 @@ test('singular plan selection refuses two usages even when the capability permit
 
     expect($plan->all(ValueTransformer::class))->toHaveCount(2)
         ->and(fn() => $plan->one(ValueTransformer::class))
-        ->toThrow(AttributeCompositionException::class, 'Capability "' . ValueTransformer::class . '" is not singular in this plan.');
+        ->toThrow(AttributeCompositionException::class, 'Capability "' . ValueTransformer::class . '" is not singular in this plan.')
+        ->and(fn() => (new AttributeSet($plan->usages))->one(ValueTransformer::class))
+        ->toThrow(AttributeCompositionException::class, 'Selector "' . ValueTransformer::class . '" is not singular in this attribute set.');
 });
 
 test('extension phases retain their stable serialized identifiers', function (): void {

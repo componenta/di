@@ -29,7 +29,8 @@ test('core capability policies expose singular providers and repeatable transfor
         $policies[$policy->capability] = $policy->maxPerTarget;
     }
 
-    expect($policies)->toBe([
+    expect(array_is_list($registry->policies()))->toBeTrue()
+        ->and($policies)->toBe([
         ValueProvider::class => 1,
         ValueTransformer::class => null,
         CreationStrategy::class => 1,
