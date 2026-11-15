@@ -76,3 +76,36 @@ test('factory admission validates a static callable discovered by its later avai
         spl_autoload_unregister($loader);
     }
 });
+
+#[\Componenta\DI\Attribute\NoConstructor]
+interface IneligibleInterface {}
+
+#[\Componenta\DI\Attribute\NoConstructor]
+trait IneligibleTrait {}
+
+#[\Componenta\DI\Attribute\NoConstructor]
+abstract class IneligibleAbstract {}
+
+#[\Componenta\DI\Attribute\NoConstructor]
+enum IneligibleEnum
+{
+    case Value;
+}
+
+/** @param class-string $class */
+test('implicit entries reject ineligible class kinds even when constructor policy would permit allocation', function (string $class): void {
+    /** @var class-string $class */
+    $container = (new ContainerBuilder())->build();
+    $pipeline = $container->get(\Componenta\DI\Object\ObjectPipeline::class);
+
+    expect($pipeline->canCreate(new \ReflectionClass($class)))->toBeFalse()
+        ->and($container->has($class))->toBeFalse()
+        ->and(fn() => $container->get($class))->toThrow(\Componenta\DI\Exception\NotFoundException::class)
+        ->and(fn() => $container->make($class))->toThrow(\Componenta\DI\Exception\NotFoundException::class);
+})->with([
+    'anonymous class' => [(new class () {})::class],
+    'interface with constructor policy' => [IneligibleInterface::class],
+    'trait with constructor policy' => [IneligibleTrait::class],
+    'abstract class with constructor policy' => [IneligibleAbstract::class],
+    'enum with constructor policy' => [IneligibleEnum::class],
+]);
