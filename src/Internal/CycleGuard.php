@@ -46,7 +46,21 @@ final class CycleGuard
      */
     public function enter(string $id): void
     {
-        $stack = $this->stack();
+        $execution = Fiber::getCurrent();
+
+        if ($execution === null) {
+            if (isset($this->resolving[$id])) {
+                throw CircularDependencyException::forService([
+                    ...array_map('strval', array_keys($this->resolving)),
+                    $id,
+                ]);
+            }
+
+            $this->resolving[$id] = true;
+            return;
+        }
+
+        $stack = $this->fiberStacks[$execution] ?? [];
 
         if (isset($stack[$id])) {
             throw CircularDependencyException::forService([
@@ -56,26 +70,32 @@ final class CycleGuard
         }
 
         $stack[$id] = true;
-        $this->replaceStack($stack);
+        $this->fiberStacks[$execution] = $stack;
     }
 
     public function leave(string $id): void
     {
-        $stack = $this->stack();
-        unset($stack[$id]);
-        $this->replaceStack($stack);
+        $this->leaveContext($id, Fiber::getCurrent());
     }
 
     public function enterShared(string $id): void
     {
         $execution = Fiber::getCurrent();
-        $stack = $this->stack();
-
-        if (isset($stack[$id])) {
-            throw CircularDependencyException::forService([
-                ...array_map('strval', array_keys($stack)),
-                $id,
-            ]);
+        if ($execution === null) {
+            if (isset($this->resolving[$id])) {
+                throw CircularDependencyException::forService([
+                    ...array_map('strval', array_keys($this->resolving)),
+                    $id,
+                ]);
+            }
+        } else {
+            $stack = $this->fiberStacks[$execution] ?? [];
+            if (isset($stack[$id])) {
+                throw CircularDependencyException::forService([
+                    ...array_map('strval', array_keys($stack)),
+                    $id,
+                ]);
+            }
         }
 
         $owner = $this->sharedOwners[$id] ?? null;
@@ -88,7 +108,12 @@ final class CycleGuard
             throw ConcurrentResolutionException::forService($id);
         }
 
-        $this->enter($id);
+        if ($execution === null) {
+            $this->resolving[$id] = true;
+        } else {
+            $stack[$id] = true;
+            $this->fiberStacks[$execution] = $stack;
+        }
         $this->sharedOwners[$id] = $execution === null
             ? $this->mainOwner
             : WeakReference::create($execution);
@@ -103,7 +128,7 @@ final class CycleGuard
             unset($this->sharedOwners[$id]);
         }
 
-        $this->leave($id);
+        $this->leaveContext($id, $execution);
     }
 
     private function ownedBy(object $owner, ?object $execution): bool
@@ -116,31 +141,22 @@ final class CycleGuard
             && $owner->get() === $execution;
     }
 
-    /** @return array<string, true> */
-    private function stack(): array
+    /** @param Fiber<mixed, mixed, mixed, mixed>|null $execution */
+    private function leaveContext(string $id, ?Fiber $execution): void
     {
-        $fiber = Fiber::getCurrent();
-
-        return $fiber === null
-            ? $this->resolving
-            : ($this->fiberStacks[$fiber] ?? []);
-    }
-
-    /** @param array<string, true> $stack */
-    private function replaceStack(array $stack): void
-    {
-        $fiber = Fiber::getCurrent();
-
-        if ($fiber === null) {
-            $this->resolving = $stack;
+        if ($execution === null) {
+            unset($this->resolving[$id]);
             return;
         }
+
+        $stack = $this->fiberStacks[$execution] ?? [];
+        unset($stack[$id]);
 
         if ($stack === []) {
-            unset($this->fiberStacks[$fiber]);
+            unset($this->fiberStacks[$execution]);
             return;
         }
 
-        $this->fiberStacks[$fiber] = $stack;
+        $this->fiberStacks[$execution] = $stack;
     }
 }
