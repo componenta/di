@@ -1,0 +1,3536 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-11-15T21:50:21.039913+00:00",
+  "repository": "componenta/di",
+  "branch": "refactor/di6-definitions-callbacks",
+  "baseline": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+  "validated_code_head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+  "status": "Final local gates and all five required CI jobs, including coverage and complete mutation testing, succeeded at the final code/test head. D1 remains an open confirmed lifecycle defect with a detailed unimplemented policy proposal.",
+  "source_only_fingerprint": {
+    "files": 169,
+    "sha256": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+    "method": "SHA256(json.dumps({relative_path: SHA256(file_bytes)}, sort_keys=True).encode()) using Python default JSON separators."
+  },
+  "src_tests_fingerprint": {
+    "count": 416,
+    "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+  },
+  "published_units": [
+    {
+      "sha": "7a9056912d7779d7399bff4afed3450e483fd342",
+      "parent": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+      "subject": "test(di): verify Cast fallback inputs before conversion",
+      "files": [
+        "tests/Contract/CastInputFallbackContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/7a9056912d7779d7399bff4afed3450e483fd342"
+    },
+    {
+      "sha": "6c3e58a6fe95de9dc55b43cb94441aefef907d99",
+      "parent": "7a9056912d7779d7399bff4afed3450e483fd342",
+      "subject": "test(di): verify custom request extraction and mapping protocols",
+      "files": [
+        "tests/Contract/RequestAttributeProtocolContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/6c3e58a6fe95de9dc55b43cb94441aefef907d99"
+    },
+    {
+      "sha": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+      "parent": "6c3e58a6fe95de9dc55b43cb94441aefef907d99",
+      "subject": "test(di): verify deferred callable retirement after cache invalidation",
+      "files": [
+        "tests/Contract/DeferredCallableRetirementContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/2c52c285b806dbccffc7f43fba197aeeb01e4f6a"
+    },
+    {
+      "sha": "b0daea8dcd804af774ebbd34ae561f3246cecdf9",
+      "parent": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+      "subject": "fix(di): bound native method metadata across case variants",
+      "files": [
+        "src/CallableResolver.php",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/b0daea8dcd804af774ebbd34ae561f3246cecdf9"
+    },
+    {
+      "sha": "8002d2dff5bb1ac03bbe345290ba34ff40276f3d",
+      "parent": "b0daea8dcd804af774ebbd34ae561f3246cecdf9",
+      "subject": "test(di): verify alias rejection preserves warmed state",
+      "files": [
+        "tests/Contract/DependencyNormalizationContractTest.php",
+        "tests/Contract/RuntimeMutationRecoveryContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/8002d2dff5bb1ac03bbe345290ba34ff40276f3d"
+    },
+    {
+      "sha": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+      "parent": "8002d2dff5bb1ac03bbe345290ba34ff40276f3d",
+      "subject": "test(di): preserve magic closure binding at visibility boundaries",
+      "files": [
+        "tests/Contract/MagicClosureInvocationContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/a4cb684c67ff86224c639013cb9252fab84e0b2d"
+    },
+    {
+      "sha": "8f47e9e61bccfb32b1a82ae29292e5276a21f211",
+      "parent": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+      "subject": "ci(di): exercise native callback fixtures on Windows PHP 8.5",
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
+      "url": "https://github.com/componenta/di/commit/8f47e9e61bccfb32b1a82ae29292e5276a21f211"
+    },
+    {
+      "sha": "b6297a6ed9ed047c1c984b33afd857b434925d95",
+      "parent": "8f47e9e61bccfb32b1a82ae29292e5276a21f211",
+      "subject": "fix(tests): preserve source checks for PHP 8.5 fixtures on Windows",
+      "files": [
+        "tests/Fixtures/Php85Callbacks/InitNative.php.fixture",
+        "tests/Fixtures/Php85Callbacks/SetUpNative.php.fixture"
+      ],
+      "url": "https://github.com/componenta/di/commit/b6297a6ed9ed047c1c984b33afd857b434925d95"
+    },
+    {
+      "sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "parent": "b6297a6ed9ed047c1c984b33afd857b434925d95",
+      "subject": "test(di): preserve original autoload failure identity",
+      "files": [
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php"
+      ],
+      "url": "https://github.com/componenta/di/commit/348330544d3d5b0bec7b158e0c2221927dc23643"
+    }
+  ],
+  "production_diff": "diff --git a/src/CallableResolver.php b/src/CallableResolver.php\nindex a3e993a..25fca03 100644\n--- a/src/CallableResolver.php\n+++ b/src/CallableResolver.php\n@@ -145,7 +145,7 @@ class CallableResolver implements CallableResolverInterface\n \n     private function isStaticMethod(string $class, string $method): bool\n     {\n-        $key = $class . '::' . $method;\n+        $key = strtolower($class . '::' . $method);\n         if (!array_key_exists($key, $this->staticCache)) {\n             $this->staticCache[$key] = new \\ReflectionMethod($class, $method)->isStatic();\n         }\n",
+  "runs": [
+    {
+      "label": "baseline-php84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--order-by=random",
+        "--random-order-seed=2026111522",
+        "--do-not-cache-result",
+        "--cache-directory=/workspace/scratch/8dccbfa10ffb/cache84",
+        "--log-junit=/workspace/scratch/8dccbfa10ffb/baseline-php84.xml"
+      ],
+      "started_at": "2026-11-15T20:05:00.836403+00:00",
+      "before": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "head": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+      "seconds": 26.284,
+      "exit_code": 0,
+      "after": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "log_sha256": "1f8ebdba188da778c88582b3f0da0fffbc65f546cac86b967b01a37ba6fe8036",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/baseline-php84.log",
+      "output": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  .................................................ss.ssssssss................\n  ............................................................................\n  ............................................................................\n  ss..........................................................................\n  ..........................ss................ss..............................\n  ............................................................................\n  .............................................................ss.............\n  ............................................................................\n  ........\n\n  Tests:    18 skipped, 1510 passed (24189 assertions)\n  Duration: 25.14s\n  Random Order Seed: 2026111522\n\n"
+    },
+    {
+      "label": "baseline-php85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=1",
+        "-d",
+        "opcache.jit=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--order-by=reverse",
+        "--do-not-cache-result",
+        "--cache-directory=/workspace/scratch/8dccbfa10ffb/cache85",
+        "--log-junit=/workspace/scratch/8dccbfa10ffb/baseline-php85.xml"
+      ],
+      "started_at": "2026-11-15T20:05:00.833370+00:00",
+      "before": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "head": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+      "seconds": 37.01,
+      "exit_code": 0,
+      "after": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "log_sha256": "4c2bbcfeda22445c0df53471f85ff16ccd7de885d0ccb9c7ef6878b858bb2a52",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/baseline-php85.log",
+      "output": "\nWarning: JIT is incompatible with third party extensions that setup user opcode handlers. JIT disabled. in Unknown on line 0\n\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ...............s............................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ........\n\n  Tests:    1 skipped, 1527 passed (24296 assertions)\n  Duration: 35.62s\n\n"
+    },
+    {
+      "label": "phpstan-baseline",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "memory_limit=1G",
+        "vendor/bin/phpstan",
+        "analyse",
+        "--no-progress",
+        "--memory-limit=1G"
+      ],
+      "started_at": "2026-11-15T20:05:34.057769+00:00",
+      "before": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "head": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+      "seconds": 24.766,
+      "exit_code": 0,
+      "after": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "log_sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/phpstan-baseline.log",
+      "output": "Warning: PHP Startup: Unable to load dynamic library '/workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: /workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924//workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0\nNote: Using configuration file /workspace/scratch/8f6c1df8ef3b/di/phpstan.neon.dist.\n\n [OK] No errors                                                                 \n\n"
+    },
+    {
+      "label": "composer-validate",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "/workspace/scratch/8f6c1df8ef3b/runtime/composer.phar",
+        "validate",
+        "--strict"
+      ],
+      "started_at": "2026-11-15T20:05:34.148259+00:00",
+      "before": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "head": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+      "seconds": 1.408,
+      "exit_code": 0,
+      "after": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "log_sha256": "43add299dc97ecbd90ec2dc456ef5a0bd824bb9abdae2a3d7cdb520e21f8e86d",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/composer-validate.log",
+      "output": "./composer.json is valid\n"
+    },
+    {
+      "label": "dependency-audit",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "/workspace/scratch/8f6c1df8ef3b/runtime/composer.phar",
+        "audit",
+        "--no-interaction",
+        "--format=json"
+      ],
+      "started_at": "2026-11-15T20:05:34.129145+00:00",
+      "before": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "head": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+      "seconds": 13.571,
+      "exit_code": 0,
+      "after": {
+        "count": 413,
+        "sha256": "5fb2f3f4eeec81110224928d5ec5e0b826003314606337b15e0e58c2d1552b68"
+      },
+      "log_sha256": "0046e84f375c11ed2bdc90e758acd0530b66a6905121613e20e9fac2525684f2",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/dependency-audit.log",
+      "output": "{\n    \"advisories\": [],\n    \"abandoned\": [],\n    \"filter\": [],\n    \"cooldown\": []\n}\n"
+    },
+    {
+      "label": "cs-baseline",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/php-cs-fixer",
+        "fix",
+        "--dry-run",
+        "--diff",
+        "--using-cache=no"
+      ],
+      "started_at": "2026-11-15T20:09:45.362501+00:00",
+      "before": {
+        "count": 414,
+        "sha256": "d42f915f2b0f8f133348ed46b0c37729779a90106910211a231f8bbc2ac3651d"
+      },
+      "head": "7a9056912d7779d7399bff4afed3450e483fd342",
+      "seconds": 8.77,
+      "exit_code": 0,
+      "after": {
+        "count": 414,
+        "sha256": "d42f915f2b0f8f133348ed46b0c37729779a90106910211a231f8bbc2ac3651d"
+      },
+      "log_sha256": "108f56c757532f14feaf24c8f61bba0f83a18ab0e49249d2795434422b824210",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/cs-baseline.log",
+      "output": "PHP CS Fixer 3.95.30 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.\nPHP runtime: 8.4.23\nLoaded config default from \"/workspace/scratch/8f6c1df8ef3b/di/.php-cs-fixer.dist.php\".\nRunning analysis on 8 cores with 10 files per process.\n   0/409 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n   1/409 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n  41/409 [▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░]  10%\n  82/409 [▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░]  20%\n 123/409 [▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░]  30%\n 164/409 [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░]  40%\n 205/409 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░]  50%\n 246/409 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░]  60%\n 287/409 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░]  70%\n 328/409 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░]  80%\n 369/409 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░]  90%\n 409/409 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%\n\n\nFound 0 of 409 files that can be fixed in 7.699 seconds, 204.00 MB memory used\n"
+    },
+    {
+      "label": "cache-parity84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "docs/audit/reproductions/MutationParity.php"
+      ],
+      "started_at": "2026-11-15T20:10:15.686396+00:00",
+      "before": {
+        "count": 414,
+        "sha256": "d42f915f2b0f8f133348ed46b0c37729779a90106910211a231f8bbc2ac3651d"
+      },
+      "head": "7a9056912d7779d7399bff4afed3450e483fd342",
+      "seconds": 3.255,
+      "exit_code": 0,
+      "after": {
+        "count": 414,
+        "sha256": "d42f915f2b0f8f133348ed46b0c37729779a90106910211a231f8bbc2ac3651d"
+      },
+      "log_sha256": "30f7cce2cf6a856479f67575efb1858638cf1927c92cc3c2c72ebd79ffdbe050",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/cache-parity84.log",
+      "output": "{\"php\":\"8.4.23\",\"operations\":1200,\"comparisons\":28800}\n"
+    },
+    {
+      "label": "cache-parity85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "docs/audit/reproductions/MutationParity.php"
+      ],
+      "started_at": "2026-11-15T20:10:15.771415+00:00",
+      "before": {
+        "count": 414,
+        "sha256": "d42f915f2b0f8f133348ed46b0c37729779a90106910211a231f8bbc2ac3651d"
+      },
+      "head": "7a9056912d7779d7399bff4afed3450e483fd342",
+      "seconds": 3.2,
+      "exit_code": 0,
+      "after": {
+        "count": 414,
+        "sha256": "d42f915f2b0f8f133348ed46b0c37729779a90106910211a231f8bbc2ac3651d"
+      },
+      "log_sha256": "1e419d97c10b75c50980a8315e02a0644a2b596cc487ae76c9f8ac288e32c7b7",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/cache-parity85.log",
+      "output": "{\"php\":\"8.5.8\",\"operations\":1200,\"comparisons\":28800}\n"
+    },
+    {
+      "label": "callable-casing-red84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:13:44.743319+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "bd6a5f82222a6562da884b0f1ff99817debc48a82ec19dab31b4124e452625db"
+      },
+      "head": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+      "seconds": 2.891,
+      "exit_code": 1,
+      "after": {
+        "count": 416,
+        "sha256": "bd6a5f82222a6562da884b0f1ff99817debc48a82ec19dab31b4124e452625db"
+      },
+      "log_sha256": "b2f6bd61e7ca3ce72b8f23f685dbb4330a75fd97c0ee3136ae75841570aced16",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/callable-casing-red84.log",
+      "output": "\n  ⨯⨯....\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n\n  Tests:    2 failed, 4 passed (23 assertions)\n  Duration: 2.10s\n  Random Order Seed: 1794773625\n\n"
+    },
+    {
+      "label": "callable-casing-red85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:13:44.793205+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "bd6a5f82222a6562da884b0f1ff99817debc48a82ec19dab31b4124e452625db"
+      },
+      "head": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+      "seconds": 3.226,
+      "exit_code": 1,
+      "after": {
+        "count": 416,
+        "sha256": "bd6a5f82222a6562da884b0f1ff99817debc48a82ec19dab31b4124e452625db"
+      },
+      "log_sha256": "dd30f99b41095ac2837b7424e17a1ecb56fb777500f34e7828e3344391fccdf2",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/callable-casing-red85.log",
+      "output": "\n  ⨯⨯....\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n\n  Tests:    2 failed, 4 passed (23 assertions)\n  Duration: 2.49s\n  Random Order Seed: 1794773625\n\n"
+    },
+    {
+      "label": "callable-casing-green84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "tests/Contract/CallableMagicRetentionContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:14:05.055531+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "aa29a076140e1a784b93c3939e3ba347eb62f978a70ea050e0c56fab9ec4e688"
+      },
+      "head": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+      "seconds": 3.656,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "aa29a076140e1a784b93c3939e3ba347eb62f978a70ea050e0c56fab9ec4e688"
+      },
+      "log_sha256": "3bdf721d466ea42a16c593ddf052a191f2a3b828728581df7c12c27a6899c4c9",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/callable-casing-green84.log",
+      "output": "\n  ..................\n\n  Tests:    18 passed (99 assertions)\n  Duration: 2.67s\n  Random Order Seed: 1794773646\n\n"
+    },
+    {
+      "label": "callable-casing-green85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "tests/Contract/CallableMagicRetentionContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:14:05.035369+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "aa29a076140e1a784b93c3939e3ba347eb62f978a70ea050e0c56fab9ec4e688"
+      },
+      "head": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+      "seconds": 3.865,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "aa29a076140e1a784b93c3939e3ba347eb62f978a70ea050e0c56fab9ec4e688"
+      },
+      "log_sha256": "b5ee55f027db123f08e9642080ac914bca78b0685f8dd4019de616b7eb5b42e2",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/callable-casing-green85.log",
+      "output": "\n  ..................\n\n  Tests:    18 passed (99 assertions)\n  Duration: 2.83s\n  Random Order Seed: 1794773646\n\n"
+    },
+    {
+      "label": "final-php84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--order-by=random",
+        "--random-order-seed=2026111545",
+        "--do-not-cache-result",
+        "--cache-directory=/workspace/scratch/8dccbfa10ffb/finalcache84",
+        "--log-junit=/workspace/scratch/8dccbfa10ffb/final-php84.xml"
+      ],
+      "started_at": "2026-11-15T20:16:50.133922+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "head": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+      "seconds": 45.356,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "log_sha256": "604fc5cb69833471ba59fe7ce18f21cbea5a3883a0e9b7739d2e52b13c58e108",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/final-php84.log",
+      "output": "\n  ...............ssssssssss...................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  .......................................................................ss...\n  ...................................................................ss.......\n  .......ss...................................................................\n  ..................................................ss........................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  .........................\n\n  Tests:    18 skipped, 1527 passed (24258 assertions)\n  Duration: 43.72s\n  Random Order Seed: 2026111545\n\n",
+      "phase_role": "Intermediate integrated gate at a4cb684, before the final fixture and identity test-only followups."
+    },
+    {
+      "label": "final-php85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "-d",
+        "opcache.enable_cli=1",
+        "-d",
+        "opcache.jit=disable",
+        "-d",
+        "opcache.jit_buffer_size=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--order-by=reverse",
+        "--do-not-cache-result",
+        "--cache-directory=/workspace/scratch/8dccbfa10ffb/finalcache85",
+        "--log-junit=/workspace/scratch/8dccbfa10ffb/final-php85.xml"
+      ],
+      "started_at": "2026-11-15T20:16:50.148592+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "head": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+      "seconds": 60.705,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "log_sha256": "e04eb03b0f3fbba7531662709be3d5c792fbac9bca3c43864b71095cef641ae6",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/final-php85.log",
+      "output": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ...............s............................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  .........................\n\n  Tests:    1 skipped, 1544 passed (24365 assertions)\n  Duration: 59.27s\n\n",
+      "phase_role": "Intermediate integrated gate at a4cb684, before the final fixture and identity test-only followups."
+    },
+    {
+      "label": "final-phpstan",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "memory_limit=1G",
+        "vendor/bin/phpstan",
+        "analyse",
+        "--no-progress",
+        "--memory-limit=1G"
+      ],
+      "started_at": "2026-11-15T20:16:50.146268+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "head": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+      "seconds": 16.48,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "log_sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/final-phpstan.log",
+      "output": "Warning: PHP Startup: Unable to load dynamic library '/workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: /workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924//workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0\nNote: Using configuration file /workspace/scratch/8f6c1df8ef3b/di/phpstan.neon.dist.\n\n [OK] No errors                                                                 \n\n",
+      "phase_role": "Intermediate integrated gate at a4cb684, before the final fixture and identity test-only followups."
+    },
+    {
+      "label": "final-cs",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/php-cs-fixer",
+        "fix",
+        "--dry-run",
+        "--diff",
+        "--using-cache=no"
+      ],
+      "started_at": "2026-11-15T20:16:50.151873+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "head": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+      "seconds": 11.319,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "227f076f53d2ae3933c3c5f45bde058753d7dee76ca64a5db8adcc8b264029c8"
+      },
+      "log_sha256": "97ed6e20b072e8d6a606c3c67e777ce6a33b5ab518095739084dd993647f50cd",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/final-cs.log",
+      "output": "PHP CS Fixer 3.95.30 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.\nPHP runtime: 8.4.23\nLoaded config default from \"/workspace/scratch/8f6c1df8ef3b/di/.php-cs-fixer.dist.php\".\nRunning analysis on 8 cores with 10 files per process.\n   0/411 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n   1/411 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n  42/411 [▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░]  10%\n  83/411 [▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░]  20%\n 124/411 [▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░]  30%\n 165/411 [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░]  40%\n 191/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░]  46%\n 206/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░]  50%\n 247/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░]  60%\n 288/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░]  70%\n 321/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░]  78%\n 370/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░]  90%\n 411/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%\n\n\nFound 0 of 411 files that can be fixed in 9.746 seconds, 206.00 MB memory used\n",
+      "phase_role": "Intermediate integrated gate at a4cb684, before the final fixture and identity test-only followups."
+    },
+    {
+      "label": "php85-fixture-root-green",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/Php85AttributeCallableContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:43:00.384260+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "ae95151ca2e23d3a0f648d0283b2e4611674c269a4799d025d1afa3e486855a4"
+      },
+      "head": "8f47e9e61bccfb32b1a82ae29292e5276a21f211",
+      "seconds": 11.068,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "ae95151ca2e23d3a0f648d0283b2e4611674c269a4799d025d1afa3e486855a4"
+      },
+      "log_sha256": "6ccca6e7cd01738cf8a195b84acf4060cdd2c11ff9cc4d535cf01dd127f5ed62",
+      "output": "\n  ...........\n\n  Tests:    11 passed (35 assertions)\n  Duration: 9.62s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/php85-fixture-root-green.log",
+      "phase_role": "Focused followup"
+    },
+    {
+      "label": "identity-root84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:49:23.564059+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "head": "b6297a6ed9ed047c1c984b33afd857b434925d95",
+      "seconds": 1.659,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "log_sha256": "f49cafbcd4093c3a95d35bbc4fdc3e1df89320c61c093fd25537419b68877a65",
+      "output": "\n  .............\n\n  Tests:    13 passed (95 assertions)\n  Duration: 0.36s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/identity-root84.log",
+      "phase_role": "Focused followup"
+    },
+    {
+      "label": "identity-root85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "started_at": "2026-11-15T20:49:23.562017+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "head": "b6297a6ed9ed047c1c984b33afd857b434925d95",
+      "seconds": 1.688,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "log_sha256": "12c2ec38de9f45697df29f4327a48b4fe981c89eb3f54260c6db5cfb16daa7a0",
+      "output": "\n  .............\n\n  Tests:    13 passed (95 assertions)\n  Duration: 0.30s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/identity-root85.log",
+      "phase_role": "Focused followup"
+    },
+    {
+      "label": "complete-php84",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--order-by=random",
+        "--random-order-seed=2026111552",
+        "--do-not-cache-result",
+        "--cache-directory=/workspace/scratch/8dccbfa10ffb/completecache84",
+        "--log-junit=/workspace/scratch/8dccbfa10ffb/complete-php84.xml"
+      ],
+      "started_at": "2026-11-15T20:50:48.758546+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "seconds": 34.861,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "log_sha256": "77da1a8397bc38c3382179bb3279ed2c98d997436f2d75c6d12123ecb44d180a",
+      "output": "\n  ................................................................ss..........\n  ........ss..................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ....................................................ss......................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ..ssssssss.ssss.............................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  .........................\n\n  Tests:    18 skipped, 1527 passed (24259 assertions)\n  Duration: 33.39s\n  Random Order Seed: 2026111552\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/complete-php84.log",
+      "phase_role": "Final integrated gate"
+    },
+    {
+      "label": "complete-php85",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "-d",
+        "opcache.enable_cli=1",
+        "-d",
+        "opcache.jit=disable",
+        "-d",
+        "opcache.jit_buffer_size=0",
+        "vendor/bin/pest",
+        "--compact",
+        "--colors=never",
+        "--order-by=reverse",
+        "--do-not-cache-result",
+        "--cache-directory=/workspace/scratch/8dccbfa10ffb/completecache85",
+        "--log-junit=/workspace/scratch/8dccbfa10ffb/complete-php85.xml"
+      ],
+      "started_at": "2026-11-15T20:50:48.741501+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "seconds": 42.573,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "log_sha256": "0236e825301cfd2b7527d2014b4e883af8ed621a6cb09ff47b30f640cecb2d9f",
+      "output": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ...............s............................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  .........................\n\n  Tests:    1 skipped, 1544 passed (24366 assertions)\n  Duration: 40.95s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/complete-php85.log",
+      "phase_role": "Final integrated gate"
+    },
+    {
+      "label": "complete-phpstan",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "memory_limit=1G",
+        "vendor/bin/phpstan",
+        "analyse",
+        "--no-progress",
+        "--memory-limit=1G"
+      ],
+      "started_at": "2026-11-15T20:50:48.756115+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "seconds": 11.327,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "log_sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1",
+      "output": "Warning: PHP Startup: Unable to load dynamic library '/workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: /workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924//workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0\nNote: Using configuration file /workspace/scratch/8f6c1df8ef3b/di/phpstan.neon.dist.\n\n [OK] No errors                                                                 \n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/complete-phpstan.log",
+      "phase_role": "Final integrated gate"
+    },
+    {
+      "label": "complete-cs",
+      "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/php-cs-fixer",
+        "fix",
+        "--dry-run",
+        "--diff",
+        "--using-cache=no"
+      ],
+      "started_at": "2026-11-15T20:50:48.738207+00:00",
+      "before": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "seconds": 9.732,
+      "exit_code": 0,
+      "after": {
+        "count": 416,
+        "sha256": "e633fcae11a2fdecabb4e38995821c05bc94ac166fb3f57e931d2d7ae7260926"
+      },
+      "log_sha256": "d6e88cb544709d6c16b2c5140fdf92579408816319d621efb913ce78243939f4",
+      "output": "PHP CS Fixer 3.95.30 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.\nPHP runtime: 8.4.23\nLoaded config default from \"/workspace/scratch/8f6c1df8ef3b/di/.php-cs-fixer.dist.php\".\nRunning analysis on 8 cores with 10 files per process.\n   0/411 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n   1/411 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n  42/411 [▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░]  10%\n  83/411 [▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░]  20%\n 124/411 [▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░]  30%\n 165/411 [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░]  40%\n 206/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░]  50%\n 247/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░]  60%\n 288/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░]  70%\n 329/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░]  80%\n 370/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░]  90%\n 411/411 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%\n\n\nFound 0 of 411 files that can be fixed in 7.961 seconds, 204.00 MB memory used\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/checks/complete-cs.log",
+      "phase_role": "Final integrated gate"
+    }
+  ],
+  "junit_census": [
+    {
+      "runtime": "84",
+      "phase": "baseline",
+      "junit_sha256": "1d2ec7048e29ebecd98f021ad3d0bae28411ffbeeedcde4dbfd937fc23d2e7cd",
+      "total_cases": 1528,
+      "passed": 1510,
+      "skipped": 18,
+      "assertions": 24189,
+      "skip_cases": [
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native Init expressions preserve legacy callables lexical scope state and lifetime with data set \"('uncached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native Init expressions preserve legacy callables lexical scope state and lifetime with data set \"('cached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native setup callbacks preserve scope state lazy retries and runtime lifetimes with data set \"('uncached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native setup callbacks preserve scope state lazy retries and runtime lifetimes with data set \"('cached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"magic method reference\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"object method reference\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"dynamic function name\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"arrow function\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"captured variable\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"non-static closure\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.ObjectAttributeCacheParityContractTest",
+          "name": "cached and uncached native closure attribute arguments keep fresh closure state with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.ObjectAttributeCacheParityContractTest",
+          "name": "cached and uncached native closure attribute arguments keep fresh closure state with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native inline transform closures keep fresh state without retaining values dependencies or local objects with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native inline transform closures keep fresh state without retaining values dependencies or local objects with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native transform first-class references preserve private static scope and current alias dependencies with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native transform first-class references preserve private static scope and current alias dependencies with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformPropertyContractTest",
+          "name": "native lazy property transformations retry with fresh closures and release failed callback state with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformPropertyContractTest",
+          "name": "native lazy property transformations retry with fresh closures and release failed callback state with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        }
+      ]
+    },
+    {
+      "runtime": "84",
+      "phase": "final",
+      "junit_sha256": "e6ab90d29cfa420909e045221f72f1107ccf1b141d4d286ae463fe13a3c19067",
+      "total_cases": 1545,
+      "passed": 1527,
+      "skipped": 18,
+      "assertions": 24258,
+      "skip_cases": [
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native Init expressions preserve legacy callables lexical scope state and lifetime with data set \"('cached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native Init expressions preserve legacy callables lexical scope state and lifetime with data set \"('uncached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"arrow function\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"non-static closure\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"magic method reference\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"object method reference\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"captured variable\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"dynamic function name\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native setup callbacks preserve scope state lazy retries and runtime lifetimes with data set \"('uncached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native setup callbacks preserve scope state lazy retries and runtime lifetimes with data set \"('cached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.ObjectAttributeCacheParityContractTest",
+          "name": "cached and uncached native closure attribute arguments keep fresh closure state with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.ObjectAttributeCacheParityContractTest",
+          "name": "cached and uncached native closure attribute arguments keep fresh closure state with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native inline transform closures keep fresh state without retaining values dependencies or local objects with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native inline transform closures keep fresh state without retaining values dependencies or local objects with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native transform first-class references preserve private static scope and current alias dependencies with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native transform first-class references preserve private static scope and current alias dependencies with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformPropertyContractTest",
+          "name": "native lazy property transformations retry with fresh closures and release failed callback state with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformPropertyContractTest",
+          "name": "native lazy property transformations retry with fresh closures and release failed callback state with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        }
+      ],
+      "new_cases": [
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty alias id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty target id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast rejects a missing required input before invoking the caster",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"nullable without a default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"attribute default precedes native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with collection extraction but no mapper\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with a mapper but no collection extraction protocol\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "a readonly custom request mapper needs no optional caster provider property",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DependencyNormalizationContractTest",
+          "name": "normalization rejects an empty default alias before merging it into the dependency graph",
+          "assertions": 1,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation\"\"",
+          "assertions": 6,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation and failure\"\"",
+          "assertions": 9,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"first class\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"fromCallable\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('method')\"",
+          "assertions": 3,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('class')\"",
+          "assertions": 3,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "native method classification does not fold opaque callable service ids",
+          "assertions": 8,
+          "skipped": false
+        }
+      ],
+      "removed_cases": [],
+      "assertion_delta": 69,
+      "phase_role": "Intermediate at a4cb684; complete phase below is final."
+    },
+    {
+      "runtime": "85",
+      "phase": "baseline",
+      "junit_sha256": "6807fae137c9ddf6e0068feed25abb9cbdfd957d0cdac7616b6493292c2773ce",
+      "total_cases": 1528,
+      "passed": 1527,
+      "skipped": 1,
+      "assertions": 24296,
+      "skip_cases": [
+        {
+          "class": "Tests.Contract.UnionAutowiringContractTest",
+          "name": "PHP 8.4 contextual union aliases select one deterministic service id",
+          "assertions": 0,
+          "skipped": true
+        }
+      ]
+    },
+    {
+      "runtime": "85",
+      "phase": "final",
+      "junit_sha256": "5ad5a1d4c1d812eab8afece19f9887ac06a379a2782caa9f91c2cfdf870b6ecc",
+      "total_cases": 1545,
+      "passed": 1544,
+      "skipped": 1,
+      "assertions": 24365,
+      "skip_cases": [
+        {
+          "class": "Tests.Contract.UnionAutowiringContractTest",
+          "name": "PHP 8.4 contextual union aliases select one deterministic service id",
+          "assertions": 0,
+          "skipped": true
+        }
+      ],
+      "new_cases": [
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty target id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty alias id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "a readonly custom request mapper needs no optional caster provider property",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with a mapper but no collection extraction protocol\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with collection extraction but no mapper\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"first class\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"fromCallable\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DependencyNormalizationContractTest",
+          "name": "normalization rejects an empty default alias before merging it into the dependency graph",
+          "assertions": 1,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation and failure\"\"",
+          "assertions": 9,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation\"\"",
+          "assertions": 6,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast rejects a missing required input before invoking the caster",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"attribute default precedes native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"nullable without a default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "native method classification does not fold opaque callable service ids",
+          "assertions": 8,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('method')\"",
+          "assertions": 3,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('class')\"",
+          "assertions": 3,
+          "skipped": false
+        }
+      ],
+      "removed_cases": [],
+      "assertion_delta": 69,
+      "phase_role": "Intermediate at a4cb684; complete phase below is final."
+    },
+    {
+      "runtime": "84",
+      "phase": "complete",
+      "head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "junit_sha256": "8d46c257799fe093cd1a7ea73ae959b7b0223966daa9f59fcf84e27da16d3e0a",
+      "total_cases": 1545,
+      "passed": 1527,
+      "skipped": 18,
+      "assertions": 24259,
+      "assertion_delta": 70,
+      "new_cases": [
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"fromCallable\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"first class\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('class')\"",
+          "assertions": 3,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('method')\"",
+          "assertions": 3,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "native method classification does not fold opaque callable service ids",
+          "assertions": 8,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation\"\"",
+          "assertions": 6,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation and failure\"\"",
+          "assertions": 9,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty target id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty alias id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"attribute default precedes native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"nullable without a default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast rejects a missing required input before invoking the caster",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "a readonly custom request mapper needs no optional caster provider property",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with a mapper but no collection extraction protocol\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with collection extraction but no mapper\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DependencyNormalizationContractTest",
+          "name": "normalization rejects an empty default alias before merging it into the dependency graph",
+          "assertions": 1,
+          "skipped": false
+        }
+      ],
+      "removed_cases": [],
+      "skip_cases": [
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native transform first-class references preserve private static scope and current alias dependencies with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native transform first-class references preserve private static scope and current alias dependencies with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native inline transform closures keep fresh state without retaining values dependencies or local objects with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformContractTest",
+          "name": "native inline transform closures keep fresh state without retaining values dependencies or local objects with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformPropertyContractTest",
+          "name": "native lazy property transformations retry with fresh closures and release failed callback state with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.TransformPropertyContractTest",
+          "name": "native lazy property transformations retry with fresh closures and release failed callback state with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.ObjectAttributeCacheParityContractTest",
+          "name": "cached and uncached native closure attribute arguments keep fresh closure state with data set \"dataset \"cached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.ObjectAttributeCacheParityContractTest",
+          "name": "cached and uncached native closure attribute arguments keep fresh closure state with data set \"dataset \"uncached plans\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"arrow function\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"non-static closure\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"captured variable\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"dynamic function name\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"object method reference\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "unsupported native callback forms fail at their engine owned boundary with data set \"dataset \"magic method reference\"\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native setup callbacks preserve scope state lazy retries and runtime lifetimes with data set \"('uncached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native setup callbacks preserve scope state lazy retries and runtime lifetimes with data set \"('cached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native Init expressions preserve legacy callables lexical scope state and lifetime with data set \"('cached')\"",
+          "assertions": 0,
+          "skipped": true
+        },
+        {
+          "class": "Tests.Contract.Php85AttributeCallableContractTest",
+          "name": "native Init expressions preserve legacy callables lexical scope state and lifetime with data set \"('uncached')\"",
+          "assertions": 0,
+          "skipped": true
+        }
+      ]
+    },
+    {
+      "runtime": "85",
+      "phase": "complete",
+      "head": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "junit_sha256": "527d3a70ba5e211a462428f15466273d3ea0398da05e5cfe55d238dc29299156",
+      "total_cases": 1545,
+      "passed": 1544,
+      "skipped": 1,
+      "assertions": 24366,
+      "assertion_delta": 70,
+      "new_cases": [
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty target id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RuntimeMutationRecoveryContractTest",
+          "name": "empty alias endpoints are rejected without invalidating warmed entries and allow later recovery with data set \"dataset \"empty alias id\"\"",
+          "assertions": 10,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "a readonly custom request mapper needs no optional caster provider property",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with a mapper but no collection extraction protocol\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.RequestAttributeProtocolContractTest",
+          "name": "request attributes use simple extraction unless the complete mapping protocol is implemented with data set \"dataset \"extractor with collection extraction but no mapper\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"first class\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.MagicClosureInvocationContractTest",
+          "name": "magic closures for an inaccessible declared method preserve native arguments with data set \"dataset \"fromCallable\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DependencyNormalizationContractTest",
+          "name": "normalization rejects an empty default alias before merging it into the dependency graph",
+          "assertions": 1,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation and failure\"\"",
+          "assertions": 9,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.DeferredCallableRetirementContractTest",
+          "name": "retired external callable owners observe all dependent pipelines after the replacement commits with data set \"dataset \"reentrant observation\"\"",
+          "assertions": 6,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast rejects a missing required input before invoking the caster",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"attribute default precedes native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"nullable without a default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CastInputFallbackContractTest",
+          "name": "Cast uses the declared fallback before invoking the caster once with data set \"dataset \"native default\"\"",
+          "assertions": 2,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "native method classification does not fold opaque callable service ids",
+          "assertions": 8,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('method')\"",
+          "assertions": 3,
+          "skipped": false
+        },
+        {
+          "class": "Tests.Contract.CallableCaseCacheRetentionContractTest",
+          "name": "rejected case variants of one method do not retain duplicate native classifications with data set \"('class')\"",
+          "assertions": 3,
+          "skipped": false
+        }
+      ],
+      "removed_cases": [],
+      "skip_cases": [
+        {
+          "class": "Tests.Contract.UnionAutowiringContractTest",
+          "name": "PHP 8.4 contextual union aliases select one deterministic service id",
+          "assertions": 0,
+          "skipped": true
+        }
+      ]
+    }
+  ],
+  "dependency_snapshot": {
+    "installed_json_sha256": "ffdbc52aadae57ef3553e8bf20035a5da492f1c3d9870f9f68fec975772dfc38",
+    "composer_json_sha256": "4710cac8f6e72a50d008580bfcf570d180fe42b18c003091148de36a8c83ef62",
+    "composer_lock_sha256": null,
+    "packages": [
+      {
+        "name": "brianium/paratest",
+        "version": "v7.20.0",
+        "source_reference": "81c80677c9ec0ed4ef16b246167f11dec81a6e3d"
+      },
+      {
+        "name": "clue/ndjson-react",
+        "version": "v1.3.0",
+        "source_reference": "392dc165fce93b5bb5c637b67e59619223c931b0"
+      },
+      {
+        "name": "componenta/arrayable",
+        "version": "v1.0.0",
+        "source_reference": "482acfddffa3b1b85e982d1bf4ab6c007d084a8a"
+      },
+      {
+        "name": "componenta/caster",
+        "version": "v1.0.0",
+        "source_reference": "383455d00c5ab8a1067b4916e11d11dae7c4a58c"
+      },
+      {
+        "name": "componenta/clock",
+        "version": "v1.1.0",
+        "source_reference": "a97b782bd17e413864ba24d90d86b75297b7b99d"
+      },
+      {
+        "name": "componenta/config",
+        "version": "3.0.0",
+        "source_reference": null
+      },
+      {
+        "name": "componenta/mimetype-detector",
+        "version": "v1.0.0",
+        "source_reference": "88cb85b51e95eb8695eaaa1f3c315dd7a7dd8ee9"
+      },
+      {
+        "name": "componenta/reflection",
+        "version": "2.0.1",
+        "source_reference": null
+      },
+      {
+        "name": "componenta/validation",
+        "version": "3.0.1",
+        "source_reference": null
+      },
+      {
+        "name": "composer/pcre",
+        "version": "3.4.0",
+        "source_reference": "d5a341b3fb61f3001970940afb1d332968a183ed"
+      },
+      {
+        "name": "composer/semver",
+        "version": "3.6.0",
+        "source_reference": "d92543b7ede9c4ec6b59853cefb061e39866d2cf"
+      },
+      {
+        "name": "composer/xdebug-handler",
+        "version": "3.0.5",
+        "source_reference": "6c1925561632e83d60a44492e0b344cf48ab85ef"
+      },
+      {
+        "name": "cycle/database",
+        "version": "2.23.3",
+        "source_reference": "75fb8f244569254f382f1beca64332b7c9814137"
+      },
+      {
+        "name": "doctrine/deprecations",
+        "version": "1.2.0",
+        "source_reference": "d2e16653a734c8784c1851ad68b02f997b53ca82"
+      },
+      {
+        "name": "ergebnis/agent-detector",
+        "version": "2.0.0",
+        "source_reference": "bcc63004284c61c6df6e9625acf2673e3be1889b"
+      },
+      {
+        "name": "evenement/evenement",
+        "version": "v3.0.2",
+        "source_reference": "0a16b0d71ab13284339abb99d9d2bd813640efbc"
+      },
+      {
+        "name": "fidry/cpu-core-counter",
+        "version": "1.4.1",
+        "source_reference": "d384a7d0d6e67aa497327260ca95023e92dc2032"
+      },
+      {
+        "name": "filp/whoops",
+        "version": "2.19.3",
+        "source_reference": "d5480d53f10069dc4620a39f87e38e8945d47322"
+      },
+      {
+        "name": "friendsofphp/php-cs-fixer",
+        "version": "v3.95.30",
+        "source_reference": "e85cafc4d861c122839d5409eda3325ac0ec0300"
+      },
+      {
+        "name": "giggsey/libphonenumber-for-php",
+        "version": "9.0.43",
+        "source_reference": "75a801c3dbf9a675e4bc83e0da2c2142fcc5344d"
+      },
+      {
+        "name": "giggsey/locale",
+        "version": "2.10.0",
+        "source_reference": "c13d22635eac0e51d1dcd7f09b99fd7475209a51"
+      },
+      {
+        "name": "jean85/pretty-package-versions",
+        "version": "2.1.1",
+        "source_reference": "4d7aa5dab42e2a76d99559706022885de0e18e1a"
+      },
+      {
+        "name": "myclabs/deep-copy",
+        "version": "1.14.0",
+        "source_reference": "8680aa248f8e07bc8fb43f56f0f5fc77a0c96aae"
+      },
+      {
+        "name": "nikic/php-parser",
+        "version": "v5.9.0",
+        "source_reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def"
+      },
+      {
+        "name": "nunomaduro/collision",
+        "version": "v8.9.6",
+        "source_reference": "68806f9257968f23775bee62970cb90925b79d51"
+      },
+      {
+        "name": "nunomaduro/termwind",
+        "version": "v2.4.1",
+        "source_reference": "9b85ae4d802403bfc004ea633ce542bc262ee5c3"
+      },
+      {
+        "name": "nyholm/psr7",
+        "version": "1.8.2",
+        "source_reference": "a71f2b11690f4b24d099d6b16690a90ae14fc6f3"
+      },
+      {
+        "name": "pestphp/pest",
+        "version": "v4.7.8",
+        "source_reference": "5b2293f67adcf1b2320b33f521b94a692d18f360"
+      },
+      {
+        "name": "pestphp/pest-plugin",
+        "version": "v4.0.0",
+        "source_reference": "9d4b93d7f73d3f9c3189bb22c220fef271cdf568"
+      },
+      {
+        "name": "pestphp/pest-plugin-arch",
+        "version": "v4.0.2",
+        "source_reference": "3fb0d02a91b9da504b139dc7ab2a31efb7c3215c"
+      },
+      {
+        "name": "pestphp/pest-plugin-mutate",
+        "version": "v4.0.1",
+        "source_reference": "d9b32b60b2385e1688a68cc227594738ec26d96c"
+      },
+      {
+        "name": "pestphp/pest-plugin-profanity",
+        "version": "v4.2.1",
+        "source_reference": "343cfa6f3564b7e35df0ebb77b7fa97039f72b27"
+      },
+      {
+        "name": "phar-io/manifest",
+        "version": "2.0.4",
+        "source_reference": "54750ef60c58e43759730615a392c31c80e23176"
+      },
+      {
+        "name": "phar-io/version",
+        "version": "3.2.1",
+        "source_reference": "4f7fd7836c6f332bb2933569e566a0d6c4cbed74"
+      },
+      {
+        "name": "phpdocumentor/reflection-common",
+        "version": "2.2.1",
+        "source_reference": "ee15a5a2022c8383906b225055e9496a6a5e6e3b"
+      },
+      {
+        "name": "phpdocumentor/reflection-docblock",
+        "version": "6.0.3",
+        "source_reference": "7bae67520aa9f5ecc506d646810bd40d9da54582"
+      },
+      {
+        "name": "phpdocumentor/type-resolver",
+        "version": "2.1.0",
+        "source_reference": "dbe2133bb23e2e33a6834f4ed417f24a1b167769"
+      },
+      {
+        "name": "phpstan/phpdoc-parser",
+        "version": "2.4.1",
+        "source_reference": "af8e840551031d254cfdb3a18a62c3470a309c10"
+      },
+      {
+        "name": "phpstan/phpstan",
+        "version": "2.3.5",
+        "source_reference": null
+      },
+      {
+        "name": "phpunit/php-code-coverage",
+        "version": "12.5.8",
+        "source_reference": "7440368d94738d54f2c1de24dbd3871793bbb0dd"
+      },
+      {
+        "name": "phpunit/php-file-iterator",
+        "version": "6.0.2",
+        "source_reference": "a248d1640ab059b075f53a2ef0f9856e864e06b5"
+      },
+      {
+        "name": "phpunit/php-invoker",
+        "version": "6.0.0",
+        "source_reference": "12b54e689b07a25a9b41e57736dfab6ec9ae5406"
+      },
+      {
+        "name": "phpunit/php-text-template",
+        "version": "5.0.1",
+        "source_reference": "babab73b7ef9fae406f2eb3ee11323a61caa63d5"
+      },
+      {
+        "name": "phpunit/php-timer",
+        "version": "8.0.0",
+        "source_reference": "f258ce36aa457f3aa3339f9ed4c81fc66dc8c2cc"
+      },
+      {
+        "name": "phpunit/phpunit",
+        "version": "12.5.33",
+        "source_reference": "b98e028a26c5c5ba7e4a54be96ccf35f2914d184"
+      },
+      {
+        "name": "psr/clock",
+        "version": "1.0.0",
+        "source_reference": "e41a24703d4560fd0acb709162f73b8adfc3aa0d"
+      },
+      {
+        "name": "psr/container",
+        "version": "2.0.2",
+        "source_reference": "c71ecc56dfe541dbd90c5360474fbc405f8d5963"
+      },
+      {
+        "name": "psr/event-dispatcher",
+        "version": "1.0.0",
+        "source_reference": "dbefd12671e8a14ec7f180cab83036ed26714bb0"
+      },
+      {
+        "name": "psr/http-factory",
+        "version": "1.1.0",
+        "source_reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a"
+      },
+      {
+        "name": "psr/http-message",
+        "version": "2.0",
+        "source_reference": "402d35bcb92c70c026d1a6a9883f06b2ead23d71"
+      },
+      {
+        "name": "psr/log",
+        "version": "3.0.2",
+        "source_reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3"
+      },
+      {
+        "name": "psr/simple-cache",
+        "version": "3.0.0",
+        "source_reference": "764e0b3939f5ca87cb904f570ef9be2d78a07865"
+      },
+      {
+        "name": "react/cache",
+        "version": "v1.2.0",
+        "source_reference": "d47c472b64aa5608225f47965a484b75c7817d5b"
+      },
+      {
+        "name": "react/child-process",
+        "version": "v0.6.7",
+        "source_reference": "970f0e71945556422ee4570ccbabaedc3cf04ad3"
+      },
+      {
+        "name": "react/dns",
+        "version": "v1.14.0",
+        "source_reference": "7562c05391f42701c1fccf189c8225fece1cd7c3"
+      },
+      {
+        "name": "react/event-loop",
+        "version": "v1.6.0",
+        "source_reference": "ba276bda6083df7e0050fd9b33f66ad7a4ac747a"
+      },
+      {
+        "name": "react/promise",
+        "version": "v3.3.0",
+        "source_reference": "23444f53a813a3296c1368bb104793ce8d88f04a"
+      },
+      {
+        "name": "react/socket",
+        "version": "v1.17.0",
+        "source_reference": "ef5b17b81f6f60504c539313f94f2d826c5faa08"
+      },
+      {
+        "name": "react/stream",
+        "version": "v1.4.0",
+        "source_reference": "1e5b0acb8fe55143b5b426817155190eb6f5b18d"
+      },
+      {
+        "name": "sebastian/cli-parser",
+        "version": "4.2.1",
+        "source_reference": "7d05781b13f7dec9043a629a21d086ed74582a15"
+      },
+      {
+        "name": "sebastian/comparator",
+        "version": "7.1.8",
+        "source_reference": "7c65c1e79836812819705b473a90c12399542485"
+      },
+      {
+        "name": "sebastian/complexity",
+        "version": "5.0.0",
+        "source_reference": "bad4316aba5303d0221f43f8cee37eb58d384bbb"
+      },
+      {
+        "name": "sebastian/diff",
+        "version": "7.0.1",
+        "source_reference": "cd4cabe39f8a4e8ee6818ba99f10a05561ea4ad6"
+      },
+      {
+        "name": "sebastian/environment",
+        "version": "8.1.2",
+        "source_reference": "9d32c685773823b1983e256ae4ecd48a10d6e439"
+      },
+      {
+        "name": "sebastian/exporter",
+        "version": "7.0.3",
+        "source_reference": "c5e21b5de653ce0a769fb36f5cdfcb5e7a32cf23"
+      },
+      {
+        "name": "sebastian/global-state",
+        "version": "8.0.3",
+        "source_reference": "b164d3274d6537ab462591c5755f76a8f5b1aae9"
+      },
+      {
+        "name": "sebastian/lines-of-code",
+        "version": "4.0.1",
+        "source_reference": "d543b8ef219dcd8da262cbb958639a96bedba10e"
+      },
+      {
+        "name": "sebastian/object-enumerator",
+        "version": "7.0.0",
+        "source_reference": "1effe8e9b8e068e9ae228e542d5d11b5d16db894"
+      },
+      {
+        "name": "sebastian/object-reflector",
+        "version": "5.0.0",
+        "source_reference": "4bfa827c969c98be1e527abd576533293c634f6a"
+      },
+      {
+        "name": "sebastian/recursion-context",
+        "version": "7.0.1",
+        "source_reference": "0b01998a7d5b1f122911a66bebcb8d46f0c82d8c"
+      },
+      {
+        "name": "sebastian/type",
+        "version": "6.0.4",
+        "source_reference": "82ff822c2edc46724be9f7411d3163021f602773"
+      },
+      {
+        "name": "sebastian/version",
+        "version": "6.0.2",
+        "source_reference": "a8b6643a19ba6c8125a473623e45fb8cbb0e4159"
+      },
+      {
+        "name": "spiral/core",
+        "version": "3.18.2",
+        "source_reference": "832abb5851c7cd07d67eb9c60f314a941fd8d477"
+      },
+      {
+        "name": "spiral/hmvc",
+        "version": "3.18.2",
+        "source_reference": "9bca030c17d6a0b8fb0f83824ee88bd0b545def7"
+      },
+      {
+        "name": "spiral/interceptors",
+        "version": "3.18.2",
+        "source_reference": "3cbef3bf13ef4700b14eeafb2b0f77f76b95f520"
+      },
+      {
+        "name": "spiral/pagination",
+        "version": "3.18.2",
+        "source_reference": "b4c3e6c15b4f1a0b176f40400e81483fd4bb860d"
+      },
+      {
+        "name": "spiral/security",
+        "version": "3.18.2",
+        "source_reference": "71d69b14edacf05882e25f929137512253606a20"
+      },
+      {
+        "name": "staabm/side-effects-detector",
+        "version": "1.0.5",
+        "source_reference": "d8334211a140ce329c13726d4a715adbddd0a163"
+      },
+      {
+        "name": "symfony/console",
+        "version": "v8.1.11",
+        "source_reference": "5a315b092b81f3e920e9daea1a2ae4c66ed298b9"
+      },
+      {
+        "name": "symfony/deprecation-contracts",
+        "version": "v3.8.1",
+        "source_reference": "feb1edf4e546af3b85c5caebe8359a20db230ca3"
+      },
+      {
+        "name": "symfony/event-dispatcher",
+        "version": "v8.1.5",
+        "source_reference": "7458da64220376b2e0dc2d8451bf43382c1ad297"
+      },
+      {
+        "name": "symfony/event-dispatcher-contracts",
+        "version": "v3.8.1",
+        "source_reference": "658e29751424da3ef4758c60f769e59d1b2981eb"
+      },
+      {
+        "name": "symfony/filesystem",
+        "version": "v8.1.11",
+        "source_reference": "58f57b6a33e3495f7f41e01258f1ae5ef76cccd2"
+      },
+      {
+        "name": "symfony/finder",
+        "version": "v8.1.11",
+        "source_reference": "a2902e479ba5691d20d51d100a715ea19ad2c837"
+      },
+      {
+        "name": "symfony/options-resolver",
+        "version": "v8.1.10",
+        "source_reference": "68cc43038d234c69d510c62f37bd0058b40d548a"
+      },
+      {
+        "name": "symfony/polyfill-ctype",
+        "version": "v1.37.0",
+        "source_reference": "141046a8f9477948ff284fa65be2095baafb94f2"
+      },
+      {
+        "name": "symfony/polyfill-intl-grapheme",
+        "version": "v1.43.3",
+        "source_reference": "5a8f33c87aeecffce24e721b5064fab05f4becf8"
+      },
+      {
+        "name": "symfony/polyfill-intl-normalizer",
+        "version": "v1.43.0",
+        "source_reference": "ebd57ccc7edb93d632e184efbe7693d2517bab3b"
+      },
+      {
+        "name": "symfony/polyfill-mbstring",
+        "version": "v1.43.3",
+        "source_reference": "122889ed24dc000165bcbfd77ec412f15cbdfc6a"
+      },
+      {
+        "name": "symfony/polyfill-php80",
+        "version": "v1.43.0",
+        "source_reference": "9c6a5d6b01ca51d486c813e9a9c0ed55f208bb74"
+      },
+      {
+        "name": "symfony/polyfill-php81",
+        "version": "v1.38.1",
+        "source_reference": "6bfb9c766cacffbc8e118cb87217d08ed84e5cd7"
+      },
+      {
+        "name": "symfony/polyfill-php83",
+        "version": "v1.43.0",
+        "source_reference": "80ccff923a8d61f73ebe9da0aa94e25232f004ce"
+      },
+      {
+        "name": "symfony/polyfill-php84",
+        "version": "v1.43.0",
+        "source_reference": "22c6548499cbe5c5bb072fc0c42312dff062a015"
+      },
+      {
+        "name": "symfony/polyfill-php85",
+        "version": "v1.43.0",
+        "source_reference": "86a42cbcc07adc331481a5ab310a4024bfc227f6"
+      },
+      {
+        "name": "symfony/process",
+        "version": "v8.1.10",
+        "source_reference": "08aa69fa0998bb65a089f9e148a2c0f8b391398e"
+      },
+      {
+        "name": "symfony/service-contracts",
+        "version": "v3.8.1",
+        "source_reference": "052852a96fd5e5ebdb617dba22031e41a3300fb5"
+      },
+      {
+        "name": "symfony/stopwatch",
+        "version": "v8.1.0",
+        "source_reference": "21c07b026905d596e8379caeb115d87aa479499d"
+      },
+      {
+        "name": "symfony/string",
+        "version": "v8.1.10",
+        "source_reference": "6c6110979c0150393bbb336170e286d51ab4d76c"
+      },
+      {
+        "name": "ta-tikoma/phpunit-architecture-test",
+        "version": "0.8.7",
+        "source_reference": "1248f3f506ca9641d4f68cebcd538fa489754db8"
+      },
+      {
+        "name": "theseer/tokenizer",
+        "version": "2.0.1",
+        "source_reference": "7989e43bf381af0eac72e4f0ca5bcbfa81658be4"
+      },
+      {
+        "name": "webmozart/assert",
+        "version": "2.5.0",
+        "source_reference": "8a163706bbcac613733dba03f51e13b5eb1bb819"
+      }
+    ]
+  },
+  "evidence_files": [
+    "2026-11-15-di6-full-reaudit-round4-scope.json",
+    "2026-11-15-propertyless-lazy-evidence.json",
+    "evidence/2026-11-15-round4/core-proof.json",
+    "evidence/2026-11-15-round4/cast-fallback.json",
+    "evidence/2026-11-15-round4/request-protocol.json",
+    "evidence/2026-11-15-round4/magic-visibility.json",
+    "evidence/2026-11-15-round4/callable-case-fix.json",
+    "evidence/2026-11-15-round4/mutations.json",
+    "evidence/2026-11-15-round4/benchmark-smoke.json",
+    "evidence/2026-11-15-round4/autoload-identity-proof.json",
+    "evidence/2026-11-15-round4/windows-php85-fixture-proof.json",
+    "evidence/2026-11-15-round4/coverage-mutation-ci.json",
+    "evidence/2026-11-15-round4/coverage.xml",
+    "evidence/2026-11-15-round4/coverage-3483305.zip",
+    "evidence/2026-11-15-round4/coverage-mutation.log.gz"
+  ],
+  "limits": [
+    "Twelve catalogue witnesses and one bespoke identity witness test improved oracles; they are not thirteen original production faults.",
+    "Only the retirement catalogue mutant has full old-suite controls; the other eleven catalogue mutations and bespoke identity mutation ran their named related test files.",
+    "Local source/test fingerprints cover src/tests, not the runtime binary, vendor directory or all documentation. Runtime versions, dependency graph, production paths and other artifact hashes are recorded separately.",
+    "Attribute/lazy evidence includes both original isolated baseline and independent integrated-source observations. D1 has not been accepted or implemented.",
+    "Current MSI is 88.80% and includes 57 timeouts; 3716 completed tested outcomes divided by all 4249 mutants is 87.46%. These engine outcomes are separate from individually checked semantic RED proofs; historical audit measurements remain historical.",
+    "The E1 public API/support policy was not redesigned; existing native callback fixtures were rerun and Windows PHP 8.5 CI coverage was added.",
+    "No automated Codex Security scan, application attack-path proof, universal schedule proof or application throughput comparison is claimed."
+  ],
+  "local_runtime_configuration_confirmation": [
+    {
+      "binary": "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+      "sha256": "6a80dbde9ecefe2135cb75edc28b3cfd5f11be5f47ca190d697679476cadfe54",
+      "reported_settings": {
+        "php": "8.4.23",
+        "opcache_loaded": true,
+        "opcache_cli": "0",
+        "jit": "disable",
+        "jit_buffer": "64M",
+        "opcache_enabled": false
+      },
+      "flags": [
+        "-n",
+        "-d",
+        "opcache.enable_cli=0"
+      ]
+    },
+    {
+      "binary": "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+      "sha256": "115fca2eaef52b696c52ddad7e97e98ca6c4f298877711faea45e32230987f5e",
+      "reported_settings": {
+        "php": "8.5.8",
+        "opcache_loaded": true,
+        "opcache_cli": "1",
+        "jit": "disable",
+        "jit_buffer": "0",
+        "opcache_enabled": true
+      },
+      "flags": [
+        "-n",
+        "-d",
+        "opcache.enable_cli=1",
+        "-d",
+        "opcache.jit=disable",
+        "-d",
+        "opcache.jit_buffer_size=0"
+      ]
+    }
+  ],
+  "independent_report_review": {
+    "reviewers": [
+      "core_audit",
+      "parameters_audit"
+    ],
+    "outcome": "Approved after precise wording/packaging corrections; no additional production defect found during this review.",
+    "corrections_applied": [
+      "Registry is mutable with readonly binding snapshots.",
+      "Propertyless normal-object rule is limited to native-eligible targets.",
+      "Original alias screening probe source now embedded.",
+      "Durable mutation phase references and hashes updated; original scratch provenance preserved.",
+      "Separate shorter-name memory probe omitted from main report to keep quantitative claims tied to fully preserved regression evidence.",
+      "Distinguished unchanged E1 public API/support policy from rerun native callback fixtures and added Windows PHP 8.5 CI coverage.",
+      "Limited original isolated-baseline provenance wording to its own runs section; independent root observations on identical production bytes remain separately recorded.",
+      "Updated the remaining magic-context prose reference to the durable magic-visibility.json file."
+    ],
+    "final_read_only_pass": {
+      "reviewer": "core_audit",
+      "reported_at_utc": "2026-11-15T21:14:40.929745+00:00",
+      "outcome": "No remaining substantive inconsistency after the three final provenance/reference corrections.",
+      "verified": {
+        "unique_reviewed_files": 438,
+        "production_files": 169,
+        "test_tree_files": 247,
+        "additional_tooling_files": 22,
+        "added_runtime_cases": 17,
+        "added_assertions": 70,
+        "removed_runtime_cases": 0,
+        "published_implementation_test_ci_units": 9,
+        "catalogue_witnesses": 12,
+        "bespoke_identity_witnesses": 1,
+        "embedded_logs_with_verified_sha256": 109,
+        "current_source_and_test_fingerprints_match": true,
+        "commit_parents_and_changed_paths_match_git": true,
+        "old_control_scopes_preserved": true,
+        "windows_red_green_and_12_negative_source_controls_consistent": true,
+        "propertyless_original_and_integrated_observations_distinguished": true,
+        "local_markdown_links_anchors_and_git_objects_valid": true
+      },
+      "remaining_at_review": "Full mutation job for run 43760317266 at head 3483305 is still running; its final metrics will be added separately.",
+      "new_tests_executed_by_final_review": 0,
+      "subsequent_resolution": "The full CI run completed successfully; final_ci_read_only_pass and ci.completed_coverage_mutation record the independently verified result."
+    },
+    "final_ci_read_only_pass": {
+      "reviewer": "core_audit",
+      "outcome": "Verified the completed run at 3483305 against raw log, current engine source, full XML and ZIP. All five required jobs succeed. Full Clover source set matches all 169 src files; 476 unique UNTESTED IDs are preserved in the raw log. No source/test execution or changes performed by this review.",
+      "reported_at_utc": "2026-11-15T21:50:21.040434+00:00"
+    }
+  },
+  "earlier_ci_snapshot": {
+    "run_id": 43757074043,
+    "head_sha": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+    "url": "https://github.com/componenta/di/actions/runs/43757074043",
+    "jobs": [
+      {
+        "id": 132943456117,
+        "name": "Windows PHP 8.4",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43757074043,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use companion workspaces",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 20
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 21
+          }
+        ]
+      },
+      {
+        "id": 132943456347,
+        "name": "PHP 8.4",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43757074043,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11
+          },
+          {
+            "name": "Audit dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13
+          },
+          {
+            "name": "Smoke benchmark harness",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29
+          }
+        ]
+      },
+      {
+        "id": 132943456454,
+        "name": "PHP 8.5",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 43757074043,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11
+          },
+          {
+            "name": "Audit dependencies",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 12
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13
+          },
+          {
+            "name": "Smoke benchmark harness",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29
+          }
+        ]
+      },
+      {
+        "id": 132943456492,
+        "name": "Coverage PHP 8.4",
+        "status": "in_progress",
+        "conclusion": null,
+        "run_id": 43757074043,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11
+          },
+          {
+            "name": "Enforce coverage and generate Clover report",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12
+          },
+          {
+            "name": "Check mutation score",
+            "status": "in_progress",
+            "conclusion": null,
+            "number": 13
+          },
+          {
+            "name": "Upload coverage artifact",
+            "status": "pending",
+            "conclusion": null,
+            "number": 14
+          },
+          {
+            "name": "Post Checkout",
+            "status": "pending",
+            "conclusion": null,
+            "number": 28
+          }
+        ]
+      }
+    ],
+    "completed_job_evidence": [
+      {
+        "job_id": 132943456117,
+        "output": [
+          "2026-11-15T20:16:29.5845269Z √ PHP Installed PHP 8.4.27 ",
+          "2026-11-15T20:16:57.3576948Z Found 0 of 411 files that can be fixed in 7.059 seconds, 88.00 MB memory used",
+          "2026-11-15T20:17:14.6431910Z  [OK] No errors                                                                                                        ",
+          "2026-11-15T20:17:26.0595427Z   - internal optional gaps reject positional variadic tails before native invocation → PDO SQLite is required to exercise a native optional parameter followed by a variadic tail.",
+          "2026-11-15T20:17:26.0682746Z   Tests:    19 skipped, 1526 passed (24256 assertions)"
+        ]
+      },
+      {
+        "job_id": 132943456347,
+        "output": [
+          "2026-11-15T20:16:15.1094773Z ✓ PHP Installed PHP 8.4.27",
+          "2026-11-15T20:16:25.2856499Z No security vulnerability advisories found.",
+          "2026-11-15T20:16:28.3200790Z Found 0 of 411 files that can be fixed in 2.728 seconds, 90.00 MB memory used",
+          "2026-11-15T20:16:33.4400589Z  [OK] No errors                                                                 ",
+          "2026-11-15T20:16:38.2937018Z   Tests:    18 skipped, 1527 passed (24258 assertions)"
+        ]
+      },
+      {
+        "job_id": 132943456454,
+        "output": [
+          "2026-11-15T20:16:16.4545528Z ✓ PHP Updated to PHP 8.5.12",
+          "2026-11-15T20:16:26.9662036Z Found 0 of 411 files that can be fixed in 2.855 seconds, 88.00 MB memory used",
+          "2026-11-15T20:16:32.6740659Z  [OK] No errors                                                                 ",
+          "2026-11-15T20:16:38.4226619Z   Tests:    1 skipped, 1544 passed (24365 assertions)"
+        ]
+      }
+    ]
+  },
+  "ci": {
+    "schema_version": 1,
+    "assembled_utc": "2026-11-15T20:55:08.942594+00:00",
+    "repository": "componenta/di",
+    "branch": "refactor/di6-definitions-callbacks",
+    "head_sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+    "run_id": 43760317266,
+    "run_url": "https://github.com/componenta/di/actions/runs/43760317266",
+    "event": "push",
+    "scope": "All four platform jobs and the coverage/mutation job succeeded at this exact head; the entire workflow run is completed/success. Earlier collection snapshots remain explicitly historical.",
+    "all_four_platform_jobs_success": true,
+    "code_tree_ids": {
+      "src": "12fb0dc8d17f6bebf9d70e95e620657caad14dab",
+      "tests": "17214fc7719c2569c0a9554be9a7d214358bdbf2"
+    },
+    "jobs": [
+      {
+        "job_id": 132953512989,
+        "name": "PHP 8.4",
+        "platform": "Linux",
+        "php_version": "8.4.27",
+        "head_sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-15T20:50:55Z",
+        "completed_at": "2026-11-15T20:51:54Z",
+        "html_url": "https://github.com/componenta/di/actions/runs/43760317266/job/132953512989",
+        "test_result": {
+          "passed": 1527,
+          "failed": 0,
+          "skipped": 18,
+          "assertions": 24259
+        },
+        "random_order_seed": 1794775878,
+        "style": {
+          "changed": 0,
+          "files": 411
+        },
+        "phpstan": "no errors",
+        "metadata_retrieved_utc": "2026-11-15T20:52:41.617308+00:00",
+        "job_metadata_file": "job-132953512989-metadata.json",
+        "job_metadata_sha256": "02b5fb46d2b0bd3bfbcc8f95ef4d81c840513c1113d43b32492a3ecdb1a60fb3",
+        "full_log_file": "job-132953512989.log",
+        "full_log_bytes": 347983,
+        "full_log_sha256": "7cef0b4aef1511a0e1dcb049670ca12debc8334aa1d048e932615bd680355b57",
+        "log_retrieved_utc": "2026-11-15T20:52:29.919Z",
+        "verbatim_excerpts": {
+          "php_version": "2026-11-15T20:51:00.5799197Z ✓ PHP Installed PHP 8.4.27",
+          "tests": "2026-11-15T20:51:24.7287430Z   Tests:    18 skipped, 1527 passed (24259 assertions)",
+          "style": "2026-11-15T20:51:11.7547746Z Found 0 of 411 files that can be fixed in 3.504 seconds, 90.00 MB memory used",
+          "phpstan": "2026-11-15T20:51:18.2488855Z  [OK] No errors                                                                 ",
+          "seed": "2026-11-15T20:51:24.7288697Z   Random Order Seed: 1794775878",
+          "native_callback_success_cases_or_skips": [
+            "2026-11-15T20:51:18.7842134Z   - native setup callbacks preserve scope state lazy retries and runtime lifetimes with ('uncached') → Native callback expressions require PHP 8.5.",
+            "2026-11-15T20:51:18.7845995Z   - native setup callbacks preserve scope state lazy retries and runtime lifetimes with ('cached') → Native callback expressions require PHP 8.5.",
+            "2026-11-15T20:51:18.7907161Z   - native Init expressions preserve legacy callables lexical scope state and lifetime with ('cached') → Native callback expressions require PHP 8.5.",
+            "2026-11-15T20:51:18.7910297Z   - native Init expressions preserve legacy callables lexical scope state and lifetime with ('uncached') → Native callback expressions require PHP 8.5."
+          ]
+        },
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-15T20:50:56Z",
+            "completed_at": "2026-11-15T20:50:56Z"
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-15T20:50:56Z",
+            "completed_at": "2026-11-15T20:50:58Z"
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3,
+            "started_at": "2026-11-15T20:50:58Z",
+            "completed_at": "2026-11-15T20:50:58Z"
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4,
+            "started_at": "2026-11-15T20:50:58Z",
+            "completed_at": "2026-11-15T20:50:58Z"
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5,
+            "started_at": "2026-11-15T20:50:58Z",
+            "completed_at": "2026-11-15T20:50:58Z"
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-15T20:50:58Z",
+            "completed_at": "2026-11-15T20:51:01Z"
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-15T20:51:01Z",
+            "completed_at": "2026-11-15T20:51:01Z"
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8,
+            "started_at": "2026-11-15T20:51:01Z",
+            "completed_at": "2026-11-15T20:51:01Z"
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9,
+            "started_at": "2026-11-15T20:51:01Z",
+            "completed_at": "2026-11-15T20:51:01Z"
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10,
+            "started_at": "2026-11-15T20:51:01Z",
+            "completed_at": "2026-11-15T20:51:01Z"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-15T20:51:01Z",
+            "completed_at": "2026-11-15T20:51:07Z"
+          },
+          {
+            "name": "Audit dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-15T20:51:07Z",
+            "completed_at": "2026-11-15T20:51:07Z"
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-15T20:51:07Z",
+            "completed_at": "2026-11-15T20:51:24Z"
+          },
+          {
+            "name": "Smoke benchmark harness",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-15T20:51:24Z",
+            "completed_at": "2026-11-15T20:51:52Z"
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-15T20:51:52Z",
+            "completed_at": "2026-11-15T20:51:53Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-15T20:51:53Z",
+            "completed_at": "2026-11-15T20:51:53Z"
+          }
+        ]
+      },
+      {
+        "job_id": 132953513026,
+        "name": "PHP 8.5",
+        "platform": "Linux",
+        "php_version": "8.5.12",
+        "head_sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-15T20:50:55Z",
+        "completed_at": "2026-11-15T20:51:33Z",
+        "html_url": "https://github.com/componenta/di/actions/runs/43760317266/job/132953513026",
+        "test_result": {
+          "passed": 1544,
+          "failed": 0,
+          "skipped": 1,
+          "assertions": 24366
+        },
+        "random_order_seed": 1794775873,
+        "style": {
+          "changed": 0,
+          "files": 411
+        },
+        "phpstan": "no errors",
+        "metadata_retrieved_utc": "2026-11-15T20:52:41.617308+00:00",
+        "job_metadata_file": "job-132953513026-metadata.json",
+        "job_metadata_sha256": "a73cb5feddb3f7ded843ea6e5f02999583b360d8ec2d21834da38563245c38cc",
+        "full_log_file": "job-132953513026.log",
+        "full_log_bytes": 345995,
+        "full_log_sha256": "002904e11c2f3207e42cd27fc6e0abcfc05c7218af3feb3f1374192f52a244e2",
+        "log_retrieved_utc": "2026-11-15T20:52:30.183Z",
+        "verbatim_excerpts": {
+          "php_version": "2026-11-15T20:50:59.8833907Z ✓ PHP Updated to PHP 8.5.12",
+          "tests": "2026-11-15T20:51:17.3240094Z   Tests:    1 skipped, 1544 passed (24366 assertions)",
+          "style": "2026-11-15T20:51:09.0163035Z Found 0 of 411 files that can be fixed in 1.993 seconds, 90.00 MB memory used",
+          "phpstan": "2026-11-15T20:51:13.4903410Z  [OK] No errors                                                                 ",
+          "seed": "2026-11-15T20:51:17.3240850Z   Random Order Seed: 1794775873",
+          "native_callback_success_cases_or_skips": []
+        },
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-15T20:50:55Z",
+            "completed_at": "2026-11-15T20:50:56Z"
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-15T20:50:56Z",
+            "completed_at": "2026-11-15T20:50:57Z"
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3,
+            "started_at": "2026-11-15T20:50:57Z",
+            "completed_at": "2026-11-15T20:50:57Z"
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4,
+            "started_at": "2026-11-15T20:50:57Z",
+            "completed_at": "2026-11-15T20:50:57Z"
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5,
+            "started_at": "2026-11-15T20:50:57Z",
+            "completed_at": "2026-11-15T20:50:57Z"
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-15T20:50:57Z",
+            "completed_at": "2026-11-15T20:51:00Z"
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-15T20:51:00Z",
+            "completed_at": "2026-11-15T20:51:00Z"
+          },
+          {
+            "name": "Use config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8,
+            "started_at": "2026-11-15T20:51:00Z",
+            "completed_at": "2026-11-15T20:51:00Z"
+          },
+          {
+            "name": "Use validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 9,
+            "started_at": "2026-11-15T20:51:00Z",
+            "completed_at": "2026-11-15T20:51:00Z"
+          },
+          {
+            "name": "Use reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 10,
+            "started_at": "2026-11-15T20:51:00Z",
+            "completed_at": "2026-11-15T20:51:00Z"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-15T20:51:00Z",
+            "completed_at": "2026-11-15T20:51:06Z"
+          },
+          {
+            "name": "Audit dependencies",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 12,
+            "started_at": "2026-11-15T20:51:06Z",
+            "completed_at": "2026-11-15T20:51:06Z"
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-15T20:51:06Z",
+            "completed_at": "2026-11-15T20:51:17Z"
+          },
+          {
+            "name": "Smoke benchmark harness",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-15T20:51:17Z",
+            "completed_at": "2026-11-15T20:51:32Z"
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-15T20:51:32Z",
+            "completed_at": "2026-11-15T20:51:32Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-15T20:51:32Z",
+            "completed_at": "2026-11-15T20:51:32Z"
+          }
+        ]
+      },
+      {
+        "job_id": 132953512879,
+        "name": "Windows PHP 8.4",
+        "platform": "Windows",
+        "php_version": "8.4.27",
+        "head_sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-15T20:50:55Z",
+        "completed_at": "2026-11-15T20:52:18Z",
+        "html_url": "https://github.com/componenta/di/actions/runs/43760317266/job/132953512879",
+        "test_result": {
+          "passed": 1526,
+          "failed": 0,
+          "skipped": 19,
+          "assertions": 24257
+        },
+        "random_order_seed": 1794775923,
+        "style": {
+          "changed": 0,
+          "files": 411
+        },
+        "phpstan": "no errors",
+        "metadata_retrieved_utc": "2026-11-15T20:53:37.082758+00:00",
+        "job_metadata_file": "job-132953512879-metadata.json",
+        "job_metadata_sha256": "ca3c7181b9936155bc2fbf34dd2da0a359c471e0ad1b875fb6a1f76365e6d286",
+        "full_log_file": "job-132953512879.log",
+        "full_log_bytes": 352840,
+        "full_log_sha256": "96a603f9da17e04823027aa12d1a59ebda7212e6c50c91b113d59f5876927844",
+        "log_retrieved_utc": "2026-11-15T20:53:46.753Z",
+        "verbatim_excerpts": {
+          "php_version": "2026-11-15T20:51:15.8039881Z √ PHP Installed PHP 8.4.27 ",
+          "tests": "2026-11-15T20:52:15.2236161Z   Tests:    19 skipped, 1526 passed (24257 assertions)",
+          "style": "2026-11-15T20:51:43.8968138Z Found 0 of 411 files that can be fixed in 7.041 seconds, 88.00 MB memory used",
+          "phpstan": "2026-11-15T20:52:03.5769299Z  [OK] No errors                                                                                                        ",
+          "seed": "2026-11-15T20:52:15.2236990Z   Random Order Seed: 1794775923",
+          "native_callback_success_cases_or_skips": [
+            "2026-11-15T20:52:06.0324286Z   - native Init expressions preserve legacy callables lexical scope state and lifetime with ('cached') → Native… 0.01s  ",
+            "2026-11-15T20:52:06.0327111Z   - native Init expressions preserve legacy callables lexical scope state and lifetime with ('uncached') → Native callback expressions require PHP 8.5.",
+            "2026-11-15T20:52:06.0329788Z   - native setup callbacks preserve scope state lazy retries and runtime lifetimes with ('cached') → Native callback expressions require PHP 8.5.",
+            "2026-11-15T20:52:06.0332771Z   - native setup callbacks preserve scope state lazy retries and runtime lifetimes with ('uncached') → Native callback expressions require PHP 8.5."
+          ]
+        },
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-15T20:50:56Z",
+            "completed_at": "2026-11-15T20:50:57Z"
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-15T20:50:57Z",
+            "completed_at": "2026-11-15T20:51:03Z"
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3,
+            "started_at": "2026-11-15T20:51:03Z",
+            "completed_at": "2026-11-15T20:51:03Z"
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4,
+            "started_at": "2026-11-15T20:51:03Z",
+            "completed_at": "2026-11-15T20:51:03Z"
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5,
+            "started_at": "2026-11-15T20:51:03Z",
+            "completed_at": "2026-11-15T20:51:03Z"
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-15T20:51:03Z",
+            "completed_at": "2026-11-15T20:51:18Z"
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-15T20:51:18Z",
+            "completed_at": "2026-11-15T20:51:20Z"
+          },
+          {
+            "name": "Use companion workspaces",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8,
+            "started_at": "2026-11-15T20:51:20Z",
+            "completed_at": "2026-11-15T20:51:20Z"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-15T20:51:20Z",
+            "completed_at": "2026-11-15T20:51:34Z"
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-15T20:51:34Z",
+            "completed_at": "2026-11-15T20:52:15Z"
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 20,
+            "started_at": "2026-11-15T20:52:15Z",
+            "completed_at": "2026-11-15T20:52:17Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 21,
+            "started_at": "2026-11-15T20:52:17Z",
+            "completed_at": "2026-11-15T20:52:17Z"
+          }
+        ]
+      },
+      {
+        "job_id": 132953513123,
+        "name": "Windows PHP 8.5",
+        "platform": "Windows",
+        "php_version": "8.5.12",
+        "head_sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-15T20:50:56Z",
+        "completed_at": "2026-11-15T20:52:18Z",
+        "html_url": "https://github.com/componenta/di/actions/runs/43760317266/job/132953513123",
+        "test_result": {
+          "passed": 1543,
+          "failed": 0,
+          "skipped": 2,
+          "assertions": 24364
+        },
+        "random_order_seed": 1794775921,
+        "style": {
+          "changed": 0,
+          "files": 411
+        },
+        "phpstan": "no errors",
+        "metadata_retrieved_utc": "2026-11-15T20:53:39.085257+00:00",
+        "job_metadata_file": "job-132953513123-metadata.json",
+        "job_metadata_sha256": "920b65f85cd165eb2077e26bafa458d2f76f01e786dd5b09ba9c61f7abed84f6",
+        "full_log_file": "job-132953513123.log",
+        "full_log_bytes": 351719,
+        "full_log_sha256": "77a4a17b3ee877b0f83ac40d6b91a3e96d2f517c4e6fac6074892ecceedb59a5",
+        "log_retrieved_utc": "2026-11-15T20:53:47.015Z",
+        "verbatim_excerpts": {
+          "php_version": "2026-11-15T20:51:13.8568867Z √ PHP Found PHP 8.5.12 ",
+          "tests": "2026-11-15T20:52:13.5282803Z   Tests:    2 skipped, 1543 passed (24364 assertions)",
+          "style": "2026-11-15T20:51:43.8259543Z Found 0 of 411 files that can be fixed in 7.838 seconds, 86.00 MB memory used",
+          "phpstan": "2026-11-15T20:52:01.7119159Z  [OK] No errors                                                                                                        ",
+          "seed": "2026-11-15T20:52:13.5283606Z   Random Order Seed: 1794775921",
+          "native_callback_success_cases_or_skips": [
+            "2026-11-15T20:52:03.3486723Z   ✓ native setup callbacks preserve scope state lazy retries and runtime lifetimes with ('uncached')             0.09s  ",
+            "2026-11-15T20:52:03.3488981Z   ✓ native setup callbacks preserve scope state lazy retries and runtime lifetimes with ('cached')               0.09s  ",
+            "2026-11-15T20:52:03.3491134Z   ✓ native Init expressions preserve legacy callables lexical scope state and lifetime with ('cached')           0.10s  ",
+            "2026-11-15T20:52:03.3493230Z   ✓ native Init expressions preserve legacy callables lexical scope state and lifetime with ('uncached')         0.09s  "
+          ]
+        },
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-15T20:50:57Z",
+            "completed_at": "2026-11-15T20:50:59Z"
+          },
+          {
+            "name": "Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-15T20:50:59Z",
+            "completed_at": "2026-11-15T20:51:06Z"
+          },
+          {
+            "name": "Checkout config v3 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 3,
+            "started_at": "2026-11-15T20:51:06Z",
+            "completed_at": "2026-11-15T20:51:06Z"
+          },
+          {
+            "name": "Checkout validation workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4,
+            "started_at": "2026-11-15T20:51:06Z",
+            "completed_at": "2026-11-15T20:51:06Z"
+          },
+          {
+            "name": "Checkout reflection v2 workspace",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 5,
+            "started_at": "2026-11-15T20:51:06Z",
+            "completed_at": "2026-11-15T20:51:06Z"
+          },
+          {
+            "name": "Setup PHP",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-15T20:51:06Z",
+            "completed_at": "2026-11-15T20:51:16Z"
+          },
+          {
+            "name": "Validate Composer metadata",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-15T20:51:16Z",
+            "completed_at": "2026-11-15T20:51:18Z"
+          },
+          {
+            "name": "Use companion workspaces",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 8,
+            "started_at": "2026-11-15T20:51:18Z",
+            "completed_at": "2026-11-15T20:51:18Z"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-15T20:51:18Z",
+            "completed_at": "2026-11-15T20:51:33Z"
+          },
+          {
+            "name": "Run checks",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-15T20:51:33Z",
+            "completed_at": "2026-11-15T20:52:13Z"
+          },
+          {
+            "name": "Post Checkout",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 20,
+            "started_at": "2026-11-15T20:52:13Z",
+            "completed_at": "2026-11-15T20:52:15Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 21,
+            "started_at": "2026-11-15T20:52:15Z",
+            "completed_at": "2026-11-15T20:52:16Z"
+          }
+        ]
+      }
+    ],
+    "mutation_job_at_platform_collection": {
+      "snapshot_utc": "2026-11-15T20:52:41.617308+00:00",
+      "job_id": 132953513010,
+      "name": "Coverage PHP 8.4",
+      "status": "in_progress",
+      "conclusion": null,
+      "steps": [
+        {
+          "name": "Enforce coverage and generate Clover report",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check mutation score",
+          "status": "in_progress",
+          "conclusion": null
+        }
+      ]
+    },
+    "evidence_note": "Full decoded GitHub job logs are saved as UTF-8 with returned line endings/BOM/ANSI intact. Metadata comes from public GitHub REST; logs from github_fetch_workflow_job_logs. Source/test code, CI configuration and runs were not modified or rerun by this observer.",
+    "final_status_retrieved_utc": "2026-11-15T21:50:21.039926+00:00",
+    "run_status": "completed",
+    "run_conclusion": "success",
+    "all_five_required_jobs_success": true,
+    "final_workflow_run": {
+      "id": 43760317266,
+      "head_sha": "348330544d3d5b0bec7b158e0c2221927dc23643",
+      "head_branch": "refactor/di6-definitions-callbacks",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "run_started_at": "2026-11-15T20:50:35Z",
+      "updated_at": "2026-11-15T21:46:30Z",
+      "html_url": "https://github.com/componenta/di/actions/runs/43760317266"
+    },
+    "completed_coverage_mutation": {
+      "evidence_file": "evidence/2026-11-15-round4/coverage-mutation-ci.json",
+      "evidence_sha256": "7a2e6358efa33f8ebfd291d9f6deccdb61f9edb10760c3f8b3eb038dba940bf3",
+      "job_id": 132953513010,
+      "job_status": "completed",
+      "job_conclusion": "success",
+      "job_started_at": "2026-11-15T20:50:55Z",
+      "job_completed_at": "2026-11-15T21:46:29Z",
+      "php_version": "8.4.27",
+      "coverage_reported_percent": 92.3,
+      "coverage_minimum_percent": 80,
+      "clover_statements": 4823,
+      "clover_covered_statements": 4453,
+      "clover_files": 169,
+      "mutation_total": 4249,
+      "mutated_source_files": 114,
+      "tested": 3716,
+      "timeout": 57,
+      "untested": 476,
+      "reported_msi_percent": 88.8,
+      "msi_minimum_percent": 85,
+      "reported_msi_formula": "(3716 + 57) / 4249 * 100",
+      "completed_tested_share_of_all_mutants_percent": 87.45587196987526,
+      "completed_tested_share_formula": "3716 / 4249 * 100; timeouts remain in denominator and are not credited in numerator",
+      "full_log_sha256": "8a4f01ce4a2ae93f44bb0ed5a2d021ab08ee0ecea012b9a11d581a3be178764f",
+      "durable_artifacts": [
+        {
+          "file": "coverage.xml",
+          "bytes": 390898,
+          "sha256": "c12f77e38739339d73a044cd97f7f91846edd2b83a474ca73ef2e16158049eea",
+          "description": "Complete byte-identical Clover XML."
+        },
+        {
+          "file": "coverage-3483305.zip",
+          "bytes": 34055,
+          "sha256": "bb3edc6a93a1c1d3ed0c0e01baa1e8fcf28e2b80f874491424a006be21a080ac",
+          "description": "Exact downloaded Actions artifact ZIP; digest matches GitHub metadata."
+        },
+        {
+          "file": "coverage-mutation.log.gz",
+          "bytes": 136471,
+          "sha256": "dddad533645cbfb4749216d28991458749ae50c6509ec9ea09b83beebee34d17",
+          "description": "Lossless gzip of the complete decoded CI job log, including all current UNTESTED diffs.",
+          "uncompressed_bytes": 1116051,
+          "uncompressed_sha256": "8a4f01ce4a2ae93f44bb0ed5a2d021ab08ee0ecea012b9a11d581a3be178764f"
+        }
+      ]
+    }
+  },
+  "artifact_manifest": [
+    {
+      "path": "docs/plans/README.md",
+      "bytes": 4020,
+      "sha256": "c61564810cbb8ff63e0a4312fa68a4eeaa843234a6ede251995e3472610fe8d9"
+    },
+    {
+      "path": "docs/plans/README.ru.md",
+      "bytes": 6703,
+      "sha256": "1431a6636e8574c5527fece1a1cc72ee917f93c5c18fa42c010941823f770bc5"
+    },
+    {
+      "path": "docs/audit/2026-11-15-attribute-scope.json",
+      "bytes": 21058,
+      "sha256": "7441c7638c128a933b7d6509e47ca0e5fe1b4a7a7de4a1251d8394a98ab3043d"
+    },
+    {
+      "path": "docs/audit/2026-11-15-di6-full-reaudit-round4-scope.json",
+      "bytes": 353343,
+      "sha256": "fd8415797af6cb7eaa79af2606811dd4edbda47b65685ab96968eee3ab41606b"
+    },
+    {
+      "path": "docs/audit/2026-11-15-di6-full-reaudit-round4.md",
+      "bytes": 31107,
+      "sha256": "ee12ac41994f50c666efe5f1c76cc944183d222099becc581e8664b4a72fb7fc"
+    },
+    {
+      "path": "docs/audit/2026-11-15-di6-full-reaudit-round4.ru.md",
+      "bytes": 52013,
+      "sha256": "6e09f8aaecb5564a39fcfc6f5b80a9474422be5c762f8aab59915fa666876acf"
+    },
+    {
+      "path": "docs/audit/2026-11-15-propertyless-lazy-evidence.json",
+      "bytes": 80332,
+      "sha256": "5d579362d338a2cab7dda9e970b95713c0ea89d10740e5034e66c29c39212503"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/README.md",
+      "bytes": 4470,
+      "sha256": "a328492087d50c0b143c28ecf42d659f17290a5de855b9560824a0fe5cc8e6d0"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/autoload-identity-proof.json",
+      "bytes": 41173,
+      "sha256": "72438e22a31b99073a921d300eb94f8c24f2d8a519ea245e2ce1482b7ff0bbef"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/benchmark-smoke.json",
+      "bytes": 49658,
+      "sha256": "d27a40a19465679ac2fe9a8868d469f1f50ba2b14d8af7541825b341eb77e14e"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/callable-case-fix.json",
+      "bytes": 10185,
+      "sha256": "fe6a00f99b74d24683087b5545f2a8bdcde59ae5ee4d4e43ad239bb52f087216"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/cast-fallback.json",
+      "bytes": 22046,
+      "sha256": "25a202021f171684fe8d9f954cf1a80723d2500a78be3a31297d33539d78ae39"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/core-proof.json",
+      "bytes": 48361,
+      "sha256": "4502114169639eb12e0f65a93b85c4f3141484049941919945dbc36d3414c2f8"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/coverage-3483305.zip",
+      "bytes": 34055,
+      "sha256": "bb3edc6a93a1c1d3ed0c0e01baa1e8fcf28e2b80f874491424a006be21a080ac"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/coverage-mutation-ci.json",
+      "bytes": 135026,
+      "sha256": "7a2e6358efa33f8ebfd291d9f6deccdb61f9edb10760c3f8b3eb038dba940bf3"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/coverage-mutation.log.gz",
+      "bytes": 136471,
+      "sha256": "dddad533645cbfb4749216d28991458749ae50c6509ec9ea09b83beebee34d17"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/coverage.xml",
+      "bytes": 390898,
+      "sha256": "c12f77e38739339d73a044cd97f7f91846edd2b83a474ca73ef2e16158049eea"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/magic-visibility.json",
+      "bytes": 25845,
+      "sha256": "3ee0737d535e8281f6fe0963446a6d242a94a043e64ec16be336e2ce8ffd36ae"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/mutations.json",
+      "bytes": 25196,
+      "sha256": "4fd734a89ee30d45658e6deb2ea10f5e64547df6e47a898aaa07a317ab816f1c"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/request-protocol.json",
+      "bytes": 38476,
+      "sha256": "472d1620c887480e109d095f8bb1d52095f421a9b0e7e16e3978d87c29c89c67"
+    },
+    {
+      "path": "docs/audit/evidence/2026-11-15-round4/windows-php85-fixture-proof.json",
+      "bytes": 33491,
+      "sha256": "a41a0d569e2d05733a4077a96a22a3541c70f366a84525476882a173fc32dc60"
+    },
+    {
+      "path": "docs/audit/reproductions/PropertylessLazyObservation.php",
+      "bytes": 12584,
+      "sha256": "64baddf90676e6bdde6277c03337d9f315623fc5a250cd589a382841df8cbe69"
+    },
+    {
+      "path": "docs/plans/propertyless-lazy-lifecycle.md",
+      "bytes": 21329,
+      "sha256": "b13d308f2c2b7ac4ec0a9f07cda954b1f389cde7aef5231979b1bac574888061"
+    },
+    {
+      "path": "docs/plans/propertyless-lazy-lifecycle.ru.md",
+      "bytes": 34529,
+      "sha256": "308f12c358cdc10c22e41f4d692606c287afad6d20ab0765063002689d456db7"
+    }
+  ],
+  "artifact_manifest_note": "Manifest includes every changed/new audit support artifact except this evidence JSON itself, avoiding a self-referential hash. Original observer hashes remain explicit provenance."
+}

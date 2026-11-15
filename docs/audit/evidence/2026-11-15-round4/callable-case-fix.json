@@ -1,0 +1,119 @@
+{
+  "base_head": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+  "change": "Case-normalize native metadata key after exact opaque service lookup",
+  "results": [
+    {
+      "phase": "original-red",
+      "runtime": "84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "tests/Contract/CallableNameBoundariesContractTest.php",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "exit_code": 1,
+      "expected_exit": "nonzero",
+      "source_tree_sha256": "4b61ca596ad90adbd3d800f093dd3bd07d936eb90057d3659d5523db84e9c38a",
+      "source_sha256": "bbc11f5f9afd9406e14449df0603b9150b488b567aaf3a04bf6f26cb32fac131",
+      "tests": {
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php": "f06703fd162c30a4832a4753cec597d58d68998f8f20adb057fb97bf062c858d",
+        "tests/Contract/CallableNameBoundariesContractTest.php": "1ef664045bcc05163ce362a15a74958eb217b7fb69a9e0ebd2e8a21f815c8f84",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php": "268869af6e09fe5c537ba36a9c57e65d17bc9c3945446c0cd137007b7d1fc032"
+      },
+      "log_sha256": "f68f8583807dd63dca959daa7c5051aee48f3e2e906b5e20d6c121dcbae7b000",
+      "output": "\n  ...⨯⨯...........\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n\n  Tests:    2 failed, 14 passed (74 assertions)\n  Duration: 2.36s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/parameters-audit/evidence/callable-case-fix/original-red84.log"
+    },
+    {
+      "phase": "original-red",
+      "runtime": "85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "tests/Contract/CallableNameBoundariesContractTest.php",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "exit_code": 1,
+      "expected_exit": "nonzero",
+      "source_tree_sha256": "4b61ca596ad90adbd3d800f093dd3bd07d936eb90057d3659d5523db84e9c38a",
+      "source_sha256": "bbc11f5f9afd9406e14449df0603b9150b488b567aaf3a04bf6f26cb32fac131",
+      "tests": {
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php": "f06703fd162c30a4832a4753cec597d58d68998f8f20adb057fb97bf062c858d",
+        "tests/Contract/CallableNameBoundariesContractTest.php": "1ef664045bcc05163ce362a15a74958eb217b7fb69a9e0ebd2e8a21f815c8f84",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php": "268869af6e09fe5c537ba36a9c57e65d17bc9c3945446c0cd137007b7d1fc032"
+      },
+      "log_sha256": "26c18a0f9be1c0dc99ec217fbc7c7d23118ef42b17f0f915ec9527d899500c3d",
+      "output": "\n  ...⨯⨯...........\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\CallableCaseCacheRetentionContractTest > rejected…    \n  Failed asserting that 3276856 is less than 1048576.\n\n  at tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n    125▕     gc_collect_cycles();\n    126▕     $growth = memory_get_usage() - $before;\n    127▕ \n    128▕     expect($rejected)->toBe($count)\n  ➜ 129▕         ->and($growth)->toBeLessThan(1024 * 1024);\n    130▕ })->with(['class', 'method']);\n    131▕ \n    132▕ test('native method classification does not fold opaque callable service ids', function (): void {\n    133▕     $upper = static fn(): string => 'upper';\n\n  1   tests/Contract/CallableCaseCacheRetentionContractTest.php:129\n\n\n  Tests:    2 failed, 14 passed (74 assertions)\n  Duration: 2.97s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/parameters-audit/evidence/callable-case-fix/original-red85.log"
+    },
+    {
+      "phase": "fixed-green",
+      "runtime": "84",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "tests/Contract/CallableNameBoundariesContractTest.php",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "source_tree_sha256": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+      "source_sha256": "ff0104b73fe5581af898ba05f0a250618b023850507b68bf51a2a131b5a9a53a",
+      "tests": {
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php": "f06703fd162c30a4832a4753cec597d58d68998f8f20adb057fb97bf062c858d",
+        "tests/Contract/CallableNameBoundariesContractTest.php": "1ef664045bcc05163ce362a15a74958eb217b7fb69a9e0ebd2e8a21f815c8f84",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php": "268869af6e09fe5c537ba36a9c57e65d17bc9c3945446c0cd137007b7d1fc032"
+      },
+      "log_sha256": "3a358534bcd1d94f983b6e579a84ff825f203f570e749ea57308e1aa9a1ad454",
+      "output": "\n  ................\n\n  Tests:    16 passed (74 assertions)\n  Duration: 2.05s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/parameters-audit/evidence/callable-case-fix/fixed-green84.log"
+    },
+    {
+      "phase": "fixed-green",
+      "runtime": "85",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-n",
+        "vendor/bin/pest",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php",
+        "tests/Contract/CallableNameBoundariesContractTest.php",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php",
+        "--compact",
+        "--colors=never",
+        "--order-by=default",
+        "--do-not-cache-result"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "source_tree_sha256": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+      "source_sha256": "ff0104b73fe5581af898ba05f0a250618b023850507b68bf51a2a131b5a9a53a",
+      "tests": {
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php": "f06703fd162c30a4832a4753cec597d58d68998f8f20adb057fb97bf062c858d",
+        "tests/Contract/CallableNameBoundariesContractTest.php": "1ef664045bcc05163ce362a15a74958eb217b7fb69a9e0ebd2e8a21f815c8f84",
+        "tests/Contract/CallableFailureDiagnosticsContractTest.php": "268869af6e09fe5c537ba36a9c57e65d17bc9c3945446c0cd137007b7d1fc032"
+      },
+      "log_sha256": "ef5a1cb070406296d2250be0eb11157eff8de2ca98411a6cdf82cd3d51cc0a5b",
+      "output": "\n  ................\n\n  Tests:    16 passed (74 assertions)\n  Duration: 2.60s\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/parameters-audit/evidence/callable-case-fix/fixed-green85.log"
+    }
+  ],
+  "durable_evidence_note": "Original scratch paths are provenance only; full outputs and hashes are embedded. Mutation diffs are in mutations.json in this directory."
+}

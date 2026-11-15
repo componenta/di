@@ -1,0 +1,581 @@
+{
+  "schema_version": 1,
+  "purpose": "Exact source mutations actually executed for the nine targeted test-oracle witnesses; not nine production defects.",
+  "source_base_commit": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+  "verified_integrated_commit": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+  "validation": {
+    "method": "Extract the mutation definitions from the existing execution scripts without executing them; reconstruct each diff from git source; verify before/after SHA256 against every matching existing proof row.",
+    "new_test_runs": 0,
+    "source_targets_match_integrated_commit": true,
+    "mutations_validated": 9,
+    "matching_mutant_execution_rows": 36,
+    "controls": "Only the named related old test file(s) ran on each mutant; no whole-suite-on-mutant claim.",
+    "magic_context": "Magic evidence was executed after the independent CallableResolver cache-key fix. Its per-run full production fingerprints are preserved in magic-visibility.json."
+  },
+  "reproduction": [
+    "Use an isolated checkout of verified_integrated_commit with the project dependencies and PHP 8.4 or 8.5.",
+    "Apply one mutation at a time. Verify the target source original_sha256; write unified_diff to a patch file and apply with git apply; verify mutated_sha256.",
+    "For the old control use the group test_revision for kind old-tests; for the strengthened test use the test_revision for kind new-tests. For magic these are two versions of the same path.",
+    "Run the recorded command from the checkout root, replacing only the absolute PHP binary path with the corresponding local runtime. Existing proof files preserve full original commands and logs.",
+    "Restore the source before applying the next mutation. Restore the strengthened tests afterward. Expected outcomes are old control exit 0, strengthened mutant run nonzero, and restored source exit 0."
+  ],
+  "groups": [
+    {
+      "group": "cast-fallback",
+      "proof_file": "cast-fallback.json",
+      "proof_sha256": "25a202021f171684fe8d9f954cf1a80723d2500a78be3a31297d33539d78ae39",
+      "execution_script_name": "prove_cast.py",
+      "execution_script_sha256": "68175af8927c7669e5e46740f61992fa52c612924342ccac93f9ad27e7f48b92",
+      "source_path": "src/Resolver/Attribute/Handler/CastHandler.php",
+      "controls": [
+        {
+          "kind": "old-tests",
+          "test_revision": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+          "tests_sha256": {
+            "tests/V5/ParameterAttributeCompositionTest.php": "b0202de7b1c24a156bb826dc00ee893bea62a701220bb0a2756f2d07859be25c"
+          },
+          "executed_commands": [
+            {
+              "runtime": "84",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/V5/ParameterAttributeCompositionTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            },
+            {
+              "runtime": "85",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/V5/ParameterAttributeCompositionTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "new-tests",
+          "test_revision": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+          "tests_sha256": {
+            "tests/Contract/CastInputFallbackContractTest.php": "c799c7cfecd19a93e35587142c4ebbb1fc081148b5a576b5b32ffb27501caa31"
+          },
+          "executed_commands": [
+            {
+              "runtime": "84",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/CastInputFallbackContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            },
+            {
+              "runtime": "85",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/CastInputFallbackContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            }
+          ]
+        }
+      ],
+      "original_proof_file": "cast-fallback/proof.json",
+      "original_proof_sha256": "0b46f42565faa8751d45d6f8c2636f3681ba57b204f5240d84952dd5ecaa44ff"
+    },
+    {
+      "group": "request-protocol",
+      "proof_file": "request-protocol.json",
+      "proof_sha256": "472d1620c887480e109d095f8bb1d52095f421a9b0e7e16e3978d87c29c89c67",
+      "execution_script_name": "prove_request.py",
+      "execution_script_sha256": "9c6626a5c3274245c4e5350b54aea637539ba7a13812b531ea0cf2bd7cd1310b",
+      "source_path": "src/Resolver/Attribute/Handler/RequestAttributeHandler.php",
+      "controls": [
+        {
+          "kind": "old-tests",
+          "test_revision": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+          "tests_sha256": {
+            "tests/V5/RequestMappingTest.php": "588253fdccdd57b21b3e9d79c9299a4dc52a25071fb816f1e2bd70051adbe822",
+            "tests/V5/RequestExtractorIsolationTest.php": "422e037b26d79b759b6efdbe36b3113125c66a46e3acaca77739a1a1444d13ba"
+          },
+          "executed_commands": [
+            {
+              "runtime": "84",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/V5/RequestMappingTest.php",
+                "tests/V5/RequestExtractorIsolationTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            },
+            {
+              "runtime": "85",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/V5/RequestMappingTest.php",
+                "tests/V5/RequestExtractorIsolationTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "new-tests",
+          "test_revision": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+          "tests_sha256": {
+            "tests/Contract/RequestAttributeProtocolContractTest.php": "2681579f538e76a49dee6a4c80bdba0e42daec7a0ac650ddf2f76973b63133a5"
+          },
+          "executed_commands": [
+            {
+              "runtime": "84",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/RequestAttributeProtocolContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            },
+            {
+              "runtime": "85",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/RequestAttributeProtocolContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            }
+          ]
+        }
+      ],
+      "original_proof_file": "request-protocol/proof.json",
+      "original_proof_sha256": "b6f95cf2f007d6a668df553a235e61f879d2b0658bbda7fb200f02b15822399f"
+    },
+    {
+      "group": "magic-visibility",
+      "proof_file": "magic-visibility.json",
+      "proof_sha256": "3ee0737d535e8281f6fe0963446a6d242a94a043e64ec16be336e2ce8ffd36ae",
+      "execution_script_name": "prove_magic.py",
+      "execution_script_sha256": "5fc4242ff12586ed8c4278e80f347b3d38c255d100b6437560ce39f307beecf5",
+      "source_path": "src/Internal/functions.php",
+      "controls": [
+        {
+          "kind": "old-tests",
+          "test_revision": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+          "tests_sha256": {
+            "tests/Contract/MagicClosureInvocationContractTest.php": "7e1d0d662d78f126cff4f019bbcf6f3c41bf2e1c802125e3a6f5590d0c4078d7"
+          },
+          "executed_commands": [
+            {
+              "runtime": "84",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/MagicClosureInvocationContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            },
+            {
+              "runtime": "85",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/MagicClosureInvocationContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "new-tests",
+          "test_revision": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+          "tests_sha256": {
+            "tests/Contract/MagicClosureInvocationContractTest.php": "ea7662ad1553eb7478f8babf1fd9a5a18ea90685a60bcdb89e2a7c0ba6560e3e"
+          },
+          "executed_commands": [
+            {
+              "runtime": "84",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/MagicClosureInvocationContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            },
+            {
+              "runtime": "85",
+              "command": [
+                "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+                "-n",
+                "vendor/bin/pest",
+                "tests/Contract/MagicClosureInvocationContractTest.php",
+                "--compact",
+                "--colors=never",
+                "--order-by=default",
+                "--do-not-cache-result"
+              ]
+            }
+          ]
+        }
+      ],
+      "original_proof_file": "magic-visibility/proof.json",
+      "original_proof_sha256": "fe77af935de8170767066cf8b053e5ea4c22e34190bbf2122d7bfefa15a50811"
+    }
+  ],
+  "mutations": [
+    {
+      "id": "e4a8075381a95f16",
+      "group": "cast-fallback",
+      "source_path": "src/Resolver/Attribute/Handler/CastHandler.php",
+      "original_sha256": "ddcec28316ac4fada88746cf8d1e606baac9b857bdc4a4986e174e535b5324f4",
+      "mutated_sha256": "a7febec67411f624bdd33aa92eeab5ee4a1db8077b9b720eeb1e758fd8da19cb",
+      "unified_diff": "--- a/src/Resolver/Attribute/Handler/CastHandler.php\n+++ b/src/Resolver/Attribute/Handler/CastHandler.php\n@@ -44,7 +44,7 @@\n                 $value = ParameterAttributeValue::resolved($attribute->default);\n             } elseif ($target->variadic) {\n                 $value = ParameterAttributeValue::resolved([]);\n-            } elseif ($target->hasDefault) {\n+            } elseif (!$target->hasDefault) {\n                 $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());\n             } elseif ($target->allowsNull) {\n                 $value = ParameterAttributeValue::resolved(null);\n",
+      "observed_results": [
+        {
+          "label": "e4a8075381a95f16-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "e4a8075381a95f16-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "e4a8075381a95f16-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "e4a8075381a95f16-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "991960b128e111b5",
+      "group": "cast-fallback",
+      "source_path": "src/Resolver/Attribute/Handler/CastHandler.php",
+      "original_sha256": "ddcec28316ac4fada88746cf8d1e606baac9b857bdc4a4986e174e535b5324f4",
+      "mutated_sha256": "72d135f5b2395df37f68a9438855437df4f134a9a5b19bb3ae879a141928059a",
+      "unified_diff": "--- a/src/Resolver/Attribute/Handler/CastHandler.php\n+++ b/src/Resolver/Attribute/Handler/CastHandler.php\n@@ -46,7 +46,7 @@\n                 $value = ParameterAttributeValue::resolved([]);\n             } elseif ($target->hasDefault) {\n                 $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());\n-            } elseif ($target->allowsNull) {\n+            } elseif (!$target->allowsNull) {\n                 $value = ParameterAttributeValue::resolved(null);\n             } else {\n                 throw ResolutionException::forParameter(\n",
+      "observed_results": [
+        {
+          "label": "991960b128e111b5-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "991960b128e111b5-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "991960b128e111b5-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "991960b128e111b5-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "4c726edd6a83e89a",
+      "group": "request-protocol",
+      "source_path": "src/Resolver/Attribute/Handler/RequestAttributeHandler.php",
+      "original_sha256": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+      "mutated_sha256": "d7dccfe0157d1cd0e4fc90d0305ba79510dce9714bb5a6a4d5c4e36be06d0b76",
+      "unified_diff": "--- a/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n+++ b/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n@@ -75,7 +75,7 @@\n         object $attribute,\n         ReflectionParameter $parameter,\n     ): mixed {\n-        if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {\n+        if ($attribute instanceof RequestDataExtractorInterface || $attribute instanceof MapperInterface) {\n             if ($attribute instanceof CasterProviderAwareInterface) {\n                 $attribute->provider = $this->casterProvider;\n             }\n",
+      "observed_results": [
+        {
+          "label": "4c726edd6a83e89a-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "4c726edd6a83e89a-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "4c726edd6a83e89a-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "4c726edd6a83e89a-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "6f7306abc956a25b",
+      "group": "request-protocol",
+      "source_path": "src/Resolver/Attribute/Handler/RequestAttributeHandler.php",
+      "original_sha256": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+      "mutated_sha256": "3ca8f837bc71a658e6bc838e46e91c41d8911d82247a2f14bd20c7789c057173",
+      "unified_diff": "--- a/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n+++ b/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n@@ -75,7 +75,7 @@\n         object $attribute,\n         ReflectionParameter $parameter,\n     ): mixed {\n-        if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {\n+        if (true && $attribute instanceof MapperInterface) {\n             if ($attribute instanceof CasterProviderAwareInterface) {\n                 $attribute->provider = $this->casterProvider;\n             }\n",
+      "observed_results": [
+        {
+          "label": "6f7306abc956a25b-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "6f7306abc956a25b-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "6f7306abc956a25b-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "6f7306abc956a25b-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "d2cb52996814d1ec",
+      "group": "request-protocol",
+      "source_path": "src/Resolver/Attribute/Handler/RequestAttributeHandler.php",
+      "original_sha256": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+      "mutated_sha256": "d7e36ac8c5a437ba015499c1321c810e3f04cd25e45205e3b16d2158cf5b52fb",
+      "unified_diff": "--- a/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n+++ b/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n@@ -75,7 +75,7 @@\n         object $attribute,\n         ReflectionParameter $parameter,\n     ): mixed {\n-        if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {\n+        if ($attribute instanceof RequestDataExtractorInterface && true) {\n             if ($attribute instanceof CasterProviderAwareInterface) {\n                 $attribute->provider = $this->casterProvider;\n             }\n",
+      "observed_results": [
+        {
+          "label": "d2cb52996814d1ec-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "d2cb52996814d1ec-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "d2cb52996814d1ec-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "d2cb52996814d1ec-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "53240def32ba1b47",
+      "group": "request-protocol",
+      "source_path": "src/Resolver/Attribute/Handler/RequestAttributeHandler.php",
+      "original_sha256": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+      "mutated_sha256": "caf2dabe73b95890a7a75c8b99f078a878e0572567da41dca68b748187a7c5b4",
+      "unified_diff": "--- a/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n+++ b/src/Resolver/Attribute/Handler/RequestAttributeHandler.php\n@@ -76,7 +76,7 @@\n         ReflectionParameter $parameter,\n     ): mixed {\n         if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {\n-            if ($attribute instanceof CasterProviderAwareInterface) {\n+            if (true) {\n                 $attribute->provider = $this->casterProvider;\n             }\n             return $this->processMapping($request, $attribute, $parameter);\n",
+      "observed_results": [
+        {
+          "label": "53240def32ba1b47-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "53240def32ba1b47-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "53240def32ba1b47-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "53240def32ba1b47-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "17e601fbc47b94cc",
+      "group": "magic-visibility",
+      "source_path": "src/Internal/functions.php",
+      "original_sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b",
+      "mutated_sha256": "dd92f9195ef3ae5760f9aabe718bf292d2edfeba7103825836d189c0a0bfd916",
+      "unified_diff": "--- a/src/Internal/functions.php\n+++ b/src/Internal/functions.php\n@@ -42,7 +42,7 @@\n     if ($scope !== null && $scope->hasMethod($name)) {\n         $method = $scope->getMethod($name);\n         if ($method->isInternal()\n-            && $method->getDeclaringClass()->getName() === $scope->getName()\n+            || $method->getDeclaringClass()->getName() === $scope->getName()\n         ) {\n             return false;\n         }\n",
+      "observed_results": [
+        {
+          "label": "17e601fbc47b94cc-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "17e601fbc47b94cc-new-tests",
+          "runtime": "84",
+          "exit_code": 1,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "17e601fbc47b94cc-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "17e601fbc47b94cc-new-tests",
+          "runtime": "85",
+          "exit_code": 1,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "ebb3f81c507f2b89",
+      "group": "magic-visibility",
+      "source_path": "src/Internal/functions.php",
+      "original_sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b",
+      "mutated_sha256": "10e5c4744dd20a9363a7141a705811ba8bc1efa6d0389075f6c3f857d943699f",
+      "unified_diff": "--- a/src/Internal/functions.php\n+++ b/src/Internal/functions.php\n@@ -41,8 +41,8 @@\n     $scope = $reflection->getClosureScopeClass();\n     if ($scope !== null && $scope->hasMethod($name)) {\n         $method = $scope->getMethod($name);\n-        if ($method->isInternal()\n-            && $method->getDeclaringClass()->getName() === $scope->getName()\n+        if (!($method->isInternal()\n+            && $method->getDeclaringClass()->getName() === $scope->getName())\n         ) {\n             return false;\n         }\n",
+      "observed_results": [
+        {
+          "label": "ebb3f81c507f2b89-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "ebb3f81c507f2b89-new-tests",
+          "runtime": "84",
+          "exit_code": 1,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "ebb3f81c507f2b89-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "ebb3f81c507f2b89-new-tests",
+          "runtime": "85",
+          "exit_code": 1,
+          "expected_exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "963ffa19a7476473",
+      "group": "magic-visibility",
+      "source_path": "src/Internal/functions.php",
+      "original_sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b",
+      "mutated_sha256": "ec216ea619919113bf70141a5afc0b8af327be37e9b7916909aba5a064c5b4f3",
+      "unified_diff": "--- a/src/Internal/functions.php\n+++ b/src/Internal/functions.php\n@@ -44,7 +44,7 @@\n         if ($method->isInternal()\n             && $method->getDeclaringClass()->getName() === $scope->getName()\n         ) {\n-            return false;\n+            return true;\n         }\n     }\n \n",
+      "observed_results": [
+        {
+          "label": "963ffa19a7476473-old-tests",
+          "runtime": "84",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "963ffa19a7476473-new-tests",
+          "runtime": "84",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        },
+        {
+          "label": "963ffa19a7476473-old-tests",
+          "runtime": "85",
+          "exit_code": 0,
+          "expected_exit": 0
+        },
+        {
+          "label": "963ffa19a7476473-new-tests",
+          "runtime": "85",
+          "exit_code": 2,
+          "expected_exit": "nonzero"
+        }
+      ]
+    }
+  ]
+}

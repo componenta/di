@@ -1,0 +1,1071 @@
+{
+  "schema_version": 1,
+  "title": "DI v6 round 4: core mutation witnesses and bounded secondary review",
+  "assembled_utc": "2026-11-15T20:25:14.807187+00:00",
+  "reviewer": "/root/core_audit",
+  "baseline_commit": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+  "interpretation": "Three missing regression protections were proved with deliberately injected mutants. Original production passed all new contracts; these three cases are test improvements, not three newly fixed production bugs.",
+  "assembly_policy": "Assembled from previously saved evidence. No test, benchmark or runtime probe was rerun for this summary. Log bytes, reconstructed mutation bytes, baseline source blobs and published test blobs were SHA-256 checked during assembly.",
+  "environment": {
+    "php": {
+      "84": {
+        "version": "8.4.23",
+        "binary": "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php"
+      },
+      "85": {
+        "version": "8.5.8",
+        "binary": "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php"
+      }
+    },
+    "isolated_repository": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+    "shared_repository_used_for_published_blob_verification": "/workspace/scratch/8f6c1df8ef3b/di"
+  },
+  "command_templates": {
+    "retirement_full_old_suite": {
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "argv": [
+        "{php_binary}",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111544"
+      ],
+      "environment": {
+        "DI_CORE_ORIGINS": "{per-run origin output path}"
+      }
+    },
+    "retirement_new_file": {
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "argv": [
+        "{php_binary}",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/DeferredCallableRetirementContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111544"
+      ],
+      "environment": {
+        "DI_CORE_ORIGINS": "{per-run origin output path}"
+      }
+    },
+    "alias_related_files": {
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "argv": [
+        "{php_binary}",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/RuntimeMutationRecoveryContractTest.php",
+        "tests/Contract/DependencyNormalizationContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111545"
+      ],
+      "environment": {
+        "DI_CORE_ORIGINS": "{per-run origin output path}"
+      }
+    }
+  },
+  "command_interpretation": "Substitute the per-run PHP binary into argv. The DI_CORE_ORIGINS path selects an output record and does not change the tested behavior. Full command argv and cwd are preserved here; scratch paths are execution provenance, not evidence a reader must open to understand the results.",
+  "provenance_checks": {
+    "bootstrap_source_sha256": "5864bcfb29c94577e5a4b8059385452f06d4856c320959c554b43ae8b1d9bdfc",
+    "checked_class_origins": [
+      "Componenta\\DI\\Container",
+      "Componenta\\DI\\Internal\\DelegatorRegistry",
+      "Componenta\\DI\\Internal\\MutationRetirement",
+      "Componenta\\DI\\Internal\\EntryCache"
+    ],
+    "baseline_checked_class_source_hashes": {
+      "src/Container.php": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235",
+      "src/Internal/DelegatorRegistry.php": "b80fcf9a2f0690b01dc70f485d75c14d1d58a1085238b30e67357c9017f5e800",
+      "src/Internal/MutationRetirement.php": "3deedf3f92d5737025d7a2aef42041efef9661f08ec34a1b783b9f0ceefe6333",
+      "src/Internal/EntryCache.php": "e5bff064ef1abbc7ccaebb6bb29a05733357eab51b2a77cb17d2023b1800b2ce"
+    },
+    "checked_helper_count": 6,
+    "helper_path": "src/Internal/functions.php",
+    "pest_root": "Every saved origin record names the isolated repository; verified during assembly.",
+    "limit": "The bootstrap directly checked the four listed class origins and six eager helper origins. AliasResolver hashes were recorded by the runner, not as a separate ReflectionClass entry in the origin records.",
+    "canonical_log_files_verified": 24,
+    "published_test_blobs_match_proof_hashes": true,
+    "production_sources_restored_to_baseline": true
+  },
+  "mutation_witnesses": [
+    {
+      "id": "3313a4fd6299c16e",
+      "name": "deferred_callable_retirement",
+      "classification": "Confirmed regression-test gap; original production already correct.",
+      "source": {
+        "path": "src/Internal/DelegatorRegistry.php",
+        "baseline_sha256": "b80fcf9a2f0690b01dc70f485d75c14d1d58a1085238b30e67357c9017f5e800",
+        "mutant_sha256": "a4f4693dd3ab647e3ef11aeb32a305d69be5d4fa2c1befca1b4f5c197eb300a2",
+        "mutation": "Remove the retention of a prepared callable owner in DelegatorRegistry::invalidate(), allowing its destructor to run during invalidation before the mutation has fully committed.",
+        "exact_diff": "--- a/src/Internal/DelegatorRegistry.php\n+++ b/src/Internal/DelegatorRegistry.php\n@@ -58,7 +58,7 @@\n     public function invalidate(string $id, MutationRetirement $retirement): void\n     {\n         if (isset($this->callables[$id])) {\n-            $retirement->retain($this->callables[$id]);\n+            // Mutation witness: discard retired callable ownership.\n         }\n         unset($this->callables[$id]);\n         $this->revisions[$id] = ($this->revisions[$id] ?? 0) + 1;\n"
+      },
+      "old_scope": {
+        "kind": "full_suite",
+        "paths": [
+          "tests"
+        ],
+        "new_retirement_file_present": false,
+        "description": "Complete pre-existing test suite at the recorded baseline; the new retirement contract file was absent for both OLD controls."
+      },
+      "new_scope": {
+        "kind": "one_complete_contract_file",
+        "paths": [
+          "tests/Contract/DeferredCallableRetirementContractTest.php"
+        ]
+      },
+      "tests": {
+        "published_commit": "2c52c285b806dbccffc7f43fba197aeeb01e4f6a",
+        "old_sha256": {
+          "tests/Contract/DeferredCallableRetirementContractTest.php": null
+        },
+        "new_sha256": {
+          "tests/Contract/DeferredCallableRetirementContractTest.php": "35551a3fe06167f584c4a22d757b28b20f30adc406d4fcc48444de99d51faa7b"
+        },
+        "scenario": "Two warmed services use separate fresh callable objects returned by an external PSR container. Replacing that callable service retires both objects; their destructors re-enter both services, optionally throwing the same original LogicException.",
+        "required_outcomes": [
+          "Both destructors observe one:new and two:new after the completed mutation; no stale warmed value is visible.",
+          "The replacement callable is the published service and runs only twice for the two re-resolved services.",
+          "With throwing destructors, MutationRetirementException reports service decorator, both original causes, and the original previous exception after publication."
+        ]
+      },
+      "red_observation": {
+        "nonthrowing_case": {
+          "expected": [
+            [
+              "one:new",
+              "two:new"
+            ],
+            [
+              "one:new",
+              "two:new"
+            ]
+          ],
+          "actual": [
+            [
+              "one:old",
+              "two:old"
+            ],
+            [
+              "one:old",
+              "two:old"
+            ]
+          ]
+        },
+        "throwing_case": "Raw LogicException(\"Retired external callable owner.\") escapes instead of the committed-mutation retirement exception.",
+        "both_runtimes": "The new file yields two failures and three assertions, exit 2. Restoring only the source restores both cases to GREEN with fifteen assertions."
+      },
+      "runs": [
+        {
+          "phase": "old-production",
+          "php": "8.4.23",
+          "command_ref": "retirement_full_old_suite",
+          "source_state": "baseline_restored",
+          "test_state": "old",
+          "result": {
+            "passed": 1510,
+            "failed": 0,
+            "skipped": 18,
+            "assertions": 24189,
+            "exit_code": 0,
+            "tests_line": "Tests: 18 skipped, 1510 passed (24189 assertions)"
+          },
+          "elapsed_seconds": 36.810337,
+          "log": {
+            "name": "old-production-84.log",
+            "sha256": "b7db185a74b0a6ec60aafd9aa477d337a43a2b476c505a8128124a252d96c04d"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "old-production",
+          "php": "8.5.8",
+          "command_ref": "retirement_full_old_suite",
+          "source_state": "baseline_restored",
+          "test_state": "old",
+          "result": {
+            "passed": 1527,
+            "failed": 0,
+            "skipped": 1,
+            "assertions": 24296,
+            "exit_code": 0,
+            "tests_line": "Tests: 1 skipped, 1527 passed (24296 assertions)"
+          },
+          "elapsed_seconds": 33.612268,
+          "log": {
+            "name": "old-production-85.log",
+            "sha256": "ac168199f18cf54ab3069334991954d051d48d2ec5b0f78e2b46bde482128064"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "old-mutant",
+          "php": "8.4.23",
+          "command_ref": "retirement_full_old_suite",
+          "source_state": "mutant",
+          "test_state": "old",
+          "result": {
+            "passed": 1510,
+            "failed": 0,
+            "skipped": 18,
+            "assertions": 24189,
+            "exit_code": 0,
+            "tests_line": "Tests: 18 skipped, 1510 passed (24189 assertions)"
+          },
+          "elapsed_seconds": 26.698564,
+          "log": {
+            "name": "old-mutant-84.log",
+            "sha256": "23359c363daab6cfccd4f5808e9d9eeec6a0c04774c6da1835366d9c5f929d40"
+          },
+          "origin_record_sha256": "5ba0a44eb3103b806b9ffbb973e40aae2de6a210e37e1e8e2855ff53a9f3da31"
+        },
+        {
+          "phase": "old-mutant",
+          "php": "8.5.8",
+          "command_ref": "retirement_full_old_suite",
+          "source_state": "mutant",
+          "test_state": "old",
+          "result": {
+            "passed": 1527,
+            "failed": 0,
+            "skipped": 1,
+            "assertions": 24296,
+            "exit_code": 0,
+            "tests_line": "Tests: 1 skipped, 1527 passed (24296 assertions)"
+          },
+          "elapsed_seconds": 37.992909,
+          "log": {
+            "name": "old-mutant-85.log",
+            "sha256": "20a315583fd0f1ff4b67998aeeb30d5e2d07b986261295e35b2f12cfce75e77d"
+          },
+          "origin_record_sha256": "c9a71ddeaac89b0f32cb499e269e0fe75d93c6e74b4a03c3fab0ceddacc981d7"
+        },
+        {
+          "phase": "new-mutant-canonical",
+          "php": "8.4.23",
+          "command_ref": "retirement_new_file",
+          "source_state": "mutant",
+          "test_state": "new",
+          "result": {
+            "passed": 0,
+            "failed": 2,
+            "skipped": 0,
+            "assertions": 3,
+            "exit_code": 2,
+            "tests_line": "Tests: 2 failed (3 assertions)"
+          },
+          "elapsed_seconds": 1.304749,
+          "log": {
+            "name": "new-mutant-canonical-84.log",
+            "sha256": "9688381abda7cccc900f6b5e49649f7e7fc495fb220e00282f3f3fca1978618d"
+          },
+          "origin_record_sha256": "5ba0a44eb3103b806b9ffbb973e40aae2de6a210e37e1e8e2855ff53a9f3da31"
+        },
+        {
+          "phase": "new-mutant-canonical",
+          "php": "8.5.8",
+          "command_ref": "retirement_new_file",
+          "source_state": "mutant",
+          "test_state": "new",
+          "result": {
+            "passed": 0,
+            "failed": 2,
+            "skipped": 0,
+            "assertions": 3,
+            "exit_code": 2,
+            "tests_line": "Tests: 2 failed (3 assertions)"
+          },
+          "elapsed_seconds": 0.76702,
+          "log": {
+            "name": "new-mutant-canonical-85.log",
+            "sha256": "c2be35e21c9f0900c8c3e68aba92a9a161876abe6c503aeb37d4bab8bd74c9e9"
+          },
+          "origin_record_sha256": "c9a71ddeaac89b0f32cb499e269e0fe75d93c6e74b4a03c3fab0ceddacc981d7"
+        },
+        {
+          "phase": "new-production",
+          "php": "8.4.23",
+          "command_ref": "retirement_new_file",
+          "source_state": "baseline_restored",
+          "test_state": "new",
+          "result": {
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 15,
+            "exit_code": 0,
+            "tests_line": "Tests: 2 passed (15 assertions)"
+          },
+          "elapsed_seconds": 0.736781,
+          "log": {
+            "name": "new-production-84.log",
+            "sha256": "933711667dc53593c4471363203615063be43c7adc1e0908adf3e159194548cc"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "new-production",
+          "php": "8.5.8",
+          "command_ref": "retirement_new_file",
+          "source_state": "baseline_restored",
+          "test_state": "new",
+          "result": {
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 15,
+            "exit_code": 0,
+            "tests_line": "Tests: 2 passed (15 assertions)"
+          },
+          "elapsed_seconds": 1.043422,
+          "log": {
+            "name": "new-production-85.log",
+            "sha256": "f298d1adf66745cd6ee0dfac633f07a0c65b9f42bbac61b2f2d3d779eb04cc36"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        }
+      ],
+      "harness_note": {
+        "description": "The first PHP 8.4 RED run produced the intended assertion and exception failures, but the wrapper initially expected exit 1. Canonical RED was repeated on both runtimes with the correct expected exit 2; the first run is not counted as a separate proof.",
+        "initial_exit_code": 2,
+        "initial_expected_exit_code": 1,
+        "initial_log_name": "new-mutant-84.log",
+        "initial_log_sha256": "9168450a46dda3b1fe509a8d1982392a00f51c7f6f1e51d72ed8403b222ca04b"
+      }
+    },
+    {
+      "id": "6631a7603baf6ab4",
+      "name": "runtime_empty_alias_endpoints",
+      "classification": "Confirmed regression-test gap; original production already correct.",
+      "source": {
+        "path": "src/Internal/AliasResolver.php",
+        "baseline_sha256": "2f7f0713f51a60761332ed3b3555f91c783b0a4239075e6de2ee650e885a558c",
+        "mutant_sha256": "04c0a04b34ea689c327bbe44f343577d7508ecc7f87eacb7ac104b27c5c3bf91",
+        "mutation": "Remove the second assertNonEmpty call, in AliasResolver::set(), while leaving constructor validation intact.",
+        "exact_diff": "--- a/src/Internal/AliasResolver.php\n+++ b/src/Internal/AliasResolver.php\n@@ -85,7 +85,7 @@\n \n     public function set(string $alias, string $target): static\n     {\n-        self::assertNonEmpty($alias, $target);\n+        // Omitted empty endpoint admission.\n \n         if ($alias === $target) {\n             throw InvalidConfigurationException::forSelfReferencingAlias($alias);\n"
+      },
+      "old_scope": {
+        "kind": "related_files_only",
+        "paths": [
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php",
+          "tests/Contract/DependencyNormalizationContractTest.php"
+        ],
+        "description": "Both complete related contract files restored from baseline git blobs. These OLD controls were not full-suite runs."
+      },
+      "new_scope": {
+        "kind": "same_two_complete_contract_files",
+        "paths": [
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php",
+          "tests/Contract/DependencyNormalizationContractTest.php"
+        ]
+      },
+      "tests": {
+        "published_commit": "8002d2dff5bb1ac03bbe345290ba34ff40276f3d",
+        "old_sha256": {
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php": "81c3dd182eaa96a5483121cc151b0abb0dfc2da33db1378d94fd2d30d1df8357",
+          "tests/Contract/DependencyNormalizationContractTest.php": "2511680076657d8d975c2217853fe4d70f7bda90ffc3ef0bbb9b3a13375e7685"
+        },
+        "new_sha256": {
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php": "82c515c8d439ad4a397e51f8c29a3fdfeeb1cd1c7439048d71ec2bca2de7626a",
+          "tests/Contract/DependencyNormalizationContractTest.php": "e703084c989109b9f5204f5b23ae1c48dcee39262e57066a2b2dbf51e6a95383"
+        },
+        "scenario": "Warm a source service and an alias through a counted delegator. Reject either an empty alias id or an empty target id without invalidating the warm identities; then retarget to a valid replacement and verify recovery."
+      },
+      "red_observation": "Both dataset cases fail because InvalidConfigurationException is not thrown. The related-files run has 2 failed, 30 passed, 76 assertions, exit 1 on each runtime.",
+      "restored_green_observation": "Restoring only AliasResolver source gives 32 passed, 92 assertions, exit 0 on each runtime.",
+      "runs": [
+        {
+          "phase": "old-production",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 1.104399,
+          "log": {
+            "name": "runtime-empty-endpoints-old-production-84.log",
+            "sha256": "6f64557d60b68d61f40572d6bea734cffc959b296301968f914ab2e394647955"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "old-production",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 0.819102,
+          "log": {
+            "name": "runtime-empty-endpoints-old-production-85.log",
+            "sha256": "bb9f1f637d873159e70e54a02eb8cde56b9e36c2d0311f31df5fca72e31253ea"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "old-mutant",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 0.950444,
+          "log": {
+            "name": "runtime-empty-endpoints-old-mutant-84.log",
+            "sha256": "8af7805729a990b53f0036f735c2f221b5b39a046cbfc9f878eebafbae515270"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "old-mutant",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 0.841532,
+          "log": {
+            "name": "runtime-empty-endpoints-old-mutant-85.log",
+            "sha256": "26e5db9b30fc1b0752e7b49107595080cb4ce7819522b6c27c2693f9b8f7dbaa"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "new-mutant",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "new",
+          "result": {
+            "passed": 30,
+            "failed": 2,
+            "skipped": 0,
+            "assertions": 76,
+            "exit_code": 1,
+            "tests_line": "Tests: 2 failed, 30 passed (76 assertions)"
+          },
+          "elapsed_seconds": 0.886094,
+          "log": {
+            "name": "runtime-empty-endpoints-new-mutant-84.log",
+            "sha256": "c790fbc17d7ef5f619d68bec7f7c4fa1f191f6d980b71ad4dfccece21ec89d4a"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "new-mutant",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "new",
+          "result": {
+            "passed": 30,
+            "failed": 2,
+            "skipped": 0,
+            "assertions": 76,
+            "exit_code": 1,
+            "tests_line": "Tests: 2 failed, 30 passed (76 assertions)"
+          },
+          "elapsed_seconds": 0.850127,
+          "log": {
+            "name": "runtime-empty-endpoints-new-mutant-85.log",
+            "sha256": "97978b34b4c038c2fc1fe2672dffffcbaf569a72bd50ab04d03303df656785cd"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "new-production",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "new",
+          "result": {
+            "passed": 32,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 92,
+            "exit_code": 0,
+            "tests_line": "Tests: 32 passed (92 assertions)"
+          },
+          "elapsed_seconds": 0.792161,
+          "log": {
+            "name": "runtime-empty-endpoints-new-production-84.log",
+            "sha256": "219a945190a0de063ab78e718104fb6577a8408d4e97e0799414800434ca5988"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "new-production",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "new",
+          "result": {
+            "passed": 32,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 92,
+            "exit_code": 0,
+            "tests_line": "Tests: 32 passed (92 assertions)"
+          },
+          "elapsed_seconds": 0.918375,
+          "log": {
+            "name": "runtime-empty-endpoints-new-production-85.log",
+            "sha256": "8001e20015d10b837fe8e06c49b3464c55d4e54a27ef3df2bb381cd7cbc9447a"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        }
+      ]
+    },
+    {
+      "id": "d80142af1d372187",
+      "name": "default_empty_alias",
+      "classification": "Confirmed regression-test gap; original production already correct.",
+      "source": {
+        "path": "src/Internal/AliasResolver.php",
+        "baseline_sha256": "2f7f0713f51a60761332ed3b3555f91c783b0a4239075e6de2ee650e885a558c",
+        "mutant_sha256": "43912d5067963d7c4d3f8c82d3af45d425bd2921ba282eae310297890344137c",
+        "mutation": "Remove the first assertNonEmpty call, in AliasResolver::__construct(), while leaving runtime set() validation intact.",
+        "exact_diff": "--- a/src/Internal/AliasResolver.php\n+++ b/src/Internal/AliasResolver.php\n@@ -34,7 +34,7 @@\n                 );\n             }\n \n-            self::assertNonEmpty($alias, $target);\n+            // Omitted empty endpoint admission.\n \n             if ($alias === $target) {\n                 throw InvalidConfigurationException::forSelfReferencingAlias($alias);\n"
+      },
+      "old_scope": {
+        "kind": "related_files_only",
+        "paths": [
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php",
+          "tests/Contract/DependencyNormalizationContractTest.php"
+        ],
+        "description": "Both complete related contract files restored from baseline git blobs. These OLD controls were not full-suite runs."
+      },
+      "new_scope": {
+        "kind": "same_two_complete_contract_files",
+        "paths": [
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php",
+          "tests/Contract/DependencyNormalizationContractTest.php"
+        ]
+      },
+      "tests": {
+        "published_commit": "8002d2dff5bb1ac03bbe345290ba34ff40276f3d",
+        "old_sha256": {
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php": "81c3dd182eaa96a5483121cc151b0abb0dfc2da33db1378d94fd2d30d1df8357",
+          "tests/Contract/DependencyNormalizationContractTest.php": "2511680076657d8d975c2217853fe4d70f7bda90ffc3ef0bbb9b3a13375e7685"
+        },
+        "new_sha256": {
+          "tests/Contract/RuntimeMutationRecoveryContractTest.php": "82c515c8d439ad4a397e51f8c29a3fdfeeb1cd1c7439048d71ec2bca2de7626a",
+          "tests/Contract/DependencyNormalizationContractTest.php": "e703084c989109b9f5204f5b23ae1c48dcee39262e57066a2b2dbf51e6a95383"
+        },
+        "scenario": "DependencyConfiguration::normalize([], [\"\" => \"source\"]) must reject the empty default alias before merging it into the dependency graph."
+      },
+      "red_observation": "The new normalization case fails because InvalidConfigurationException is not thrown. The related-files run has 1 failed, 31 passed, 92 assertions, exit 1 on each runtime.",
+      "restored_green_observation": "Restoring only AliasResolver source gives 32 passed, 92 assertions, exit 0 on each runtime.",
+      "runs": [
+        {
+          "phase": "old-production",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 0.762661,
+          "log": {
+            "name": "default-empty-alias-old-production-84.log",
+            "sha256": "bb9f1f637d873159e70e54a02eb8cde56b9e36c2d0311f31df5fca72e31253ea"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "old-production",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 0.771569,
+          "log": {
+            "name": "default-empty-alias-old-production-85.log",
+            "sha256": "5836dcae4d6e777a1936932b24269620e9481e5da7739248de78d0c096923f83"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "old-mutant",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 0.938453,
+          "log": {
+            "name": "default-empty-alias-old-mutant-84.log",
+            "sha256": "a1c767034ee5b37fb83f7722c19e8419a20d44d19f22d14a00948e67a91fc3e1"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "old-mutant",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "old",
+          "result": {
+            "passed": 29,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 71,
+            "exit_code": 0,
+            "tests_line": "Tests: 29 passed (71 assertions)"
+          },
+          "elapsed_seconds": 1.380911,
+          "log": {
+            "name": "default-empty-alias-old-mutant-85.log",
+            "sha256": "56272a5f1e22b4a453634878645b56dbf6abf637695eb6c715f0b1d7912c9ff0"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "new-mutant",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "new",
+          "result": {
+            "passed": 31,
+            "failed": 1,
+            "skipped": 0,
+            "assertions": 92,
+            "exit_code": 1,
+            "tests_line": "Tests: 1 failed, 31 passed (92 assertions)"
+          },
+          "elapsed_seconds": 1.346159,
+          "log": {
+            "name": "default-empty-alias-new-mutant-84.log",
+            "sha256": "ce50e225c6ebb874457ee80fafd5a2477d5d544d1a316a0127bb008dae4f8e93"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "new-mutant",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "mutant",
+          "test_state": "new",
+          "result": {
+            "passed": 31,
+            "failed": 1,
+            "skipped": 0,
+            "assertions": 92,
+            "exit_code": 1,
+            "tests_line": "Tests: 1 failed, 31 passed (92 assertions)"
+          },
+          "elapsed_seconds": 1.894717,
+          "log": {
+            "name": "default-empty-alias-new-mutant-85.log",
+            "sha256": "c1ac8e1e30c9a31a26767a007d8bc0fa727f0880aef4ee2f136ff7dc2771fe93"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        },
+        {
+          "phase": "new-production",
+          "php": "8.4.23",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "new",
+          "result": {
+            "passed": 32,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 92,
+            "exit_code": 0,
+            "tests_line": "Tests: 32 passed (92 assertions)"
+          },
+          "elapsed_seconds": 2.239959,
+          "log": {
+            "name": "default-empty-alias-new-production-84.log",
+            "sha256": "8422444e964b7b620a04b54ce44f8183d5d23e2ff712cb55124f153a4f24354a"
+          },
+          "origin_record_sha256": "96bcb19486c8223037aac8176e35bf23124267a0a68ce666304911284bc02060"
+        },
+        {
+          "phase": "new-production",
+          "php": "8.5.8",
+          "command_ref": "alias_related_files",
+          "source_state": "baseline_restored",
+          "test_state": "new",
+          "result": {
+            "passed": 32,
+            "failed": 0,
+            "skipped": 0,
+            "assertions": 92,
+            "exit_code": 0,
+            "tests_line": "Tests: 32 passed (92 assertions)"
+          },
+          "elapsed_seconds": 1.492791,
+          "log": {
+            "name": "default-empty-alias-new-production-85.log",
+            "sha256": "12044b35c3f2ae1c004dd201ebe22420760db03d3619797229e00a349884a23c"
+          },
+          "origin_record_sha256": "b996301d50ccdb78d645daf463be21b0cc01fcdf635e25ad4bf5b60411cf83b3"
+        }
+      ]
+    }
+  ],
+  "secondary_review": {
+    "callable_staticness_cache_fix": {
+      "commit": "b0daea8dcd804af774ebbd34ae561f3246cecdf9",
+      "change": "CallableResolver::isStaticMethod uses strtolower($class . \"::\" . $method) as its private native staticness cache key.",
+      "verdict": "No defect found in this bounded independent review; no changes requested.",
+      "reviewed_source_sha256": {
+        "src/CallableResolver.php": "ff0104b73fe5581af898ba05f0a250618b023850507b68bf51a2a131b5a9a53a",
+        "tests/Contract/CallableCaseCacheRetentionContractTest.php": "93727e6db971779eaea0010c6f9969286219f5d9adcadc1b2a3a5683b52812b8",
+        "src/Exception/InvalidCallableException.php": "71254cfd560f2f03880c00beb5242365864c1de8feeae21eef645f32076309fe"
+      },
+      "reasoning": [
+        "Key normalization is confined to private native method staticness metadata after exact service-id lookup.",
+        "Declaring/requested class remains in key; parent private static and child instance methods do not collide.",
+        "Class/method names cannot change native staticness by ASCII case spelling. Method identifiers cannot contain :: so composite-key split remains unambiguous.",
+        "Reflection lookup only caches existing methods; failed availability checks and magic dispatch behavior retain their earlier path.",
+        "Diagnostics use original unmodified class/method/id inputs. Four parent/child rejection variants executed on PHP84/85 preserved exact callableDescription/type and null previous.",
+        "Augmented memory workload verifies bounded retained metadata for 16384 rejected spellings and does not cap legitimate cached declarations. Opaque service-id tests exercise distinct identities."
+      ],
+      "bounded_diagnostic_probe": {
+        "scenario": "Private static Parent::method and public instance Child::method, each in two ASCII case spellings, resolved against a container containing no services.",
+        "script_sha256": "803c12c4e9e73af861325a2dd07a54184de4eb735b6d6cdb6822baddb35fb9f7",
+        "invariants_checked_by_script": [
+          "Expected InvalidCallableException was thrown for each candidate.",
+          "callableDescription preserves the exact input class/method spelling appropriate to the static or instance rejection route.",
+          "The previous exception is null in all four variants."
+        ],
+        "runs": [
+          {
+            "php": "8.4.23",
+            "results": [
+              {
+                "input": [
+                  "CoreReviewNativeParent",
+                  "method"
+                ],
+                "native_static": true,
+                "type": "array",
+                "description": "CoreReviewNativeParent::method",
+                "message": "Method \"CoreReviewNativeParent::method()\" does not exist."
+              },
+              {
+                "input": [
+                  "corereviewnativeparent",
+                  "METHOD"
+                ],
+                "native_static": true,
+                "type": "array",
+                "description": "corereviewnativeparent::METHOD",
+                "message": "Method \"corereviewnativeparent::METHOD()\" does not exist."
+              },
+              {
+                "input": [
+                  "CoreReviewNativeChild",
+                  "METHOD"
+                ],
+                "native_static": false,
+                "type": "string",
+                "description": "CoreReviewNativeChild",
+                "message": "Service \"CoreReviewNativeChild\" is not defined in the container."
+              },
+              {
+                "input": [
+                  "corereviewnativechild",
+                  "method"
+                ],
+                "native_static": false,
+                "type": "string",
+                "description": "corereviewnativechild",
+                "message": "Service \"corereviewnativechild\" is not defined in the container."
+              }
+            ],
+            "raw_result_sha256": "db74cb0307d68eeb0409833d4292ebec6185d5af2c05842da7b88e1c9b94cbe4"
+          },
+          {
+            "php": "8.5.8",
+            "results": [
+              {
+                "input": [
+                  "CoreReviewNativeParent",
+                  "method"
+                ],
+                "native_static": true,
+                "type": "array",
+                "description": "CoreReviewNativeParent::method",
+                "message": "Method \"CoreReviewNativeParent::method()\" does not exist."
+              },
+              {
+                "input": [
+                  "corereviewnativeparent",
+                  "METHOD"
+                ],
+                "native_static": true,
+                "type": "array",
+                "description": "corereviewnativeparent::METHOD",
+                "message": "Method \"corereviewnativeparent::METHOD()\" does not exist."
+              },
+              {
+                "input": [
+                  "CoreReviewNativeChild",
+                  "METHOD"
+                ],
+                "native_static": false,
+                "type": "string",
+                "description": "CoreReviewNativeChild",
+                "message": "Service \"CoreReviewNativeChild\" is not defined in the container."
+              },
+              {
+                "input": [
+                  "corereviewnativechild",
+                  "method"
+                ],
+                "native_static": false,
+                "type": "string",
+                "description": "corereviewnativechild",
+                "message": "Service \"corereviewnativechild\" is not defined in the container."
+              }
+            ],
+            "raw_result_sha256": "ad89c80f2d9990a3d81d310b1f902101dea4eed10afe2a4efff89d849e551005"
+          }
+        ]
+      },
+      "limit": "This was a bounded independent code/contract review plus a four-candidate public diagnostic probe on each runtime, not an additional full suite or a repeat of the memory workload."
+    },
+    "propertyless_lazy_plan": {
+      "documents": [
+        {
+          "repository_path": "docs/plans/propertyless-lazy-lifecycle.md",
+          "sha256": "e9c8b0503be8c43a25c46464d7b4e8a693df7f315c598e1feebaf2f37bb7d2c3"
+        },
+        {
+          "repository_path": "docs/plans/propertyless-lazy-lifecycle.ru.md",
+          "sha256": "601f09cc8ebb1d3d1125f601a9925eeaaff23a1bf3d65f644ed78341315a1a74"
+        }
+      ],
+      "verdict": "Conditional design is coherent after both precision comments were incorporated in EN and RU. D1 is still open; this review does not authorize or mark a production implementation ready.",
+      "decision": "A: reject native-eligible propertyless targets before allocation in the default adapter (recommended), or B: explicitly design eager behavior for higher-level callers.",
+      "boundaries_reviewed": [
+        "Default native adapter owns detection; no global limit on alternate implementations.",
+        "Complete parent-chain scan includes private backed slots; static-only and virtual-only do not qualify.",
+        "stdClass and inherited backed properties distinguished from other internal classes.",
+        "Naive eager proxy fallback changes timing, product identity and destroys an unused ordinary placeholder.",
+        "ClassDefinition remains eager; existing before-instantiation application effects are not promised rollback.",
+        "Supported direct callbacks keep deferred execution and original later exception identity.",
+        "The default native factory boundary preserves alternate/custom factories and ordinary eager ClassDefinition behavior."
+      ],
+      "review_comments_closed": [
+        "Class-kind flags and the complete internal-ancestor chain preserve existing native error/previous precedence for native-ineligible targets. The plan explicitly forbids an isInstantiable() shortcut, which would incorrectly conflate constructor visibility with native lazy allocation.",
+        "DI diagnostic payload ownership is separated from native Throwable trace ownership. Retained-exception capture collection is tested only with temporarily enabled and restored zend.exception_ignore_args=1, or after releasing the exception; no trace sanitization is promised."
+      ],
+      "native_behavior_evidence_owner": "/root/attributes_audit; its separate reproduction and evidence are not counted as new core proof runs.",
+      "production_code_changes_in_this_review": false
+    }
+  },
+  "bounded_alias_benchmark": {
+    "php": "8.4.23",
+    "source_path": "src/Internal/AliasResolver.php",
+    "source_sha256": "2f7f0713f51a60761332ed3b3555f91c783b0a4239075e6de2ee650e885a558c",
+    "script_sha256": "49b97f6970a0d52f52c3a1c86aa7b31223dd1eb021b0dde1969b89e4a3aeceb8",
+    "result_sha256": "1fc6fb61a62465cc6de18c905b9ee56ce13ee1795da196a6ed134cefb1bf6d09",
+    "measurement": "A single local synthetic run, three iterations per size/order. Each measured interval includes new AliasResolver($aliases) and one resolve() verification of the deepest endpoint.",
+    "graph": "alias.0 => target; alias.i => alias.(i-1). Forward inserts canonical-first; reverse inserts the same final graph in reverse array order.",
+    "results": [
+      {
+        "aliases": 100,
+        "order": "forward",
+        "ms": [
+          1.480151,
+          1.190491,
+          1.179801
+        ],
+        "median_ms": 1.190491
+      },
+      {
+        "aliases": 100,
+        "order": "reverse",
+        "ms": [
+          0.122499,
+          0.160229,
+          0.113481
+        ],
+        "median_ms": 0.122499
+      },
+      {
+        "aliases": 1000,
+        "order": "forward",
+        "ms": [
+          108.716295,
+          103.289138,
+          108.393763
+        ],
+        "median_ms": 108.393763
+      },
+      {
+        "aliases": 1000,
+        "order": "reverse",
+        "ms": [
+          1.209216,
+          1.184009,
+          1.209225
+        ],
+        "median_ms": 1.209216
+      },
+      {
+        "aliases": 3000,
+        "order": "forward",
+        "ms": [
+          963.370286,
+          851.768244,
+          848.2744
+        ],
+        "median_ms": 851.768244
+      },
+      {
+        "aliases": 3000,
+        "order": "reverse",
+        "ms": [
+          3.6773,
+          3.568117,
+          3.605627
+        ],
+        "median_ms": 3.605627
+      }
+    ],
+    "interpretation": "The canonical-first long-chain constructor repeatedly traverses earlier links during cycle checks. This constructed worst case exhibits quadratic construction work; the reverse-order graph is much cheaper. Existing resolve path compression remains relevant after construction.",
+    "caveats": [
+      "This is not a representative application workload or an estimate of warmed get() throughput.",
+      "Only PHP 8.4.23 was measured; three iterations and possible concurrent workspace load do not support a universal latency threshold.",
+      "Timing includes one resolve() check and loop/allocation overhead; it is not a pure isolated constructor micro-cost.",
+      "No optimization, arbitrary alias-chain limit or architecture change was implemented or justified by this benchmark alone. Prioritize only if real applications supply similarly deep construction graphs."
+    ]
+  },
+  "manual_review_scope": {
+    "primary_production_files": 31,
+    "supplemental_or_delegated_production_files": 6,
+    "selected_significant_test_files": 28,
+    "note": "These counts describe recorded file-by-file reading in the core slice; they do not claim a fresh manual review of every repository test or all possible execution paths.",
+    "new_production_bug_confirmed_in_primary_core_slice": false
+  },
+  "scratch_provenance_only": {
+    "original_proofs": [
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/retirement-proof/proof.json",
+        "sha256": "f5516f2147bdd1e7acc9d5934781d7d7e1d7415c5b0ab79c7254cf5811e993ba"
+      },
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/alias-proof/proof.json",
+        "sha256": "e47481d9bc00d47c206c94f1272ee7d270f2094a46fd24550c0f46c46339fd19"
+      }
+    ],
+    "log_directories": [
+      "/workspace/scratch/8dccbfa10ffb/core-audit/retirement-proof",
+      "/workspace/scratch/8dccbfa10ffb/core-audit/alias-proof"
+    ],
+    "harnesses": [
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/retirement-proof.py",
+        "sha256": "5849a7b446f24800f686f47b11d0576fc8085d4f419878f2ec75588d8470d15c"
+      },
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/retirement-proof-complete.py",
+        "sha256": "ff5afc52f1b564b5038895097ad661a240efe4cc425cf12ca2533a93f59ad5e7"
+      },
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/alias-proof.py",
+        "sha256": "088f647530c2262db75a1aefb9788abd1bcbc464d02239709ad9324f3d24e947"
+      },
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/proof-bootstrap.php",
+        "sha256": "5864bcfb29c94577e5a4b8059385452f06d4856c320959c554b43ae8b1d9bdfc"
+      }
+    ],
+    "review_records": [
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/review.json",
+        "sha256": "55dd1533dcb9673da3f8c35ae21685630ab27f59750175cc3da2bbbcd453aa23"
+      },
+      {
+        "path": "/workspace/scratch/8dccbfa10ffb/core-audit/secondary-review.json",
+        "sha256": "1cc5f0d5f727bcbf27aafc89ab6257f0254c485a3d4f0484d23cd3fa0aa5c74e"
+      }
+    ],
+    "probe": {
+      "path": "/workspace/scratch/8dccbfa10ffb/core-audit/native-classification-probe.php",
+      "sha256": "803c12c4e9e73af861325a2dd07a54184de4eb735b6d6cdb6822baddb35fb9f7"
+    },
+    "benchmark": {
+      "path": "/workspace/scratch/8dccbfa10ffb/core-audit/alias-benchmark.php",
+      "sha256": "49b97f6970a0d52f52c3a1c86aa7b31223dd1eb021b0dde1969b89e4a3aeceb8"
+    },
+    "plan_source_directory": "/workspace/scratch/8dccbfa10ffb/attributes-audit/docs/plans"
+  },
+  "embedded_alias_probe": {
+    "original_path": "/workspace/scratch/8dccbfa10ffb/core-audit/alias-benchmark.php",
+    "sha256": "49b97f6970a0d52f52c3a1c86aa7b31223dd1eb021b0dde1969b89e4a3aeceb8",
+    "source": "<?php\ndeclare(strict_types=1);\nrequire __DIR__ . '/repo/tests/bootstrap.php';\n$results = [];\nforeach ([100, 1000, 3000] as $count) {\n    foreach (['forward', 'reverse'] as $order) {\n        $aliases = [];\n        for ($i = 0; $i < $count; ++$i) {\n            $aliases['alias.' . $i] = $i === 0 ? 'target' : 'alias.' . ($i - 1);\n        }\n        if ($order === 'reverse') $aliases = array_reverse($aliases, true);\n        $measurements = [];\n        for ($round = 0; $round < 3; ++$round) {\n            $start = hrtime(true);\n            $resolver = new Componenta\\DI\\Internal\\AliasResolver($aliases);\n            if ($resolver->resolve('alias.' . ($count - 1)) !== 'target') throw new LogicException('Wrong target.');\n            $measurements[] = (hrtime(true) - $start) / 1e6;\n        }\n        $results[] = ['aliases' => $count, 'order' => $order, 'ms' => $measurements];\n    }\n}\necho json_encode(['php' => PHP_VERSION, 'scope' => 'Local worst-case alias-chain construction, not an application benchmark.', 'results' => $results], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), \"\\n\";\n",
+    "execution_layout": "This original screening probe uses the adjacent isolated repo/tests/bootstrap.php; the selected checkout and PHP version are recorded in the benchmark provenance. It is not the general-purpose benchmark harness."
+  }
+}

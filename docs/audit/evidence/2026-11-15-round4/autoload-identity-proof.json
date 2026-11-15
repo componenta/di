@@ -1,0 +1,559 @@
+{
+  "case": "autoload_exception_identity",
+  "classification": "Test-oracle gap; unchanged production already preserves the original exception.",
+  "proof_type": "Bespoke semantic mutant, not a catalogue survivor or an Infection-generated mutation.",
+  "generated_utc": "2026-11-15T20:48:01.090053+00:00",
+  "execution_checkout_baseline": "897f8b10ca6537e7b2f96d20b2e00ed52571ff6f",
+  "integrated_review_head": "a4cb684c67ff86224c639013cb9252fab84e0b2d",
+  "target_source_and_old_test_are_byte_identical_between_heads": true,
+  "old_scope": "The one complete AttributeAvailabilityRevisionContractTest.php file, not the full suite.",
+  "source": {
+    "path": "src/Attribute/Composition/AttributeDefinitionRegistry.php",
+    "original_sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+    "mutant_sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e",
+    "exact_mutation_diff": "--- a/src/Attribute/Composition/AttributeDefinitionRegistry.php\n+++ b/src/Attribute/Composition/AttributeDefinitionRegistry.php\n@@ -41,7 +41,12 @@\n     public int $revision {\n         get {\n             foreach ($this->unavailableAttributes as $attribute => $_) {\n-                if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {\n+                try {\n+                    $available = class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false);\n+                } catch (\\RuntimeException $exception) {\n+                    throw new \\RuntimeException($exception->getMessage());\n+                }\n+                if ($available) {\n                     // The fallback interface probe can autoload a class. Its\n                     // declaration must invalidate plans in this same poll.\n                     unset($this->unavailableAttributes[$attribute]);\n",
+    "behavior": "Replace a RuntimeException thrown by availability autoload polling with a new RuntimeException preserving the same message; class/message and autoload attempts are unchanged, object identity is lost.",
+    "restored_sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5"
+  },
+  "test": {
+    "path": "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+    "old_sha256": "7ecb0a01cc684b381f841243765e12346326360f50a3e799e6faf8b7702e30c5",
+    "improved_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+    "exact_test_diff": "--- a/tests/Contract/AttributeAvailabilityRevisionContractTest.php\n+++ b/tests/Contract/AttributeAvailabilityRevisionContractTest.php\n@@ -153,8 +153,18 @@\n \n     spl_autoload_register($loader);\n     try {\n-        expect(fn(): int => $registry->revision)->toThrow($failure);\n-        expect($loads)->toBe(2);\n+        $caught = null;\n+        try {\n+            $revision = $registry->revision;\n+            throw new LogicException('Expected an autoload failure, got revision ' . $revision . '.');\n+        } catch (RuntimeException $exception) {\n+            $caught = $exception;\n+        }\n+\n+        expect($caught)->toBeInstanceOf(RuntimeException::class)\n+            ->and($caught)->toBe($failure)\n+            ->and($caught->getMessage())->toBe('fallback autoload failure')\n+            ->and($loads)->toBe(2);\n     } finally {\n         spl_autoload_unregister($loader);\n     }\n",
+    "preserved_checks": [
+      "Explicit RuntimeException class assertion after a fail-closed try/catch.",
+      "Exact original exception message.",
+      "Exactly two autoload attempts."
+    ],
+    "new_check": "The caught exception is the identical original object.",
+    "delta": {
+      "runtime_cases": 0,
+      "assertions_in_complete_file": 1
+    },
+    "absence_of_exception": "Explicit LogicException failure after a successful revision read; caught starts null and must also satisfy the original RuntimeException type and exact identity."
+  },
+  "bootstrap": {
+    "path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+    "sha256": "c082d2495b7d4d797d3fc8792be55917335e393e1fa0a2ab9cf0f1a404b4903b"
+  },
+  "test_typing_note": "Two preliminary callback variants were discarded: RuntimeException-typed toThrow passed runtime tests but violated the installed Closure(Throwable) PHPStan stub; Throwable-typed callback passed that type shape but Pest runtime treated the Throwable interface as a message because class_exists(Throwable) is false. Neither is shipped or counted as an extra witness. The final explicit try/catch checks class, identity, message and load count without framework callback ambiguity; all eight canonical phases below use these final bytes.",
+  "runs": [
+    {
+      "php": "84",
+      "phase": "old-production",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-production-84-origins.json"
+      },
+      "exit": 0,
+      "expected_exit": 0,
+      "seconds": 0.8770521100013866,
+      "source_sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+      "test_sha256": "7ecb0a01cc684b381f841243765e12346326360f50a3e799e6faf8b7702e30c5",
+      "summary": "13 passed (94 assertions)",
+      "log_sha256": "e4765f7d479997c3153b3dc6e71815bea3f44e985a57308d7e52df9d88628dda",
+      "origins_sha256": "eccb83227f3bd88a58b93d676d0f0ec17fd460947947396790396e2312b9c400",
+      "runtime_version": "8.4.23",
+      "output": "\n  .............\n\n  Tests:    13 passed (94 assertions)\n  Duration: 0.26s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-production-84.log",
+      "observed_origins": {
+        "php": "8.4.23",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-production-84-origins.json"
+    },
+    {
+      "php": "85",
+      "phase": "old-production",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-production-85-origins.json"
+      },
+      "exit": 0,
+      "expected_exit": 0,
+      "seconds": 0.8500462299998617,
+      "source_sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+      "test_sha256": "7ecb0a01cc684b381f841243765e12346326360f50a3e799e6faf8b7702e30c5",
+      "summary": "13 passed (94 assertions)",
+      "log_sha256": "6e060ac26602f5b8264803ee2bc6bf8950a3a32439e8d90d9ad500a5cd9cc5b0",
+      "origins_sha256": "3445ad7d1ea0738460a7afddadb897c6bf156eab74aba014a3ff89e4cf56f131",
+      "runtime_version": "8.5.8",
+      "output": "\n  .............\n\n  Tests:    13 passed (94 assertions)\n  Duration: 0.22s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-production-85.log",
+      "observed_origins": {
+        "php": "8.5.8",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-production-85-origins.json"
+    },
+    {
+      "php": "84",
+      "phase": "old-mutant",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-mutant-84-origins.json"
+      },
+      "exit": 0,
+      "expected_exit": 0,
+      "seconds": 0.8527672519994667,
+      "source_sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e",
+      "test_sha256": "7ecb0a01cc684b381f841243765e12346326360f50a3e799e6faf8b7702e30c5",
+      "summary": "13 passed (94 assertions)",
+      "log_sha256": "384465e6dd5b223473222dfbc910130350c9e50d0b5f1e5865aa7f10922b9677",
+      "origins_sha256": "bf4e9b9660da44d13abc62e8efe9d483310018fd679a1c9a3a18b682a3a51002",
+      "runtime_version": "8.4.23",
+      "output": "\n  .............\n\n  Tests:    13 passed (94 assertions)\n  Duration: 0.17s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-mutant-84.log",
+      "observed_origins": {
+        "php": "8.4.23",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-mutant-84-origins.json"
+    },
+    {
+      "php": "85",
+      "phase": "old-mutant",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-mutant-85-origins.json"
+      },
+      "exit": 0,
+      "expected_exit": 0,
+      "seconds": 0.9418334780020814,
+      "source_sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e",
+      "test_sha256": "7ecb0a01cc684b381f841243765e12346326360f50a3e799e6faf8b7702e30c5",
+      "summary": "13 passed (94 assertions)",
+      "log_sha256": "7535c5ffba967e2e6957379140bddd61b3d84586243cce106b41bdb551eaaf0c",
+      "origins_sha256": "cd02544581ce03a7c1dd42435e5238e71db7a105b2952deb8df4141eff4712c9",
+      "runtime_version": "8.5.8",
+      "output": "\n  .............\n\n  Tests:    13 passed (94 assertions)\n  Duration: 0.14s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-mutant-85.log",
+      "observed_origins": {
+        "php": "8.5.8",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/old-mutant-85-origins.json"
+    },
+    {
+      "php": "84",
+      "phase": "improved-mutant",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/improved-mutant-84-origins.json"
+      },
+      "exit": 1,
+      "expected_exit": 1,
+      "seconds": 0.8177798229990003,
+      "source_sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e",
+      "test_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "summary": "1 failed, 12 passed (93 assertions)",
+      "log_sha256": "0669be80c3456affb09b35b229fa2b16721112167352cf49d065e1be74068020",
+      "origins_sha256": "bf4e9b9660da44d13abc62e8efe9d483310018fd679a1c9a3a18b682a3a51002",
+      "runtime_version": "8.4.23",
+      "semantic_failure": "Only the original autoload exception object identity check fails; class, message and two attempts were accepted by the old test.",
+      "output": "\n  ............⨯\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\AttributeAvailabilityRevisionContractTest > availa…   \n  Failed asserting that two variables reference the same object.\n\n  at tests/Contract/AttributeAvailabilityRevisionContractTest.php:165\n    161▕             $caught = $exception;\n    162▕         }\n    163▕ \n    164▕         expect($caught)->toBeInstanceOf(RuntimeException::class)\n  ➜ 165▕             ->and($caught)->toBe($failure)\n    166▕             ->and($caught->getMessage())->toBe('fallback autoload failure')\n    167▕             ->and($loads)->toBe(2);\n    168▕     } finally {\n    169▕         spl_autoload_unregister($loader);\n\n  1   tests/Contract/AttributeAvailabilityRevisionContractTest.php:165\n\n\n  Tests:    1 failed, 12 passed (93 assertions)\n  Duration: 0.21s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/improved-mutant-84.log",
+      "observed_origins": {
+        "php": "8.4.23",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/improved-mutant-84-origins.json"
+    },
+    {
+      "php": "85",
+      "phase": "improved-mutant",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/improved-mutant-85-origins.json"
+      },
+      "exit": 1,
+      "expected_exit": 1,
+      "seconds": 0.8419030529985321,
+      "source_sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e",
+      "test_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "summary": "1 failed, 12 passed (93 assertions)",
+      "log_sha256": "a1910c6fe2d3f5ef1e062184b7eb49cffc467c1693b91291b1ffc57592b50be1",
+      "origins_sha256": "cd02544581ce03a7c1dd42435e5238e71db7a105b2952deb8df4141eff4712c9",
+      "runtime_version": "8.5.8",
+      "semantic_failure": "Only the original autoload exception object identity check fails; class, message and two attempts were accepted by the old test.",
+      "output": "\n  ............⨯\n  ────────────────────────────────────────────────────────────────────────────  \n   FAILED  Tests\\Contract\\AttributeAvailabilityRevisionContractTest > availa…   \n  Failed asserting that two variables reference the same object.\n\n  at tests/Contract/AttributeAvailabilityRevisionContractTest.php:165\n    161▕             $caught = $exception;\n    162▕         }\n    163▕ \n    164▕         expect($caught)->toBeInstanceOf(RuntimeException::class)\n  ➜ 165▕             ->and($caught)->toBe($failure)\n    166▕             ->and($caught->getMessage())->toBe('fallback autoload failure')\n    167▕             ->and($loads)->toBe(2);\n    168▕     } finally {\n    169▕         spl_autoload_unregister($loader);\n\n  1   tests/Contract/AttributeAvailabilityRevisionContractTest.php:165\n\n\n  Tests:    1 failed, 12 passed (93 assertions)\n  Duration: 0.17s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/improved-mutant-85.log",
+      "observed_origins": {
+        "php": "8.5.8",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "b099ba2b362c058e4ede3c87377fe4b4f25411c9f3b316675e9467afc21a773e"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/improved-mutant-85-origins.json"
+    },
+    {
+      "php": "84",
+      "phase": "restored-production",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/restored-production-84-origins.json"
+      },
+      "exit": 0,
+      "expected_exit": 0,
+      "seconds": 0.7849920589978865,
+      "source_sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+      "test_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "summary": "13 passed (95 assertions)",
+      "log_sha256": "4b42d8ae27924c0901bad13c08b33ee690faaed23340153f6838d18abc836e9e",
+      "origins_sha256": "eccb83227f3bd88a58b93d676d0f0ec17fd460947947396790396e2312b9c400",
+      "runtime_version": "8.4.23",
+      "output": "\n  .............\n\n  Tests:    13 passed (95 assertions)\n  Duration: 0.15s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/restored-production-84.log",
+      "observed_origins": {
+        "php": "8.4.23",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/restored-production-84-origins.json"
+    },
+    {
+      "php": "85",
+      "phase": "restored-production",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+        "--bootstrap=/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=random",
+        "--random-order-seed=2026111546"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "environment": {
+        "DI_IDENTITY_ORIGINS": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/restored-production-85-origins.json"
+      },
+      "exit": 0,
+      "expected_exit": 0,
+      "seconds": 1.0356110159991658,
+      "source_sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+      "test_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "summary": "13 passed (95 assertions)",
+      "log_sha256": "ffca957d77afcbde9158d9bf98f1ec9230cc9e1b436ce2b95d62aa6d541dba32",
+      "origins_sha256": "3445ad7d1ea0738460a7afddadb897c6bf156eab74aba014a3ff89e4cf56f131",
+      "runtime_version": "8.5.8",
+      "output": "\n  .............\n\n  Tests:    13 passed (95 assertions)\n  Duration: 0.16s\n  Random Order Seed: 2026111546\n\n",
+      "original_log_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/restored-production-85.log",
+      "observed_origins": {
+        "php": "8.5.8",
+        "classes": {
+          "Componenta\\DI\\Container": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributeDefinitionRegistry.php",
+            "sha256": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5"
+          },
+          "Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder": {
+            "file": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Attribute/Composition/AttributePlanBuilder.php",
+            "sha256": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_magic_closure_trampoline": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\normalize_env_name": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\is_entry_class_eligible": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\validate_parameter_resolution_result": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php",
+          "componenta\\di\\internal\\transform_request_mapper_data": "/workspace/scratch/8dccbfa10ffb/core-audit/repo/src/Internal/functions.php"
+        },
+        "pest_root": "/workspace/scratch/8dccbfa10ffb/core-audit/repo"
+      },
+      "original_origins_path": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/restored-production-85-origins.json"
+    }
+  ],
+  "production_source_restored": true,
+  "improved_test_restored": true,
+  "outcome": "Original tests pass the same-class/message replacement on both runtimes; improved tests fail that mutant on exact identity and pass after restoring only production source.",
+  "verification": {
+    "phpstan": {
+      "command": "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --no-progress tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "exit_code": 0,
+      "log": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/phpstan.log",
+      "log_sha256": "fe76389165665928e5d7a06f77ebe5ff35391db1ef9d3a445ffe598fd032aeb6",
+      "test_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "note": "Maximum configured level; optional turbo extension unavailable in static PHP binary, normal analysis finished with no errors."
+    },
+    "style": {
+      "command": "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.dist.php --dry-run --diff --using-cache=no tests/Contract/AttributeAvailabilityRevisionContractTest.php",
+      "cwd": "/workspace/scratch/8dccbfa10ffb/core-audit/repo",
+      "exit_code": 0,
+      "log": "/workspace/scratch/8dccbfa10ffb/core-audit/attribute-identity-proof/style.log",
+      "log_sha256": "768b4106f21e33acaef6663b759efd53b3307f03f34442b0197561da6fab292f",
+      "test_sha256": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "result": "0 of 1 files require changes."
+    }
+  },
+  "excluded_harness_attempts": [
+    {
+      "name": "narrow_typed_callback",
+      "proof_sha256": "4d31f35a27285019a5f96d61d1bde7d61f5b36337fb5969c5d1ea9233a808d27",
+      "status": "Excluded from canonical witness accounting: RuntimeException callback accepted by Pest runtime but rejected by the installed Closure(Throwable) PHPStan stub."
+    },
+    {
+      "name": "throwable_interface_callback",
+      "proof_sha256": "50b1652566d0a433b0f528e0d1f05f2828b5e0089cc08518ce60ca1b1e90c8e2",
+      "status": "Excluded: Pest treated Throwable as a message string; both improved mutant and restored production failed for the same matcher reason. Not a semantic RED."
+    }
+  ],
+  "production_git_diff_clean": true,
+  "patch": "--- a/tests/Contract/AttributeAvailabilityRevisionContractTest.php\n+++ b/tests/Contract/AttributeAvailabilityRevisionContractTest.php\n@@ -153,8 +153,18 @@\n \n     spl_autoload_register($loader);\n     try {\n-        expect(fn(): int => $registry->revision)->toThrow($failure);\n-        expect($loads)->toBe(2);\n+        $caught = null;\n+        try {\n+            $revision = $registry->revision;\n+            throw new LogicException('Expected an autoload failure, got revision ' . $revision . '.');\n+        } catch (RuntimeException $exception) {\n+            $caught = $exception;\n+        }\n+\n+        expect($caught)->toBeInstanceOf(RuntimeException::class)\n+            ->and($caught)->toBe($failure)\n+            ->and($caught->getMessage())->toBe('fallback autoload failure')\n+            ->and($loads)->toBe(2);\n     } finally {\n         spl_autoload_unregister($loader);\n     }\n",
+  "witness_limit": "One complete related contract file on each runtime. No full-suite mutation run or new Infection catalogue claim; prior manual-reading manifest remains a separate snapshot.",
+  "published_test_commit": "348330544d3d5b0bec7b158e0c2221927dc23643",
+  "embedded_bootstrap": {
+    "sha256": "c082d2495b7d4d797d3fc8792be55917335e393e1fa0a2ab9cf0f1a404b4903b",
+    "source": "<?php\ndeclare(strict_types=1);\n\n$root = __DIR__ . '/repo';\nrequire $root . '/tests/bootstrap.php';\n$classes = [];\nforeach ([\n    Componenta\\DI\\Container::class,\n    Componenta\\DI\\Attribute\\Composition\\AttributeDefinitionRegistry::class,\n    Componenta\\DI\\Attribute\\Composition\\AttributePlanBuilder::class,\n] as $class) {\n    $file = (new ReflectionClass($class))->getFileName();\n    if (!is_string($file) || !str_starts_with(realpath($file) ?: '', $root . '/src/')) {\n        throw new RuntimeException('Foreign class origin: ' . $class);\n    }\n    $classes[$class] = ['file' => $file, 'sha256' => hash_file('sha256', $file)];\n}\n$functions = [];\nforeach (get_defined_functions()['user'] as $function) {\n    if (!str_starts_with($function, 'componenta\\\\di\\\\internal\\\\')) {\n        continue;\n    }\n    $file = (new ReflectionFunction($function))->getFileName();\n    if ($file !== $root . '/src/Internal/functions.php') {\n        throw new RuntimeException('Foreign helper origin.');\n    }\n    $functions[$function] = $file;\n}\nif (count($functions) !== 6) {\n    throw new RuntimeException('Wrong helper count.');\n}\nif (Pest\\TestSuite::getInstance()->rootPath !== $root) {\n    throw new RuntimeException('Foreign Pest root.');\n}\n$destination = getenv('DI_IDENTITY_ORIGINS');\nif (!is_string($destination) || $destination === '') {\n    throw new RuntimeException('Missing origin path.');\n}\nfile_put_contents($destination, json_encode([\n    'php' => PHP_VERSION,\n    'classes' => $classes,\n    'functions' => $functions,\n    'pest_root' => Pest\\TestSuite::getInstance()->rootPath,\n], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));\n"
+  }
+}
