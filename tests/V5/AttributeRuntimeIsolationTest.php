@@ -58,6 +58,8 @@ final class AuditStatefulObjectTarget {}
 
 final class AuditStatefulObjectHandler implements AttributeHandlerInterface
 {
+    public int $calls = 0;
+
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
         if (!$attribute instanceof AuditStatefulObjectAttribute || !$target instanceof ReflectionClass) {
@@ -67,6 +69,7 @@ final class AuditStatefulObjectHandler implements AttributeHandlerInterface
             throw new LogicException('Object attribute runtime state leaked between resolutions.');
         }
         $attribute->runtimeState = new \stdClass();
+        ++$this->calls;
     }
 }
 
@@ -115,15 +118,18 @@ test('parameter attribute runtime instances are isolated between calls', functio
 });
 
 test('object attribute runtime instances are isolated between object creations', function (): void {
+    $handler = new AuditStatefulObjectHandler();
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
             AuditStatefulObjectAttribute::class,
-            new AuditStatefulObjectHandler(),
+            $handler,
         ))
         ->build();
 
     expect($container->make(AuditStatefulObjectTarget::class))->toBeInstanceOf(AuditStatefulObjectTarget::class)
-        ->and($container->make(AuditStatefulObjectTarget::class))->toBeInstanceOf(AuditStatefulObjectTarget::class);
+        ->and($handler->calls)->toBe(1)
+        ->and($container->make(AuditStatefulObjectTarget::class))->toBeInstanceOf(AuditStatefulObjectTarget::class)
+        ->and($handler->calls)->toBe(2);
 });
 
 test('attribute constructors run once per actual handler invocation and never for plan metadata in every environment', function (string $environment): void {
