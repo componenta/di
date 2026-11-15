@@ -84,10 +84,25 @@ test('external takeover continues past dependencies already owned by an earlier 
 test('aliases to core entries preserve mutation protection', function (): void {
     $container = (new ContainerBuilder())->build();
     $container->alias('public.container', ContainerInterface::class);
+    $class = __NAMESPACE__ . '\\ProtectedDecorator_' . bin2hex(random_bytes(5));
+    $loads = 0;
+    $loader = static function (string $requested) use ($class, &$loads): void {
+        if ($requested === $class) {
+            ++$loads;
+            class_alias(RuntimeLabelDecorator::class, $class);
+        }
+    };
+    spl_autoload_register($loader);
 
-    expect(fn() => $container->set('public.container', new \stdClass()))
-        ->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI id "public.container".')
-        ->and(fn() => $container->delegator('public.container', static fn(object $entry): object => $entry))
-        ->toThrow(InvalidConfigurationException::class, 'Cannot decorate protected DI id "public.container".')
-        ->and($container->get('public.container'))->toBe($container);
+    try {
+        expect(fn() => $container->set('public.container', new \stdClass()))
+            ->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI id "public.container".')
+            ->and(fn() => $container->delegator('public.container', $class . '::__invoke'))
+            ->toThrow(InvalidConfigurationException::class, 'Cannot decorate protected DI id "public.container".')
+            ->and($loads)->toBe(0)
+            ->and(class_exists($class, false))->toBeFalse()
+            ->and($container->get('public.container'))->toBe($container);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
 });
