@@ -72,6 +72,17 @@ test('magic closure signature handling does not retain its bound object', functi
     expect($reference->get())->toBeNull();
 })->with(['fromCallable' => false, 'first class' => true]);
 
+test('magic closures for an inaccessible declared method preserve native arguments', function (bool $firstClass): void {
+    $target = new MagicClosureTarget();
+    $method = 'hidden';
+    $candidate = [$target, $method];
+    $callable = $firstClass ? $target->{$method}(...) : Closure::fromCallable($candidate);
+    $container = container();
+
+    expect($container->call($callable, ['first', 42]))->toBe(['hidden', ['first', 42]])
+        ->and($container->call($callable, ['next']))->toBe(['hidden', ['next']]);
+})->with(['fromCallable' => false, 'first class' => true]);
+
 test('real closure signatures still resolve named parameters including internal and private methods', function (): void {
     $container = container();
     $target = new MagicClosureTarget();
@@ -80,5 +91,6 @@ test('real closure signatures still resolve named parameters including internal 
     expect($container->call($target->privateCallable(), ['value' => 'resolved']))->toBe('private:resolved')
         ->and($container->call(strlen(...), ['string' => 'text']))->toBe(4)
         ->and($container->call($date->format(...), ['format' => 'Y-m-d']))->toBe('2026-01-02')
+        ->and($container->call($date->format(...), ['format' => 'Y', 'unused' => 'ignored']))->toBe('2026')
         ->and($container->call(static fn(): int => func_num_args(), [42]))->toBe(0);
 });
