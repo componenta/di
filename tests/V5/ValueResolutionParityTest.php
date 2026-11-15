@@ -53,7 +53,7 @@ final class ConfigOverrideParityDto
 {
     public function __construct(
         #[ConfigAttribute('value')]
-        public string $value,
+        public ?string $value,
     ) {}
 }
 
@@ -62,6 +62,14 @@ final class AttributedRequestTransportDto
     public function __construct(
         #[ConfigAttribute('request')]
         public ServerRequestInterface $request,
+    ) {}
+}
+
+final class AttributedRequestUnionTransportDto
+{
+    public function __construct(
+        #[ConfigAttribute('request')]
+        public ServerRequestInterface|AttributedTypedOverrideA $request,
     ) {}
 }
 
@@ -185,20 +193,25 @@ test('Init remains a property attribute handler and executes once after instanti
         ->and(TestCounter::$value)->toBe(1);
 });
 
-test('explicit named parameters keep precedence over Config parameter resolution', function (): void {
+test('explicit parameters including null keep precedence over Config parameter resolution', function (array $provided, ?string $expected): void {
     $container = ContainerBuilder::configure(new Config(
         ['value' => 'configured'],
         new Environment([]),
     ))->build();
 
-    expect($container->make(ConfigOverrideParityDto::class, ['value' => 'explicit'])->value)
-        ->toBe('explicit');
-});
+    expect($container->make(ConfigOverrideParityDto::class, $provided)->value)
+        ->toBe($expected);
+})->with([
+    'named value' => [['value' => 'explicit'], 'explicit'],
+    'named null' => [['value' => null], null],
+    'positional null' => [[null], null],
+]);
 
 test('HTTP request transport is not a generic attributed typed override', function (): void {
     $configured = new ServerRequest('GET', '/configured');
     $transport = new ServerRequest('GET', '/transport');
     $explicit = new ServerRequest('GET', '/explicit');
+    $typed = new AttributedTypedOverrideAValue();
     $container = ContainerBuilder::configure(new Config(
         ['request' => $configured],
         new Environment([]),
@@ -210,12 +223,17 @@ test('HTTP request transport is not a generic attributed typed override', functi
         ->and($container->make(AttributedRequestTransportDto::class, [
             ServerRequestInterface::class => $transport,
             'request' => $explicit,
-        ])->request)->toBe($explicit);
+        ])->request)->toBe($explicit)
+        ->and($container->make(AttributedRequestUnionTransportDto::class, [
+            ServerRequestInterface::class => $transport,
+            AttributedTypedOverrideA::class => $typed,
+        ])->request)->toBe($typed);
 });
 
 test('attributed typed overrides must satisfy the type named by their key', function (): void {
     $configured = new AttributedTypedOverrideAValue();
     $validOverride = new AttributedTypedOverrideAValue();
+    $validSecondOverride = new AttributedTypedOverrideBValue();
     $wrongKeyValue = new AttributedTypedOverrideBValue();
     $container = ContainerBuilder::configure(new Config(
         ['dependency' => $configured],
@@ -227,7 +245,10 @@ test('attributed typed overrides must satisfy the type named by their key', func
     ])->dependency)->toBe($validOverride)
         ->and($container->make(AttributedTypedOverrideDto::class, [
             AttributedTypedOverrideA::class => $wrongKeyValue,
-        ])->dependency)->toBe($configured);
+        ])->dependency)->toBe($configured)
+        ->and($container->make(AttributedTypedOverrideDto::class, [
+            AttributedTypedOverrideB::class => $validSecondOverride,
+        ])->dependency)->toBe($validSecondOverride);
 });
 
 test('Env converts values for scalar target types', function (): void {

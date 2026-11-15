@@ -93,6 +93,7 @@ test('bare request and URI types do not imply the current HTTP context', functio
     $container = (new ContainerBuilder())->build();
     $current = new ServerRequest('GET', 'https://example.test/current');
     $explicit = new ServerRequest('GET', 'https://example.test/explicit');
+    $uri = $explicit->getUri();
 
     expect(fn() => $container->call(
         static fn(ServerRequestInterface $request): ServerRequestInterface => $request,
@@ -108,7 +109,14 @@ test('bare request and URI types do not imply the current HTTP context', functio
                 ServerRequestInterface::class => $current,
                 'request' => $explicit,
             ],
-        ))->toBe($explicit);
+        ))->toBe($explicit)
+        ->and($container->call(
+            static fn(ServerRequestInterface|UriInterface $value): ServerRequestInterface|UriInterface => $value,
+            [
+                ServerRequestInterface::class => $current,
+                UriInterface::class => $uri,
+            ],
+        ))->toBe($uri);
 });
 
 test('current request and URI attributes are rejected on constructors', function (): void {
