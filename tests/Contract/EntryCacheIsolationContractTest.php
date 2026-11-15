@@ -114,7 +114,7 @@ test('shared callable metadata preserves factory and delegator instances in each
         ->and($containers['second']->get('product'))->toBe($shared['second']);
 })->with(['bound instances' => false, 'deferred service methods' => true]);
 
-test('null and false factory results remain shared through warmed aliases', function (mixed $value): void {
+test('null and false factory results remain shared through warmed aliases', function (mixed $value, string $alias): void {
     $calls = 0;
     $container = (new ContainerBuilder())
         ->addFactory('source', static function () use ($value, &$calls): mixed {
@@ -122,21 +122,22 @@ test('null and false factory results remain shared through warmed aliases', func
             return $value;
         })
         ->build();
-    $container->alias('alias', 'source');
+    $container->alias($alias, 'source');
 
-    expect($container->get('alias'))->toBe($value)
+    expect($container->get($alias))->toBe($value)
         ->and($container->get('source'))->toBe($value)
-        ->and($container->get('alias'))->toBe($value)
-        ->and($container->has('alias'))->toBeTrue()
+        ->and($container->get($alias))->toBe($value)
+        ->and($container->has($alias))->toBeTrue()
         ->and($calls)->toBe(1);
 
     $replacement = new stdClass();
     $container->set('source', $replacement);
 
-    expect($container->get('alias'))->toBe($replacement)
+    expect($container->get($alias))->toBe($replacement)
         ->and($container->get('source'))->toBe($replacement)
         ->and($calls)->toBe(1);
-})->with(['null' => [null], 'false' => [false]]);
+})->with(['null' => [null], 'false' => [false]])
+    ->with(['ordinary alias' => 'alias', 'numeric string alias' => '7']);
 
 test('external ownership changes are observed without replacing the local shared value', function (): void {
     $local = new stdClass();
