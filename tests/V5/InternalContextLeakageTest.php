@@ -86,7 +86,8 @@ test('mapped request provenance is hidden from custom parameter resolvers', func
         [ServerRequestInterface::class => $request],
     );
 
-    expect($result)->toBe('ok');
+    expect($result)->toBe('ok')
+        ->and($probe->keys)->toContain('value', ServerRequestInterface::class);
     expectNoInternalResolutionKeys($probe->keys);
 });
 
@@ -105,6 +106,7 @@ test('object handlers receive only caller-visible creation parameters', function
         [ServerRequestInterface::class => $request],
     );
 
-    expect($result)->toBe('ok');
+    expect($result)->toBe('ok')
+        ->and($probe->keys)->toContain('value', ServerRequestInterface::class);
     expectNoInternalResolutionKeys($probe->keys);
 });
