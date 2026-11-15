@@ -103,17 +103,24 @@ test('external recursion is detected and the lookup guard is cleared after failu
     $container = container();
     $external = new class ($container) implements ContainerInterface {
         public bool $forward = true;
+        public mixed $nestedValue = null;
+        public int $nestedCalls = 0;
         private int $depth = 0;
 
         public function __construct(private readonly Container $parent) {}
 
         public function has(string $id): bool
         {
-            return $id === 'entry';
+            return in_array($id, ['entry', 'independent'], true);
         }
 
         public function get(string $id): mixed
         {
+            if ($id === 'independent') {
+                ++$this->nestedCalls;
+                return 'independent value';
+            }
+            $this->nestedValue = $this->parent->get('independent');
             if (!$this->forward) {
                 return 'recovered';
             }
@@ -130,9 +137,13 @@ test('external recursion is detected and the lookup guard is cleared after failu
     };
     $container->addContainer($external);
 
-    expect(fn(): mixed => $container->get('entry'))->toThrow(CircularDependencyException::class);
+    expect(fn(): mixed => $container->get('entry'))->toThrow(CircularDependencyException::class)
+        ->and($external->nestedValue)->toBe('independent value')
+        ->and($external->nestedCalls)->toBe(1);
     $external->forward = false;
-    expect($container->get('entry'))->toBe('recovered');
+    expect($container->get('entry'))->toBe('recovered')
+        ->and($external->nestedValue)->toBe('independent value')
+        ->and($external->nestedCalls)->toBe(2);
 });
 
 test('runtime registration rejects empty service ids', function (bool $delegator): void {
