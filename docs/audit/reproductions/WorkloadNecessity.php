@@ -233,7 +233,10 @@ function operation(string $path, string $state, bool $customRule): Closure
 function median(array $values): int|float
 {
     sort($values, SORT_NUMERIC);
-    return $values[intdiv(count($values), 2)];
+    $middle = intdiv(count($values), 2);
+    return count($values) % 2 === 1
+        ? $values[$middle]
+        : ($values[$middle - 1] + $values[$middle]) / 2;
 }
 
 $iterations = max(1, (int) (getenv('DI_REASSESS_ITERATIONS') ?: 500));
