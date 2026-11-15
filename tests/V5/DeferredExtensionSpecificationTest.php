@@ -166,16 +166,20 @@ test('container factory accepts deferred extension service method forms', functi
 });
 
 test('container factory materializes closure function and service-id extension forms', function (): void {
+    $attributeFactoryCalls = 0;
     $config = new Config([], new Environment([]));
     $dependencies = new DependencyDefinitions([
         ConfigKey::SERVICES => [
             'deferred.resolver.service' => new DeferredConventionResolver(),
         ],
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
-            static fn(ContainerInterface $container): AttributeDefinition => new AttributeDefinition(
-                DeferredValue::class,
-                capabilities: [ValueProvider::class],
-            ),
+            static function (ContainerInterface $container) use (&$attributeFactoryCalls): AttributeDefinition {
+                ++$attributeFactoryCalls;
+                return new AttributeDefinition(
+                    DeferredValue::class,
+                    capabilities: [ValueProvider::class],
+                );
+            },
         ],
         ConfigKey::PARAMETER_RESOLVERS => [
             750 => __NAMESPACE__ . '\\deferredFunctionResolverFactory',
@@ -190,7 +194,8 @@ test('container factory materializes closure function and service-id extension f
 
     $dto = $container->make(DeferredExtensionDto::class);
 
-    expect($dto->value)->toBe('from-service-method')
+    expect($attributeFactoryCalls)->toBe(1)
+        ->and($dto->value)->toBe('from-service-method')
         ->and($dto->fallback)->toBe('from-deferred-resolver');
 });
 
