@@ -128,7 +128,7 @@ test('invalid variadic inputs fail before the callable body', function (array $p
     'positional element after named element' => [['parts' => ['named' => 'one', 0 => 'two']], 'must precede named arguments'],
 ]);
 
-test('attributes provide and transform a variadic collection once per invocation', function (): void {
+test('attributes provide and transform a variadic collection once per invocation', function (bool $fixedPrefix): void {
     $caster = new class () implements CasterInterface {
         public int $calls = 0;
         /** @var list<array<array-key,mixed>> */
@@ -160,15 +160,17 @@ test('attributes provide and transform a variadic collection once per invocation
     };
     $di = ContainerBuilder::configure(new Config(['parts' => ['config']], new Environment([])))
         ->addService(CasterProviderInterface::class, $provider)->build();
-    $callable = static fn(int $prefix = 0, #[ConfigAttribute('parts'), Cast('upper-parts')] string ...$parts): array => $parts;
+    $callable = $fixedPrefix
+        ? static fn(int $prefix = 0, #[ConfigAttribute('parts'), Cast('upper-parts')] string ...$parts): array => $parts
+        : static fn(#[ConfigAttribute('parts'), Cast('upper-parts')] string ...$parts): array => $parts;
 
     expect($di->call($callable))->toBe(['CONFIG'])
-        ->and($di->call($callable, [7, 'one', 'two']))->toBe(['ONE', 'TWO'])
+        ->and($di->call($callable, $fixedPrefix ? [7, 'one', 'two'] : ['one', 'two']))->toBe(['ONE', 'TWO'])
         ->and($di->call($callable, ['parts' => []]))->toBe([])
         ->and($di->call(static fn(#[Cast('upper-parts')] string ...$parts): array => $parts))->toBe([])
         ->and($caster->calls)->toBe(4)
         ->and($caster->collections)->toBe([['config'], ['one', 'two'], [], []]);
-});
+})->with(['variadic only' => false, 'fixed parameter then variadic' => true]);
 
 test('custom parameter resolvers can provide a variadic collection', function (): void {
     $resolver = new class () implements ParameterResolverInterface {

@@ -19,7 +19,7 @@ final readonly class Entry
     }
 }
 
-test('changing one alias pipeline preserves independent shared decorations', function (string $mutation, string $siblingDecorator): void {
+test('changing one alias pipeline preserves independent shared decorations', function (string $mutation, ?string $siblingDecorator): void {
     $container = (new ContainerBuilder())->build();
     $container->set('source', new Entry('source'));
     $container->set('other', new Entry('other'));
@@ -29,8 +29,11 @@ test('changing one alias pipeline preserves independent shared decorations', fun
     $container->alias('sibling', 'source');
     $container->delegator('first', 'first.decorator');
     $container->delegator('first.child', static fn(Entry $entry): Entry => new Entry($entry->path . ':child'));
-    $container->set($siblingDecorator, static fn(Entry $entry): Entry => new Entry($entry->path . ':sibling'));
-    $container->delegator('sibling', $siblingDecorator);
+    $decorateSibling = static fn(Entry $entry): Entry => new Entry($entry->path . ':sibling');
+    if ($siblingDecorator !== null) {
+        $container->set($siblingDecorator, $decorateSibling);
+    }
+    $container->delegator('sibling', $siblingDecorator ?? $decorateSibling);
     $container->delegator('source', static fn(Entry $entry): Entry => new Entry($entry->path . ':canonical'));
     $container->set('product', 'value');
     $container->delegator('product', 'first');
@@ -65,7 +68,7 @@ test('changing one alias pipeline preserves independent shared decorations', fun
         expect($container->get('first.child'))->toBe($child);
     }
 })->with(['append delegator', 'replace deferred decorator', 'retarget alias'])
-    ->with(['ordinary decorator id' => 'sibling.decorator', 'numeric string decorator id' => '7']);
+    ->with(['inline decorator' => null, 'ordinary decorator id' => 'sibling.decorator', 'numeric string decorator id' => '7']);
 
 test('replacing a base value still invalidates every alias pipeline and deferred dependent', function (): void {
     $container = (new ContainerBuilder())->build();
