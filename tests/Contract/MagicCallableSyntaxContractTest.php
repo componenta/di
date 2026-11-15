@@ -42,13 +42,13 @@ final class OrdinaryService
     }
 }
 
-test('string and array callable syntax preserve magic arguments', function (string $class): void {
+test('string and array callable syntax preserve magic arguments', function (string $class, string $method): void {
     $di = (new ContainerBuilder())->build();
     $arguments = ['one', 'named' => 'two'];
 
-    expect($di->call($class . '::dynamic', $arguments))->toBe(['dynamic', $arguments])
-        ->and($di->call([$class, 'dynamic'], $arguments))->toBe(['dynamic', $arguments]);
-})->with([MagicService::class, StaticMagicService::class]);
+    expect($di->call($class . '::' . $method, $arguments))->toBe([$method, $arguments])
+        ->and($di->call([$class, $method], $arguments))->toBe([$method, $arguments]);
+})->with([MagicService::class, StaticMagicService::class])->with(['dynamic', '__invoke', '__INVOKE']);
 
 test('instance magic dispatch handles inaccessible static methods in either syntax', function (): void {
     $di = (new ContainerBuilder())->build();
