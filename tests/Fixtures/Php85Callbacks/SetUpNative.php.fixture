@@ -13,10 +13,17 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 require $argv[1];
-$source = realpath($argv[2]);
+$canonicalPath = static function (string|false $path): string|false {
+    $canonical = $path === false ? false : realpath($path);
+    return $canonical === false ? false : str_replace(DIRECTORY_SEPARATOR, '/', $canonical);
+};
+$source = $canonicalPath($argv[2]);
+if ($source === false || !is_dir($source)) {
+    throw new RuntimeException('The fixture selected source root must be an existing directory.');
+}
 $sourceMap = [
-    'class' => realpath(new ReflectionClass(Componenta\DI\Container::class)->getFileName()) === $source . '/Container.php',
-    'functions' => realpath(new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible')->getFileName()) === $source . '/Internal/functions.php',
+    'class' => $canonicalPath(new ReflectionClass(Componenta\DI\Container::class)->getFileName()) === $source . '/Container.php',
+    'functions' => $canonicalPath(new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible')->getFileName()) === $source . '/Internal/functions.php',
 ];
 if (in_array(false, $sourceMap, true)) {
     throw new RuntimeException('The fixture must load the selected checkout source.');
