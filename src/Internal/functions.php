@@ -218,6 +218,17 @@ function transform_request_mapper_data(
         }
     }
 
+    if ($cast !== [] || $sortMap !== []) {
+        // Array copies retain referenced cells. Own the slots before replacing
+        // values so transformation cannot write through to caller-owned data.
+        $values = [];
+        foreach ($data as $key => $value) {
+            $values[$key] = $value;
+        }
+        $data = $values;
+        unset($values, $value);
+    }
+
     foreach ($cast as $key => $casterName) {
         if (array_key_exists($key, $data)) {
             $caster = $provider->provide($casterName)
