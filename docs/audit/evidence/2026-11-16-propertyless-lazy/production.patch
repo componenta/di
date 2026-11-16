@@ -1,0 +1,71 @@
+diff --git a/src/ProxyFactory.php b/src/ProxyFactory.php
+index da867be..5ab02a4 100644
+--- a/src/ProxyFactory.php
++++ b/src/ProxyFactory.php
+@@ -7,6 +7,7 @@ namespace Componenta\DI;
+ use Componenta\DI\Exception\ExceptionInterface;
+ use Componenta\DI\Exception\ResolutionException;
+ use ReflectionClass;
++use stdClass;
+ use Throwable;
+ 
+ /** Default {@see ProxyFactoryInterface} implementation backed by PHP native lazy objects. */
+@@ -23,6 +24,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
+         try {
+             /** @var ReflectionClass<T> $reflection */
+             $reflection = new ReflectionClass($class);
++            $this->assertSupportsLazyState($reflection, 'lazy ghost');
+             return $reflection->newLazyGhost($initializer);
+         } catch (ExceptionInterface $e) {
+             throw $e;
+@@ -42,6 +44,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
+         try {
+             /** @var ReflectionClass<T> $reflection */
+             $reflection = new ReflectionClass($class);
++            $this->assertSupportsLazyState($reflection, 'virtual proxy');
+             return $reflection->newLazyProxy($factory);
+         } catch (ExceptionInterface $e) {
+             throw $e;
+@@ -49,4 +52,42 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
+             throw ResolutionException::forService($class, $e);
+         }
+     }
++
++    /** @param ReflectionClass<object> $reflection */
++    private function assertSupportsLazyState(ReflectionClass $reflection, string $strategy): void
++    {
++        if ($reflection->isInterface() || $reflection->isTrait() || $reflection->isAbstract() || $reflection->isEnum()) {
++            return;
++        }
++
++        $hasBackedProperty = false;
++        for ($current = $reflection; $current !== false; $current = $current->getParentClass()) {
++            // Native allocation owns errors for unsupported internal ancestry.
++            if ($current->isInternal() && $current->getName() !== stdClass::class) {
++                return;
++            }
++            if ($hasBackedProperty) {
++                continue;
++            }
++
++            // A parent's private properties may be absent from the leaf reflection.
++            foreach ($current->getProperties() as $property) {
++                if (!$property->isStatic() && !$property->isVirtual()) {
++                    $hasBackedProperty = true;
++                    break;
++                }
++            }
++        }
++
++        if (!$hasBackedProperty) {
++            throw new ResolutionException(
++                sprintf(
++                    'Cannot create native %s for class "%s": no backed instance properties; use eager construction instead.',
++                    $strategy,
++                    $reflection->getName(),
++                ),
++                serviceId: $reflection->getName(),
++            );
++        }
++    }
+ }

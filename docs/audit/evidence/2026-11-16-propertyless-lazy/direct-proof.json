@@ -1,0 +1,803 @@
+{
+  "schema_version": 2,
+  "baseline": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+  "decision": "D1 option A: default native adapter rejects eligible propertyless targets before allocation",
+  "working_checkout": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+  "isolation": {
+    "fresh_clone_verified_baseline": true,
+    "vendor": "separate copy, no shared autoloader or vendor mutation",
+    "bootstrap_sha256": "097ecf279472aa204f8225f0d0ea405f3c4b87a3838abfef2c536bc15f0e18b5",
+    "bootstrap_source": "<?php\n\ndeclare(strict_types=1);\n\n$root = __DIR__ . '/repo';\nrequire $root . '/tests/bootstrap.php';\n\n$classes = [\n    Componenta\\DI\\ProxyFactory::class => 'src/ProxyFactory.php',\n    Componenta\\DI\\Container::class => 'src/Container.php',\n    Componenta\\DI\\ContainerFactory::class => 'src/ContainerFactory.php',\n    Componenta\\DI\\Exception\\ResolutionException::class => 'src/Exception/ResolutionException.php',\n    Componenta\\DI\\Tests\\Support\\ContainerBuilder::class => 'tests/Support/ContainerBuilder.php',\n];\n$observed = ['php' => PHP_VERSION, 'root' => $root, 'classes' => [], 'functions' => []];\nforeach ($classes as $class => $relative) {\n    $path = (new ReflectionClass($class))->getFileName();\n    if ($path === false || realpath($path) !== realpath($root . '/' . $relative)) {\n        throw new LogicException('Unexpected loaded class origin: ' . $class);\n    }\n    $observed['classes'][$class] = ['path' => $path, 'sha256' => hash_file('sha256', $path)];\n}\nforeach (get_defined_functions()['user'] as $function) {\n    if (!str_starts_with($function, 'componenta\\\\di\\\\internal\\\\') && $function !== 'componenta\\\\di\\\\tests\\\\support\\\\container') {\n        continue;\n    }\n    $path = (new ReflectionFunction($function))->getFileName();\n    $relative = $function === 'componenta\\\\di\\\\tests\\\\support\\\\container' ? 'tests/Support/functions.php' : 'src/Internal/functions.php';\n    if ($path === false || realpath($path) !== realpath($root . '/' . $relative)) {\n        throw new LogicException('Unexpected loaded function origin: ' . $function);\n    }\n    $observed['functions'][$function] = ['path' => $path, 'sha256' => hash_file('sha256', $path)];\n}\nif (count($observed['functions']) !== 7) {\n    throw new LogicException('Expected six internal functions and the local container test helper.');\n}\n$destination = getenv('D1_ORIGIN_REPORT');\nif ($destination === false || $destination === '') {\n    throw new LogicException('Set D1_ORIGIN_REPORT for isolated verification.');\n}\nfile_put_contents($destination, json_encode($observed, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . \"\\n\");\n",
+    "runner_sha256": "6018c5c6ddec050b4691a08b51c4cca907d37860ae83bfe8572f78a2145f8eb4",
+    "five_class_origins_and_seven_function_origins_verified_inside_each_run": true
+  },
+  "artifacts": {
+    "test": {
+      "path": "tests/Contract/NativeLazyEligibilityContractTest.php",
+      "sha256": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+      "lines": 457
+    },
+    "test_patch": {
+      "provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/native-lazy-eligibility-tests.patch",
+      "sha256": "3c6196fb6cc7c0425bf9778da8db34364fac617ad139c2fb3e74b427488e83c8"
+    },
+    "production_patch": {
+      "provenance": "/workspace/scratch/8dccbfa10ffb/d1-production.patch",
+      "sha256": "df57e7ed2b1bf07eaa7753ec4339cb968332aef084b3984e20706dbac2c17c46",
+      "diff": "diff --git a/src/ProxyFactory.php b/src/ProxyFactory.php\nindex da867be..5ab02a4 100644\n--- a/src/ProxyFactory.php\n+++ b/src/ProxyFactory.php\n@@ -7,6 +7,7 @@ namespace Componenta\\DI;\n use Componenta\\DI\\Exception\\ExceptionInterface;\n use Componenta\\DI\\Exception\\ResolutionException;\n use ReflectionClass;\n+use stdClass;\n use Throwable;\n \n /** Default {@see ProxyFactoryInterface} implementation backed by PHP native lazy objects. */\n@@ -23,6 +24,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface\n         try {\n             /** @var ReflectionClass<T> $reflection */\n             $reflection = new ReflectionClass($class);\n+            $this->assertSupportsLazyState($reflection, 'lazy ghost');\n             return $reflection->newLazyGhost($initializer);\n         } catch (ExceptionInterface $e) {\n             throw $e;\n@@ -42,6 +44,7 @@ final readonly class ProxyFactory implements ProxyFactoryInterface\n         try {\n             /** @var ReflectionClass<T> $reflection */\n             $reflection = new ReflectionClass($class);\n+            $this->assertSupportsLazyState($reflection, 'virtual proxy');\n             return $reflection->newLazyProxy($factory);\n         } catch (ExceptionInterface $e) {\n             throw $e;\n@@ -49,4 +52,42 @@ final readonly class ProxyFactory implements ProxyFactoryInterface\n             throw ResolutionException::forService($class, $e);\n         }\n     }\n+\n+    /** @param ReflectionClass<object> $reflection */\n+    private function assertSupportsLazyState(ReflectionClass $reflection, string $strategy): void\n+    {\n+        if ($reflection->isInterface() || $reflection->isTrait() || $reflection->isAbstract() || $reflection->isEnum()) {\n+            return;\n+        }\n+\n+        $hasBackedProperty = false;\n+        for ($current = $reflection; $current !== false; $current = $current->getParentClass()) {\n+            // Native allocation owns errors for unsupported internal ancestry.\n+            if ($current->isInternal() && $current->getName() !== stdClass::class) {\n+                return;\n+            }\n+            if ($hasBackedProperty) {\n+                continue;\n+            }\n+\n+            // A parent's private properties may be absent from the leaf reflection.\n+            foreach ($current->getProperties() as $property) {\n+                if (!$property->isStatic() && !$property->isVirtual()) {\n+                    $hasBackedProperty = true;\n+                    break;\n+                }\n+            }\n+        }\n+\n+        if (!$hasBackedProperty) {\n+            throw new ResolutionException(\n+                sprintf(\n+                    'Cannot create native %s for class \"%s\": no backed instance properties; use eager construction instead.',\n+                    $strategy,\n+                    $reflection->getName(),\n+                ),\n+                serviceId: $reflection->getName(),\n+            );\n+        }\n+    }\n }\n"
+    }
+  },
+  "scope": {
+    "cases": 64,
+    "rejection_layout_route_cases": 22,
+    "canonical_alias_cases": 2,
+    "supported_layout_identity_cases": 14,
+    "native_error_precedence_cases": 18,
+    "deferred_callback_exception_retry_cases": 4,
+    "retained_exception_callback_capture_cases": 4
+  },
+  "source_fingerprint_method": "SHA256(json.dumps({relative src PHP file path: SHA256(file bytes)}, sort_keys=True).encode()), default separators",
+  "baseline_source_sha256": {
+    "src/Attribute/Cast.php": "34c5025b4bdc674aef1593682e1760880853b6ae2bd8861756bd034a9e0c1539",
+    "src/Attribute/Composition/AttributeCapabilityInterface.php": "0fcb5e9a1906825f21f297a60f0efb4c9c2b148f2513d9adf90893d3b492ee92",
+    "src/Attribute/Composition/AttributeCompositionRuleInterface.php": "a46a71f00f516dc68c7066012d067ad5028d383c24abd03913e8b0ae2631d1b8",
+    "src/Attribute/Composition/AttributeDefinition.php": "7382c1027c02e0fa6db3938473d10fe304fc5ef0b5e6ffcce6d417c8dc121aca",
+    "src/Attribute/Composition/AttributeDefinitionRegistry.php": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+    "src/Attribute/Composition/AttributePlan.php": "feca843113742858b0bd05f885d17f88ef969d8de386b5e5784f1887c006b853",
+    "src/Attribute/Composition/AttributePlanBuilder.php": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb",
+    "src/Attribute/Composition/AttributeSet.php": "8c0defa0450ed23b41230ee3f39f862aea9864503cb23b9e91794895eb504adb",
+    "src/Attribute/Composition/AttributeUsage.php": "09bbcb1c52b722b99a31d19f0d07b6ef0dd2702d69a04a276c668a79b284702d",
+    "src/Attribute/Composition/Capability/AuthoritativeValueProvider.php": "353aeb72b25af6bf240099283052cd35c6885806b9992eb4fadff0f116d314ef",
+    "src/Attribute/Composition/Capability/ConstructorPolicy.php": "0ad394eada603b9aedae824bd1889b72d6f8570a22eaffec28a93301b173ae35",
+    "src/Attribute/Composition/Capability/CreationStrategy.php": "390ab6ebb2e5616b41f43afb886d37353c313ab4961541a5a656f11a7bf227fd",
+    "src/Attribute/Composition/Capability/InvocationOnlyValueProvider.php": "5e9f9e17508e99b943b4898e368b56df8bd5ba7745bf94c5a50ec1c889931301",
+    "src/Attribute/Composition/Capability/LifecycleHook.php": "afb40d56abc33863cdaee31f68d3a19c9afdec4cf57cf8c1eb41c52837e7e2f0",
+    "src/Attribute/Composition/Capability/ValueProvider.php": "baf96570026b35569593e32a4a801bf9d196a68333e4ecfe1ace0a71496a72b4",
+    "src/Attribute/Composition/Capability/ValueTransformer.php": "e42ba2f2d3899fec244d2a512afff889a1a79640357095f490ed1f8874379dc8",
+    "src/Attribute/Composition/CapabilityPolicy.php": "340d1f4b3b772895c5c6d379e04346b0ee12b7f979fb12576fe37e265b73b3dc",
+    "src/Attribute/Composition/Rule/ProxyCompositionRule.php": "6dfb16c8598c090ac5c953ae9de06af75d6aa115d1a02a80b95d5097f7b3d30d",
+    "src/Attribute/Config.php": "214555c996e41dd1b082a913bac685eb9cb2ae414c1f62f67b00180c99607ed1",
+    "src/Attribute/Cookie.php": "7c2423a9bb43274a31588da660673d9c6715e382936a3c854042fd37575c1aa5",
+    "src/Attribute/CurrentRequest.php": "affb563cec651615979a9e4f6ca22a20de1c68f8c837ef64c73b526f0d1be12b",
+    "src/Attribute/CurrentUri.php": "d7fdc7b8c3f75f46e7c79d79f7f0e968c2833e5c4983ca18c2e27e1a14bea9b5",
+    "src/Attribute/EntryId.php": "8ae524066aa777bed624cddafc50b1a0d048ea7900b5c6b7926ef62bec736220",
+    "src/Attribute/Env.php": "5c82229eda347960839a78092036b187bf2b8aeed167a85d321e4475a15adbfd",
+    "src/Attribute/ExtractsRequestData.php": "37877b5c076f1306a92a9df708b617767c2b422740100633f42940331108ee57",
+    "src/Attribute/Header.php": "3891e1f5ccc3a5be9f7231caee4d0e575637b4aaa38e481fc2571fdd489e2c4b",
+    "src/Attribute/Init.php": "09f90548cf12f92a8811af42523fd5e22fa9a1875a7ab243feee027c40f786b0",
+    "src/Attribute/Inject.php": "b94eac7085fe47cf929b3e9fcc65f6bda3e67b04ceebda0ba6c37e8c96fb76be",
+    "src/Attribute/Lazy.php": "7e4a85162dd2048090cd8dc55c92287df3efaa7c473a81de98f59ad95e6a1409",
+    "src/Attribute/Make.php": "e2304ecb372242cce177034ae22b92969b6c01ee5cea7a7af3e115836d3ba933",
+    "src/Attribute/MapCookies.php": "eb6c160bc276261ce7bec5e527725d80cf397f50f55e3c92274f1ad56f3172f0",
+    "src/Attribute/MapHeaders.php": "0df9599f7658d897ef53937bdf40ee9d5f7899a8bba5bf0a2a2e6cec0462d63e",
+    "src/Attribute/MapQueryString.php": "f19e4a8aa7b9184737d99e4d2e5793d00eebf335d61f37e8899b3bc728e656ad",
+    "src/Attribute/MapRequest.php": "876c861dc12490759bfc300f3ab9f65a1812d216ca4cd53ed9d1b036d4341518",
+    "src/Attribute/MapRequestAttributes.php": "c700db232626ec2b40ce7550445624500d6f59808dc45080964e04dc8157631e",
+    "src/Attribute/MapRequestPayload.php": "1d6a6d105166acee55a1d7e2610dcf2c63e2491db2395027dbd1dba2037a5756",
+    "src/Attribute/MapServerParams.php": "9178cf00172f431d7a1ea4b73e720d541b56b4afed4afec0a942a8e07c48b5f5",
+    "src/Attribute/MapUploadedFiles.php": "d018c57e21711fc4dd14c2f3e6c9bc54e1db6a5f7f7af5562c880979f0839e9f",
+    "src/Attribute/NoConstructor.php": "bae7347a3f43d9444c869a3cad5d8040c50b615e317b27de33cc5e319ed3b373",
+    "src/Attribute/PayloadParam.php": "8431354a5ac24a855b2b198d792fbf41d6dd9a7dd32e5be94d7c33d2fb00179a",
+    "src/Attribute/Proxy.php": "3298ab883e2e6a4c7f1e9e43412e63cd508d979f81bb27fe2eb747de6af49bad",
+    "src/Attribute/QueryParam.php": "cf3f3a910a92eaff2f90b8fc06714e7755e05525809ea395ea02e2f13807145f",
+    "src/Attribute/RequestAttribute.php": "8d5ff81936e227e45af123bf874db0bd8052d847872829742cc7054026fdc75f",
+    "src/Attribute/RequestDataSource.php": "3984ade94063e8cc1f99a4472821df297372a016dd8ef43706c58af40c12ab09",
+    "src/Attribute/RequestMapper.php": "bd3fae5a0ef5c92a921657cbd5332027dadb3621d8920d2c164f469137d08851",
+    "src/Attribute/ServerParam.php": "cf89b8a88eb7079460db5edf183cb83a7940d27e1886f90ef0f059a001574774",
+    "src/Attribute/SetUp.php": "73746fa9ae536fa75810799952f5984d1509fdc1e6e337a86af76450eae78068",
+    "src/Attribute/Transform.php": "67d95e9ecb51131195342c86ef9e12463df1d4175bb2404e7184129d3fc562d3",
+    "src/Attribute/UploadedFile.php": "e4bc4b1851f58c4e8bdc8894ef52fc6c41962fa429d8d45085827cbed2daa380",
+    "src/CallableExecutor.php": "24d80c87f68a299c32159b881583046e9f940397e0d56a946614b83eb907190d",
+    "src/CallableExecutorInterface.php": "577d6bc5c9387946939fe0b6e776eeda7773eb33c0659dca3a8f6900ebf9fb0c",
+    "src/CallableInvoker.php": "67d3e810d06b4e115a276635498b05082d6e79a169aca9c000adbda0a73dde3e",
+    "src/CallableInvokerInterface.php": "b655122d4988ade658859274552e3bd037e4487887ebcb1ffcaf739e944af8de",
+    "src/CallableResolver.php": "ff0104b73fe5581af898ba05f0a250618b023850507b68bf51a2a131b5a9a53a",
+    "src/CallableResolverInterface.php": "47ca21a523ddc4274f16d05c73c60de15a62b121057cadbedf602f45795b0eb0",
+    "src/ConfigKey.php": "53b0427f2d5ee86f5c4683d86dc7392d76b4296c02a25cdcdce99bf95578a5c6",
+    "src/Configuration/DependencyConfiguration.php": "05dd7ca192c6c215a83f115c2ac9468b20bc7486bf1ae80b971e507bea75adee",
+    "src/Container.php": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235",
+    "src/ContainerFactory.php": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450",
+    "src/Definition/ClassDefinition.php": "3fb2b068cedeb58fa9b750d6a5a5cc4f5deb216392c81cb6fabe747f1dbbb920",
+    "src/Definition/Definition.php": "2984d92e8ad674a58ef01243610551cc173adc9876849d16ccf168149a6fff0b",
+    "src/Definition/DefinitionInterface.php": "1307086dce9c96fbe27770ef826a8051a45a7fb02d901ca0082afcc2e556b4d2",
+    "src/Definition/FactoryDefinition.php": "02baed2daba9c4abd69afbdfbf2d786116426e7f3cf50333f06f6e0740110520",
+    "src/Definition/InvokableDefinition.php": "b8cb7112bdff4455392df0f09dd407bd44922a0276148047a787736bf323721a",
+    "src/Definition/ReferenceDefinition.php": "65e0c3c4360a704a7fcd2d5b865c2f17476c5490d1641125f20a844ea815f75a",
+    "src/Exception/AttributeCompositionException.php": "a8f9f62b6531e055e241477f4afd1adffce2e3ca3541908436fea6add0f0cf70",
+    "src/Exception/CircularDependencyException.php": "1b4afde22a604b2085526ae2fd3049a879942c0e9012710b1662902d04ca8937",
+    "src/Exception/ConcurrentResolutionException.php": "bafd50085e7f06d00a1eb5bf8305621210b76cc18f86b577fbb127bbbd76b2b6",
+    "src/Exception/DelegatorException.php": "a93f31bb930bf40638cf1d362cf80a6bffeb028feb8f17fc1441c38d2717a8cd",
+    "src/Exception/ExceptionInterface.php": "a06d01669964e5674ed6f8d5df3c0c1fe996f84938a29f588f99c8b0cadffa77",
+    "src/Exception/InvalidCallableException.php": "71254cfd560f2f03880c00beb5242365864c1de8feeae21eef645f32076309fe",
+    "src/Exception/InvalidConfigurationException.php": "567abb68a34a534c5f19ab0008d46333c5af75eec20e24b59a57af924d546006",
+    "src/Exception/MutationRetirementException.php": "8ea823c2dc4d479e4f9c0e10aaa853b0a472eafbdedbbdcd3a44afaac6ed3d02",
+    "src/Exception/NotFoundException.php": "954bab0097f3ee3d1385677a66a60bbb6c6b5ea1840603f23e6d8b3035223b35",
+    "src/Exception/ParameterDiagnostic.php": "f05b8a325c609cc08b18a3c01077809787bf55492bc4fd1eee260dd33b415252",
+    "src/Exception/PropertyDiagnostic.php": "2ac0220ec6c84be9f6bb008d7ed310fcbe6805a482bfa63b15df83d7d2f6d186",
+    "src/Exception/RequestDataConflictException.php": "6abc7d0b242831293b7beaa668034b83e996e6a8ea7762f03b3d283658d273e2",
+    "src/Exception/RequestParameterSourceConflictException.php": "ccf8a945a72fba8a8d1fb2a5de8b0df767965537c4683a7ba6f055ebe7025150",
+    "src/Exception/ResolutionException.php": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8",
+    "src/FactoryInterface.php": "5567e93ba06fe37c384546b7adeaebfa8577de8dc959e46fc37271ad14e55dbe",
+    "src/Internal/AliasResolver.php": "2f7f0713f51a60761332ed3b3555f91c783b0a4239075e6de2ee650e885a558c",
+    "src/Internal/AttributeCallbackInvoker.php": "0bb1f304a0d72f4ff80d9014df581e290ba3d99e20ffea1c44aae43d5d38429a",
+    "src/Internal/AttributeExecutionOrder.php": "8741b545566139e867e1ccd0364facd41661e7a7b47bcd9501e639b144db0c67",
+    "src/Internal/BootstrapResolutionGuard.php": "38620a406e1bc24fc7956ff2b6d376f244aa5dcdfc86e4773911a7302ac14ebb",
+    "src/Internal/CompletedAttributeGuard.php": "55c6f2951174e8d857d6109955f53c2c4618054752bca78b19a03ca98b7bbae6",
+    "src/Internal/ContainerBootstrapState.php": "8de48d0c7af715fd8b809046798777c9e725e196ac4457284a17850405af07a5",
+    "src/Internal/CycleGuard.php": "897cad0ad73eae675638dcb86fdb7daf3b047de2a62be04823fdbe566b82c3eb",
+    "src/Internal/DelegatorRegistry.php": "b80fcf9a2f0690b01dc70f485d75c14d1d58a1085238b30e67357c9017f5e800",
+    "src/Internal/EntryCache.php": "e5bff064ef1abbc7ccaebb6bb29a05733357eab51b2a77cb17d2023b1800b2ce",
+    "src/Internal/ExternalContainerRegistry.php": "873d1c894555a1c8f53ba47706af45d511ed90b24db01915e69f85d42e3ca84e",
+    "src/Internal/MutationRetirement.php": "3deedf3f92d5737025d7a2aef42041efef9661f08ec34a1b783b9f0ceefe6333",
+    "src/Internal/ObjectAttributeSequence.php": "5f90c1819b023dbc6528eec161a608fe40f8b5275a73da90ad135907dae0add2",
+    "src/Internal/ProtectedServiceIds.php": "6d97c2defab9d9cafe1a518a23bbed5a875377f92f60f1cc987478e97338b21b",
+    "src/Internal/ResolutionMetadata.php": "7097e3fd8ab7108d5cd9da7dbc9acf5d2429bc4c4f65357cbf4ac811b594c92a",
+    "src/Internal/Resolver/Entry/ConfiguredFactoryDefinition.php": "e2fdd8fd38630b775f026db7c8f88d5a85a7fe9963823a14d6d317e8c006efeb",
+    "src/Internal/Resolver/Entry/DefinitionBinding.php": "b4e4b76e2cc8914a9442c7eab204623f8c69e55c512702c7be6247e34ac825ae",
+    "src/Internal/Resolver/Entry/EntryResolverContext.php": "f0c4e1a75b67549bb9970b3abd8146586d3ee19691b581783485bbd4658e108d",
+    "src/Internal/Resolver/Entry/FactorySpecificationValidator.php": "6b75d39bf22f77a050f1d0a980e752a419f0980d4082d3e1399483b475c16ce6",
+    "src/Internal/Resolver/Entry/ObjectResolutionParameterStore.php": "9f5a8f1865528b86b2664402708ac22e4386307fcb6b3d43d8d138a36199f26f",
+    "src/Internal/Resolver/Entry/PreparedFactoryDefinition.php": "1e168700ebbf50826081b1b050ea1235c9270cdb81d0fe90717e386186ab2930",
+    "src/Internal/Resolver/Parameter/ParameterResolutionBoundary.php": "f429c77b293ec35c4ac6e9601504854a33567b4559d7099f19ec891da1bfbb7c",
+    "src/Internal/Resolver/Parameter/PreparedParameter.php": "cf4173e40aa1745b7a4efb4ff6e488d26628ad68a9a8e83a569d065344ee2fe4",
+    "src/Internal/Resolver/Parameter/PreparedParameterPlan.php": "5193e66e22ab58269c63e7fbf33773b21da6b8e2b1609e2e112c93e56c8fe71e",
+    "src/Internal/Resolver/Parameter/Request/LazyCasterProvider.php": "bb6ef3f892ca8e2c7d5b4aa1280394977ac083b04b89c3a5c57ef39936d74ecf",
+    "src/Internal/Resolver/Parameter/Request/LazyFactory.php": "f7de25f77dda2b7127eb2efb20eab70a4b80a26b7103c558ae8ea569e1541df3",
+    "src/Internal/Resolver/Parameter/Request/LazyValidationProvider.php": "552f33c0a871d93b72e9cd073a82bb2b3bceafe83a1fb30ebbcc4d764e9d2120",
+    "src/Internal/Resolver/Parameter/Request/MappedRequestContext.php": "d87ec87e2ec647cfbf209058f99ee090f5b25a5fa4379f01149614d218d473c1",
+    "src/Internal/Resolver/Parameter/Request/MappedRequestParameterSourceGuard.php": "972d35235dfeb41d887e078b153680af0112a0a2ecb09687d0cbc7cdf4ac9633",
+    "src/Internal/Resolver/Parameter/Request/RequestParameter.php": "584ef266d903e8066fc53587a3f7367307fc92fb67e04e1888d69d0bbb6512aa",
+    "src/Internal/Resolver/Parameter/VariadicArguments.php": "d8d72c8223b86c879d65b2e7700664bf0b64ca288cd253c8ff2da5620967eb68",
+    "src/Internal/functions.php": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b",
+    "src/LazyObjectFactoryInterface.php": "eb3168f23213e82d4718e9bb33b68e526e2c0f80c7fcadf648289cbb7bd13aa5",
+    "src/LazyServiceFactoryInterface.php": "29aa2dfe7a8f430db1f5666c88ffbef6ac72efed3db1a0e83d1e2ed7a1ff83c8",
+    "src/Object/CreationStrategy.php": "0562c97e8a9b70cde2364d0be2d8f53d7b008d26ed02f3dd380b2eaab7b2eb88",
+    "src/Object/ObjectMetadata.php": "d0432ea24c83b23e8a4d2fc800663c84e20eb5911bae37708d58bb7b5e22de0d",
+    "src/Object/ObjectPipeline.php": "0eac36e84193c0c700ac942969e5807778c3a306d2d512ea78fc0029e952a0ee",
+    "src/PreparedCallable.php": "7efe45c3ca386c0f0a85256361fc50978dec2c4866f2796f9f5de17b3161d82a",
+    "src/ProxyFactory.php": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e",
+    "src/ProxyFactoryInterface.php": "2ba2187bd5efde171c1039fc0cc05bbaeba1d89da4b425d899ae5ba4cf68a792",
+    "src/Resolver/Attribute/AttributeHandlerInterface.php": "c0a64a9509df6e11a34eb1b4576af50f09cb4d1755f869be4743576ef1f07bff",
+    "src/Resolver/Attribute/AttributePhase.php": "91af60062222ba10923926064fcc7079689c1a951e9cc2fb703d24d2c1ac0742",
+    "src/Resolver/Attribute/AttributeProcessor.php": "a1ea7f53a6e6ecac76e1c1c292de57cba2b78ca5e6727a2aa65c256e5c8da784",
+    "src/Resolver/Attribute/Handler/CastHandler.php": "ddcec28316ac4fada88746cf8d1e606baac9b857bdc4a4986e174e535b5324f4",
+    "src/Resolver/Attribute/Handler/ConfigHandler.php": "4a746797b1c8e8af9d5468ec23483a8fa485558ce2a44c8fca52251629f6093d",
+    "src/Resolver/Attribute/Handler/EntryIdHandler.php": "c6c5556f71b0aef7ec17a480829ce8b6330728fafe0cb284623d64b7213a91f1",
+    "src/Resolver/Attribute/Handler/EnvHandler.php": "2578c88dd1094e51d912e77b109ffaf2aa0db40858884ebb2aacc38f6c1df10e",
+    "src/Resolver/Attribute/Handler/InitHandler.php": "dd08154223d58a55193943474de54de9482f6f41081dc328560bac3a09bd7557",
+    "src/Resolver/Attribute/Handler/InjectHandler.php": "5c020787c75b73cc7ba420827885354b60f479d2bf288dada91717c67518fe29",
+    "src/Resolver/Attribute/Handler/LazyHandler.php": "c4014429d2c62ad25cf85def678cdea4ef9790b6275466af2256a5eb8c49e4ba",
+    "src/Resolver/Attribute/Handler/MakeHandler.php": "a04ba77251022ee169fdb2e06b5b4a22d7ce7ae242534a932d491d894ec91e75",
+    "src/Resolver/Attribute/Handler/NoConstructorHandler.php": "e28ffbf0959e922583252b9152b173dce973f2dd9f1fa02ffdfd86999fe3f17c",
+    "src/Resolver/Attribute/Handler/RequestAttributeHandler.php": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+    "src/Resolver/Attribute/Handler/TransformHandler.php": "213b97cfce8f199757ea0c0c4c29320b976243b5b98d8c8b5c17078182c42a79",
+    "src/Resolver/Attribute/ParameterAttributeHandlerInterface.php": "7cf1b9cb118fcfac3d10b47244ab620d62e5a15cdb35818a6ae1c893ea7044aa",
+    "src/Resolver/Entry/CompositeResolver.php": "ffdf28f98fe9ce7cb48c838b2f00d0869b3d2f642e2bdd9c5bef4752475c576c",
+    "src/Resolver/Entry/DefinitionResolverInterface.php": "e577a449698e850383f3145fe8edeac3a07b9e82942812f1f26865c17f15beab",
+    "src/Resolver/Entry/EntryResolverInterface.php": "aee3a17d69e757a314402f02cb57d84613657040a8dec70a0a19f2deeb3d8c4e",
+    "src/Resolver/Entry/FactoryResolver.php": "054354cc86f8a9f272362162990cf348b311d818304a61d9896b6602ee7c6fd9",
+    "src/Resolver/Entry/InstanceCreator.php": "c36174e4743ada0c7a76954edc97b3e4ac8a58f5e169fc2dd7ab6c3b61fde0cb",
+    "src/Resolver/Entry/InvokableResolver.php": "c2f35c42ae2fd9bdb6e52ef85e34c7bd26c7f64c2b7cf1db505117f50093f054",
+    "src/Resolver/Entry/ObjectCreationContext.php": "f9c83e7d4a470380155e4de5a84480165defc7e7d24686bc682896dd7560e762",
+    "src/Resolver/Entry/ReflectionResolver.php": "48523570610a22b93d59e77a8164462fb812ba0dd98540a95fb09de3e5a18fde",
+    "src/Resolver/Entry/SetUp/ConfigUnwrapper.php": "d6c44a5662ebc4e2de99a476a7dbc2092fe7dc825457ed53b0ce960a31045438",
+    "src/Resolver/Entry/SetUp/ContainerValueUnwrapper.php": "ba786a1e71cd9bd76c97ceba13a4f4e3855d955ec367c462cbc59890031aa792",
+    "src/Resolver/Entry/SetUp/EntryIdUnwrapper.php": "06817f24bb5c6e26f19afa37edfec1337b461c45e126b891ed102868d3c68f64",
+    "src/Resolver/Entry/SetUp/EnvUnwrapper.php": "9de2fa7200dfe4ef4ac87d5c4be945dbeba84d0817c9e16a307100c700c1092d",
+    "src/Resolver/Entry/SetUp/SetUpValueUnwrapperInterface.php": "4d626f726660263736eed74f2a102b2944580fef053ca3beffa12626cde33b63",
+    "src/Resolver/Entry/SetUpRunner.php": "f0af89019bc3ede95ba1023793e5ea6f0d6c91a36f271873f472b2d78af06022",
+    "src/Resolver/Parameter/ArrayResolver.php": "10a5e5592739312dda96f7f1a039beb01d149f16d6560c8d03fdc1083f51efd9",
+    "src/Resolver/Parameter/ArrayTypedResolver.php": "15b750d75bfc7db3b2acccfe5191a29497be37ac87cc34c9c9e51c540ec3ab36",
+    "src/Resolver/Parameter/AttributeParameterResolver.php": "bfebd1b5c21a49e95877d9acef51c75787e8705b0fb5f45e68e067536f8209ea",
+    "src/Resolver/Parameter/AutowireByTypeResolver.php": "625bfd70fdfdc0772ff86c45ffdcafcfa58334a98de14b0105da936f4401ec2a",
+    "src/Resolver/Parameter/DefaultValueResolver.php": "9db3f42dcc223c6ef301e0b0d739672885b25020b014f4fca915825ab7e3acbb",
+    "src/Resolver/Parameter/NullableResolver.php": "47fca218ee460d17ad58c0f78baf30a344496a6e6bbe4634f2006c4b08129012",
+    "src/Resolver/Parameter/ParameterAttributeValue.php": "bc1a1e3c756a148c96d4fef8a289f888149d1122e870bbf15761340f9f997bac",
+    "src/Resolver/Parameter/ParameterResolutionContext.php": "aeb634741d61fe5717a4802c7db922856fd9353272e207c1684c37de6aaa18c8",
+    "src/Resolver/Parameter/ParameterResolverInterface.php": "3b09e70deb497e8d8b131e48d1af742c4a7d9a5083991ae71d48c0f40b9607b4",
+    "src/Resolver/Parameter/ParameterSourceAttributeInterface.php": "679c7e6133d358ba053a108f051490771ef164bcde44b890a06219475cc2fa4d",
+    "src/Resolver/Parameter/ParametersResolver.php": "ddb2dcd9b394a680210dea19871c7b713e8e88a6935c8afdb703637780491448",
+    "src/Resolver/Parameter/Request/CastableInterface.php": "9eb56589ed049d717760f7034fa8daa98c4dfbf5e4eb860ff77c0bb276939ec7",
+    "src/Resolver/Parameter/Request/ExtractorInterface.php": "249615461e711127f3fb38bf0b6f69c51fe68b80f7adf3bdf244e42ecdee5757",
+    "src/Resolver/Parameter/Request/MapperInterface.php": "7cd4b6269415491531cd762abef937a3adb0921dc166cf767fe5c86c35e5ab29",
+    "src/Resolver/Parameter/Request/ParameterNameAwareExtractorInterface.php": "36d0f62a759765581e2a8d738218c40fc7de96c11076b735388001dd6cd49a02",
+    "src/Resolver/Parameter/Request/RequestDataConflictPolicy.php": "e54e0c6aa3c3c137be5fba5883b4d128d5e2b4693d85e8e5cf8d0bf6fc0e6e1e",
+    "src/Resolver/Parameter/Request/RequestDataExtractorInterface.php": "da3ea08ba6f536037369e75a2df6f90b5c5cf4fc6240c3bd4caf2c480e08ccda",
+    "src/Resolver/Target/ParameterTarget.php": "e64150a24593bcc8bcac4b0e47f004df14e8be1252d74ee31003bd0c468d3286",
+    "src/Resolver/Target/ParameterTargetFactory.php": "484293e9194e6def1c42cd1300b62295ed72b45044425b60edcea6d33f2f0925",
+    "src/Resolver/TypeHints.php": "96fbf01f7a633009522412092ac51ab3b374dab0bedcd6c974315860c646ecd9",
+    "src/VirtualProxyFactoryInterface.php": "e1e1dbcfbbe62aab0f080b9816b4e110e29cba22ffe67e012409444bf1464295"
+  },
+  "production_changes": {
+    "src/ProxyFactory.php": {
+      "baseline_sha256": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e",
+      "fixed_sha256": "966f797866f9a18fc1237c5e781345fdaaf213224fd849414dc072fa657d0056"
+    }
+  },
+  "canonical_runs": [
+    {
+      "phase": "final-red-configured-phpstan-fixture",
+      "runtime": "8.4.23",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/NativeLazyEligibilityContractTest.php",
+        "--bootstrap",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/origin-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=default",
+        "--log-junit",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-red-configured-phpstan-fixture/php84.xml"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+      "git_head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+      "exit_code": 1,
+      "results": {
+        "tests": 64,
+        "assertions": 273,
+        "errors": 0,
+        "failures": 28,
+        "skipped": 0,
+        "passed": 36
+      },
+      "test_sha256": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+      "source_file_count": 169,
+      "before_source_fingerprint": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+      "after_source_fingerprint": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+      "proxy_factory_sha256": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e",
+      "all_source_files_unchanged_within_run": true,
+      "loaded_origin": {
+        "php": "8.4.23",
+        "root": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+        "classes": {
+          "Componenta\\DI\\ProxyFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ProxyFactory.php",
+            "sha256": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e"
+          },
+          "Componenta\\DI\\Container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\ContainerFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ContainerFactory.php",
+            "sha256": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450"
+          },
+          "Componenta\\DI\\Exception\\ResolutionException": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Exception/ResolutionException.php",
+            "sha256": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8"
+          },
+          "Componenta\\DI\\Tests\\Support\\ContainerBuilder": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/ContainerBuilder.php",
+            "sha256": "ad99d65720f2b7a73beb499508d698694bc846bd33423e5055476aa2530b79fb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_magic_closure_trampoline": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\normalize_env_name": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_entry_class_eligible": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\validate_parameter_resolution_result": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\transform_request_mapper_data": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\tests\\support\\container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/functions.php",
+            "sha256": "3405d047b0f9392f2a699acedc5de2a50f25cf7c2131df1b432b68f3b5e7ea9e"
+          }
+        }
+      },
+      "seconds": 1.1726458072662354,
+      "log_provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-red-configured-phpstan-fixture/php84.log",
+      "log_sha256": "aa53833dd81c3ca019dd06d7560d2bd2f9ac8e18ee7ee0e2035c9d06e16bcc95",
+      "log_bytes": 27724,
+      "junit_sha256": "ff4bdf22c9209c80d306d4936759b0e4567b6ac128559a2769b581798758517a",
+      "output_summary": "Tests:    28 failed, 36 passed (273 assertions)\n  Duration: 0.21s",
+      "failure_messages": {
+        "null": 28
+      },
+      "failed_cases": [
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"proxy\"\"",
+        "native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"ghost\"\"",
+        "native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"proxy\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"ghost\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"proxy\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"ghost\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"proxy\"\""
+      ]
+    },
+    {
+      "phase": "final-red-configured-phpstan-fixture",
+      "runtime": "8.5.8",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/NativeLazyEligibilityContractTest.php",
+        "--bootstrap",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/origin-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=default",
+        "--log-junit",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-red-configured-phpstan-fixture/php85.xml"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+      "git_head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+      "exit_code": 1,
+      "results": {
+        "tests": 64,
+        "assertions": 273,
+        "errors": 0,
+        "failures": 28,
+        "skipped": 0,
+        "passed": 36
+      },
+      "test_sha256": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+      "source_file_count": 169,
+      "before_source_fingerprint": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+      "after_source_fingerprint": "6237d2b929cb4caac36b2170c104105c6342840098db01a29177247059185dff",
+      "proxy_factory_sha256": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e",
+      "all_source_files_unchanged_within_run": true,
+      "loaded_origin": {
+        "php": "8.5.8",
+        "root": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+        "classes": {
+          "Componenta\\DI\\ProxyFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ProxyFactory.php",
+            "sha256": "fc03bbb0da6eacd008c03987e828954433e8a0a803e6e1d4f5da72995954b44e"
+          },
+          "Componenta\\DI\\Container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\ContainerFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ContainerFactory.php",
+            "sha256": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450"
+          },
+          "Componenta\\DI\\Exception\\ResolutionException": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Exception/ResolutionException.php",
+            "sha256": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8"
+          },
+          "Componenta\\DI\\Tests\\Support\\ContainerBuilder": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/ContainerBuilder.php",
+            "sha256": "ad99d65720f2b7a73beb499508d698694bc846bd33423e5055476aa2530b79fb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_magic_closure_trampoline": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\normalize_env_name": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_entry_class_eligible": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\validate_parameter_resolution_result": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\transform_request_mapper_data": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\tests\\support\\container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/functions.php",
+            "sha256": "3405d047b0f9392f2a699acedc5de2a50f25cf7c2131df1b432b68f3b5e7ea9e"
+          }
+        }
+      },
+      "seconds": 1.208613634109497,
+      "log_provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-red-configured-phpstan-fixture/php85.log",
+      "log_sha256": "aa53833dd81c3ca019dd06d7560d2bd2f9ac8e18ee7ee0e2035c9d06e16bcc95",
+      "log_bytes": 27724,
+      "junit_sha256": "73a1540b165394659358d668fca0ec78a3b0b81ad373e466ef29898e6d69beb8",
+      "output_summary": "Tests:    28 failed, 36 passed (273 assertions)\n  Duration: 0.21s",
+      "failure_messages": {
+        "null": 28
+      },
+      "failed_cases": [
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"proxy\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"ghost\"\"",
+        "native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"proxy\"\"",
+        "native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"ghost\"\"",
+        "native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"proxy\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"ghost\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"proxy\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"ghost\"\"",
+        "propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"proxy\"\""
+      ]
+    },
+    {
+      "phase": "final-green-configured-phpstan-fixture",
+      "runtime": "8.4.23",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/NativeLazyEligibilityContractTest.php",
+        "--bootstrap",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/origin-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=default",
+        "--log-junit",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-green-configured-phpstan-fixture/php84.xml"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+      "git_head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+      "exit_code": 0,
+      "results": {
+        "tests": 64,
+        "assertions": 417,
+        "errors": 0,
+        "failures": 0,
+        "skipped": 0,
+        "passed": 64
+      },
+      "test_sha256": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+      "source_file_count": 169,
+      "before_source_fingerprint": "8ac82a5957e7981ee9f87dc797dd4f25a55f4b26e30b51e06085c48db75ee2bc",
+      "after_source_fingerprint": "8ac82a5957e7981ee9f87dc797dd4f25a55f4b26e30b51e06085c48db75ee2bc",
+      "proxy_factory_sha256": "966f797866f9a18fc1237c5e781345fdaaf213224fd849414dc072fa657d0056",
+      "all_source_files_unchanged_within_run": true,
+      "loaded_origin": {
+        "php": "8.4.23",
+        "root": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+        "classes": {
+          "Componenta\\DI\\ProxyFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ProxyFactory.php",
+            "sha256": "966f797866f9a18fc1237c5e781345fdaaf213224fd849414dc072fa657d0056"
+          },
+          "Componenta\\DI\\Container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\ContainerFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ContainerFactory.php",
+            "sha256": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450"
+          },
+          "Componenta\\DI\\Exception\\ResolutionException": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Exception/ResolutionException.php",
+            "sha256": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8"
+          },
+          "Componenta\\DI\\Tests\\Support\\ContainerBuilder": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/ContainerBuilder.php",
+            "sha256": "ad99d65720f2b7a73beb499508d698694bc846bd33423e5055476aa2530b79fb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_magic_closure_trampoline": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\normalize_env_name": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_entry_class_eligible": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\validate_parameter_resolution_result": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\transform_request_mapper_data": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\tests\\support\\container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/functions.php",
+            "sha256": "3405d047b0f9392f2a699acedc5de2a50f25cf7c2131df1b432b68f3b5e7ea9e"
+          }
+        }
+      },
+      "seconds": 0.8658697605133057,
+      "log_provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-green-configured-phpstan-fixture/php84.log",
+      "log_sha256": "c30d3437085ed2b6cde912cc467e7af02b8367e26511cdf16c70d8d690397f87",
+      "log_bytes": 127,
+      "junit_sha256": "67dff3ede6851416e03c3e414e4f9783349bb10ff239d6f0dedf7892e4f54a53",
+      "output_summary": "Tests:    64 passed (417 assertions)\n  Duration: 0.16s",
+      "failure_messages": {},
+      "failed_cases": []
+    },
+    {
+      "phase": "final-green-configured-phpstan-fixture",
+      "runtime": "8.5.8",
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+        "-d",
+        "opcache.enable_cli=0",
+        "vendor/bin/pest",
+        "tests/Contract/NativeLazyEligibilityContractTest.php",
+        "--bootstrap",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/origin-bootstrap.php",
+        "--compact",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--order-by=default",
+        "--log-junit",
+        "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-green-configured-phpstan-fixture/php85.xml"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+      "git_head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+      "exit_code": 0,
+      "results": {
+        "tests": 64,
+        "assertions": 417,
+        "errors": 0,
+        "failures": 0,
+        "skipped": 0,
+        "passed": 64
+      },
+      "test_sha256": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+      "source_file_count": 169,
+      "before_source_fingerprint": "8ac82a5957e7981ee9f87dc797dd4f25a55f4b26e30b51e06085c48db75ee2bc",
+      "after_source_fingerprint": "8ac82a5957e7981ee9f87dc797dd4f25a55f4b26e30b51e06085c48db75ee2bc",
+      "proxy_factory_sha256": "966f797866f9a18fc1237c5e781345fdaaf213224fd849414dc072fa657d0056",
+      "all_source_files_unchanged_within_run": true,
+      "loaded_origin": {
+        "php": "8.5.8",
+        "root": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+        "classes": {
+          "Componenta\\DI\\ProxyFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ProxyFactory.php",
+            "sha256": "966f797866f9a18fc1237c5e781345fdaaf213224fd849414dc072fa657d0056"
+          },
+          "Componenta\\DI\\Container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Container.php",
+            "sha256": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235"
+          },
+          "Componenta\\DI\\ContainerFactory": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/ContainerFactory.php",
+            "sha256": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450"
+          },
+          "Componenta\\DI\\Exception\\ResolutionException": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Exception/ResolutionException.php",
+            "sha256": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8"
+          },
+          "Componenta\\DI\\Tests\\Support\\ContainerBuilder": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/ContainerBuilder.php",
+            "sha256": "ad99d65720f2b7a73beb499508d698694bc846bd33423e5055476aa2530b79fb"
+          }
+        },
+        "functions": {
+          "componenta\\di\\internal\\is_closure_reflector": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_magic_closure_trampoline": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\normalize_env_name": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\is_entry_class_eligible": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\validate_parameter_resolution_result": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\internal\\transform_request_mapper_data": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/src/Internal/functions.php",
+            "sha256": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b"
+          },
+          "componenta\\di\\tests\\support\\container": {
+            "path": "/workspace/scratch/8dccbfa10ffb/d1-core/repo/tests/Support/functions.php",
+            "sha256": "3405d047b0f9392f2a699acedc5de2a50f25cf7c2131df1b432b68f3b5e7ea9e"
+          }
+        }
+      },
+      "seconds": 0.791785478591919,
+      "log_provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/final-green-configured-phpstan-fixture/php85.log",
+      "log_sha256": "201df8b3a255dee98a5d36a9b53bdfc5c728931d9b0cc5ed0e55d768745b344d",
+      "log_bytes": 127,
+      "junit_sha256": "f1f3fc996b9b8e8977732e39a995072fd3ead36037ea542dc41735a23e3e2266",
+      "output_summary": "Tests:    64 passed (417 assertions)\n  Duration: 0.14s",
+      "failure_messages": {},
+      "failed_cases": []
+    }
+  ],
+  "secondary_review": {
+    "production_patch": "Read complete patch: shared adapter-local preallocation check; native-ineligible class-kind gate and complete internal ancestry preserve native previous errors; inherited private backed slots included; no isInstantiable shortcut; no callbacks/hooks/object allocation during check; canonical diagnostics contain target metadata only. No concrete correction identified.",
+    "integration_test": "Read PropertylessLazyLifecycleContractTest.php SHA d0eab489292d5fc0f2e668ef6ddbfad3c224e2f614864e33b4a462951a105a10: retry/no shared publication, eager definitions and ordinary product factory, NoConstructor setup, destructor lifetime, supplied-factory callback delegation covered without claiming protocol double is a universal alternate lazy implementation.",
+    "independent_test_review": "Parameters agent read direct contract test and found no concrete correction; root also read complete 64-case file and approved scope.",
+    "final_fixture_revision": "Verified the exact final main-file SHA and diff: only the unused empty trait declaration was removed and the same trait dataset now names the existing used NativeLazyEligibilityLifecycle trait. Native comparison oracle and 64-case matrix remain unchanged."
+  },
+  "limitations": [
+    "Tests cover the specified PHP 8.4.23/8.5.8 layouts and routes; native allocation remains authoritative for other class/flag combinations.",
+    "Only the new direct contract file was executed in this isolated final RED/GREEN proof; root owns combined integration, full-suite, static gates and CI.",
+    "Retained-exception capture collection is deliberately checked with temporarily enabled zend.exception_ignore_args=1 and restored afterward; no claim is made about trace-argument retention when disabled.",
+    "No production code was authored here; root production patch was applied only after final test RED. No main checkout files were edited, no commits or pushes performed by this agent.",
+    "All prior phases before final-red-configured-phpstan-fixture/final-green-configured-phpstan-fixture are historical artifacts; final canonical proof uses test SHA0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8.",
+    "Targeted PHPStan/style outputs retained here validate previous test SHAa07c481 only. The full configured PHPStan subsequently detected an unused fixture trait; root corrected it and owns all final integrated static/full-suite gates."
+  ],
+  "previous_artifact": {
+    "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+    "proof_provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/evidence/native-lazy-eligibility-proof-previous-a07c481.json",
+    "proof_sha256": "24664ccc233c760571e086353a323eb20efb194b485f2ad0452a19881249423a",
+    "patch_provenance": "/workspace/scratch/8dccbfa10ffb/d1-core/native-lazy-eligibility-tests-previous-a07c481.patch",
+    "patch_sha256": "3c68c7b0855b691a6c052585c0c4b200c724f5771aff5224de740f92b29e976d",
+    "canonical_runs": [
+      {
+        "phase": "final-red-published",
+        "runtime": "8.4.23",
+        "results": {
+          "tests": 64,
+          "assertions": 273,
+          "errors": 0,
+          "failures": 28,
+          "skipped": 0,
+          "passed": 36
+        },
+        "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+        "log_sha256": "0836f1e645a374c2d9d5614f4b0dcb7d9167925075574073011aa81377769392"
+      },
+      {
+        "phase": "final-red-published",
+        "runtime": "8.5.8",
+        "results": {
+          "tests": 64,
+          "assertions": 273,
+          "errors": 0,
+          "failures": 28,
+          "skipped": 0,
+          "passed": 36
+        },
+        "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+        "log_sha256": "0836f1e645a374c2d9d5614f4b0dcb7d9167925075574073011aa81377769392"
+      },
+      {
+        "phase": "final-green",
+        "runtime": "8.4.23",
+        "results": {
+          "tests": 64,
+          "assertions": 417,
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "passed": 64
+        },
+        "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+        "log_sha256": "5858bb3772e25ebf35fa230c9beca409cc620209e911ce0724c2683f8e8ffb76"
+      },
+      {
+        "phase": "final-green",
+        "runtime": "8.5.8",
+        "results": {
+          "tests": 64,
+          "assertions": 417,
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "passed": 64
+        },
+        "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+        "log_sha256": "8ed88940fba36fa5e31b595970231176f796fab4d1b942d67301f9128f46c116"
+      }
+    ],
+    "reason_for_revision": "Full configured PHPStan found trait.unused on the standalone empty NativeLazyEligibilityTrait; targeted file-only PHPStan had passed. Root removed that unused fixture and reused the existing applied NativeLazyEligibilityLifecycle trait in the same native-precedence dataset. No suppressions, test cases or assertions changed.",
+    "exact_test_diff": "--- previous-a07c481\n+++ final-0764318\n@@ -193,8 +193,6 @@\n }\n \n interface NativeLazyEligibilityInterface {}\n-\n-trait NativeLazyEligibilityTrait {}\n \n abstract class NativeLazyEligibilityAbstract {}\n \n@@ -371,7 +369,7 @@\n })->with([\n     'missing class' => __NAMESPACE__ . '\\\\NativeLazyEligibilityMissing',\n     'interface' => NativeLazyEligibilityInterface::class,\n-    'trait' => NativeLazyEligibilityTrait::class,\n+    'trait' => NativeLazyEligibilityLifecycle::class,\n     'abstract without a slot' => NativeLazyEligibilityAbstract::class,\n     'abstract with a slot' => NativeLazyEligibilityBackedAbstract::class,\n     'enum' => NativeLazyEligibilityEnum::class,\n"
+  },
+  "previous_artifact_static_checks": [
+    {
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/phpstan",
+        "analyse",
+        "tests/Contract/NativeLazyEligibilityContractTest.php",
+        "--level=max",
+        "--no-progress",
+        "--error-format=table"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+      "exit_code": 0,
+      "log_sha256": "6f97e2deebb341d8e271492deee60aa269ba9805b5f6965626cb77c99ab1f839",
+      "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+      "output": "Warning: PHP Startup: Unable to load dynamic library '/workspace/scratch/8dccbfa10ffb/d1-core/repo/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: /workspace/scratch/8dccbfa10ffb/d1-core/repo/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924//workspace/scratch/8dccbfa10ffb/d1-core/repo/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0\nNote: Using configuration file /workspace/scratch/8dccbfa10ffb/d1-core/repo/phpstan.neon.dist.\n\n [OK] No errors                                                                 \n\n",
+      "kind": "phpstan-final"
+    },
+    {
+      "command": [
+        "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+        "vendor/bin/php-cs-fixer",
+        "fix",
+        "tests/Contract/NativeLazyEligibilityContractTest.php",
+        "--dry-run",
+        "--diff",
+        "--using-cache=no"
+      ],
+      "cwd": "/workspace/scratch/8dccbfa10ffb/d1-core/repo",
+      "exit_code": 0,
+      "log_sha256": "9708037f3a339f996ef5ab2b8d2ce6667f1b24f5e58aa22fff3cdc19566bbae5",
+      "test_sha256": "a07c481449a5d1a9e19917f5f6386dcf99be30242c9805ad8ae6e8d74a762f6b",
+      "output": "PHP CS Fixer 3.95.30 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.\nPHP runtime: 8.4.23\nLoaded config default from \"/workspace/scratch/8dccbfa10ffb/d1-core/repo/.php-cs-fixer.dist.php\".\nRunning analysis on 8 cores with 10 files per process.\nPaths from configuration have been overridden by paths provided as command arguments.\n 0/1 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n 1/1 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%\n\n\nFound 0 of 1 files that can be fixed in 0.242 seconds, 22.00 MB memory used\n",
+      "kind": "style-final"
+    }
+  ],
+  "current_artifact_static_validation": {
+    "owner": "root",
+    "scope": "complete configured PHPStan and style; full suites",
+    "status_at_proof_assembly": "root running final integrated gates; earlier targeted results are not claimed for the current test SHA"
+  }
+}

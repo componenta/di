@@ -1,0 +1,2192 @@
+{
+  "schema_version": 1,
+  "scope": "D1/A implementation and its final local acceptance; this is not another full-library audit.",
+  "baseline_commit": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+  "published_fix_commit": "299ee93f6be6d91e3a4fc1372389f1fff953d61b",
+  "published_tree": "55431727b22aad2b5a0234aff3f134d4cdd865ec",
+  "published_subtrees": {
+    "src": "4992d462fe15f63625c822ed893596be6941bca5",
+    "tests": "64c4bb456335fa41895841b006a5e6203fd66fc0",
+    ".github": "e9adb045de026945ca7ef4841f4f4f6b4274027a"
+  },
+  "precommit_provenance": "Final local runs recorded HEAD fe435db with staged/uncommitted D1 changes. Every current src/tests byte has been compared to published commit 299ee93. Recorded HEAD values are intentionally preserved; the four gates tested exactly the published source/test bytes.",
+  "source_test_fingerprint": {
+    "method": "SHA256 of Python json.dumps(path_to_SHA256, sort_keys=True).encode(); default separators, relative POSIX paths, all regular files recursively in src and tests.",
+    "count": 418,
+    "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e",
+    "counts": {
+      "src": 169,
+      "tests": 249
+    },
+    "files": {
+      "src/Attribute/Cast.php": "34c5025b4bdc674aef1593682e1760880853b6ae2bd8861756bd034a9e0c1539",
+      "src/Attribute/Composition/AttributeCapabilityInterface.php": "0fcb5e9a1906825f21f297a60f0efb4c9c2b148f2513d9adf90893d3b492ee92",
+      "src/Attribute/Composition/AttributeCompositionRuleInterface.php": "a46a71f00f516dc68c7066012d067ad5028d383c24abd03913e8b0ae2631d1b8",
+      "src/Attribute/Composition/AttributeDefinition.php": "7382c1027c02e0fa6db3938473d10fe304fc5ef0b5e6ffcce6d417c8dc121aca",
+      "src/Attribute/Composition/AttributeDefinitionRegistry.php": "a15da481deaa9aae5dc6b1490d3105fbe986dd2b34bf066da663724200b2ccd5",
+      "src/Attribute/Composition/AttributePlan.php": "feca843113742858b0bd05f885d17f88ef969d8de386b5e5784f1887c006b853",
+      "src/Attribute/Composition/AttributePlanBuilder.php": "9badfd696e4a137c8605e42edaeebf5927ec1817461c817650e801b0cfb11deb",
+      "src/Attribute/Composition/AttributeSet.php": "8c0defa0450ed23b41230ee3f39f862aea9864503cb23b9e91794895eb504adb",
+      "src/Attribute/Composition/AttributeUsage.php": "09bbcb1c52b722b99a31d19f0d07b6ef0dd2702d69a04a276c668a79b284702d",
+      "src/Attribute/Composition/Capability/AuthoritativeValueProvider.php": "353aeb72b25af6bf240099283052cd35c6885806b9992eb4fadff0f116d314ef",
+      "src/Attribute/Composition/Capability/ConstructorPolicy.php": "0ad394eada603b9aedae824bd1889b72d6f8570a22eaffec28a93301b173ae35",
+      "src/Attribute/Composition/Capability/CreationStrategy.php": "390ab6ebb2e5616b41f43afb886d37353c313ab4961541a5a656f11a7bf227fd",
+      "src/Attribute/Composition/Capability/InvocationOnlyValueProvider.php": "5e9f9e17508e99b943b4898e368b56df8bd5ba7745bf94c5a50ec1c889931301",
+      "src/Attribute/Composition/Capability/LifecycleHook.php": "afb40d56abc33863cdaee31f68d3a19c9afdec4cf57cf8c1eb41c52837e7e2f0",
+      "src/Attribute/Composition/Capability/ValueProvider.php": "baf96570026b35569593e32a4a801bf9d196a68333e4ecfe1ace0a71496a72b4",
+      "src/Attribute/Composition/Capability/ValueTransformer.php": "e42ba2f2d3899fec244d2a512afff889a1a79640357095f490ed1f8874379dc8",
+      "src/Attribute/Composition/CapabilityPolicy.php": "340d1f4b3b772895c5c6d379e04346b0ee12b7f979fb12576fe37e265b73b3dc",
+      "src/Attribute/Composition/Rule/ProxyCompositionRule.php": "6dfb16c8598c090ac5c953ae9de06af75d6aa115d1a02a80b95d5097f7b3d30d",
+      "src/Attribute/Config.php": "214555c996e41dd1b082a913bac685eb9cb2ae414c1f62f67b00180c99607ed1",
+      "src/Attribute/Cookie.php": "7c2423a9bb43274a31588da660673d9c6715e382936a3c854042fd37575c1aa5",
+      "src/Attribute/CurrentRequest.php": "affb563cec651615979a9e4f6ca22a20de1c68f8c837ef64c73b526f0d1be12b",
+      "src/Attribute/CurrentUri.php": "d7fdc7b8c3f75f46e7c79d79f7f0e968c2833e5c4983ca18c2e27e1a14bea9b5",
+      "src/Attribute/EntryId.php": "8ae524066aa777bed624cddafc50b1a0d048ea7900b5c6b7926ef62bec736220",
+      "src/Attribute/Env.php": "5c82229eda347960839a78092036b187bf2b8aeed167a85d321e4475a15adbfd",
+      "src/Attribute/ExtractsRequestData.php": "37877b5c076f1306a92a9df708b617767c2b422740100633f42940331108ee57",
+      "src/Attribute/Header.php": "3891e1f5ccc3a5be9f7231caee4d0e575637b4aaa38e481fc2571fdd489e2c4b",
+      "src/Attribute/Init.php": "09f90548cf12f92a8811af42523fd5e22fa9a1875a7ab243feee027c40f786b0",
+      "src/Attribute/Inject.php": "b94eac7085fe47cf929b3e9fcc65f6bda3e67b04ceebda0ba6c37e8c96fb76be",
+      "src/Attribute/Lazy.php": "ff06c4b0e2b58a6435021017da0dc4fcb6414d1b7018f00c49cbd5d87faeba0f",
+      "src/Attribute/Make.php": "e2304ecb372242cce177034ae22b92969b6c01ee5cea7a7af3e115836d3ba933",
+      "src/Attribute/MapCookies.php": "eb6c160bc276261ce7bec5e527725d80cf397f50f55e3c92274f1ad56f3172f0",
+      "src/Attribute/MapHeaders.php": "0df9599f7658d897ef53937bdf40ee9d5f7899a8bba5bf0a2a2e6cec0462d63e",
+      "src/Attribute/MapQueryString.php": "f19e4a8aa7b9184737d99e4d2e5793d00eebf335d61f37e8899b3bc728e656ad",
+      "src/Attribute/MapRequest.php": "876c861dc12490759bfc300f3ab9f65a1812d216ca4cd53ed9d1b036d4341518",
+      "src/Attribute/MapRequestAttributes.php": "c700db232626ec2b40ce7550445624500d6f59808dc45080964e04dc8157631e",
+      "src/Attribute/MapRequestPayload.php": "1d6a6d105166acee55a1d7e2610dcf2c63e2491db2395027dbd1dba2037a5756",
+      "src/Attribute/MapServerParams.php": "9178cf00172f431d7a1ea4b73e720d541b56b4afed4afec0a942a8e07c48b5f5",
+      "src/Attribute/MapUploadedFiles.php": "d018c57e21711fc4dd14c2f3e6c9bc54e1db6a5f7f7af5562c880979f0839e9f",
+      "src/Attribute/NoConstructor.php": "bae7347a3f43d9444c869a3cad5d8040c50b615e317b27de33cc5e319ed3b373",
+      "src/Attribute/PayloadParam.php": "8431354a5ac24a855b2b198d792fbf41d6dd9a7dd32e5be94d7c33d2fb00179a",
+      "src/Attribute/Proxy.php": "f8a51d016cf7020147abb35d8e4e0cb2078bf14d589e901c89026539b768735e",
+      "src/Attribute/QueryParam.php": "cf3f3a910a92eaff2f90b8fc06714e7755e05525809ea395ea02e2f13807145f",
+      "src/Attribute/RequestAttribute.php": "8d5ff81936e227e45af123bf874db0bd8052d847872829742cc7054026fdc75f",
+      "src/Attribute/RequestDataSource.php": "3984ade94063e8cc1f99a4472821df297372a016dd8ef43706c58af40c12ab09",
+      "src/Attribute/RequestMapper.php": "bd3fae5a0ef5c92a921657cbd5332027dadb3621d8920d2c164f469137d08851",
+      "src/Attribute/ServerParam.php": "cf89b8a88eb7079460db5edf183cb83a7940d27e1886f90ef0f059a001574774",
+      "src/Attribute/SetUp.php": "73746fa9ae536fa75810799952f5984d1509fdc1e6e337a86af76450eae78068",
+      "src/Attribute/Transform.php": "67d95e9ecb51131195342c86ef9e12463df1d4175bb2404e7184129d3fc562d3",
+      "src/Attribute/UploadedFile.php": "e4bc4b1851f58c4e8bdc8894ef52fc6c41962fa429d8d45085827cbed2daa380",
+      "src/CallableExecutor.php": "24d80c87f68a299c32159b881583046e9f940397e0d56a946614b83eb907190d",
+      "src/CallableExecutorInterface.php": "577d6bc5c9387946939fe0b6e776eeda7773eb33c0659dca3a8f6900ebf9fb0c",
+      "src/CallableInvoker.php": "67d3e810d06b4e115a276635498b05082d6e79a169aca9c000adbda0a73dde3e",
+      "src/CallableInvokerInterface.php": "b655122d4988ade658859274552e3bd037e4487887ebcb1ffcaf739e944af8de",
+      "src/CallableResolver.php": "ff0104b73fe5581af898ba05f0a250618b023850507b68bf51a2a131b5a9a53a",
+      "src/CallableResolverInterface.php": "47ca21a523ddc4274f16d05c73c60de15a62b121057cadbedf602f45795b0eb0",
+      "src/ConfigKey.php": "53b0427f2d5ee86f5c4683d86dc7392d76b4296c02a25cdcdce99bf95578a5c6",
+      "src/Configuration/DependencyConfiguration.php": "05dd7ca192c6c215a83f115c2ac9468b20bc7486bf1ae80b971e507bea75adee",
+      "src/Container.php": "eef2783d241c61007805264e11debd206560462a8e27ec9872f8ff52f3632235",
+      "src/ContainerFactory.php": "04fa399cd5968aac923b601bfbe7426894b48ec107524c96aa6e3b7a8ffc2450",
+      "src/Definition/ClassDefinition.php": "3fb2b068cedeb58fa9b750d6a5a5cc4f5deb216392c81cb6fabe747f1dbbb920",
+      "src/Definition/Definition.php": "2984d92e8ad674a58ef01243610551cc173adc9876849d16ccf168149a6fff0b",
+      "src/Definition/DefinitionInterface.php": "1307086dce9c96fbe27770ef826a8051a45a7fb02d901ca0082afcc2e556b4d2",
+      "src/Definition/FactoryDefinition.php": "02baed2daba9c4abd69afbdfbf2d786116426e7f3cf50333f06f6e0740110520",
+      "src/Definition/InvokableDefinition.php": "b8cb7112bdff4455392df0f09dd407bd44922a0276148047a787736bf323721a",
+      "src/Definition/ReferenceDefinition.php": "65e0c3c4360a704a7fcd2d5b865c2f17476c5490d1641125f20a844ea815f75a",
+      "src/Exception/AttributeCompositionException.php": "a8f9f62b6531e055e241477f4afd1adffce2e3ca3541908436fea6add0f0cf70",
+      "src/Exception/CircularDependencyException.php": "1b4afde22a604b2085526ae2fd3049a879942c0e9012710b1662902d04ca8937",
+      "src/Exception/ConcurrentResolutionException.php": "bafd50085e7f06d00a1eb5bf8305621210b76cc18f86b577fbb127bbbd76b2b6",
+      "src/Exception/DelegatorException.php": "a93f31bb930bf40638cf1d362cf80a6bffeb028feb8f17fc1441c38d2717a8cd",
+      "src/Exception/ExceptionInterface.php": "a06d01669964e5674ed6f8d5df3c0c1fe996f84938a29f588f99c8b0cadffa77",
+      "src/Exception/InvalidCallableException.php": "71254cfd560f2f03880c00beb5242365864c1de8feeae21eef645f32076309fe",
+      "src/Exception/InvalidConfigurationException.php": "567abb68a34a534c5f19ab0008d46333c5af75eec20e24b59a57af924d546006",
+      "src/Exception/MutationRetirementException.php": "8ea823c2dc4d479e4f9c0e10aaa853b0a472eafbdedbbdcd3a44afaac6ed3d02",
+      "src/Exception/NotFoundException.php": "954bab0097f3ee3d1385677a66a60bbb6c6b5ea1840603f23e6d8b3035223b35",
+      "src/Exception/ParameterDiagnostic.php": "f05b8a325c609cc08b18a3c01077809787bf55492bc4fd1eee260dd33b415252",
+      "src/Exception/PropertyDiagnostic.php": "2ac0220ec6c84be9f6bb008d7ed310fcbe6805a482bfa63b15df83d7d2f6d186",
+      "src/Exception/RequestDataConflictException.php": "6abc7d0b242831293b7beaa668034b83e996e6a8ea7762f03b3d283658d273e2",
+      "src/Exception/RequestParameterSourceConflictException.php": "ccf8a945a72fba8a8d1fb2a5de8b0df767965537c4683a7ba6f055ebe7025150",
+      "src/Exception/ResolutionException.php": "a0d7450cf14d391c03887735831b7457ab92ea587ac04a90090ef19ef60b62a8",
+      "src/FactoryInterface.php": "5567e93ba06fe37c384546b7adeaebfa8577de8dc959e46fc37271ad14e55dbe",
+      "src/Internal/AliasResolver.php": "2f7f0713f51a60761332ed3b3555f91c783b0a4239075e6de2ee650e885a558c",
+      "src/Internal/AttributeCallbackInvoker.php": "0bb1f304a0d72f4ff80d9014df581e290ba3d99e20ffea1c44aae43d5d38429a",
+      "src/Internal/AttributeExecutionOrder.php": "8741b545566139e867e1ccd0364facd41661e7a7b47bcd9501e639b144db0c67",
+      "src/Internal/BootstrapResolutionGuard.php": "38620a406e1bc24fc7956ff2b6d376f244aa5dcdfc86e4773911a7302ac14ebb",
+      "src/Internal/CompletedAttributeGuard.php": "55c6f2951174e8d857d6109955f53c2c4618054752bca78b19a03ca98b7bbae6",
+      "src/Internal/ContainerBootstrapState.php": "8de48d0c7af715fd8b809046798777c9e725e196ac4457284a17850405af07a5",
+      "src/Internal/CycleGuard.php": "897cad0ad73eae675638dcb86fdb7daf3b047de2a62be04823fdbe566b82c3eb",
+      "src/Internal/DelegatorRegistry.php": "b80fcf9a2f0690b01dc70f485d75c14d1d58a1085238b30e67357c9017f5e800",
+      "src/Internal/EntryCache.php": "e5bff064ef1abbc7ccaebb6bb29a05733357eab51b2a77cb17d2023b1800b2ce",
+      "src/Internal/ExternalContainerRegistry.php": "873d1c894555a1c8f53ba47706af45d511ed90b24db01915e69f85d42e3ca84e",
+      "src/Internal/MutationRetirement.php": "3deedf3f92d5737025d7a2aef42041efef9661f08ec34a1b783b9f0ceefe6333",
+      "src/Internal/ObjectAttributeSequence.php": "5f90c1819b023dbc6528eec161a608fe40f8b5275a73da90ad135907dae0add2",
+      "src/Internal/ProtectedServiceIds.php": "6d97c2defab9d9cafe1a518a23bbed5a875377f92f60f1cc987478e97338b21b",
+      "src/Internal/ResolutionMetadata.php": "7097e3fd8ab7108d5cd9da7dbc9acf5d2429bc4c4f65357cbf4ac811b594c92a",
+      "src/Internal/Resolver/Entry/ConfiguredFactoryDefinition.php": "e2fdd8fd38630b775f026db7c8f88d5a85a7fe9963823a14d6d317e8c006efeb",
+      "src/Internal/Resolver/Entry/DefinitionBinding.php": "b4e4b76e2cc8914a9442c7eab204623f8c69e55c512702c7be6247e34ac825ae",
+      "src/Internal/Resolver/Entry/EntryResolverContext.php": "f0c4e1a75b67549bb9970b3abd8146586d3ee19691b581783485bbd4658e108d",
+      "src/Internal/Resolver/Entry/FactorySpecificationValidator.php": "6b75d39bf22f77a050f1d0a980e752a419f0980d4082d3e1399483b475c16ce6",
+      "src/Internal/Resolver/Entry/ObjectResolutionParameterStore.php": "9f5a8f1865528b86b2664402708ac22e4386307fcb6b3d43d8d138a36199f26f",
+      "src/Internal/Resolver/Entry/PreparedFactoryDefinition.php": "1e168700ebbf50826081b1b050ea1235c9270cdb81d0fe90717e386186ab2930",
+      "src/Internal/Resolver/Parameter/ParameterResolutionBoundary.php": "f429c77b293ec35c4ac6e9601504854a33567b4559d7099f19ec891da1bfbb7c",
+      "src/Internal/Resolver/Parameter/PreparedParameter.php": "cf4173e40aa1745b7a4efb4ff6e488d26628ad68a9a8e83a569d065344ee2fe4",
+      "src/Internal/Resolver/Parameter/PreparedParameterPlan.php": "5193e66e22ab58269c63e7fbf33773b21da6b8e2b1609e2e112c93e56c8fe71e",
+      "src/Internal/Resolver/Parameter/Request/LazyCasterProvider.php": "bb6ef3f892ca8e2c7d5b4aa1280394977ac083b04b89c3a5c57ef39936d74ecf",
+      "src/Internal/Resolver/Parameter/Request/LazyFactory.php": "f7de25f77dda2b7127eb2efb20eab70a4b80a26b7103c558ae8ea569e1541df3",
+      "src/Internal/Resolver/Parameter/Request/LazyValidationProvider.php": "552f33c0a871d93b72e9cd073a82bb2b3bceafe83a1fb30ebbcc4d764e9d2120",
+      "src/Internal/Resolver/Parameter/Request/MappedRequestContext.php": "d87ec87e2ec647cfbf209058f99ee090f5b25a5fa4379f01149614d218d473c1",
+      "src/Internal/Resolver/Parameter/Request/MappedRequestParameterSourceGuard.php": "972d35235dfeb41d887e078b153680af0112a0a2ecb09687d0cbc7cdf4ac9633",
+      "src/Internal/Resolver/Parameter/Request/RequestParameter.php": "584ef266d903e8066fc53587a3f7367307fc92fb67e04e1888d69d0bbb6512aa",
+      "src/Internal/Resolver/Parameter/VariadicArguments.php": "d8d72c8223b86c879d65b2e7700664bf0b64ca288cd253c8ff2da5620967eb68",
+      "src/Internal/functions.php": "b733a500013b79c9d2b9e9e39eecc428e03aebb5a4d78270cd066d0ba87e957b",
+      "src/LazyObjectFactoryInterface.php": "546b987b11888f295945bd8401aa73ca59d21cb231a6091479ec4a425a5c8f5f",
+      "src/LazyServiceFactoryInterface.php": "29aa2dfe7a8f430db1f5666c88ffbef6ac72efed3db1a0e83d1e2ed7a1ff83c8",
+      "src/Object/CreationStrategy.php": "0562c97e8a9b70cde2364d0be2d8f53d7b008d26ed02f3dd380b2eaab7b2eb88",
+      "src/Object/ObjectMetadata.php": "d0432ea24c83b23e8a4d2fc800663c84e20eb5911bae37708d58bb7b5e22de0d",
+      "src/Object/ObjectPipeline.php": "0eac36e84193c0c700ac942969e5807778c3a306d2d512ea78fc0029e952a0ee",
+      "src/PreparedCallable.php": "7efe45c3ca386c0f0a85256361fc50978dec2c4866f2796f9f5de17b3161d82a",
+      "src/ProxyFactory.php": "966f797866f9a18fc1237c5e781345fdaaf213224fd849414dc072fa657d0056",
+      "src/ProxyFactoryInterface.php": "2ba2187bd5efde171c1039fc0cc05bbaeba1d89da4b425d899ae5ba4cf68a792",
+      "src/Resolver/Attribute/AttributeHandlerInterface.php": "c0a64a9509df6e11a34eb1b4576af50f09cb4d1755f869be4743576ef1f07bff",
+      "src/Resolver/Attribute/AttributePhase.php": "91af60062222ba10923926064fcc7079689c1a951e9cc2fb703d24d2c1ac0742",
+      "src/Resolver/Attribute/AttributeProcessor.php": "a1ea7f53a6e6ecac76e1c1c292de57cba2b78ca5e6727a2aa65c256e5c8da784",
+      "src/Resolver/Attribute/Handler/CastHandler.php": "ddcec28316ac4fada88746cf8d1e606baac9b857bdc4a4986e174e535b5324f4",
+      "src/Resolver/Attribute/Handler/ConfigHandler.php": "4a746797b1c8e8af9d5468ec23483a8fa485558ce2a44c8fca52251629f6093d",
+      "src/Resolver/Attribute/Handler/EntryIdHandler.php": "c6c5556f71b0aef7ec17a480829ce8b6330728fafe0cb284623d64b7213a91f1",
+      "src/Resolver/Attribute/Handler/EnvHandler.php": "2578c88dd1094e51d912e77b109ffaf2aa0db40858884ebb2aacc38f6c1df10e",
+      "src/Resolver/Attribute/Handler/InitHandler.php": "dd08154223d58a55193943474de54de9482f6f41081dc328560bac3a09bd7557",
+      "src/Resolver/Attribute/Handler/InjectHandler.php": "5c020787c75b73cc7ba420827885354b60f479d2bf288dada91717c67518fe29",
+      "src/Resolver/Attribute/Handler/LazyHandler.php": "c4014429d2c62ad25cf85def678cdea4ef9790b6275466af2256a5eb8c49e4ba",
+      "src/Resolver/Attribute/Handler/MakeHandler.php": "a04ba77251022ee169fdb2e06b5b4a22d7ce7ae242534a932d491d894ec91e75",
+      "src/Resolver/Attribute/Handler/NoConstructorHandler.php": "e28ffbf0959e922583252b9152b173dce973f2dd9f1fa02ffdfd86999fe3f17c",
+      "src/Resolver/Attribute/Handler/RequestAttributeHandler.php": "9ce3c2b639a5ffd080f4be513eb4870851cab024f3802576093a5def4f8190ee",
+      "src/Resolver/Attribute/Handler/TransformHandler.php": "213b97cfce8f199757ea0c0c4c29320b976243b5b98d8c8b5c17078182c42a79",
+      "src/Resolver/Attribute/ParameterAttributeHandlerInterface.php": "7cf1b9cb118fcfac3d10b47244ab620d62e5a15cdb35818a6ae1c893ea7044aa",
+      "src/Resolver/Entry/CompositeResolver.php": "ffdf28f98fe9ce7cb48c838b2f00d0869b3d2f642e2bdd9c5bef4752475c576c",
+      "src/Resolver/Entry/DefinitionResolverInterface.php": "e577a449698e850383f3145fe8edeac3a07b9e82942812f1f26865c17f15beab",
+      "src/Resolver/Entry/EntryResolverInterface.php": "aee3a17d69e757a314402f02cb57d84613657040a8dec70a0a19f2deeb3d8c4e",
+      "src/Resolver/Entry/FactoryResolver.php": "054354cc86f8a9f272362162990cf348b311d818304a61d9896b6602ee7c6fd9",
+      "src/Resolver/Entry/InstanceCreator.php": "c36174e4743ada0c7a76954edc97b3e4ac8a58f5e169fc2dd7ab6c3b61fde0cb",
+      "src/Resolver/Entry/InvokableResolver.php": "c2f35c42ae2fd9bdb6e52ef85e34c7bd26c7f64c2b7cf1db505117f50093f054",
+      "src/Resolver/Entry/ObjectCreationContext.php": "f9c83e7d4a470380155e4de5a84480165defc7e7d24686bc682896dd7560e762",
+      "src/Resolver/Entry/ReflectionResolver.php": "48523570610a22b93d59e77a8164462fb812ba0dd98540a95fb09de3e5a18fde",
+      "src/Resolver/Entry/SetUp/ConfigUnwrapper.php": "d6c44a5662ebc4e2de99a476a7dbc2092fe7dc825457ed53b0ce960a31045438",
+      "src/Resolver/Entry/SetUp/ContainerValueUnwrapper.php": "ba786a1e71cd9bd76c97ceba13a4f4e3855d955ec367c462cbc59890031aa792",
+      "src/Resolver/Entry/SetUp/EntryIdUnwrapper.php": "06817f24bb5c6e26f19afa37edfec1337b461c45e126b891ed102868d3c68f64",
+      "src/Resolver/Entry/SetUp/EnvUnwrapper.php": "9de2fa7200dfe4ef4ac87d5c4be945dbeba84d0817c9e16a307100c700c1092d",
+      "src/Resolver/Entry/SetUp/SetUpValueUnwrapperInterface.php": "4d626f726660263736eed74f2a102b2944580fef053ca3beffa12626cde33b63",
+      "src/Resolver/Entry/SetUpRunner.php": "f0af89019bc3ede95ba1023793e5ea6f0d6c91a36f271873f472b2d78af06022",
+      "src/Resolver/Parameter/ArrayResolver.php": "10a5e5592739312dda96f7f1a039beb01d149f16d6560c8d03fdc1083f51efd9",
+      "src/Resolver/Parameter/ArrayTypedResolver.php": "15b750d75bfc7db3b2acccfe5191a29497be37ac87cc34c9c9e51c540ec3ab36",
+      "src/Resolver/Parameter/AttributeParameterResolver.php": "bfebd1b5c21a49e95877d9acef51c75787e8705b0fb5f45e68e067536f8209ea",
+      "src/Resolver/Parameter/AutowireByTypeResolver.php": "625bfd70fdfdc0772ff86c45ffdcafcfa58334a98de14b0105da936f4401ec2a",
+      "src/Resolver/Parameter/DefaultValueResolver.php": "9db3f42dcc223c6ef301e0b0d739672885b25020b014f4fca915825ab7e3acbb",
+      "src/Resolver/Parameter/NullableResolver.php": "47fca218ee460d17ad58c0f78baf30a344496a6e6bbe4634f2006c4b08129012",
+      "src/Resolver/Parameter/ParameterAttributeValue.php": "bc1a1e3c756a148c96d4fef8a289f888149d1122e870bbf15761340f9f997bac",
+      "src/Resolver/Parameter/ParameterResolutionContext.php": "aeb634741d61fe5717a4802c7db922856fd9353272e207c1684c37de6aaa18c8",
+      "src/Resolver/Parameter/ParameterResolverInterface.php": "3b09e70deb497e8d8b131e48d1af742c4a7d9a5083991ae71d48c0f40b9607b4",
+      "src/Resolver/Parameter/ParameterSourceAttributeInterface.php": "679c7e6133d358ba053a108f051490771ef164bcde44b890a06219475cc2fa4d",
+      "src/Resolver/Parameter/ParametersResolver.php": "ddb2dcd9b394a680210dea19871c7b713e8e88a6935c8afdb703637780491448",
+      "src/Resolver/Parameter/Request/CastableInterface.php": "9eb56589ed049d717760f7034fa8daa98c4dfbf5e4eb860ff77c0bb276939ec7",
+      "src/Resolver/Parameter/Request/ExtractorInterface.php": "249615461e711127f3fb38bf0b6f69c51fe68b80f7adf3bdf244e42ecdee5757",
+      "src/Resolver/Parameter/Request/MapperInterface.php": "7cd4b6269415491531cd762abef937a3adb0921dc166cf767fe5c86c35e5ab29",
+      "src/Resolver/Parameter/Request/ParameterNameAwareExtractorInterface.php": "36d0f62a759765581e2a8d738218c40fc7de96c11076b735388001dd6cd49a02",
+      "src/Resolver/Parameter/Request/RequestDataConflictPolicy.php": "e54e0c6aa3c3c137be5fba5883b4d128d5e2b4693d85e8e5cf8d0bf6fc0e6e1e",
+      "src/Resolver/Parameter/Request/RequestDataExtractorInterface.php": "da3ea08ba6f536037369e75a2df6f90b5c5cf4fc6240c3bd4caf2c480e08ccda",
+      "src/Resolver/Target/ParameterTarget.php": "e64150a24593bcc8bcac4b0e47f004df14e8be1252d74ee31003bd0c468d3286",
+      "src/Resolver/Target/ParameterTargetFactory.php": "484293e9194e6def1c42cd1300b62295ed72b45044425b60edcea6d33f2f0925",
+      "src/Resolver/TypeHints.php": "96fbf01f7a633009522412092ac51ab3b374dab0bedcd6c974315860c646ecd9",
+      "src/VirtualProxyFactoryInterface.php": "c910f962845416df8953bb0b5c9489cbdfc23c305a41f3c6c88aac2e39bbdd61",
+      "tests/Contract/AliasDelegatorResolutionContractTest.php": "ee513b808ede98f694ac77d15ae06326cd3fb08776ba48025e4857c2647acbd6",
+      "tests/Contract/AliasPipelineInvalidationContractTest.php": "17a4f6929997d407a0f8674423306d4007c0b7338bcf4b83bf2fc819a9b19583",
+      "tests/Contract/AttributeArgumentLifecycleTest.php": "9ad756c37721bc0f82d03ab32eb74a813d2bce9b1abaeff8a0bb2c117a37fe27",
+      "tests/Contract/AttributeAvailabilityRevisionContractTest.php": "73ebdb3e4676af79245286f1e5fbdc96ba757ebb1008b0b2ee53d8ad3659c875",
+      "tests/Contract/AttributeCallbackInvocationContractTest.php": "67819a42f2ced2067eb12c572423e2e687ddc966826ad0d786152d6b00e35cf4",
+      "tests/Contract/AttributeCapabilityPolicyContractTest.php": "195a440516c8b1a437110cd9f57bf06888b5837b2373ac1e6f03ce0ec40c9628",
+      "tests/Contract/AttributeCompositionValidationContractTest.php": "db0165d3eae756354e7190bb2b87707cff8f894d037087efc6e1d125c5fcb2da",
+      "tests/Contract/AttributeConstructionLoadingContractTest.php": "b59563289952e0f1dfcdcd318827bbbf028f1b03505a7b73e6581e105552d4b1",
+      "tests/Contract/AttributeDefinitionAvailabilityContractTest.php": "53672f42a4a6380b330a78868eeeb4a5fe094578b85d6ebec31e73bdf96348cc",
+      "tests/Contract/AttributeDefinitionIdentityContractTest.php": "2a6a2a698ca0c28d0bde9cff944ac66f39c281e74115468a1069db03d9d1b81a",
+      "tests/Contract/AttributeDefinitionSnapshotContractTest.php": "5d89887afba8b5514bf7a18c0c80d9f179fb39524197d9e1fa6c532e17be3ca8",
+      "tests/Contract/AttributeDiscoveryRevisionContractTest.php": "71ba7294d327f78f61c661ca359fa44cb0450770653b3eccd50fa9720e48dbe6",
+      "tests/Contract/AttributeExecutionOrderContractTest.php": "d46907a3a1339247d6aef26026ab084c75f63f0586f962654ca7e728c2967155",
+      "tests/Contract/AttributeFailureSequenceContractTest.php": "b5cf7f1447d4cbe71a096c4b621a8abed5e5a35063b24755dc1e92fdc50f858b",
+      "tests/Contract/AttributeLookupStabilizationContractTest.php": "e34ac9ace680acf145112c9eba67d4478ee322cfb8157335e1011309451cd396",
+      "tests/Contract/AttributeParameterPlanIdentityContractTest.php": "cf16c3fdcdf2c2360859eef08a19e04a16aa3f08077ef7fddf1e27846f9931bc",
+      "tests/Contract/AttributePhaseLoadingContractTest.php": "df7d6eacd4728f6082b0bf56adbc6052af952b4c66fc49d7cd6721206ad81fe3",
+      "tests/Contract/AttributePlanDiagnosticsContractTest.php": "0beb9356fc6d69440baa9ad59d83c248578186f6b26f1371e078082b01918641",
+      "tests/Contract/AttributePlanSelectionContractTest.php": "ffb4fea737f9cda0d65d8e3c0011396540395d4bca492bdd81e33881d06b0d37",
+      "tests/Contract/AttributePlanSingleSelectionContractTest.php": "c3e6b7895df68d24fd9a11dffe807195b2ceb8c7a6f4bb2853c5cab643c9471b",
+      "tests/Contract/AttributeProcessorRevisionContractTest.php": "f70db3e7a960a82f242b2b16ccf4f48cd8dfcc83de2b1d3068acc39a6133fd49",
+      "tests/Contract/AttributeRegistryMutationContractTest.php": "4ccb4b91c08dca61cfe78e1647917d4afdfd02a294af9243d8b13217e84b2cb8",
+      "tests/Contract/AttributeRepeatabilityContractTest.php": "4785e5bb2e89f698d6c6b505e4690ec5a14a9673ca7baffefb61ac2c8638321b",
+      "tests/Contract/AuditSourceSelectionContractTest.php": "0aedc65bb78039d18d57b44410ba78dfde14ea0fe4262d877ddfd8130993aab6",
+      "tests/Contract/BaseValueRetirementContractTest.php": "b28e5157a4feffee359681f97441333394f308cfb2952b78d5a8550ed149e493",
+      "tests/Contract/BenchmarkStatisticsContractTest.php": "9ed7c5b7832f290d8614045fc540305304265e77d739d3acea62b1a049d9570b",
+      "tests/Contract/BootstrapCoreContractTest.php": "b8b022557b6971142e812647f2991c3453c0d0e75c26584252f5230509112d3b",
+      "tests/Contract/BootstrapDelegatorContractTest.php": "e8d8a8fd820b10bc5bc0b147acef8c5b8a5fe1b02389b9d88274539991e6e7e2",
+      "tests/Contract/BootstrapExtensionDependencyContractTest.php": "be7c31421791ca16b329cadbe19958b4eb8dbe99df4bd1d342dc18bbf7993ec9",
+      "tests/Contract/BootstrapFinalizationContractTest.php": "f0def80d60bb6421582de0d0dd41ef14a667e870faaa39bbf705d265a95d2cb1",
+      "tests/Contract/BootstrapLateAttributesContractTest.php": "32f497440fb49b924fe4bcef3205b8c8d8d7fe5eaee8828803e58b2a64b82e54",
+      "tests/Contract/BootstrapPropertyProxyContractTest.php": "e57b02c654b3a1b25e4b6a6e0203d4021e9d5cd324e6330c7d239da36259dd51",
+      "tests/Contract/BuiltInResolverPriorityContractTest.php": "d5abc538933d79580415c8d3e2bed6fbb444055bc1bf0df902ba1bf7dd495295",
+      "tests/Contract/CallableCacheParityContractTest.php": "af5dafc75665caf914b36112862eecb24dc85d091f84e66e59c4d1e85031874e",
+      "tests/Contract/CallableCaseCacheRetentionContractTest.php": "93727e6db971779eaea0010c6f9969286219f5d9adcadc1b2a3a5683b52812b8",
+      "tests/Contract/CallableFailureDiagnosticsContractTest.php": "268869af6e09fe5c537ba36a9c57e65d17bc9c3945446c0cd137007b7d1fc032",
+      "tests/Contract/CallableInvocationSnapshotContractTest.php": "fd4003fef8371573a1ace2453e38da5a8659d02f7d0595fbfbac685744aa0ad5",
+      "tests/Contract/CallableMagicRetentionContractTest.php": "d8d55bf7d95af99fb9908039272e12ef53ec77b4935510fb9385fd50a885305b",
+      "tests/Contract/CallableNameBoundariesContractTest.php": "1ef664045bcc05163ce362a15a74958eb217b7fb69a9e0ebd2e8a21f815c8f84",
+      "tests/Contract/CallablePlanIsolationContractTest.php": "cd24bbbd2f03afb152bbabcdc8fbceb52d6fdb1652edbf153225cdac320b55d4",
+      "tests/Contract/CapabilityIdentityContractTest.php": "4e6ae53e2c53f4d69e42e14e74adfd821619fc0f56a078e0c3f9bcb93dc51515",
+      "tests/Contract/CastInputFallbackContractTest.php": "c799c7cfecd19a93e35587142c4ebbb1fc081148b5a576b5b32ffb27501caa31",
+      "tests/Contract/CentralDefinitionStrategyContractTest.php": "62973ba572f7f6adb882ca74ebd2519f6093f4b1d30cdb21a0bb82c1201ddb5e",
+      "tests/Contract/ClassDefinitionArgumentBoundariesContractTest.php": "0aeeb696bb333f5df3939ef2e044be1fafb1189029bbe3234b5c84d00898608f",
+      "tests/Contract/ClassDefinitionLifecycleContractTest.php": "22903f04b221004396fb765b70c68c8fb0317ec55233e5cb90f2fc7b94b27cfc",
+      "tests/Contract/ClassDefinitionRecursiveArgumentsContractTest.php": "2b63c2839ef4119113482da3e4b56b38f383a74ab24d68daca20f64dd4b90d5e",
+      "tests/Contract/ClassDefinitionReferenceOverrideTest.php": "866441393076e1c3ed7f0e5a87215860fd1fe1973d7aedf6fad084f929a0473c",
+      "tests/Contract/ClassDefinitionRequestTransportTest.php": "741f53ac95e614428f4e90e7b77c79f44c16795576024e773f7734077a18faae",
+      "tests/Contract/ClassDefinitionSnapshotContractTest.php": "7be7a28caa8caf6fbdcfaaa42b9e3fa5dcc3e963923f642d6f7caa96e330f738",
+      "tests/Contract/ClassDefinitionValueLifetimeContractTest.php": "cd3b5b544afa9549ffc57e14498bdf349c39f8bcbe5a4c8072a9b1e5ed2c4a82",
+      "tests/Contract/ClosureInvocationContractTest.php": "4e274f27654ecf99f012eef039568180c721a906e24656b52d363f147fec3dad",
+      "tests/Contract/ClosureParameterResolutionContractTest.php": "b0b05ccc2837459038fdbcf3cb5f5dffdb3772b052490506fb97109b0cd25f37",
+      "tests/Contract/CompletedAfterPhaseContractTest.php": "5ece79f2ae1bba8dba26f09ad1d3621d45312bc0a6d589f7d045cec92cd52c7f",
+      "tests/Contract/CompletedObjectPhaseContractTest.php": "2e2d137b651f75f67ea290bfa421108b109c238ca5cf3eb6f130ae2ba9ff2aac",
+      "tests/Contract/CompletedParameterAttributesContractTest.php": "25426ebe5b8ae3694352b892395dc55fcf88ddb633233dd9d04f381a49f8ed22",
+      "tests/Contract/CompletedPhaseDiagnosticsContractTest.php": "553a41c83d04dd7e6c05f89d93b0854a9d27a1750e9e8085cdb0c04ab2a66b03",
+      "tests/Contract/CompositionConfigurationContractTest.php": "cb788df92b297a5b36a7c16b8ac18c86382de0711279d840c79ce81cd7d97fa1",
+      "tests/Contract/ConfigCompositionResolutionContractTest.php": "7847e99f74b542712e2c96c969207dc8dcb99feabe5c4b9d5d5f86f1a514a4e0",
+      "tests/Contract/ContainerBindingContractTest.php": "de68933c10a5a0ed2f317a43b89b5e131c82d1b0d0ad1ecf6bb09d9963945a0c",
+      "tests/Contract/ContainerBootstrapServicesContractTest.php": "7a1bf7cb98328c7424fc3a228e60d587cb284f4b2e863013f6d7fcb1a4c2cf88",
+      "tests/Contract/ContainerFactoryContractTest.php": "c1caeedfc3b60d73f9ac6cc54762c94f04873f0408c3cf6a7475a280a34affea",
+      "tests/Contract/ContainerLazyObjectContractTest.php": "b066a3ef31329997b6160f6ea81ceea46bf84373a56e9a5549565cae3f2695e8",
+      "tests/Contract/ContextualTypeContractTest.php": "6884eed6e0035a9fa15effee8fd6b41ebb234c604d2ce596fbab94a3baf20137",
+      "tests/Contract/CoreServiceProtectionContractTest.php": "f5116c7d4d1c55957b3970db3857e1fb24ec07123ea18697394b90bfaf53b2d4",
+      "tests/Contract/DeferredCallableRetirementContractTest.php": "35551a3fe06167f584c4a22d757b28b20f30adc406d4fcc48444de99d51faa7b",
+      "tests/Contract/DeferredDefinitionDependenciesTest.php": "90f2a70ac26c792877c5ed3c29ff002dc93837cafe07b4dbddafafb0989becf4",
+      "tests/Contract/DeferredDefinitionRetryContractTest.php": "bc0bd91a36e22767de8dc5d71f8af7601f271212fa45f68f33bec67b7f75df9e",
+      "tests/Contract/DeferredFactoryRecoveryContractTest.php": "3ee8994b96089833c62dd4122cd118daeddb722164ae2bcab4d7a41ebc5c8bb4",
+      "tests/Contract/DefinitionAliasRetargetContractTest.php": "b8c2bbbc0ec9edf1744c4100f3252c503850360563bd978680216a25d7cc6fd5",
+      "tests/Contract/DefinitionDeferredRetargetContractTest.php": "90ecadab5f360e57413ba723f79f214b68a254dc2ebbdb9f1d5d551188a070b7",
+      "tests/Contract/DefinitionSnapshotCompositionContractTest.php": "9a7a4c606ca6c373e67c790a16fc29729b730a17cb423a135d3470958f0318cf",
+      "tests/Contract/DefinitionStrategyDirectUseContractTest.php": "73be0cc5bd752310c9bde95a968e3f8073821ed81c32c2a053fffd8c0625a44b",
+      "tests/Contract/DelegatorPipelineContractTest.php": "58571f4f71d22d992585573ae59035205386a49de1d34da0661ac64f3f1b2441",
+      "tests/Contract/DelegatorReentrantRegistrationContractTest.php": "5d4b451c6e374be19c33eaf0119e247742997a3e162f22d06f40d83173ea617e",
+      "tests/Contract/DelegatorRegistrationAtomicityContractTest.php": "dcad9d8ed22900068004af6b28c3684f7e28540663e00e96db9bf296e30289d6",
+      "tests/Contract/DelegatorSpecificationSnapshotContractTest.php": "c6febdfc0e225d0f5aedb55b5b776ab9d1dbe0387bd537a152b5c05cd05662c3",
+      "tests/Contract/DependencyConfigurationContractTest.php": "e197cb8f9cb468b882f51cb7cacb0a24954e5283eddced6d3b6abb07ad3b85fb",
+      "tests/Contract/DependencyNormalizationContractTest.php": "e703084c989109b9f5204f5b23ae1c48dcee39262e57066a2b2dbf51e6a95383",
+      "tests/Contract/EntryCacheIsolationContractTest.php": "f3c36e7ea995eb31adbd35bb20bff8f4b04d85fb8622e65de81a37818c28c806",
+      "tests/Contract/EntryCachePublicationContractTest.php": "54d924f274f1b2081ddc2b271cdbc815c5b58ba71f3a5d85aa91616ba0a9118f",
+      "tests/Contract/EnvironmentParityContractTest.php": "35eac0fada34e0be2be26aa2f7bba2342b0cfe2f9f51ace985db58d1355b4f97",
+      "tests/Contract/ExceptionPayloadContractTest.php": "165485d180a2e92795c19636592abf82c6bf75bbf91c64940fbf9a08dd2a1c5e",
+      "tests/Contract/ExplicitArgumentValidationContractTest.php": "a820b7ba22f265d45372ac9961d366e8ace4d9ce61d9497d460d2d27d75b3221",
+      "tests/Contract/ExplicitDefinitionContractTest.php": "754bbd891e9fa0269816bda95a22146b165bcdb752961ab969760fca7ce004fa",
+      "tests/Contract/ExtensionInvocationSnapshotContractTest.php": "28c12839efaa0d0e4761fd7a72cbceb923ebe0ae05374eb20c4d6a4e4aacd164",
+      "tests/Contract/ExternalHasRecursionContractTest.php": "dcdab8490a43e30993e87cba400d6f37e2a62a7135222aaf96b8a5c18fbc6989",
+      "tests/Contract/ExternalLookupMutationContractTest.php": "e175148e8c7daebf9fb950ef797fde80e7a2c1dd1a24e01228b4ce1738439772",
+      "tests/Contract/ExternalLookupRegistrationContractTest.php": "dbb8c482ce194f498fe13b6f590abefb58e5f4075ab9e764c3a54b3248326aea",
+      "tests/Contract/ExternalRegistrationMutationContractTest.php": "0d0b027d2cdc6af0f80593b062f066c1184c717efed7bc919857d1c7ab874e9d",
+      "tests/Contract/FactoryClassAvailabilityContractTest.php": "8c9d7b0e9a1c1ff218fe44475080144ef9f7ea7e08a2a88bdd64e4e193bd8d86",
+      "tests/Contract/FactoryDefinitionSnapshotContractTest.php": "62c299117bc1095452ae01593427c2556aaa2e21382216febd20b094e3c73aa2",
+      "tests/Contract/FactoryFormsContractTest.php": "883a7eb52f40683e25048da995ba7b71c913d12c6cb66850de806a7edfc8bb75",
+      "tests/Contract/FactoryRegistrationValidationContractTest.php": "4627cf76f1d7f76e8dfc3d43ab1b44f04b4a682f52d0dadca344c4da3ff79a29",
+      "tests/Contract/FactoryValidationContractTest.php": "c80efdf577b9aeb23a3b240a27f2daf54499bac1f30c8e3a6b9557b2e3b714a1",
+      "tests/Contract/HandlerRegistrationContractTest.php": "cc3388877281c3713183086568db1adafbd0befb3c0b4ebeb1918bb7d76f49b5",
+      "tests/Contract/HandlerTargetContractTest.php": "3c4a7c39532f1fbacec18d1c907c8d361f22f83104dd22a9fac63b9b170ed20d",
+      "tests/Contract/InFlightMutationContractTest.php": "93c9463b070d939790e1427fe5c56d94a60b72a35c29ea13c2207117b788cd78",
+      "tests/Contract/InheritedPropertyIdentityContractTest.php": "1edd43dfc687a9b8b5a15a71ddf290705cdb64049fc1a466d92d8bffc12d6396",
+      "tests/Contract/InternalCallableDefaultsContractTest.php": "c8c95d59cdebad59e47abe724979756c250cac5c60df2b9d7b87cee0b01c666a",
+      "tests/Contract/LateAttributeConstructionParityTest.php": "2e66e5b87f30fba9f9aaa1c1989ec2c98384c33f066b651725d95029d1e1039e",
+      "tests/Contract/LateAttributeLoadingTest.php": "e6726ff5f8f095b1c1e6db05b5e21afa7560ec0fa60249d6371a64a91bb52716",
+      "tests/Contract/LateParameterTransformerContractTest.php": "df83c6c8e13ab58519629c9edc34e3a74206a37683eb75a71f0752db01506473",
+      "tests/Contract/MagicCallableSyntaxContractTest.php": "b6152b46f28661151402c6f01a5fbfb50d9a301b05b810ddd1c124dc25caf872",
+      "tests/Contract/MagicClosureInvocationContractTest.php": "ea7662ad1553eb7478f8babf1fd9a5a18ea90685a60bcdb89e2a7c0ba6560e3e",
+      "tests/Contract/MagicDelegatorInvalidationContractTest.php": "8288ff67467b483fa01ad25628a59e7af2b37170224dd0cbef46bd7e7c6dabf4",
+      "tests/Contract/MakeProxyDefinitionContractTest.php": "4c51228cc19a2880ee932ff70e83f647b6a80adc1a14ef030e63f36c148ea7ab",
+      "tests/Contract/MetadataLoadingConsistencyContractTest.php": "e587efdbc3345653435963d320f6566a0f96bb779d696f727fb0c1bb257ad279",
+      "tests/Contract/MethodAttributeLifecycleContractTest.php": "3084eb9fa061353b68fb452e685f5aa79fac7c65dfd400a370d1d31bff5e5b06",
+      "tests/Contract/MutationBootstrapContractTest.php": "5b1afc0bda4291cfa1598d7601de447abfec025df309b6a308147893411520a5",
+      "tests/Contract/MutationFallbackBatchContractTest.php": "6808df09ee3d80f50a4fecbb2b488950e27745942b5cdfbd7840f84d322a4ab8",
+      "tests/Contract/MutationFallbackContractTest.php": "0a5bb472a2e6bbcb94d71b9eac966a2b81fbfd613eeeb241a5576ac151bd41c2",
+      "tests/Contract/MutationRetirementBoundaryContractTest.php": "e2f7e4d94f68612ae3f221fd92414794afdf9c6fc656dce070bfa5f49a8cfc57",
+      "tests/Contract/MutationRetirementContractTest.php": "51b222f393af60e4dcfced14e7fe649df53ae5e15eb39d5280674828ee3b95a9",
+      "tests/Contract/MutationRuntimeContractTest.php": "3f9062034988d30e078ba0b9edf237325a80100b44abeb7b8e29931fd7d68105",
+      "tests/Contract/NativeCallableInvokerContractTest.php": "f59adb4f483e1601c640016eab52f608a89e89f73665ea37bc4a834e607c735d",
+      "tests/Contract/NativeLazyEligibilityContractTest.php": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+      "tests/Contract/NativeTypeAcceptanceContractTest.php": "a867fc39ab0bcecc83aa51ee0aa39f11064f9f28a050ef67ba1b34ee81068496",
+      "tests/Contract/NoConstructorPromotedPropertyContractTest.php": "114dc4f876b7a8c07adf6fca34c915a9631132563512805e37e33f7c4ce6ac23",
+      "tests/Contract/NumericRequestMappingContractTest.php": "1755011806793fab2e29908712f29fc9f65a8bc1fdffcfa84181d3b42f5d25fe",
+      "tests/Contract/NumericServiceIdContractTest.php": "26410a8170da1224ea2eec9033caf63c3eee50e9dc111efcc90131e30e978a84",
+      "tests/Contract/ObjectAttributeCacheParityContractTest.php": "dabead97ca9f6b9c03bcebbfd7806900431c62601a02abcd158c40a328ed6e97",
+      "tests/Contract/ObjectHandlerContextContractTest.php": "793b4a55a25055b5388d4e441025536675e0b3efc683dfd4e87fd1294a19de00",
+      "tests/Contract/ObjectHandlerFailureContractTest.php": "f1864ee3428a55f0e0098181d765fbf0660048c12acfc06e90252d727da4a478",
+      "tests/Contract/ObjectLifecycleTestCoverageContractTest.php": "813a19c3725cb688d68c3ce205d012a1a4ddf33615eaa065eab83ff85b27eb48",
+      "tests/Contract/ObjectPipelineLifecycleContractTest.php": "1c6cc09c37369f7047c9125fbba99eaa4b25033c89460740b02690a25c5e4192",
+      "tests/Contract/ParameterClassificationRefreshContractTest.php": "4b2be755d7dbc5ef77364b9076a3e55a58c2a46dc4d58651a11e4cd89256458e",
+      "tests/Contract/ParameterExecutionRevisionContractTest.php": "90e63ff610d3af2c5eb3fe397e9b6e9fe44896e83b125fa5fa4836d6ac2b91c6",
+      "tests/Contract/ParameterPipelineContractTest.php": "90e15c3e24e44913eecaf04ce9c3078ab57d6bf3b40920b04ea344f0785a1e57",
+      "tests/Contract/ParameterTargetContractTest.php": "26752cabbe66db659616fbe1ddcde01dee9ba9d277a45954965c82cf71bbfcce",
+      "tests/Contract/ParameterTargetDiscoveryContractTest.php": "65c33fd3ad01dfb0b5ae572b6b658b2ba2864efc799a436d0ae28ad91b235f79",
+      "tests/Contract/ParameterTargetFirstAttributeDiscoveryContractTest.php": "476ed50f0d49724cfe277829d5e78b98115ea657d68194a7979ef700cccc7a42",
+      "tests/Contract/PayloadObjectPathContractTest.php": "214136075cae1bbdeb30ec41f5634bf5dab39b9d870e69a835a58cf5f36c67f8",
+      "tests/Contract/Php85AttributeCallableContractTest.php": "0d02c63af6efcedbc1af4e52d7fa5ce0fa2ad5005aa2874b65a12e7d5e0884d0",
+      "tests/Contract/PreparedCallableContractTest.php": "7b76c4c88e36c577d19e31ff54c32f09e69e5258e2a33f0c3812f57e87c8702f",
+      "tests/Contract/PropertyTransformationContractTest.php": "ba030fc8c13e4cc11caeb5d942925e8d932fac72ed64938c02e2695936f486af",
+      "tests/Contract/PropertylessLazyLifecycleContractTest.php": "d0eab489292d5fc0f2e668ef6ddbfad3c224e2f614864e33b4a462951a105a10",
+      "tests/Contract/ReflectionObjectLifetimeContractTest.php": "0e56c239dab083fb7110da2c8694e584552c775991a786a6b6482f778e3f41a9",
+      "tests/Contract/RelativeTypeInspectionContractTest.php": "9ec79ddcf9fb6c648d35a7fca6876b67ad58e7ae3ff4287fcd318caa7204715d",
+      "tests/Contract/RequestAndProxyBoundariesContractTest.php": "3f86509e0a4dbe977a0d6b4b57d734e6a7b8cd70010b7c1262459bbf204a8134",
+      "tests/Contract/RequestAttributeProtocolContractTest.php": "2681579f538e76a49dee6a4c80bdba0e42daec7a0ac650ddf2f76973b63133a5",
+      "tests/Contract/RequestCacheParityContractTest.php": "e1e0c557f0d42b8fc9c2d289a79c063ccc4c2703095948f465ab37168e885bd3",
+      "tests/Contract/RequestExtractorBoundariesContractTest.php": "9396f562f0c60d567e9c8338ad8033460c0a464fd15ef1bae240e43cb92fad1a",
+      "tests/Contract/RequestExtractorDefaultsContractTest.php": "5b880786eb5f424cd196769bc671f40aa738f41133948f56220160844e388d10",
+      "tests/Contract/RequestMappingBoundariesContractTest.php": "19c33e7a492cd84af2b94471e02736b4b5ab53f8255b905ef37686e2da98ec53",
+      "tests/Contract/RequestProviderRecoveryContractTest.php": "7df74abb136d7ed4a8bc502a8ff4295e5c02fc6e02e1ea27f7530b9548ae8862",
+      "tests/Contract/RequestSharedSourcesContractTest.php": "10b31527931dbbfa2a3d47fbc577920f61442317c5eb9f0a62b37c028528248b",
+      "tests/Contract/RequestSourceAvailabilityContractTest.php": "41a17e3247bd6c7f6ab1927fc1d31a52c1cbe2b7fe57f6d74649565f162caa05",
+      "tests/Contract/RequestSourceDiscoveryContractTest.php": "0d0184b2e65fbeff84061e57233d086447faf6d6798f81500410313f880bbf58",
+      "tests/Contract/RequestValidationFailureContractTest.php": "7dcfd46fdd5c4bd6819668b70af3880735134b0c80e22314939b6a4e77c555be",
+      "tests/Contract/ResolutionDiagnosticsContractTest.php": "20ed98097bb8d365137b821a14d4878bd64ec942e0cd993142f076d82ff75ebb",
+      "tests/Contract/RuntimeMutationContractTest.php": "147aa0ff82f36152929dec1ee5a407bb5ad4ba557f0ae50f922999054078d374",
+      "tests/Contract/RuntimeMutationRecoveryContractTest.php": "82c515c8d439ad4a397e51f8c29a3fdfeeb1cd1c7439048d71ec2bca2de7626a",
+      "tests/Contract/RuntimeRegistrationExceptionContractTest.php": "ca009e11c79b565aa7f4fa842aa5829dfd7990fd1c4b0c40441afecc1b605bdb",
+      "tests/Contract/RuntimeResolutionContractTest.php": "1bb6cf950a6586e5753826d41dde4c5d36ac042b4b8088c0dd161a7f654b4bce",
+      "tests/Contract/SealedParameterPipelineContractTest.php": "15e9213a1578985bee936e97e0cd9230e38812535fccf0e56ffbd878ba6ca801",
+      "tests/Contract/ServiceIdGuardIsolationContractTest.php": "c2744a7b41fdb46afcf7aad69ea434d7327fe22c88b9a0b18cf07a63925da3f1",
+      "tests/Contract/SetUpCallbackContractTest.php": "13b2f792e03866c365d187010ea308cb6746af8388eb87c534056c011fcdb1a3",
+      "tests/Contract/SetUpEnvironmentContractTest.php": "83ddb421fedb95f115f85aca9e20fe8e5e3b48a73bb7cbf7a244d1f91c89d6e1",
+      "tests/Contract/SetUpPropertyOrderContractTest.php": "45e34fe79eefe3ed6467d261b1ed5d434bd88d4f9e9ece2cde31e1e0425a3b06",
+      "tests/Contract/SetUpValueUnwrapperContractTest.php": "10a8d593939ed42b0dcccc7ab41340d278e4203342d4393b9ef93f459738c2dd",
+      "tests/Contract/SkippedConstructorContractTest.php": "c4a0b94e719ea83c97a99fbe2f7e148e8a981e2565a8b4c005ba3cb3e64bb25b",
+      "tests/Contract/StandaloneContainerContractTest.php": "85843e685d76f41baaac0a99fc941b4e7b9e571dfe5e68d96fc1fb679e1a189f",
+      "tests/Contract/StaticDelegatorInvalidationContractTest.php": "92d5eed4e55af8735fe8fdf5c00f61385352280682921e1f87a7b72d8b462879",
+      "tests/Contract/TransformContractTest.php": "83ad44540290cbe0f698a7a18cdc52074ba16c6a68e0aafe99af5df5fc6a12c2",
+      "tests/Contract/TransformPropertyContractTest.php": "702064956c6c7d0fe2542a667beed136832b2e890ba3862d87ad0d0b2dd52dc0",
+      "tests/Contract/UnionAutowiringContractTest.php": "2abb914c03097bb1b9052ee1895da0f0606fd47dd189d5ce258a8c875a1e691b",
+      "tests/Contract/VariadicEnvironmentContractTest.php": "6d1b30a2341125b69f4db3dc8294f287811eb101470f33891dd529a4c9ea3c11",
+      "tests/Contract/VariadicResolutionContractTest.php": "c8252b8c26475bb95113632dca1c53496115d0a472b31227ed5077d69ad37263",
+      "tests/Fixtures/Php85Callbacks/InitNative.php.fixture": "7d9c0a2b732c9772274d3da565da97a06ae57c9963c135e1bec15929c765cc15",
+      "tests/Fixtures/Php85Callbacks/InvalidArrow.php.fixture": "1536fd064bf58f291f46c996dffb5736983dda88e2beb137eedfc57cb496a3db",
+      "tests/Fixtures/Php85Callbacks/InvalidCapture.php.fixture": "b67d6e751b89b430bf46d36806917dd9e2ed5efcfc4fef636d7d86cb653edf9f",
+      "tests/Fixtures/Php85Callbacks/InvalidDynamicReference.php.fixture": "45730ec07b186a287e4a4f5bef8048fc0ab405d67f246a1caef7aee95cd2c451",
+      "tests/Fixtures/Php85Callbacks/InvalidMagicReference.php.fixture": "2278b468c14dcd2973fe0b874db43fa692b5725633b7fdb592d82d2bb72c59e0",
+      "tests/Fixtures/Php85Callbacks/InvalidNonStatic.php.fixture": "897a4a31c42eecb4081744a01825bd37ffee24eb44dfcfc60be334e6bcee2c03",
+      "tests/Fixtures/Php85Callbacks/InvalidObjectReference.php.fixture": "ab17806e34fae13dac47cef74b508a50443de4507a5749f95a63726a06797ca0",
+      "tests/Fixtures/Php85Callbacks/PlatformTraitCallables.php.fixture": "23ee0a4d715a4399e87e076d93ca4068f0b60edf9e92bacd8bc910667de11868",
+      "tests/Fixtures/Php85Callbacks/SetUpNative.php.fixture": "4cadfb4cdb23bbb61a0abed4a4c36a1bc3e4f2c48e287f20bab4e3ac24c93b2a",
+      "tests/Fixtures/Php85Callbacks/SetUpPropertyNarrowing.php.fixture": "4fa178c23c9dbba12ff954fcfd8a03c2351b14415d2ba8c3a4b1e070df5b20d0",
+      "tests/Support/AutoloadFailureTarget.php": "ef3bdc4c587993d372a4a989968a53ea304b4789f29f18bfe48f4e5f1096a856",
+      "tests/Support/ContainerBuilder.php": "ad99d65720f2b7a73beb499508d698694bc846bd33423e5055476aa2530b79fb",
+      "tests/Support/MutationCoverage.php": "a09054483a8f5c1d0d396f105c4d4be0a148b4a04b54819ff88d225c902aabd9",
+      "tests/Support/MutationFallback.php": "c5c575dc59ff3ba16eed2e599faaf10376670a23f0f328c7d43901d24979b3fc",
+      "tests/Support/MutationFallbackPreparation.php": "0c384c615dc1aaebd4fa2ca024557a0de1c3530e7cd5da29eb3ef4aa57b15d04",
+      "tests/Support/MutationRuntime.php": "642fc42c5d11958330069182a3eb713222a9b8b3e9c180920fb2c051e2ba4827",
+      "tests/Support/TestCasterProvider.php": "defdceeca4d223d9235da2ff5fd0f02ad4654db66ec9745a994730e551bf3aad",
+      "tests/Support/TestCounter.php": "80f47728326b8a21d6c06a1916abe98b1ccaad26395a1a49423c4616cb572af5",
+      "tests/Support/functions.php": "3405d047b0f9392f2a699acedc5de2a50f25cf7c2131df1b432b68f3b5e7ea9e",
+      "tests/V5/AttributeCompositionTest.php": "43dfe32bc4af1b64b355c1a436e298aef9879b075341aeb737a89475c88ab8f2",
+      "tests/V5/AttributeRuntimeIsolationTest.php": "fbd5f43d20c7ae66097ae989feb7513707c546c462124b9fd1060d349f2972ee",
+      "tests/V5/AttributeTargetContractTest.php": "80a5e58c96ae460907df0da33164660cde22e2d17c8fef08362203e69955e3b5",
+      "tests/V5/AuditRegressionTest.php": "05f1ce4d269bb309668f466b3cba051a3ce5dcf7e691e5eeeaecae7c92aefd10",
+      "tests/V5/BuilderAndSetUpContractTest.php": "493caa720b40a01452a1ae6b0ad0f24d9bd76ee29f1712c567331b0a88df75fa",
+      "tests/V5/CallableContractTest.php": "2c04784db66d9e2d5ff377e60af8212f522a661ebab3ddf6217052bb41ce7175",
+      "tests/V5/CallableResolutionContractTest.php": "d94f58e6acf45eef3b202dccf37dff4dc7334607ea1580eb296f0fa2f01233ee",
+      "tests/V5/CallableRetentionTest.php": "f9a0227f036b5fe99e516cca9afbdd19c27abf6abe066820ff7c80abeb6a232b",
+      "tests/V5/ClassDefinitionContextParityTest.php": "859b37ec7d599202dd7811c532d14ab066a48e31d1574089a6efdac70bd7c219",
+      "tests/V5/ClassDefinitionRequestParityTest.php": "d7cd20bd22937131076ded574f83ef7d9ba270496f75106b93bac6d06162de6a",
+      "tests/V5/CompositionArchitectureTest.php": "03806f0709f2349b56b4fbfd4641d97778b9ec1dd11a4d8a6ae295df5f4dc8ef",
+      "tests/V5/CompositionAuditRegressionTest.php": "b47b0d7bfd63e271a0558477b82055b6de3a16d192f97ec3d0b2b3bcda88a924",
+      "tests/V5/CompositionRuleRuntimeTest.php": "a5001a416625fd899b1f2302351f66b3d247698bbb68f5aee1cd20831c757d73",
+      "tests/V5/ConfigProviderCompositionParityTest.php": "6c8d82ab611d55607d30609d29c8815cc35c014c21076e2b355d245d890b1763",
+      "tests/V5/CoreCapabilityPolicyTest.php": "9789a02d87ae15b29a18b2a91dfb5e7b8f623a3e4fd64d360a16580f922a4ad6",
+      "tests/V5/CoreRuntimeParityTest.php": "a52af76d9f13bc552131b4a25df73331ba82b4aedba37464df00977687aa9333",
+      "tests/V5/CurrentRequestAttributesSmokeTest.php": "955bf5a183a7f997c86d70190debdc6f1a053526a14edbc87dedbe37510d3a6f",
+      "tests/V5/CurrentRequestContextTest.php": "52adf164de5e75a2b3aebcd217ab24b23c7377017e8fd3ed72ba721ccc190a11",
+      "tests/V5/DeferredExtensionSpecificationTest.php": "4bca9692a56dbbf9682ff97fd644e32aefe6203e2c686cfab24229beb8909d8c",
+      "tests/V5/DefinitionContractTest.php": "877c99a0d0c006b8e69e3d4bf1f8c21c597b8be481ae1f06169c70bc211a35af",
+      "tests/V5/DelegatorInvalidationCycleTest.php": "a0d3db15b60558109ea3b3a6b1c2e0df2497e827ccaa200d786d036f6f3e2e90",
+      "tests/V5/DelegatorNormalizationRegressionTest.php": "59604d0a1ded1edda2a7321d5a2c4b75ed8896fb61902e0bc20b5c72d17ced8c",
+      "tests/V5/EdgeContractParityTest.php": "8c8b3d0aac13a21ae2c0f08525e12ac0de19f6e0f4ebed82cf92370daf6d2cf1",
+      "tests/V5/ExceptionContractTest.php": "83a7114484ea5b20f186a27f481e05f4133fc411a33b0b69ca4859cc20623c15",
+      "tests/V5/ExceptionRetentionTest.php": "d470093adc90f53966f2fec0f05579f4e12b5e61c427c8918094ac196575a8ab",
+      "tests/V5/ExtensionAndCoreTest.php": "f58597d29526d8c5af9130232396d28ab61a69ee5e5d572c4628b9956b939855",
+      "tests/V5/FactoryValidationTest.php": "71f4a5e486c67b7116eeef9e56f1cedd0cfdc9c5a4c292a46706824c0191d763",
+      "tests/V5/FullAuditRegressionTest.php": "cabce6ab23f33d767ebe0c9a34143a42ad72b76ae0a18c2a764437878c0c16f2",
+      "tests/V5/InternalContextLeakageTest.php": "38f228c2a0b50da675d1f0fe13740a5892d2e0aa76647743f1eff75a87941909",
+      "tests/V5/InternalHelperNamespaceTest.php": "e1a3eec2b3db4060a542da1d3fcf8e8da8e341497d590cb0c9ed7f1747b6ff56",
+      "tests/V5/InvocationOnlyValueProviderTest.php": "76f4b2a44357557b328fff5c78b2d14dfdc589a5bba5a011a6826992743caf84",
+      "tests/V5/InvokableValidationRegressionTest.php": "2f72627179bc9dbfeacf7a7c230d1e40c76b786152f7073fdf153a09eb22c663",
+      "tests/V5/LateAutoloadDelegatorInvalidationTest.php": "c594102b10936e8480d9e166d021efe9fa6038cb1dfa5677e9a4c39a34052952",
+      "tests/V5/LateAutoloadFactoryValidationTest.php": "243c761762cebadfddda5f96dd90a53fa2ed581e4c9c378608eca8e50c718f75",
+      "tests/V5/LateAutoloadResolutionTest.php": "157c1ab45865f29bddc05cd52a5d5c47b94cef21f192f3120d8e989b03e79585",
+      "tests/V5/LazyContextRetentionTest.php": "0aecc5baefc1e44a353bb8a54f59ec51324696ddbc88ea786877e42e96d50ff6",
+      "tests/V5/ObjectLifecycleParityTest.php": "37074217d1e10d4e00a4eab48fe8a12971c460d90b00f71a064de544fcc30c44",
+      "tests/V5/ParameterAttributeCompositionTest.php": "b0202de7b1c24a156bb826dc00ee893bea62a701220bb0a2756f2d07859be25c",
+      "tests/V5/ParameterResolverContractTest.php": "6d3f3fb158696f963b421061d5cecea877d742ac74242cb70e8b309d9df585c2",
+      "tests/V5/ParameterResolverPriorityParityTest.php": "cc4b537f5b91199f76ed515747b2139f2e10955950790f2f1f066ef14090dcf5",
+      "tests/V5/PreparedObjectPipelineTest.php": "baa2c7c621159b97ea94467b67876470e8b925b0dc95e29adfb02ae03478eeca",
+      "tests/V5/PreparedParameterPlanTest.php": "37168240532afce141b32aec6fead4b31da9d66120374c492e890dc66e460088",
+      "tests/V5/PropertyFailureParityTest.php": "fb6336ed253095dedb340fe407e3132d87fede94fe180cd8f0511dbfa8aceb01",
+      "tests/V5/PropertyHookAccessContractTest.php": "11a9154ad24f7e15f0454a8388bd46e8027bfb7724b65356c210f5a601082bca",
+      "tests/V5/PropertyHookParityTest.php": "2a3efc2c26f9032bfbb810529ca027b41013fbb4140abaa0384a8c800a586bea",
+      "tests/V5/ProtectedExternalContainerTest.php": "bb121c081309c91a89fffa91a8b5097eef30cd3d772138bdd4fdcd569bdb5bb0",
+      "tests/V5/ProxyCompositionRegressionTest.php": "f1b29f4503b0714e1fcdcd1fdb4e1a2dd47d638ae5b5c002a797e0519a8d388e",
+      "tests/V5/PublicApiContractTest.php": "588272ddf7fc1d61bf1d076f23e75954ebb894b1341c422732671f42fe4f8470",
+      "tests/V5/ReadonlyCompositionParityTest.php": "16f05b331ea49ad4dc1cccb2512f7db8a9ca494437c4dfb0e7f710eef560ddd5",
+      "tests/V5/RequestActorAliasParityTest.php": "8c6ccfee0d57809329d424ab167ae399259d1b47c9a52ab7461b829cc5dac400",
+      "tests/V5/RequestExtractorIsolationTest.php": "422e037b26d79b759b6efdbe36b3113125c66a46e3acaca77739a1a1444d13ba",
+      "tests/V5/RequestLazyAliasParityTest.php": "b0a71c0e7d810894d7e12888614196b14b23bfc2f7e8716ea3686c17ebcd69a0",
+      "tests/V5/RequestMappingContractTest.php": "31eccaddd33e1110fef2f954a3165ae0b8dcdd4221fdad3612fede9ee4fe7d4e",
+      "tests/V5/RequestMappingTest.php": "588253fdccdd57b21b3e9d79c9299a4dc52a25071fb816f1e2bd70051adbe822",
+      "tests/V5/RequestTypedKeyParityTest.php": "73757effc865ca4ba438de8caa85fec84089796eb34a6258c100d90426cfe47c",
+      "tests/V5/SpecializedRequestMapperSelectionTest.php": "f6657a45e2b55e23c2d80296c9ab337504156646609d610b6e7691385a03acdb",
+      "tests/V5/ValueResolutionParityTest.php": "d0cbe58a53de338d75064431eec1825b84193cd23a8cb9a6c80db87de5c6b3d3",
+      "tests/V5/VirtualPropertyHookParityTest.php": "86d3312c16ee68b5f3d67405b179e83bab2a7cede48c13a799a706df5bbf741b",
+      "tests/bootstrap.php": "e63948de16551ad851a577a0f35836077efc0788374efa57a5431aba4ff6cec4",
+      "tests/mutate.php": "09a4d2427b1b4b4c4e45d15e07a30af0ac8b2a8a32f3fb1ed12b697f43cd4896",
+      "tests/mutation-testing.md": "2effaecf9977be17dd71a6e25c131fa01e2ebb478e76fb5c23c69995de021567",
+      "tests/php85-platform.php": "07629a6061cdabd676d1e6a3706829b418b842989651c93bf226c287f521c8bd"
+    }
+  },
+  "only_executable_production_change": "src/ProxyFactory.php",
+  "comment_only_source_files": [
+    "src/LazyObjectFactoryInterface.php",
+    "src/VirtualProxyFactoryInterface.php",
+    "src/Attribute/Lazy.php",
+    "src/Attribute/Proxy.php"
+  ],
+  "comment_only_validation": {
+    "baseline": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+    "patch": "/workspace/scratch/8dccbfa10ffb/d1-docs/d1-docs-contracts.patch",
+    "checks": [
+      {
+        "name": "php84_comment_only_parse",
+        "status": "fulfilled",
+        "value": {
+          "chunk_id": "2c8cf2",
+          "wall_time_seconds": 0.726640894,
+          "exit_code": 0,
+          "original_token_count": 159,
+          "output": "{\n    \"php_version\": \"8.4.23\",\n    \"files\": [\n        {\n            \"path\": \"src/LazyObjectFactoryInterface.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        },\n        {\n            \"path\": \"src/VirtualProxyFactoryInterface.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        },\n        {\n            \"path\": \"src/Attribute/Lazy.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        },\n        {\n            \"path\": \"src/Attribute/Proxy.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        }\n    ]\n}\n"
+        }
+      },
+      {
+        "name": "php85_comment_only_parse",
+        "status": "fulfilled",
+        "value": {
+          "chunk_id": "501937",
+          "wall_time_seconds": 0.77679584,
+          "exit_code": 0,
+          "original_token_count": 159,
+          "output": "{\n    \"php_version\": \"8.5.8\",\n    \"files\": [\n        {\n            \"path\": \"src/LazyObjectFactoryInterface.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        },\n        {\n            \"path\": \"src/VirtualProxyFactoryInterface.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        },\n        {\n            \"path\": \"src/Attribute/Lazy.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        },\n        {\n            \"path\": \"src/Attribute/Proxy.php\",\n            \"executable_tokens_equal\": true,\n            \"parsed\": true\n        }\n    ]\n}\n"
+        }
+      },
+      {
+        "name": "apply_check_own_baseline",
+        "status": "fulfilled",
+        "value": {
+          "chunk_id": "e77a27",
+          "wall_time_seconds": 2.228e-05,
+          "exit_code": 0,
+          "original_token_count": 0,
+          "output": ""
+        }
+      },
+      {
+        "name": "no_index_whitespace_check",
+        "status": "fulfilled",
+        "value": {
+          "chunk_id": "a7336f",
+          "wall_time_seconds": 2.704e-05,
+          "exit_code": 1,
+          "original_token_count": 0,
+          "output": ""
+        }
+      }
+    ],
+    "interpretation": "Both PHP token comparisons parse all four modified files and prove identical executable tokens. apply --check succeeded. git diff --no-index --check returned 1 because files differ, with empty output (no whitespace diagnostics)."
+  },
+  "production_patch": {
+    "source_path": "/workspace/scratch/8dccbfa10ffb/d1-production.patch",
+    "bytes": 2932,
+    "sha256": "df57e7ed2b1bf07eaa7753ec4339cb968332aef084b3984e20706dbac2c17c46"
+  },
+  "test_artifact_identity": {
+    "tests/Contract/NativeLazyEligibilityContractTest.php": "0764318df8247492aa74412d84030d2018e6d56372c853b423d4399ebd0734d8",
+    "tests/Contract/PropertylessLazyLifecycleContractTest.php": "d0eab489292d5fc0f2e668ef6ddbfad3c224e2f614864e33b4a462951a105a10"
+  },
+  "final_local_gates": [
+    {
+      "metadata": {
+        "label": "final-php84",
+        "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "-n",
+          "-d",
+          "opcache.enable_cli=0",
+          "vendor/bin/pest",
+          "--compact",
+          "--colors=never",
+          "--order-by=random",
+          "--random-order-seed=2026111602",
+          "--do-not-cache-result",
+          "--cache-directory=/workspace/scratch/8dccbfa10ffb/d1-final-cache84",
+          "--log-junit=/workspace/scratch/8dccbfa10ffb/d1-final-php84.xml"
+        ],
+        "started_at": "2026-11-15T23:23:34.516756+00:00",
+        "before": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+        "seconds": 25.761,
+        "exit_code": 0,
+        "after": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "log": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-php84.log",
+        "log_sha256": "080df7cc6ee4dc8c6431933f603fbd335775a018c5c27532330a5308748cbfde"
+      },
+      "log": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-php84.log",
+        "bytes": 1795,
+        "sha256": "080df7cc6ee4dc8c6431933f603fbd335775a018c5c27532330a5308748cbfde",
+        "full_text": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ...........................ss......ss.......................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ....ssssssssss..............................................................\n  ............................................................................\n  .............................ss.............................................\n  ............................................................................\n  ....................................ss......................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ........................\n\n  Tests:    18 skipped, 1602 passed (24774 assertions)\n  Duration: 24.56s\n  Random Order Seed: 2026111602\n\n"
+      }
+    },
+    {
+      "metadata": {
+        "label": "final-php85",
+        "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php85/php",
+          "-n",
+          "-d",
+          "opcache.enable_cli=1",
+          "-d",
+          "opcache.jit=disable",
+          "-d",
+          "opcache.jit_buffer_size=0",
+          "vendor/bin/pest",
+          "--compact",
+          "--colors=never",
+          "--order-by=reverse",
+          "--do-not-cache-result",
+          "--cache-directory=/workspace/scratch/8dccbfa10ffb/d1-final-cache85",
+          "--log-junit=/workspace/scratch/8dccbfa10ffb/d1-final-php85.xml"
+        ],
+        "started_at": "2026-11-15T23:23:34.494962+00:00",
+        "before": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+        "seconds": 30.941,
+        "exit_code": 0,
+        "after": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "log": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-php85.log",
+        "log_sha256": "709d76074b77bf2d9f10bff8e580a67c2875d7e107ba6b9839ab99d3c97b4797"
+      },
+      "log": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-php85.log",
+        "bytes": 1762,
+        "sha256": "709d76074b77bf2d9f10bff8e580a67c2875d7e107ba6b9839ab99d3c97b4797",
+        "full_text": "\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ...............s............................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ............................................................................\n  ........................\n\n  Tests:    1 skipped, 1619 passed (24881 assertions)\n  Duration: 29.64s\n\n"
+      }
+    },
+    {
+      "metadata": {
+        "label": "final-phpstan",
+        "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "-d",
+          "memory_limit=1G",
+          "vendor/bin/phpstan",
+          "analyse",
+          "--no-progress",
+          "--memory-limit=1G"
+        ],
+        "started_at": "2026-11-15T23:23:34.459109+00:00",
+        "before": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+        "seconds": 10.076,
+        "exit_code": 0,
+        "after": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "log": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-phpstan.log",
+        "log_sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1"
+      },
+      "log": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-phpstan.log",
+        "bytes": 685,
+        "sha256": "19f96dec1aa48c213e03d493a7e68cced34c3981242436322d772d7a165305b1",
+        "full_text": "Warning: PHP Startup: Unable to load dynamic library '/workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so' (tried: /workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so (Dynamic loading not supported), /lib/php/extensions/no-debug-non-zts-20240924//workspace/scratch/8f6c1df8ef3b/di/vendor/phpstan/phpstan/turbo-ext/linux-gnu-x86_64/phpstan_turbo-8.4.so.so (Dynamic loading not supported)) in Unknown on line 0\nNote: Using configuration file /workspace/scratch/8f6c1df8ef3b/di/phpstan.neon.dist.\n\n [OK] No errors                                                                 \n\n"
+      }
+    },
+    {
+      "metadata": {
+        "label": "final-cs",
+        "cwd": "/workspace/scratch/8f6c1df8ef3b/di",
+        "command": [
+          "/workspace/scratch/8f6c1df8ef3b/runtime/php84/php",
+          "vendor/bin/php-cs-fixer",
+          "fix",
+          "--dry-run",
+          "--diff",
+          "--using-cache=no"
+        ],
+        "started_at": "2026-11-15T23:23:34.492933+00:00",
+        "before": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "head": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+        "seconds": 7.311,
+        "exit_code": 0,
+        "after": {
+          "count": 418,
+          "sha256": "f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e"
+        },
+        "log": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-cs.log",
+        "log_sha256": "3ea38c5303b425089662c87236edc04c99c0b584ebea662cf96dba2c8e44bf4a"
+      },
+      "log": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/d1-checks/final-cs.log",
+        "bytes": 1544,
+        "sha256": "3ea38c5303b425089662c87236edc04c99c0b584ebea662cf96dba2c8e44bf4a",
+        "full_text": "PHP CS Fixer 3.95.30 Adalbertus by Fabien Potencier, Dariusz Ruminski and contributors.\nPHP runtime: 8.4.23\nLoaded config default from \"/workspace/scratch/8f6c1df8ef3b/di/.php-cs-fixer.dist.php\".\nRunning analysis on 8 cores with 10 files per process.\n   0/413 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n   1/413 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%\n  42/413 [▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░]  10%\n  83/413 [▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░]  20%\n 124/413 [▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░]  30%\n 166/413 [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░]  40%\n 207/413 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░]  50%\n 248/413 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░]  60%\n 290/413 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░]  70%\n 331/413 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░]  80%\n 372/413 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░]  90%\n 413/413 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%\n\n\nFound 0 of 413 files that can be fixed in 5.732 seconds, 202.00 MB memory used\n"
+      }
+    }
+  ],
+  "junit_case_comparison": [
+    {
+      "runtime": "84",
+      "identity_key": "JUnit testcase classname + :: + name; order and duration ignored",
+      "baseline_junit": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/complete-php84.xml",
+        "bytes": 860661,
+        "sha256": "8d46c257799fe093cd1a7ea73ae959b7b0223966daa9f59fcf84e27da16d3e0a"
+      },
+      "final_junit": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/d1-final-php84.xml",
+        "bytes": 907944,
+        "sha256": "27af0e6ff7c975a0860a44b1ccd67c155a5ac4d6a4b83b29375cf9c9aee1dc61"
+      },
+      "baseline_cases": 1545,
+      "final_cases": 1620,
+      "added": {
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract without a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract without a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"enum\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"enum\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"interface\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"interface\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal class\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal class\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal descendant without a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal descendant without a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal grandchild with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal grandchild with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"missing class\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"missing class\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"trait\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"trait\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"backed get and set hooks\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"backed get and set hooks\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private constructor with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private constructor with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private grandparent slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private grandparent slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"promoted property\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"promoted property\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"protected constructor with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"protected constructor with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"readonly property\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"readonly property\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"stdClass descendant with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"stdClass descendant with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"ghost\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"proxy\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"ghost\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"proxy\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"ghost\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"proxy\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"container\" / dataset \"ghost\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"container\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"factory\" / dataset \"ghost\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"factory\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::Make with Proxy rejects a propertyless product before its factory runs and preserves the ordinary factory route with data set \"dataset \"parameter\"\"": {
+          "assertions": 13,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::Make with Proxy rejects a propertyless product before its factory runs and preserves the ordinary factory route with data set \"dataset \"property\"\"": {
+          "assertions": 13,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"disabled constructor and lazy setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"disabled constructor and proxy setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"lazy with setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"proxy with setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::container delegates propertyless targets and callbacks to its supplied proxy factory": {
+          "assertions": 8,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"disabled constructor and lazy setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"disabled constructor and proxy setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"lazy with setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"proxy with setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        }
+      },
+      "removed": [],
+      "existing_case_assertion_or_result_changes": {},
+      "added_assertions": 515
+    },
+    {
+      "runtime": "85",
+      "identity_key": "JUnit testcase classname + :: + name; order and duration ignored",
+      "baseline_junit": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/complete-php85.xml",
+        "bytes": 859912,
+        "sha256": "527d3a70ba5e211a462428f15466273d3ea0398da05e5cfe55d238dc29299156"
+      },
+      "final_junit": {
+        "source_path": "/workspace/scratch/8dccbfa10ffb/d1-final-php85.xml",
+        "bytes": 907195,
+        "sha256": "6f931e5483acd8a0b907e09798c9f54effd199d6dc93074884fab9d9e9a658cf"
+      },
+      "baseline_cases": 1545,
+      "final_cases": 1620,
+      "added": {
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract without a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"abstract without a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"enum\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"enum\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"interface\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"interface\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal class\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal class\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal descendant without a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal descendant without a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal grandchild with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"internal grandchild with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"missing class\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"missing class\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"trait\" / dataset \"ghost\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native allocation failures keep their original cause ahead of propertyless diagnostics with data set \"dataset \"trait\" / dataset \"proxy\"\"": {
+          "assertions": 4,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"backed get and set hooks\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"backed get and set hooks\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private constructor with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private constructor with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private grandparent slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"private grandparent slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"promoted property\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"promoted property\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"protected constructor with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"protected constructor with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"readonly property\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"readonly property\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"stdClass descendant with a slot\" / dataset \"ghost\"\"": {
+          "assertions": 9,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy eligibility keeps backed layouts deferred with native object identities with data set \"dataset \"stdClass descendant with a slot\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container static only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container virtual only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"container without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory empty stdClass descendant\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory inherited virtual only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory private constructor without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory protected constructor without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory static only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory stdClass\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory virtual only\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"ghost\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native lazy requests reject propertyless targets before allocating or invoking user code with data set \"dataset \"factory without properties\" / dataset \"proxy\"\"": {
+          "assertions": 7,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"ghost\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::native propertyless diagnostics identify the declared class behind a class alias with data set \"dataset \"proxy\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"ghost\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"container\" / dataset \"proxy\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"ghost\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::propertyless diagnostics release callback captures while their exception remains retained with data set \"dataset \"factory\" / dataset \"proxy\"\"": {
+          "assertions": 3,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"container\" / dataset \"ghost\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"container\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"factory\" / dataset \"ghost\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.NativeLazyEligibilityContractTest::supported lazy callbacks keep deferred exception identity and can retry initialization with data set \"dataset \"factory\" / dataset \"proxy\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::Make with Proxy rejects a propertyless product before its factory runs and preserves the ordinary factory route with data set \"dataset \"parameter\"\"": {
+          "assertions": 13,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::Make with Proxy rejects a propertyless product before its factory runs and preserves the ordinary factory route with data set \"dataset \"property\"\"": {
+          "assertions": 13,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"disabled constructor and lazy setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"disabled constructor and proxy setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"lazy with setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::backed lazy lifecycle still defers setup and respects the constructor policy with data set \"dataset \"proxy with setup\"\"": {
+          "assertions": 6,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::container delegates propertyless targets and callbacks to its supplied proxy factory": {
+          "assertions": 8,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"disabled constructor and lazy setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"disabled constructor and proxy setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"lazy with setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        },
+        "Tests.Contract.PropertylessLazyLifecycleContractTest::propertyless lazy lifecycle rejection publishes no shared value and permits an explicit eager definition with data set \"dataset \"proxy with setup\"\"": {
+          "assertions": 10,
+          "skipped": false,
+          "failure": false,
+          "error": false
+        }
+      },
+      "removed": [],
+      "existing_case_assertion_or_result_changes": {},
+      "added_assertions": 515
+    }
+  ],
+  "proof_interpretation": {
+    "per_runtime_baseline": {
+      "failed": 34,
+      "passed": 41,
+      "assertions": 305
+    },
+    "per_runtime_fixed": {
+      "failed": 0,
+      "passed": 75,
+      "assertions": 515
+    },
+    "baseline_failures": "28 direct + 6 integration cases fail because the required propertyless rejection is absent; controls pass. These are cases for one defect, not 34 distinct defects.",
+    "static_fixture_revision": "The first direct-test artifact used an otherwise unused trait. Configured full PHPStan caught trait.unused. The fixture now reuses the exercised lifecycle trait without suppression. The final direct test SHA 0764318 has canonical RED/GREEN proof and all four final gates; earlier artifact checks in direct-proof.json remain labeled historical.",
+    "custom_factory_case": "Delegation protocol and callback identity only; the recording double is not an alternative production lazy-object implementation.",
+    "exception_lifetime": "Capture collection while retaining the exception is asserted only with zend.exception_ignore_args=1 restored afterward. Native traces with arguments can retain caller callbacks.",
+    "source_guard": "Direct proof checks five loaded classes and seven functions in each isolated process; integration proof checks six loaded classes. Production fingerprints before/after each run must match."
+  },
+  "ci_status": "Completed/success: run43774753909 on exact fix299ee93, all five required jobs. See ci.json and ci-independent-review.json; the conditional workflow-dispatch benchmark is skipped.",
+  "limitations": [
+    "Local PHP 8.4.23 and 8.5.8 are different binaries from CI; the versions are recorded, not presented as latest PHP releases.",
+    "The optional PHPStan turbo extension cannot load in the local runtime; configured analysis falls back and exits zero with no errors.",
+    "No numeric latency or memory improvement is claimed. This is a lifecycle-correctness repair."
+  ],
+  "junit_baseline_provenance": {
+    "previous_complete_suite_commit": "348330544d3d5b0bec7b158e0c2221927dc23643",
+    "implementation_baseline": "fe435db72d60fc3b042f1a5def815bf1fdb91980",
+    "test_subtrees": {
+      "348330544d3d5b0bec7b158e0c2221927dc23643": "17214fc7719c2569c0a9554be9a7d214358bdbf2",
+      "fe435db72d60fc3b042f1a5def815bf1fdb91980": "17214fc7719c2569c0a9554be9a7d214358bdbf2"
+    },
+    "identical": true
+  },
+  "local_dependencies": {
+    "composer_lock_tracked": false,
+    "installed_json_sha256": "ffdbc52aadae57ef3553e8bf20035a5da492f1c3d9870f9f68fec975772dfc38",
+    "packages": [
+      {
+        "name": "brianium/paratest",
+        "version": "v7.20.0",
+        "reference": "81c80677c9ec0ed4ef16b246167f11dec81a6e3d"
+      },
+      {
+        "name": "clue/ndjson-react",
+        "version": "v1.3.0",
+        "reference": "392dc165fce93b5bb5c637b67e59619223c931b0"
+      },
+      {
+        "name": "componenta/arrayable",
+        "version": "v1.0.0",
+        "reference": "482acfddffa3b1b85e982d1bf4ab6c007d084a8a"
+      },
+      {
+        "name": "componenta/caster",
+        "version": "v1.0.0",
+        "reference": "383455d00c5ab8a1067b4916e11d11dae7c4a58c"
+      },
+      {
+        "name": "componenta/clock",
+        "version": "v1.1.0",
+        "reference": "a97b782bd17e413864ba24d90d86b75297b7b99d"
+      },
+      {
+        "name": "componenta/config",
+        "version": "3.0.0",
+        "reference": "dcd218904f7336a61d059363ae1b336f54ad7453"
+      },
+      {
+        "name": "componenta/mimetype-detector",
+        "version": "v1.0.0",
+        "reference": "88cb85b51e95eb8695eaaa1f3c315dd7a7dd8ee9"
+      },
+      {
+        "name": "componenta/reflection",
+        "version": "2.0.1",
+        "reference": "62aca6575934f119277236bb5dec7953063d69da"
+      },
+      {
+        "name": "componenta/validation",
+        "version": "3.0.1",
+        "reference": "8f888784bbe12069f8f9dc75703c5dd66c43e53f"
+      },
+      {
+        "name": "composer/pcre",
+        "version": "3.4.0",
+        "reference": "d5a341b3fb61f3001970940afb1d332968a183ed"
+      },
+      {
+        "name": "composer/semver",
+        "version": "3.6.0",
+        "reference": "d92543b7ede9c4ec6b59853cefb061e39866d2cf"
+      },
+      {
+        "name": "composer/xdebug-handler",
+        "version": "3.0.5",
+        "reference": "6c1925561632e83d60a44492e0b344cf48ab85ef"
+      },
+      {
+        "name": "cycle/database",
+        "version": "2.23.3",
+        "reference": "75fb8f244569254f382f1beca64332b7c9814137"
+      },
+      {
+        "name": "doctrine/deprecations",
+        "version": "1.2.0",
+        "reference": "d2e16653a734c8784c1851ad68b02f997b53ca82"
+      },
+      {
+        "name": "ergebnis/agent-detector",
+        "version": "2.0.0",
+        "reference": "bcc63004284c61c6df6e9625acf2673e3be1889b"
+      },
+      {
+        "name": "evenement/evenement",
+        "version": "v3.0.2",
+        "reference": "0a16b0d71ab13284339abb99d9d2bd813640efbc"
+      },
+      {
+        "name": "fidry/cpu-core-counter",
+        "version": "1.4.1",
+        "reference": "d384a7d0d6e67aa497327260ca95023e92dc2032"
+      },
+      {
+        "name": "filp/whoops",
+        "version": "2.19.3",
+        "reference": "d5480d53f10069dc4620a39f87e38e8945d47322"
+      },
+      {
+        "name": "friendsofphp/php-cs-fixer",
+        "version": "v3.95.30",
+        "reference": "e85cafc4d861c122839d5409eda3325ac0ec0300"
+      },
+      {
+        "name": "giggsey/libphonenumber-for-php",
+        "version": "9.0.43",
+        "reference": "75a801c3dbf9a675e4bc83e0da2c2142fcc5344d"
+      },
+      {
+        "name": "giggsey/locale",
+        "version": "2.10.0",
+        "reference": "c13d22635eac0e51d1dcd7f09b99fd7475209a51"
+      },
+      {
+        "name": "jean85/pretty-package-versions",
+        "version": "2.1.1",
+        "reference": "4d7aa5dab42e2a76d99559706022885de0e18e1a"
+      },
+      {
+        "name": "myclabs/deep-copy",
+        "version": "1.14.0",
+        "reference": "8680aa248f8e07bc8fb43f56f0f5fc77a0c96aae"
+      },
+      {
+        "name": "nikic/php-parser",
+        "version": "v5.9.0",
+        "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def"
+      },
+      {
+        "name": "nunomaduro/collision",
+        "version": "v8.9.6",
+        "reference": "68806f9257968f23775bee62970cb90925b79d51"
+      },
+      {
+        "name": "nunomaduro/termwind",
+        "version": "v2.4.1",
+        "reference": "9b85ae4d802403bfc004ea633ce542bc262ee5c3"
+      },
+      {
+        "name": "nyholm/psr7",
+        "version": "1.8.2",
+        "reference": "a71f2b11690f4b24d099d6b16690a90ae14fc6f3"
+      },
+      {
+        "name": "pestphp/pest",
+        "version": "v4.7.8",
+        "reference": "5b2293f67adcf1b2320b33f521b94a692d18f360"
+      },
+      {
+        "name": "pestphp/pest-plugin",
+        "version": "v4.0.0",
+        "reference": "9d4b93d7f73d3f9c3189bb22c220fef271cdf568"
+      },
+      {
+        "name": "pestphp/pest-plugin-arch",
+        "version": "v4.0.2",
+        "reference": "3fb0d02a91b9da504b139dc7ab2a31efb7c3215c"
+      },
+      {
+        "name": "pestphp/pest-plugin-mutate",
+        "version": "v4.0.1",
+        "reference": "d9b32b60b2385e1688a68cc227594738ec26d96c"
+      },
+      {
+        "name": "pestphp/pest-plugin-profanity",
+        "version": "v4.2.1",
+        "reference": "343cfa6f3564b7e35df0ebb77b7fa97039f72b27"
+      },
+      {
+        "name": "phar-io/manifest",
+        "version": "2.0.4",
+        "reference": "54750ef60c58e43759730615a392c31c80e23176"
+      },
+      {
+        "name": "phar-io/version",
+        "version": "3.2.1",
+        "reference": "4f7fd7836c6f332bb2933569e566a0d6c4cbed74"
+      },
+      {
+        "name": "phpdocumentor/reflection-common",
+        "version": "2.2.1",
+        "reference": "ee15a5a2022c8383906b225055e9496a6a5e6e3b"
+      },
+      {
+        "name": "phpdocumentor/reflection-docblock",
+        "version": "6.0.3",
+        "reference": "7bae67520aa9f5ecc506d646810bd40d9da54582"
+      },
+      {
+        "name": "phpdocumentor/type-resolver",
+        "version": "2.1.0",
+        "reference": "dbe2133bb23e2e33a6834f4ed417f24a1b167769"
+      },
+      {
+        "name": "phpstan/phpdoc-parser",
+        "version": "2.4.1",
+        "reference": "af8e840551031d254cfdb3a18a62c3470a309c10"
+      },
+      {
+        "name": "phpstan/phpstan",
+        "version": "2.3.5",
+        "reference": "645a1bd6bead15fc1b8474137467961d0fa30a79"
+      },
+      {
+        "name": "phpunit/php-code-coverage",
+        "version": "12.5.8",
+        "reference": "7440368d94738d54f2c1de24dbd3871793bbb0dd"
+      },
+      {
+        "name": "phpunit/php-file-iterator",
+        "version": "6.0.2",
+        "reference": "a248d1640ab059b075f53a2ef0f9856e864e06b5"
+      },
+      {
+        "name": "phpunit/php-invoker",
+        "version": "6.0.0",
+        "reference": "12b54e689b07a25a9b41e57736dfab6ec9ae5406"
+      },
+      {
+        "name": "phpunit/php-text-template",
+        "version": "5.0.1",
+        "reference": "babab73b7ef9fae406f2eb3ee11323a61caa63d5"
+      },
+      {
+        "name": "phpunit/php-timer",
+        "version": "8.0.0",
+        "reference": "f258ce36aa457f3aa3339f9ed4c81fc66dc8c2cc"
+      },
+      {
+        "name": "phpunit/phpunit",
+        "version": "12.5.33",
+        "reference": "b98e028a26c5c5ba7e4a54be96ccf35f2914d184"
+      },
+      {
+        "name": "psr/clock",
+        "version": "1.0.0",
+        "reference": "e41a24703d4560fd0acb709162f73b8adfc3aa0d"
+      },
+      {
+        "name": "psr/container",
+        "version": "2.0.2",
+        "reference": "c71ecc56dfe541dbd90c5360474fbc405f8d5963"
+      },
+      {
+        "name": "psr/event-dispatcher",
+        "version": "1.0.0",
+        "reference": "dbefd12671e8a14ec7f180cab83036ed26714bb0"
+      },
+      {
+        "name": "psr/http-factory",
+        "version": "1.1.0",
+        "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a"
+      },
+      {
+        "name": "psr/http-message",
+        "version": "2.0",
+        "reference": "402d35bcb92c70c026d1a6a9883f06b2ead23d71"
+      },
+      {
+        "name": "psr/log",
+        "version": "3.0.2",
+        "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3"
+      },
+      {
+        "name": "psr/simple-cache",
+        "version": "3.0.0",
+        "reference": "764e0b3939f5ca87cb904f570ef9be2d78a07865"
+      },
+      {
+        "name": "react/cache",
+        "version": "v1.2.0",
+        "reference": "d47c472b64aa5608225f47965a484b75c7817d5b"
+      },
+      {
+        "name": "react/child-process",
+        "version": "v0.6.7",
+        "reference": "970f0e71945556422ee4570ccbabaedc3cf04ad3"
+      },
+      {
+        "name": "react/dns",
+        "version": "v1.14.0",
+        "reference": "7562c05391f42701c1fccf189c8225fece1cd7c3"
+      },
+      {
+        "name": "react/event-loop",
+        "version": "v1.6.0",
+        "reference": "ba276bda6083df7e0050fd9b33f66ad7a4ac747a"
+      },
+      {
+        "name": "react/promise",
+        "version": "v3.3.0",
+        "reference": "23444f53a813a3296c1368bb104793ce8d88f04a"
+      },
+      {
+        "name": "react/socket",
+        "version": "v1.17.0",
+        "reference": "ef5b17b81f6f60504c539313f94f2d826c5faa08"
+      },
+      {
+        "name": "react/stream",
+        "version": "v1.4.0",
+        "reference": "1e5b0acb8fe55143b5b426817155190eb6f5b18d"
+      },
+      {
+        "name": "sebastian/cli-parser",
+        "version": "4.2.1",
+        "reference": "7d05781b13f7dec9043a629a21d086ed74582a15"
+      },
+      {
+        "name": "sebastian/comparator",
+        "version": "7.1.8",
+        "reference": "7c65c1e79836812819705b473a90c12399542485"
+      },
+      {
+        "name": "sebastian/complexity",
+        "version": "5.0.0",
+        "reference": "bad4316aba5303d0221f43f8cee37eb58d384bbb"
+      },
+      {
+        "name": "sebastian/diff",
+        "version": "7.0.1",
+        "reference": "cd4cabe39f8a4e8ee6818ba99f10a05561ea4ad6"
+      },
+      {
+        "name": "sebastian/environment",
+        "version": "8.1.2",
+        "reference": "9d32c685773823b1983e256ae4ecd48a10d6e439"
+      },
+      {
+        "name": "sebastian/exporter",
+        "version": "7.0.3",
+        "reference": "c5e21b5de653ce0a769fb36f5cdfcb5e7a32cf23"
+      },
+      {
+        "name": "sebastian/global-state",
+        "version": "8.0.3",
+        "reference": "b164d3274d6537ab462591c5755f76a8f5b1aae9"
+      },
+      {
+        "name": "sebastian/lines-of-code",
+        "version": "4.0.1",
+        "reference": "d543b8ef219dcd8da262cbb958639a96bedba10e"
+      },
+      {
+        "name": "sebastian/object-enumerator",
+        "version": "7.0.0",
+        "reference": "1effe8e9b8e068e9ae228e542d5d11b5d16db894"
+      },
+      {
+        "name": "sebastian/object-reflector",
+        "version": "5.0.0",
+        "reference": "4bfa827c969c98be1e527abd576533293c634f6a"
+      },
+      {
+        "name": "sebastian/recursion-context",
+        "version": "7.0.1",
+        "reference": "0b01998a7d5b1f122911a66bebcb8d46f0c82d8c"
+      },
+      {
+        "name": "sebastian/type",
+        "version": "6.0.4",
+        "reference": "82ff822c2edc46724be9f7411d3163021f602773"
+      },
+      {
+        "name": "sebastian/version",
+        "version": "6.0.2",
+        "reference": "a8b6643a19ba6c8125a473623e45fb8cbb0e4159"
+      },
+      {
+        "name": "spiral/core",
+        "version": "3.18.2",
+        "reference": "832abb5851c7cd07d67eb9c60f314a941fd8d477"
+      },
+      {
+        "name": "spiral/hmvc",
+        "version": "3.18.2",
+        "reference": "9bca030c17d6a0b8fb0f83824ee88bd0b545def7"
+      },
+      {
+        "name": "spiral/interceptors",
+        "version": "3.18.2",
+        "reference": "3cbef3bf13ef4700b14eeafb2b0f77f76b95f520"
+      },
+      {
+        "name": "spiral/pagination",
+        "version": "3.18.2",
+        "reference": "b4c3e6c15b4f1a0b176f40400e81483fd4bb860d"
+      },
+      {
+        "name": "spiral/security",
+        "version": "3.18.2",
+        "reference": "71d69b14edacf05882e25f929137512253606a20"
+      },
+      {
+        "name": "staabm/side-effects-detector",
+        "version": "1.0.5",
+        "reference": "d8334211a140ce329c13726d4a715adbddd0a163"
+      },
+      {
+        "name": "symfony/console",
+        "version": "v8.1.11",
+        "reference": "5a315b092b81f3e920e9daea1a2ae4c66ed298b9"
+      },
+      {
+        "name": "symfony/deprecation-contracts",
+        "version": "v3.8.1",
+        "reference": "feb1edf4e546af3b85c5caebe8359a20db230ca3"
+      },
+      {
+        "name": "symfony/event-dispatcher",
+        "version": "v8.1.5",
+        "reference": "7458da64220376b2e0dc2d8451bf43382c1ad297"
+      },
+      {
+        "name": "symfony/event-dispatcher-contracts",
+        "version": "v3.8.1",
+        "reference": "658e29751424da3ef4758c60f769e59d1b2981eb"
+      },
+      {
+        "name": "symfony/filesystem",
+        "version": "v8.1.11",
+        "reference": "58f57b6a33e3495f7f41e01258f1ae5ef76cccd2"
+      },
+      {
+        "name": "symfony/finder",
+        "version": "v8.1.11",
+        "reference": "a2902e479ba5691d20d51d100a715ea19ad2c837"
+      },
+      {
+        "name": "symfony/options-resolver",
+        "version": "v8.1.10",
+        "reference": "68cc43038d234c69d510c62f37bd0058b40d548a"
+      },
+      {
+        "name": "symfony/polyfill-ctype",
+        "version": "v1.37.0",
+        "reference": "141046a8f9477948ff284fa65be2095baafb94f2"
+      },
+      {
+        "name": "symfony/polyfill-intl-grapheme",
+        "version": "v1.43.3",
+        "reference": "5a8f33c87aeecffce24e721b5064fab05f4becf8"
+      },
+      {
+        "name": "symfony/polyfill-intl-normalizer",
+        "version": "v1.43.0",
+        "reference": "ebd57ccc7edb93d632e184efbe7693d2517bab3b"
+      },
+      {
+        "name": "symfony/polyfill-mbstring",
+        "version": "v1.43.3",
+        "reference": "122889ed24dc000165bcbfd77ec412f15cbdfc6a"
+      },
+      {
+        "name": "symfony/polyfill-php80",
+        "version": "v1.43.0",
+        "reference": "9c6a5d6b01ca51d486c813e9a9c0ed55f208bb74"
+      },
+      {
+        "name": "symfony/polyfill-php81",
+        "version": "v1.38.1",
+        "reference": "6bfb9c766cacffbc8e118cb87217d08ed84e5cd7"
+      },
+      {
+        "name": "symfony/polyfill-php83",
+        "version": "v1.43.0",
+        "reference": "80ccff923a8d61f73ebe9da0aa94e25232f004ce"
+      },
+      {
+        "name": "symfony/polyfill-php84",
+        "version": "v1.43.0",
+        "reference": "22c6548499cbe5c5bb072fc0c42312dff062a015"
+      },
+      {
+        "name": "symfony/polyfill-php85",
+        "version": "v1.43.0",
+        "reference": "86a42cbcc07adc331481a5ab310a4024bfc227f6"
+      },
+      {
+        "name": "symfony/process",
+        "version": "v8.1.10",
+        "reference": "08aa69fa0998bb65a089f9e148a2c0f8b391398e"
+      },
+      {
+        "name": "symfony/service-contracts",
+        "version": "v3.8.1",
+        "reference": "052852a96fd5e5ebdb617dba22031e41a3300fb5"
+      },
+      {
+        "name": "symfony/stopwatch",
+        "version": "v8.1.0",
+        "reference": "21c07b026905d596e8379caeb115d87aa479499d"
+      },
+      {
+        "name": "symfony/string",
+        "version": "v8.1.10",
+        "reference": "6c6110979c0150393bbb336170e286d51ab4d76c"
+      },
+      {
+        "name": "ta-tikoma/phpunit-architecture-test",
+        "version": "0.8.7",
+        "reference": "1248f3f506ca9641d4f68cebcd538fa489754db8"
+      },
+      {
+        "name": "theseer/tokenizer",
+        "version": "2.0.1",
+        "reference": "7989e43bf381af0eac72e4f0ca5bcbfa81658be4"
+      },
+      {
+        "name": "webmozart/assert",
+        "version": "2.5.0",
+        "reference": "8a163706bbcac613733dba03f51e13b5eb1bb819"
+      }
+    ]
+  },
+  "independent_final_review": {
+    "scope": "Read-only review of source/test bytes, reports and local evidence before final CI artifacts; no additional runtime tests executed.",
+    "reviewer": "separate core audit agent",
+    "verdict": "No concrete discrepancies remain in the reviewed package.",
+    "verified": [
+      "418 source/test files match published commit and local fingerprint",
+      "41 added executable production lines; four source files comment-only",
+      "22 embedded full-text artifacts have correct byte counts and hashes",
+      "Both test-only patches restore published test bytes",
+      "Canonical RED/GREEN results and origin guards agree",
+      "Both complete JUnit comparisons:75 additions,0 removals,0 existing-result changes,515 added assertions",
+      "Both baseline gzip files preserve expected decompressed SHA256 and mtime0",
+      "Configured local gates and101 dependency versions/references agree",
+      "Native error precedence, custom protocol double and exception-trace scope are qualified correctly",
+      "English/Russian reports are substantively consistent"
+    ],
+    "review_feedback_applied": "Archived both baseline JUnit files as well as final JUnit files, so census assertions are reproducible without scratch files.",
+    "excluded_at_review_time": [
+      "Final CI coverage/mutation evidence",
+      "Final artifact manifest",
+      "Removal of CI_PENDING markers"
+    ]
+  },
+  "independent_ci_review": {
+    "reviewer": "separate core audit agent",
+    "scope": "Read-only verification of completed current CI, EN/RU report sections and transferred artifacts; no new tests or mutant runs.",
+    "verdict": "No concrete corrections required.",
+    "verified": [
+      "Exact completed/success run43774753909,attempt1,head299ee93 and all5requiredjobs",
+      "All coverage fractions and console floor rule; statement/method/branch distinctions",
+      "4274=3743tested+54timeout+477untested; both MSI denominators remain4274",
+      "477uniqueUNTESTED IDs and exactly2newProxyFactory entries",
+      "Both apparent equivalence classifications follow from current data/control flow and remain labeled static inference",
+      "All5gzip logs and decompressed hashes; ZIP digest against GitHub metadata/uploadlog; exact embeddedXML",
+      "All transferred CI artifacts are byte-identical",
+      "EN/RU report parity and removal of current pending markers"
+    ],
+    "excluded_at_review_time": [
+      "Final manifest.json",
+      "Final delivery-checks.json"
+    ]
+  }
+}
