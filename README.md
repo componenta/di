@@ -262,7 +262,7 @@ An otherwise native-eligible target without such a property throws `ResolutionEx
 
 For ordinary eager reflection creation, remove the relevant class or injection-point lazy/proxy marker. Calling `make()` instead of `get()` does not disable those attributes. An explicit ordinary factory or `ClassDefinition` provides another eager path under its existing contract: a factory owns its result's initialization, while `ClassDefinition` executes its constructor and explicit `call()` instructions and does not execute DI attributes such as `SetUp`. Configure any required initialization through that chosen path. A class-level `#[Proxy]` does not by itself wrap an opaque application factory's result.
 
-The property requirement belongs to the default native adapter. User-supplied `ProxyFactoryInterface` implementations can use other supported mechanisms and remain responsible for the deferred-callback contracts. Direct caller-supplied callbacks on supported targets still own their later exceptions unless they re-enter a DI resolution boundary. The adapter does not introduce an eager fallback or a container-wide capability check. The [implemented propertyless-lazy plan](docs/plans/propertyless-lazy-lifecycle.md) records the rationale and compatibility boundary; the [November 16 fix report](docs/audit/2026-11-16-propertyless-lazy-fix.md) records the implementation and verification.
+The property requirement belongs to the default native adapter. User-supplied `ProxyFactoryInterface` implementations can use other supported mechanisms and remain responsible for the deferred-callback contracts. Direct caller-supplied callbacks on supported targets still own their later exceptions unless they re-enter a DI resolution boundary. The adapter does not introduce an eager fallback or a container-wide capability check. The [implemented propertyless-lazy plan](docs/plans/propertyless-lazy-lifecycle.md) records the rationale and compatibility boundary.
 
 ## Attributes and request mapping
 
@@ -317,17 +317,10 @@ If definition or delegator registration fails during validation or autoloading, 
 
 After DI resolves an explicitly invoked callable and enters its body, exceptions thrown by that callable propagate unchanged.
 
-## Audit and architecture plans
+## DI 6 refactoring and migration
 
-The [November 16 whole-repository re-audit, round 5](docs/audit/2026-11-16-di6-full-reaudit-round5.md) records two library fixes, one benchmark-tooling fix, 28 additional test cases, and the complete source/test/document review. All five required CI jobs passed on `42b62af`; measured statement coverage is 92.78% and the reported mutation score is 89.06%, including the separately documented timeouts. The report contains the evidence archive and conditional architecture plans.
+The `refactor/di6-definitions-callbacks` branch implements central definition ownership, strategies without registration maps, configuration snapshots and retirement after complete mutation publication. Public extension changes are described in the [definition migration guide](docs/migrations/di6-definitions.md).
 
-The [architecture plan index](docs/plans/README.md) links the reviewed specifications, their implementation readiness, and complete Russian translations. The selected directions are:
+The shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and simple-union autowiring are described in the [callback migration guide](docs/migrations/di6-callbacks.md). The package retains PHP `^8.4`; E1 limits only the affected native PHP 8.5 trait-callable forms.
 
-- **Attribute availability:** retain corrected polling in current 5.x. B2 remains conditional on application cost and a specified synchronization contract; C is not selected.
-- **Definition ownership:** implemented in this branch. `CompositeResolver` owns immutable bindings; strategies execute supplied definitions without registration maps; all registration mutations complete before retired roots are released.
-- **Callbacks and unions:** implemented in this branch, with a shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and deterministic simple-union autowiring. The package retains PHP `^8.4`; E1 limits only the affected native trait-callable support promise. Request-to-DTO callbacks remain deferred.
-- **Propertyless native laziness:** [D1/A](docs/plans/propertyless-lazy-lifecycle.md), accepted on November 16, 2026, is implemented in [`299ee93`](https://github.com/componenta/di/commit/299ee93f6be6d91e3a4fc1372389f1fff953d61b). The default adapter rejects unsupported propertyless targets before allocation and preserves deferred callbacks for supported targets. Local validation and all five required CI jobs passed, including coverage and mutation, in [run 43774753909](https://github.com/componenta/di/actions/runs/43774753909). See the [fix report](docs/audit/2026-11-16-propertyless-lazy-fix.md).
-
-The [November 15 repeated review](docs/audit/2026-11-15-di6-repeat-review.md) records two further consistency fixes, complete source review, current-source verification and the corrected PHP platform policy. The library retains PHP `^8.4`; E1 limits support for affected native expressions and does not block the whole DI 6 release.
-
-The [November 14 full recheck](docs/audit/2026-11-14-release-audit.md) records the TDD corrections and local verification for [v5.0.6](docs/releases/v5.0.6.md). That version is published on GitHub and Packagist after all release gates passed on its exact commit. The [November 13 recheck](docs/audit/2026-11-13-full-library-recheck.md), [DI 6 implementation report](docs/audit/2026-11-14-di6-refactoring.md) and [preceding full-library review](docs/audit/2026-11-14-di6-full-library-recheck.md) retain their original fixes, measurements, migration checks and source identities.
+The [architecture contracts and plans](docs/plans/README.md) define acceptance criteria and future scope. Native-lazy D1/A is implemented. B2 availability polling and request-to-DTO callbacks remain separate future directions.

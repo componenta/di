@@ -226,4 +226,4 @@ The PHP 8.4 suites cover library behavior and runtime-created closures. PHP 8.5 
 - [Setup callback contracts](../../tests/Contract/SetUpCallbackContractTest.php): lifecycle, explicit parameters, mapped source provenance and constructor-only subclass compatibility.
 - [Native callback contracts](../../tests/Contract/Php85AttributeCallableContractTest.php) and [fixtures](../../tests/Fixtures/Php85Callbacks): `Init` compatibility, syntax boundaries, scope/state, lazy retries and the property-invariance migration.
 - [Union contracts](../../tests/Contract/UnionAutowiringContractTest.php): candidate selection, ambiguity, warmed mutation and explicit-definition behavior.
-- [Normative callback specification](../plans/php85-callbacks.md), [native engine evidence](../audit/2026-11-13-php85-native-evidence.json), and [portable reproduction](../audit/reproductions/Php85Callbacks.py).
+- [Normative callback specification](../plans/php85-callbacks.md) and the [standalone native PHP check](../../tests/php85-platform.php).

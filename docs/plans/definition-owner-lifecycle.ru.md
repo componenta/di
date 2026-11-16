@@ -2,7 +2,7 @@
 
 **Каноническая спецификация:** [английский документ](definition-owner-lifecycle.md). Это его полный русский перевод.
 
-**Статус реализации (2026-11-14):** центральная таблица регистраций, стратегии без собственных регистраций, снимки, правила присоединения и полное освобождение после мутаций реализованы в `refactor/di6-definitions-callbacks`, коммит `87d7a775`. Это работа следующей major-версии, которая ещё не выпущена; совместимая ветка 5.x сохраняет прежнюю архитектуру. Проверки и оставшиеся условия описаны в [руководстве миграции](../migrations/di6-definitions.ru.md) и [доказательствах реализации](../audit/2026-11-14-di6-refactoring.ru.md). Анализ исходного состояния ниже описывает проверенную реализацию 5.x. Нормативный контракт и критерии приёмки остаются целью реализации.
+**Статус реализации (2026-11-14):** центральная таблица регистраций, стратегии без собственных регистраций, снимки, правила присоединения и полное освобождение после мутаций реализованы в `refactor/di6-definitions-callbacks`, коммит `87d7a775`. Это работа следующей major-версии, которая ещё не выпущена; совместимая ветка 5.x сохраняет прежнюю архитектуру. Проверки и оставшиеся условия описаны в [руководстве миграции](../migrations/di6-definitions.ru.md) и [доказательствах реализации](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-14-di6-refactoring.ru.md). Анализ исходного состояния ниже описывает проверенную реализацию 5.x. Нормативный контракт и критерии приёмки остаются целью реализации.
 
 ## Цель и доказательства
 
@@ -10,13 +10,7 @@
 
 Три сбоя остаются наблюдаемыми на PHP **8.4.23** и **8.5.8** в реализации v5.0.5 (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). Они повторно воспроизведены в свежем аудите; последующие локальные исправления alias, поиска во внешних контейнерах и проверки доступности классов не меняют эти пути владения. При установленных зависимостях разработки диагностические сценарии через публичные точки входа запускаются так:
 
-```sh
-php -n docs/audit/reproductions/DefinitionLifecycle.php
-php -n docs/audit/reproductions/CacheRetirement.php
-php -n docs/audit/reproductions/MutationParity.php
-```
-
-Это сценарии [DefinitionLifecycle.php](../audit/reproductions/DefinitionLifecycle.php), [CacheRetirement.php](../audit/reproductions/CacheRetirement.php) и [MutationParity.php](../audit/reproductions/MutationParity.php). Пока дефекты не исправлены, они сообщают наблюдения вне обычного набора тестов.
+Текущий контракт проверяют [CentralDefinitionStrategyContractTest](../../tests/Contract/CentralDefinitionStrategyContractTest.php), [MutationRetirementContractTest](../../tests/Contract/MutationRetirementContractTest.php) и [MutationRetirementBoundaryContractTest](../../tests/Contract/MutationRetirementBoundaryContractTest.php). Описанные ниже сбои относятся к исходной архитектуре 5.x.
 
 | Сценарий | Текущее наблюдение на обеих версиях PHP | Требуемый результат |
 | --- | --- | --- |

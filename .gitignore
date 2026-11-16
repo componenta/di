@@ -8,3 +8,6 @@
 vendor/
 .phpunit.cache/
 integration/composer.lock
+/coverage.xml
+/junit.xml
+/docs/audit/

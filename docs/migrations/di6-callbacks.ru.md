@@ -226,4 +226,4 @@ E1 остаётся открытым для этих затронутых фор
 - [Контракты callback-варианта setup](../../tests/Contract/SetUpCallbackContractTest.php): lifecycle, явные параметры, provenance mapped-источников и совместимость подкласса, переопределяющего только конструктор.
 - [Нативные callback-контракты](../../tests/Contract/Php85AttributeCallableContractTest.php) и [fixtures](../../tests/Fixtures/Php85Callbacks): совместимость `Init`, границы синтаксиса, scope/state, lazy-повторы и миграция инвариантного свойства.
 - [Контракты union-типов](../../tests/Contract/UnionAutowiringContractTest.php): выбор кандидата, неоднозначность, мутации после прогрева и поведение явных definitions.
-- [Нормативная спецификация callback-функций](../plans/php85-callbacks.ru.md), [данные проверки движка](../audit/2026-11-13-php85-native-evidence.json) и [переносимый reproduction](../audit/reproductions/Php85Callbacks.py).
+- [Нормативная спецификация callback-функций](../plans/php85-callbacks.ru.md) и [отдельная проверка native PHP](../../tests/php85-platform.php).

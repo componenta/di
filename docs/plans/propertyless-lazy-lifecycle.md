@@ -1,8 +1,8 @@
 # Lazy construction without backed instance properties
 
-**Decision and implementation:** **D1/A was accepted on November 16, 2026 and is implemented in [`299ee93`](https://github.com/componenta/di/commit/299ee93f6be6d91e3a4fc1372389f1fff953d61b)**, following the user's instruction “Доделывай” to finish the recommended repair. The default native `ProxyFactory` rejects an otherwise native-eligible target without backed instance properties before allocating an object. The accepted implementation scope is complete; section 7 records the validation status. See the [November 16 fix report](../audit/2026-11-16-propertyless-lazy-fix.md).
+**Status:** D1/A is implemented. The default native `ProxyFactory` rejects a target without backed instance properties before object allocation. This document retains the rationale, compatibility boundaries and acceptance criteria.
 
-Audit baseline: `897f8b10ca6537e7b2f96d20b2e00ed52571ff6f`. Implementation baseline: `fe435db72d60fc3b042f1a5def815bf1fdb91980`; published implementation: `299ee93f6be6d91e3a4fc1372389f1fff953d61b`, branch `refactor/di6-definitions-callbacks`. The original audit and recorded observations remain historical evidence; this document records the implemented target. [Русская версия](propertyless-lazy-lifecycle.ru.md).
+[Русская версия](propertyless-lazy-lifecycle.ru.md)
 
 ## 1. Confirmed defect and significance
 
@@ -22,34 +22,9 @@ The source references below are fixed to the audited baseline:
 | Explicit factory injection enclosed in the callback | [`MakeHandler::create()` L213](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Resolver/Attribute/Handler/MakeHandler.php#L213) |
 | Container delegates to the selected adapter | [`Container::makeLazy()` L293](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Container.php#L293), [`makeProxy()` L298](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Container.php#L298) |
 
-### Reproduction and independent controls
+### Contract checks
 
-The original [PropertylessLazyObservation.php](../audit/reproductions/PropertylessLazyObservation.php) reproduces the defect from a Composer-installed checkout before this repair:
-
-```sh
-php docs/audit/reproductions/PropertylessLazyObservation.php
-```
-
-The script uses the public `ContainerFactory`, `Container`, and `ProxyFactory`, verifies their loaded source paths and SHA-256 hashes, and records outcomes. It does not add a failing test or encode the omission as desired behavior. Another installation can be selected using the documented paired environment variables; mismatched loaded source is rejected. The [recorded evidence](../audit/2026-11-15-propertyless-lazy-evidence.json) contains both runtime observations, selected baseline-suite results and the fail-closed source-selection check. These observations describe the pre-repair source; the accepted target instead rejects the unsupported public requests. The script is historical evidence, not a replacement for the post-repair acceptance tests.
-
-The script produced the same observations on local PHP **8.4.23** and **8.5.8**:
-
-| Case | Observed result |
-|---|---|
-| Native ghost/proxy, no properties / only static / only virtual | Normal object; callback count remains zero after explicit initialization |
-| Public `ProxyFactory`, same three shapes | Same missing callback |
-| `#[Lazy]` / `#[Proxy]` with constructor and setup | `get()` succeeds and shares the object; both lifecycle events are missing |
-| `#[NoConstructor]` plus lazy strategy and setup | Setup is also missing |
-| `#[Make]` plus property proxy around a registered factory | Factory invocation count is zero |
-| An inherited private backed property | Real native laziness; one callback after explicit initialization |
-| A backed property hook | Real native laziness; one callback after explicit initialization |
-| `stdClass` and empty subclass | Normal object; no callback |
-| `stdClass` subclass with a backed property | Real native laziness |
-| Other internal class / its descendant | Native allocation error |
-
-There are 42 recorded observations per runtime: 10 native layout cases, 10 native eligibility controls, 10 public-factory cases, 10 attributed pipeline cases, one factory injection and one rejected fallback prototype. These are observations, not 42 newly added passing regression tests. The binaries' reported versions are recorded; this evidence does not claim a new PHP release certification.
-
-The runtime rule is independently documented in the PHP manuals for [newLazyGhost](https://www.php.net/manual/en/reflectionclass.newlazyghost.php) and [newLazyProxy](https://www.php.net/manual/en/reflectionclass.newlazyproxy.php). Native initialization and destructor semantics are described in the [lazy-objects RFC](https://wiki.php.net/rfc/lazy-objects) and [language manual](https://www.php.net/manual/en/language.oop5.lazy-objects.php). This issue is independent of the PHP 8.5 callable-expression E1 matrix.
+[NativeLazyEligibilityContractTest](../../tests/Contract/NativeLazyEligibilityContractTest.php) checks supported native forms and rejection before allocation. [PropertylessLazyLifecycleContractTest](../../tests/Contract/PropertylessLazyLifecycleContractTest.php) checks public DI paths, setup, custom adapters and negative controls. The native requirement is documented by PHP for [newLazyGhost](https://www.php.net/manual/en/reflectionclass.newlazyghost.php) and [newLazyProxy](https://www.php.net/manual/en/reflectionclass.newlazyproxy.php).
 
 ## 2. Why an immediate eager fallback is not a safe local correction
 
@@ -120,7 +95,7 @@ The benefit is lifecycle correctness and a diagnosable native capability boundar
 
 ## 6. Change surface and acceptance mapping
 
-The following files implement the accepted option A in `299ee93`. The two new contract files add **75 runtime cases**; the [fix report](../audit/2026-11-16-propertyless-lazy-fix.md) records their proof and the final source identities. The acceptance requirements remain listed below so future changes preserve the same boundaries.
+The following files implement the accepted option A in `299ee93`. The two new contract files add **75 runtime cases**; the [fix report](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-16-propertyless-lazy-fix.md) records their proof and the final source identities. The acceptance requirements remain listed below so future changes preserve the same boundaries.
 
 | Surface | Required responsibility |
 |---|---|
@@ -148,29 +123,10 @@ The following files implement the accepted option A in `299ee93`. The two new co
 | Diagnostics / lifetime | Stored DI payload contains only target/strategy metadata; after caller release, prove capture collection with retained exception only under temporarily enabled `zend.exception_ignore_args=1`, or release the exception too; no trace-sanitization claim |
 | Production verification | Focused RED/GREEN on PHP 8.4/8.5; existing complete suite, PHPStan max and style; applicable CI matrix including Windows |
 
-The implementation review covers R1–R2 and P1–P5, especially preallocation timing, custom-factory delegation and the absence of an eager fallback. The [fix report](../audit/2026-11-16-propertyless-lazy-fix.md) records the focused RED/GREEN evidence and regression verification. The new assertions observe public behavior; they do not use private cache counters or arbitrary timing thresholds.
+The implementation review covers R1–R2 and P1–P5, especially preallocation timing, custom-factory delegation and the absence of an eager fallback. The [fix report](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-16-propertyless-lazy-fix.md) records the focused RED/GREEN evidence and regression verification. The new assertions observe public behavior; they do not use private cache counters or arbitrary timing thresholds.
 
-## 7. Implementation and verification status
+## 7. Status and future changes
 
-**The accepted D1/A implementation scope is complete and published in `299ee93`.** It includes the shared adapter check, public contract documentation and both new contract-test files. Implementation completion and CI validation are recorded separately below.
+D1/A is complete in [`299ee93`](https://github.com/componenta/di/commit/299ee93f6be6d91e3a4fc1372389f1fff953d61b); all five required jobs passed in [CI 43774753909](https://github.com/componenta/di/actions/runs/43774753909). The contract tests remain part of the ordinary library suite.
 
-Local validation ran **before the implementation commit**, on `fe435db` plus the final patch. The final `src/` and `tests/` snapshot contains **418 files**, with fingerprint `f517fbbacdcd1e380d9492d8b2c1496801cbeb8716d3e01531f356a927af2e3e`, and matches the published implementation. The original local log HEAD remains the pre-commit baseline; these results are not presented as another run performed after committing `299ee93`.
-
-| Local gate | Result |
-|---|---|
-| PHP 8.4.23 complete suite | **1,602 passed; 18 skipped; 24,774 assertions** |
-| PHP 8.5.8 complete suite | **1,619 passed; 1 skipped; 24,881 assertions** |
-| PHPStan max | **PASS** |
-| Style | **0 of 413 files require changes** |
-
-| CI gate for `299ee93` | Result |
-|---|---|
-| Four platform jobs, PHP 8.4.27 / 8.5.12 | **PASS: 4/4** |
-| Coverage | **PASS** |
-| Mutation testing | **PASS:** all five required jobs in [run 43774753909](https://github.com/componenta/di/actions/runs/43774753909) completed successfully |
-
-The [fix report](../audit/2026-11-16-propertyless-lazy-fix.md) is the verification record for this repair. Earlier audit counts and native observations retain their original source and runtime identities.
-
-Option B is not selected. Any later proposal for eager support would separately need to settle high-level versus direct API behavior, factory/ghost identity, constructor and setup timing, exception normalization, failed-attempt retry and custom implementation interaction. It would have to choose eager construction **before any placeholder is allocated**, reuse the existing eager object pipeline or application factory, and cover every relevant caller. Merely adding `if (!isUninitializedLazyObject(...))` to the adapter does not satisfy those obligations and is not part of D1/A.
-
-The original audit reports and observation evidence remain unchanged. The observation script is retained as a pre-repair reproduction; the naive prototype is explicitly marked rejected and must not migrate into `src/`.
+Option B is not selected. Future eager support would require a separate decision covering direct and high-level APIs, identity, constructor/setup timing, exceptions, retries and custom adapters. The eager path must be selected before allocating a placeholder and use the existing object pipeline or application factory. Checking `isUninitializedLazyObject()` after allocation is insufficient.

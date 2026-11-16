@@ -42,7 +42,7 @@ The proven bottleneck has a specific trigger: an inspected annotation names a cl
 | Custom composition rules | Registering a custom rule disables semantic plan memoization so current state and arguments remain observable. | Repeated discovery/validation is deliberate. An availability change must not restore stale rule-result caching, and it cannot remove the rule's own work. |
 | New container and first graph | Configuration/bootstrap, initial discovery, plan construction and first service creation all contribute. | Setup must be measured separately from a warm creation loop. The missing-name benchmark alone does not establish startup or request-level benefit. |
 
-The decision is therefore **no broad performance refactor for the current 5.x scope**. The evidence establishes a real pathological workload, not its prevalence or share of an application's latency. Local cache-coherence corrections remain necessary regardless of whether an application encounters that workload. The workload reassessment below reports ordinary valid-attribute paths, loaded foreign attributes, missing optional names, shared/fresh graph identity, custom-rule controls, and cold setup separately; a faster missing-name loop is insufficient evidence for a general library speedup.
+The decision is therefore **no broad performance refactor for the current 5.x scope**. The evidence establishes a real pathological workload, not its prevalence or share of an application's latency. Local cache-coherence corrections remain necessary regardless of whether an application encounters that workload. A qualifying workload comparison must report ordinary valid-attribute paths, loaded foreign attributes, missing optional names, shared/fresh graph identity, custom-rule controls, and cold setup separately; a faster missing-name loop is insufficient evidence for a general library speedup.
 
 If an application does spend material time on repeated unresolved-name polling, **B2 is the preferred future direction**. Keep the existing per-container registry as the sole availability owner; separate the operation which can execute autoloaders from a pure observation of the generation already established. Consumers must publish or execute a plan together with the generation and resolver slots which actually produced it. A later refresh cannot retroactively mark an unexecuted handler as completed. Making synchronization explicit helps review these obligations, but merely renaming or splitting the existing reads does not reduce their number and has no demonstrated speedup.
 
@@ -69,82 +69,7 @@ For every case in every round, the probe creates a separate container. The conta
 
 A prepended autoloader counts requests only for the eight reserved fixture names. It never defines a class. Name matching is case insensitive, unrelated Composer requests are ignored, and counts reset immediately before timing. Loaded-only checks before and after measurement reject a run in which another loader defines a fixture name. Consequently, counts represent attempts to autoload these missing names, not the number of filesystem reads or the total number of callbacks in the autoloader stack. Timings include the counting callback's overhead.
 
-### Observed baseline, November 13
-
-Observed on Linux x86_64, PHP 8.4.23 and PHP 8.5.8 static CLI binaries, `-n`, OPcache CLI disabled and JIT disabled. Each version ran separately, with seven rounds of 10,000 operations and 2,000 warmup operations per case/round. These measurements use an immutable snapshot of `65da4acc18b19989041a2813dbc92f2f474b7177`, before the November 13 fixes. The [audit evidence](../audit/2026-11-13-evidence.json) records exact source/dependency identity and a later final-source smoke check. Historical measurements remain in the November 12 reports; differences between sessions are not attributed to code changes.
-
-| Case | PHP 8.4.23 median, µs/op | PHP 8.5.8 median, µs/op | Missing-name autoload calls/op, both versions | Calls in every 10,000-operation round |
-|---|---:|---:|---:|---:|
-| `make/clean` | 5.1196 | 5.5019 | 0 | 0 |
-| `make/1-unavailable` | 22.0571 | 25.2777 | 22 | 220,000 |
-| `make/8-unavailable` | 132.1754 | 137.7157 | 176 | 1,760,000 |
-| `get-shared/clean` | 0.2010 | 0.2008 | 0 | 0 |
-| `get-shared/1-unavailable` | 0.1997 | 0.2050 | 0 | 0 |
-| `get-shared/8-unavailable` | 0.2016 | 0.1993 | 0 | 0 |
-
-The exact autoload counts were identical in every round on both runtimes. They establish that one inspected class can add repeated work to unrelated later object creation within the same container. Increasing the unresolved set from one name to eight multiplies that count by eight in this fixture. A shared `get()` hit does not perform these probes.
-
-These are local, instrumented measurements, not a production throughput claim or a PHP-version comparison. CPU scheduling, the autoloader implementation, its own negative cache, filesystem behavior, and extensions affect elapsed time. The stable signal is repeated unresolved-name autoloading; the measured latency demonstrates its cost in this environment. The benchmark does not measure cold startup, real application request latency, or memory growth from arbitrarily many generated class names.
-
-### Corrected-source workload reassessment
-
-The later [full-library recheck](../audit/2026-11-13-full-library-recheck.md) measured production source `fce3f176a2ab37b6ac7d595712c3fe5ff18564b0` after the availability and parameter-coherence corrections. Its [evidence](../audit/2026-11-13-full-library-evidence.json) retains the raw five-round latency samples, independent autoload counts, complete source hashes and dependency identity. This is a baseline workload characterization: no B2/C candidate or before/after fix comparison was run. The later callable-key correction `7dc88a4` and benchmark-loader correction `71a8430` are not the timed source; these results are not relabelled as measurements of those commits.
-
-The measured [WorkloadNecessity.php](../audit/reproductions/WorkloadNecessity.php) and [source adapter](../audit/reproductions/autoload-selected-source.php) are preserved byte for byte. The two versions ran serially on Linux x86_64, PHP 8.4.23 and 8.5.8, with CLI OPcache enabled and JIT disabled. Released dependencies included `componenta/config v3.0.0`, `componenta/reflection v2.0.1`, and `componenta/validation v3.0.1`. Both processes verified the same 161-file source manifest, 132 loaded production declarations and six DI functions from the selected source. Each version covered 66 cases: five rounds of 500 warm operations or 40 fresh-container operations, plus a separate 20-operation counting control. Latency did not include an observing autoloader; the counts below come from that separate control.
-
-```bash
-COMPONENTA_DI_BENCH_AUTOLOAD="$PWD/vendor/autoload.php" \
-COMPONENTA_DI_BENCH_SOURCE="$PWD/src" \
-DI_REASSESS_ITERATIONS=500 DI_REASSESS_COLD_ITERATIONS=40 \
-DI_REASSESS_ROUNDS=5 DI_REASSESS_COUNT_ITERATIONS=20 \
-php -n -d opcache.enable_cli=1 -d opcache.jit=0 \
-docs/audit/reproductions/WorkloadNecessity.php
-```
-
-Select the source/dependency revisions recorded in the evidence to reproduce that snapshot; the command above selects the current checkout and its installed dependencies. The adapter remaps optimized Composer classmaps and autoloaded DI functions before loading them. A later `setPsr4()` call alone is insufficient when those mappings or declarations already select another source.
-
-For warm cases, an initial `has()` inspects an unrelated class with zero, one, or eight permanently absent fixture attributes, or one already loaded foreign attribute. Container setup and path warmup are outside timing. The measured objects do not carry those missing annotations: these results characterize contamination of unrelated later work. They do not separately measure repeated creation of a DTO which itself carries an absent annotation. Each timing round owns a new container, while fixture classes and the PHP process are already warm.
-
-All latency cells below are **µs/operation, PHP 8.4.23 / PHP 8.5.8**. Count triples mean **clean / one missing name / eight missing names**, identical on both runtimes.
-
-| Default cached workload | Clean | One missing name | Eight missing names | Missing-name calls/op |
-|---|---:|---:|---:|---:|
-| Plain `make()` | 5.474 / 5.268 | 17.417 / 19.088 | 91.121 / 101.237 | 0 / 22 / 176 |
-| `#[Inject]` property and `#[SetUp]` lifecycle | 23.567 / 25.901 | 65.137 / 70.758 | 305.883 / 332.499 | 0 / 70 / 560 |
-| Reused typed closure | 16.616 / 17.701 | 39.512 / 43.294 | 169.944 / 183.569 | 0 / 38 / 304 |
-| New root, warmed shared children | 15.902 / 17.031 | 38.824 / 41.790 | 178.608 / 193.561 | 0 / 40 / 320 |
-| Explicitly fresh five-object graph | 43.070 / 47.223 | 128.059 / 141.158 | 654.452 / 706.572 | 0 / 152 / 1216 |
-| Warm shared-root `get()` | 0.181 / 0.188 | 0.182 / 0.191 | 0.186 / 0.188 | 0 / 0 / 0 |
-
-The loaded-foreign controls also recorded zero missing-name calls in every case. Plain creation was 4.931 / 5.387 µs and the valid DI-attribute path was 24.241 / 26.353 µs. These controls distinguish available unrelated annotations from absent names; small latency differences are not treated as regressions. No result establishes an architectural speedup on the clean path or a gain on shared-cache hits.
-
-Graph identity is deliberate. Ordinary autowiring reuses `Left` and `Right` services and the same `Leaf` shared by both branches. The warm root case creates only a new root. The explicit-fresh case calls `make()` for every object and supplies its children, producing two distinct leaves and five new objects. Its cost cannot be presented as the cost of ordinary warm shared dependency injection.
-
-The custom-rule control registers one unused marker with a no-op rule. That registration disables semantic plan memoization globally; it does not simulate the cost of an expensive rule body. The following results therefore expose the cost of repeatedly rebuilding metadata while retaining current rule semantics:
-
-| Custom-rule control workload | Clean | One missing name | Eight missing names | Missing-name calls/op |
-|---|---:|---:|---:|---:|
-| Plain `make()` | 16.937 / 17.438 | 47.832 / 51.447 | 244.082 / 254.146 | 0 / 56 / 448 |
-| `#[Inject]` property and `#[SetUp]` lifecycle | 85.169 / 88.205 | 180.440 / 194.503 | 756.403 / 772.198 | 0 / 154 / 1232 |
-| New root, warmed shared children | 80.239 / 85.093 | 215.335 / 226.970 | 1035.606 / 1104.240 | 0 / 228 / 1824 |
-| Explicitly fresh five-object graph | 206.011 / 217.694 | 567.694 / 616.190 | 2757.660 / 3158.261 | 0 / 608 / 4864 |
-
-Shared retrieval still made zero missing-name calls in every custom-rule control. The larger clean custom-rule cost cannot be attributed to unavailable-name polling: that counter is zero. Restoring semantic memoization for arbitrary stateful rules would violate P6, and a polling refactor does not establish that it can remove this separate cost.
-
-Cold cases mean a new container and new metadata/service state in an already warm process. Their totals include construction and the initial contaminant observation. The first root resolves shared dependency services for the first time. Setup and total columns are separate measurements, not additive phases or paired subtractions:
-
-| Cache mode / availability | Build and observe, µs | Build, observe, first root, µs | Missing-name calls, setup / total |
-|---|---:|---:|---:|
-| Default / clean | 52.899 / 58.349 | 190.356 / 212.346 | 0 / 0 |
-| Default / one missing name | 92.841 / 103.566 | 358.403 / 396.658 | 38 / 262 |
-| Default / eight missing names | 227.583 / 254.769 | 1316.168 / 1432.186 | 304 / 2096 |
-| Custom rule / clean | 58.383 / 58.062 | 308.998 / 344.630 | 0 / 0 |
-| Custom rule / one missing name | 122.902 / 148.925 | 715.143 / 891.551 | 70 / 666 |
-| Custom rule / eight missing names | 358.793 / 417.676 | 3096.557 / 3355.903 | 560 / 5328 |
-
-Independent build-only controls and all raw rounds remain in the evidence. The small cold samples showed noticeable spread; subtracting independently measured medians would not yield a reliable exact setup percentage. These figures do not measure PHP process startup, I/O or application request latency. They also cannot be compared with the historical 65da/32b timings as a fix speedup: source, dependencies, settings and counting instrumentation differ.
-
-The new evidence supports the decision above: persistent missing names impose substantial repeated work, especially across many creation/parameter boundaries and uncached-rule paths, while known/loaded attributes and shared retrieval do not produce that miss multiplier. The practical next input for an application considering B2 is a profile showing that this conditional work is material in its own workload. The baseline matrix supplies no measured B2/C benefit and does not justify adding C's index.
+Qualification of a future change must measure valid DI attributes, loaded foreign attributes, missing names, shared and fresh graphs, custom rules and cold startup separately. Keep runtime settings and raw results outside the library source tree. A faster synthetic loop alone does not justify a contract change.
 
 ## Current ownership and root cause
 
@@ -197,7 +122,7 @@ P1–P6 constrain when discovery must become observable; they do not establish t
 
 P11 distinguishes the same-poll coherence invariant from the two-attempt and fallback-exception controls deliberately preserved by the local fix. Both remain obligations under this revision. If G1 proposes changing those autoloader observations, it must explicitly identify the affected constraints, test expectations and compatibility consequences in a revised normative specification; a prototype cannot silently waive them. Immediate invalidation after a declaration has actually been discovered, and agreement between cached and non-memoized behavior, remain correctness requirements.
 
-The original eleven P1–P8 test files passed on both runtimes; the [cache parity recheck](../audit/2026-11-12-cache-parity-recheck.md) added P9–P10. On November 13, fifteen preservation files passed on both the immutable baseline and prototype A: **117 passing, two PHP-8.5-only skips, 820 assertions on PHP 8.4; 119 passing and 828 assertions on PHP 8.5**. The new P11 file had four failing cases and nine successful controls on the pre-correction source, then all thirteen passed. Passing P1–P10 did not establish arbitrary autoloader equivalence: G1 below contains concrete counterexamples. P11 is part of every future optimization's preservation obligations.
+The original eleven P1–P8 test files passed on both runtimes; the [cache parity recheck](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-12-cache-parity-recheck.md) added P9–P10. On November 13, fifteen preservation files passed on both the immutable baseline and prototype A: **117 passing, two PHP-8.5-only skips, 820 assertions on PHP 8.4; 119 passing and 828 assertions on PHP 8.5**. The new P11 file had four failing cases and nine successful controls on the pre-correction source, then all thirteen passed. Passing P1–P10 did not establish arbitrary autoloader equivalence: G1 below contains concrete counterexamples. P11 is part of every future optimization's preservation obligations.
 
 ## Settled design constraints
 
@@ -230,7 +155,7 @@ Freezing unresolved annotations after bootstrap, imposing an arbitrary poll cap/
 
 The repository proves late class loading and completed-work protection. This decision preserves the corrected implementation's observations without declaring every historical miss count a new general public API guarantee. In particular, no optimization here may delay discovery or an exception merely because a loader needs another invocation, or remove an existing unrelated-name side effect. Reducing polls necessarily changes some count-sensitive observations; that would need a revised contract rather than an assertion of transparency.
 
-**Completed evidence:** seven isolated scenarios and their preloaded controls ran against baseline `65da4acc` and A on both runtimes: 56 processes. The same-resolution readiness case reused `ObjectAttributeCacheParityContractTest`. The portable [AttributeAvailabilityObservations.php](../audit/reproductions/AttributeAvailabilityObservations.php) reproduces the isolated observations; the [evidence](../audit/2026-11-13-evidence.json) preserves exact outcomes and source provenance.
+**Completed evidence:** seven isolated scenarios and their preloaded controls ran against baseline `65da4acc` and A on both runtimes: 56 processes. The same-resolution readiness case reused `ObjectAttributeCacheParityContractTest`. The portable [AttributeAvailabilityObservations.php](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/reproductions/AttributeAvailabilityObservations.php) reproduces the isolated observations; the [evidence](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-13-evidence.json) preserves exact outcomes and source provenance.
 
 | Observation | Baseline `65da4acc` | Prototype A | Decision |
 | --- | --- | --- | --- |
@@ -287,7 +212,7 @@ All source-map checks passed; the optimized Composer classmap and autoloaded fun
 
 **Deciding evidence:** after a justified revised G1 contract and G2 are settled, use the then-current corrected source, including P11 and the parameter execution coherence fixes, as the comparison baseline. Historical A remains evidence; do not rebase it merely to reopen its completed rejection as a transparent fix. Compare at most one B2 candidate. Use identical settings and the targeted preservation suites; run runtime versions serially. Include the ordinary valid-attribute paths, custom-rule control, shared/fresh graphs, cold setup, and clean/shared-get controls alongside the affected missing-name cases. Record exact miss counts, raw latency rounds and their median, any count range, and additional retained metadata. An autoload-count range is not a latency distribution; timing and counting instrumentation must be identified separately.
 
-Also retain the controlled `RuntimeBench.php` comparison, including reused and fresh closures. The follow-up coherence fixes showed a positive reused-closure latency signal even with no unavailable attribute in that fixture (see the [recheck measurements](../audit/2026-11-12-cache-parity-recheck.md#controlled-runtime-comparison)). A candidate must account for the ordinary non-memoized path as well as the missing-name benchmark; removing a revision check is acceptable only after its required observation is covered by the approved checkpoint contract.
+Also retain the controlled `RuntimeBench.php` comparison, including reused and fresh closures. The follow-up coherence fixes showed a positive reused-closure latency signal even with no unavailable attribute in that fixture (see the [recheck measurements](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-12-cache-parity-recheck.md#controlled-runtime-comparison)). A candidate must account for the ordinary non-memoized path as well as the missing-name benchmark; removing a revision check is acceptable only after its required observation is covered by the approved checkpoint contract.
 
 **Bound:** disposable candidate copies only; no production edits or public API adoption. Reject a candidate on any preserved behavior failure. Stop after this comparison: choose the smallest satisfactory candidate, retain the baseline with an explained tradeoff, or revise the desired-state specification if a contract change is necessary. A prototype is not implicitly the selected architecture.
 

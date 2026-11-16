@@ -2,7 +2,7 @@
 
 **Canonical specification:** this English document. [Full Russian translation](definition-owner-lifecycle.ru.md).
 
-**Implementation status (2026-11-14):** the central binding table, registration-free strategies, snapshots, attachment rules and complete mutation retirement are implemented on `refactor/di6-definitions-callbacks` in commit `87d7a775`. This is unreleased next-major work; the compatible 5.x line retains its earlier architecture. See the [migration guide](../migrations/di6-definitions.md) and [implementation evidence](../audit/2026-11-14-di6-refactoring.md) for verification and remaining gates. The baseline analysis below describes the audited 5.x implementation. The normative contract and acceptance criteria remain the implementation target.
+**Implementation status (2026-11-14):** the central binding table, registration-free strategies, snapshots, attachment rules and complete mutation retirement are implemented on `refactor/di6-definitions-callbacks` in commit `87d7a775`. This is unreleased next-major work; the compatible 5.x line retains its earlier architecture. See the [migration guide](../migrations/di6-definitions.md) and [implementation evidence](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-14-di6-refactoring.md) for verification and remaining gates. The baseline analysis below describes the audited 5.x implementation. The normative contract and acceptance criteria remain the implementation target.
 
 ## Objective and evidence
 
@@ -10,13 +10,7 @@ Replacing an explicit definition must leave one authoritative registration and s
 
 Three failures remain observable on PHP **8.4.23** and **8.5.8** in the v5.0.5 implementation (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). They were reproduced again during the fresh review; subsequent localized alias/external-lookup and class-availability corrections do not change these ownership paths. Run the public-entry-point diagnostics with development dependencies installed:
 
-```sh
-php -n docs/audit/reproductions/DefinitionLifecycle.php
-php -n docs/audit/reproductions/CacheRetirement.php
-php -n docs/audit/reproductions/MutationParity.php
-```
-
-The scripts are [DefinitionLifecycle.php](../audit/reproductions/DefinitionLifecycle.php), [CacheRetirement.php](../audit/reproductions/CacheRetirement.php) and [MutationParity.php](../audit/reproductions/MutationParity.php). They report observations outside the regular test suite while the defects remain unfixed.
+The current contract is checked by [CentralDefinitionStrategyContractTest](../../tests/Contract/CentralDefinitionStrategyContractTest.php), [MutationRetirementContractTest](../../tests/Contract/MutationRetirementContractTest.php) and [MutationRetirementBoundaryContractTest](../../tests/Contract/MutationRetirementBoundaryContractTest.php). The failures below describe the original 5.x architecture.
 
 | Scenario | Current observation on both runtimes | Required result |
 | --- | --- | --- |
