@@ -13,13 +13,31 @@ parser = argparse.ArgumentParser(description='Serial ABBA public-operation quali
 parser.add_argument('--baseline-source', type=Path, required=True)
 parser.add_argument('--candidate-source', type=Path, required=True)
 parser.add_argument('--vendor', type=Path, required=True)
-parser.add_argument('--php', action='append', required=True, help='Repeat for each PHP binary, processed sequentially.')
+parser.add_argument('--php', action='append', required=True, help='Repeat for each PHP binary, using one binary per major/minor series; processed sequentially.')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--rounds', type=int, default=5)
 parser.add_argument('--scale', type=int, default=32768)
 args = parser.parse_args()
 if args.rounds < 1:
     parser.error('Provide at least one round.')
+runtimes = []
+series = {}
+for php in args.php:
+    version = subprocess.check_output([php, '-n', '-r', 'echo PHP_VERSION;'], text=True).strip()
+    match = re.match(r'^(\d+)\.(\d+)\.', version)
+    if match is None:
+        parser.error(f'Cannot determine the PHP major/minor series for {php!r}: {version!r}.')
+    major_minor = '.'.join(match.groups())
+    previous = series.get(major_minor)
+    if previous is not None:
+        parser.error(
+            f'Provide one --php binary per major/minor series: '
+            f'{previous["binary"]!r} ({previous["version"]}) and {php!r} ({version}) '
+            f'both use PHP {major_minor}.',
+        )
+    runtime = {'binary': php, 'version': version, 'tag': 'php' + ''.join(match.groups())}
+    runtimes.append(runtime)
+    series[major_minor] = runtime
 root = Path(__file__).resolve().parent
 worker = root / 'cycle-guard-benchmark.php'
 loader = root / 'source-loader.php'
@@ -63,9 +81,10 @@ evidence = {
     'summaries': {},
 }
 
-for php in args.php:
-    version = subprocess.check_output([php, '-n', '-r', 'echo PHP_VERSION;'], text=True).strip()
-    tag = 'php' + ''.join(version.split('.')[:2])
+for runtime in runtimes:
+    php = runtime['binary']
+    version = runtime['version']
+    tag = runtime['tag']
     for round_index in range(1, args.rounds + 1):
         ratios = {}
         for position, variant in enumerate(evidence['order'], 1):

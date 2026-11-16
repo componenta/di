@@ -11,7 +11,7 @@ These commands reproduce the fixtures used in the November 15, 2026 optimization
 | `OptimizationComparison.py` | root `OptimizationComparison.py` | Calls adjacent `OptimizationWorkloads.php` unless `--worker` is supplied. Its result schema expects that 12-case worker. |
 | `cycle-guard-benchmark.php` | `core/cycle-guard-benchmark.php` | Positional **repository root**, **vendor directory**, scale; requires adjacent `source-loader.php`. |
 | `source-loader.php` | `core/source-loader.php` | Companion for the core worker; keep this filename and directory relationship. |
-| `run-cycle-guard-benchmark.py` | `core/run-cycle-guard-benchmark.py` | Calls adjacent `cycle-guard-benchmark.php` and hashes adjacent `source-loader.php`; repeat `--php` for both runtimes. |
+| `run-cycle-guard-benchmark.py` | `core/run-cycle-guard-benchmark.py` | Calls adjacent `cycle-guard-benchmark.php` and hashes adjacent `source-loader.php`; repeat `--php` with one binary per major/minor series. |
 
 Two existing published files are also needed: `docs/audit/reproductions/ParameterTargetHelpers.php` and `benchmarks/autoload.php`. The helper takes a **repository root** and **vendor/autoload.php**, unlike the `AttributePlan` and core-worker CLI shapes. Do not substitute either helper worker into `OptimizationComparison.py`; their result schemas differ.
 
@@ -74,6 +74,8 @@ python3 "$DI_REPRO/OptimizationComparison.py" \
 ### CycleGuard alone
 
 Use a fresh output directory here too; this historical driver permits existing directories, so reusing a directory could overwrite earlier logs. The recorded qualification used **scale 8192**, while the standalone worker/driver default is 32768; supply 8192 explicitly to reproduce the recorded operation counts.
+
+The driver now checks all selected PHP versions before creating the output directory or inspecting source trees. Repeating a major/minor series, including the same binary twice, is rejected: process log names use that series, so two PHP 8.4 builds would otherwise overwrite each other's logs. Use separate fresh output directories when comparing patch versions from the same series. One PHP 8.4 binary plus one PHP 8.5 binary remains supported.
 
 ```bash
 python3 "$DI_REPRO/run-cycle-guard-benchmark.py" \
@@ -141,7 +143,7 @@ The worker rejects build counts that are not positive multiples of 100. Preserve
 
 ## Scope of the reproduction proof
 
-The original six published PHP/Python files are copied byte-for-byte from their reviewed originals identified in the evidence. The two additional targeted-follow-up files exactly match the separately measured worker and driver. `AttributePlanSelection.php` is the portable adaptation: the original loop functions, case list and timed body are unchanged, while its untimed CLI/source-manifest observer differs from the historical measured worker. Do not claim whole-file identity between that portable file and the historical worker. The other five files retain their current reviewed bytes.
+The original publication copied the six PHP/Python files byte-for-byte from their reviewed originals identified in the evidence. The current `run-cycle-guard-benchmark.py` additionally validates runtime-series uniqueness before starting work; it no longer has whole-file identity with the historical driver. This untimed input check leaves the worker, timed bodies, ABBA order and historical results unchanged. The two additional targeted-follow-up files exactly match the separately measured worker and driver. `AttributePlanSelection.php` is the portable adaptation: the original loop functions, case list and timed body are unchanged, while its untimed CLI/source-manifest observer differs from the historical measured worker. Do not claim whole-file identity between that portable file and the historical worker.
 
 All source-selection checks must pass. AttributePlan hashes the full selected source at startup and verifies its loaded class; the common benchmark loader checks loaded DI declarations/functions. The core worker checks all loaded production declarations and internal functions against the selected tree. The helper verifies ParameterTarget and TypeHints origins and that its loaded-case loops invoke no autoload callbacks. Those helper checks are not a proof that all application code comes from the selected tree.
 
