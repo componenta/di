@@ -178,8 +178,8 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
-        if (!$reflection->isInstantiable()) {
-            throw new LogicException(sprintf('Virtual proxy class "%s" must be concrete and instantiable.', $class));
+        if ($reflection->isInterface() || $reflection->isTrait() || $reflection->isAbstract() || $reflection->isEnum()) {
+            throw new LogicException(sprintf('Virtual proxy class "%s" must be concrete.', $class));
         }
         if ($typeName !== null
             && (class_exists($typeName) || interface_exists($typeName))
