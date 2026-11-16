@@ -6,6 +6,7 @@ namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\InvokableDefinition;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use ReflectionClass;
@@ -23,6 +24,8 @@ final class InvokableResolver implements DefinitionResolverInterface
         $class = $validated->value;
         try {
             return new $class();
+        } catch (ExceptionInterface $e) {
+            throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forService($id, $e);
         }

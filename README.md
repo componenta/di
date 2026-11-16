@@ -189,7 +189,7 @@ protected function getAliases(): array
 }
 ```
 
-A keyed invokable registers both the concrete class and an alias. Invokables use a direct zero-argument constructor call, including PHP defaults, without processing DI attributes.
+A keyed invokable registers both the concrete class and an alias. Invokables use a direct zero-argument constructor call, including PHP defaults, without processing DI attributes. A constructor failure preserves an existing Componenta exception, including the original circular-dependency diagnostic; a foreign failure becomes `ResolutionException` with the original throwable as its previous exception. Failed creation is not shared, and a later resolution can retry.
 
 ### Delegators
 
