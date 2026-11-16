@@ -319,6 +319,8 @@ After DI resolves an explicitly invoked callable and enters its body, exceptions
 
 ## Audit and architecture plans
 
+The [November 16 whole-repository re-audit, round 5](docs/audit/2026-11-16-di6-full-reaudit-round5.md) records two library fixes, one benchmark-tooling fix, 28 additional test cases, and the complete source/test/document review. All five required CI jobs passed on `42b62af`; measured statement coverage is 92.78% and the reported mutation score is 89.06%, including the separately documented timeouts. The report contains the evidence archive and conditional architecture plans.
+
 The [architecture plan index](docs/plans/README.md) links the reviewed specifications, their implementation readiness, and complete Russian translations. The selected directions are:
 
 - **Attribute availability:** retain corrected polling in current 5.x. B2 remains conditional on application cost and a specified synchronization contract; C is not selected.
