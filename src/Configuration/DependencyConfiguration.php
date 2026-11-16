@@ -43,6 +43,13 @@ final class DependencyConfiguration
      */
     public static function normalize(array $dependencies, array $defaultAliases = []): array
     {
+        // Own the section slots before in-place normalization. A by-value array
+        // can still carry references to the caller's configuration sections.
+        $snapshot = [];
+        foreach ($dependencies as $key => $value) {
+            $snapshot[$key] = $value;
+        }
+        $dependencies = $snapshot;
         self::assertShape($dependencies);
 
         /** @var array<string,non-empty-string> $configuredAliases */
