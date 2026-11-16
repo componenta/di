@@ -7,6 +7,7 @@ namespace Componenta\DI\Attribute\Composition;
 use Attribute;
 use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
+use Componenta\DI\Attribute\Composition\Rule\ProxyCompositionRule;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -66,12 +67,12 @@ final class AttributePlanBuilder
             $this->assertInvocationOnlyComposition($target, $usages);
             $this->assertParameterHandlerComposition($target, $usages);
             $this->assertDependencies($target, $usages);
-            $this->assertCustomRules($usages);
+            $validatedUserRules = $this->assertCustomRules($usages);
 
             // Rules may evaluate native arguments that load another attribute.
             // Revalidate the complete metadata before publishing a direct plan;
             // no runtime handlers have been dispatched during this preparation.
-            if (!$this->canCachePlans && $revision !== $this->registry->revision) {
+            if ($validatedUserRules && $revision !== $this->registry->revision) {
                 continue;
             }
             break;
@@ -407,18 +408,25 @@ final class AttributePlanBuilder
         }
     }
 
-    /** @param list<AttributeUsage> $usages */
-    private function assertCustomRules(array $usages): void
+    /**
+     * @param list<AttributeUsage> $usages
+     * @return bool Whether a user rule ran and may have changed attribute availability.
+     */
+    private function assertCustomRules(array $usages): bool
     {
         if ($usages === []) {
-            return;
+            return false;
         }
 
+        $validatedUserRules = false;
         $set = new AttributeSet($usages);
         foreach ($usages as $usage) {
             foreach ($usage->definition->rules as $rule) {
                 try {
                     $rule->validate($usage, $set);
+                    if (!$rule instanceof ProxyCompositionRule) {
+                        $validatedUserRules = true;
+                    }
                 } catch (AttributeCompositionException $e) {
                     throw $e;
                 } catch (Throwable $e) {
@@ -434,6 +442,7 @@ final class AttributePlanBuilder
                 }
             }
         }
+        return $validatedUserRules;
     }
 
     /**
