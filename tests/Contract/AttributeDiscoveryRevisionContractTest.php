@@ -93,7 +93,7 @@ test('attribute discovery validates one revision when a later autoload reveals a
         $target,
     ));
     $class = __NAMESPACE__ . '\\' . $target;
-    if (!is_a($class, DiscoveryTarget::class, true)) {
+    if (!class_exists($class, false)) {
         throw new LogicException('Expected the discovery target class.');
     }
     $handler = new DiscoveryHandler();
