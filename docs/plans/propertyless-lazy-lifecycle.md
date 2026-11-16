@@ -32,9 +32,9 @@ The tempting change is to call the supplied callback immediately when native all
 
 1. It changes the explicit deferred-callback promise and moves callback errors from a later property access into the creation call. The existing `ProxyFactory` catch boundary would also normalize exceptions that previously belonged to the caller's deferred callback.
 2. For a proxy, the factory creates or returns a second object. Returning that object changes the public result's identity from a wrapper to the factory's product. Returning the placeholder instead loses factory-owned state and identity.
-3. An ordinary placeholder has an active destructor. The prototype in the reproduction observes `constructor, destructor` **before the returned product is released**, then a second destructor when the product is released. One factory call has caused two destruction events, one on an object whose constructor was not run. Native initialized proxies ordinarily rely on the backing object's destructor instead.
+3. An ordinary placeholder has an active destructor. If the factory then returns another object, releasing the placeholder can invoke the destructor of an object whose constructor never ran. This adds a destruction event before the final product is released. Native initialized proxies ordinarily rely on the backing object's destructor instead.
 
-The prototype is a separate function in the observation script; it did not modify `src/`. Keeping the placeholder alive merely postpones the extra destructor and adds ownership/lifetime problems. `resetAsLazy*()` cannot make a propertyless object lazy. Injecting a dummy property or generating a subclass changes class shape/identity and fails for final classes. None is an acceptable silent workaround.
+Keeping the placeholder alive merely postpones the extra destructor and adds ownership/lifetime problems. `resetAsLazy*()` cannot make a propertyless object lazy. Injecting a dummy property or generating a subclass changes class shape/identity and fails for final classes. None is an acceptable silent workaround.
 
 ## 3. Decision D1 and alternatives
 
