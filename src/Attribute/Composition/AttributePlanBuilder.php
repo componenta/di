@@ -46,7 +46,7 @@ final class AttributePlanBuilder
     public function build(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): AttributePlan {
-        do {
+        while (true) {
             $this->synchronizeRegistryRevision();
             $revision = $this->registryRevision;
 
@@ -58,13 +58,24 @@ final class AttributePlanBuilder
             $usages = $this->discoverUsages($target);
             // Loading a later attribute may reveal one skipped earlier. Validate
             // a complete revision, before a missing dependency can fail creation.
-        } while ($revision !== $this->registry->revision);
+            if ($revision !== $this->registry->revision) {
+                continue;
+            }
 
-        $this->assertCapabilityCardinality($target, $usages);
-        $this->assertInvocationOnlyComposition($target, $usages);
-        $this->assertParameterHandlerComposition($target, $usages);
-        $this->assertDependencies($target, $usages);
-        $this->assertCustomRules($usages);
+            $this->assertCapabilityCardinality($target, $usages);
+            $this->assertInvocationOnlyComposition($target, $usages);
+            $this->assertParameterHandlerComposition($target, $usages);
+            $this->assertDependencies($target, $usages);
+            $this->assertCustomRules($usages);
+
+            // Rules may evaluate native arguments that load another attribute.
+            // Revalidate the complete metadata before publishing a direct plan;
+            // no runtime handlers have been dispatched during this preparation.
+            if (!$this->canCachePlans && $revision !== $this->registry->revision) {
+                continue;
+            }
+            break;
+        }
 
         $plan = new AttributePlan($target, $this->ordered($target, $usages));
         if ($key === null) {
