@@ -21,6 +21,8 @@ final class Events
 
 abstract class Product
 {
+    use UnsupportedTrait;
+
     public string $value;
 
     abstract public static function create(): self;
