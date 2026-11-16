@@ -63,6 +63,10 @@ final class AttributePlanBuilder
                 continue;
             }
 
+            if ($usages === []) {
+                break;
+            }
+
             $this->assertCapabilityCardinality($target, $usages);
             $this->assertInvocationOnlyComposition($target, $usages);
             $this->assertParameterHandlerComposition($target, $usages);

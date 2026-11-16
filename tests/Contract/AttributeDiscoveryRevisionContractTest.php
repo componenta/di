@@ -7,12 +7,14 @@ namespace Componenta\DI\Tests\Contract\AttributeDiscoveryRevision;
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use ReflectionClass;
 use Reflector;
 use WeakReference;
 
@@ -78,7 +80,7 @@ final class DiscoveryHandler implements AttributeHandlerInterface
     }
 }
 
-test('attribute discovery validates one revision when a later autoload reveals an earlier dependency', function (bool $uncached, bool $warm): void {
+test('attribute discovery validates one revision when a later autoload reveals an earlier dependency', function (bool $uncached, bool $warm, bool $directPlan): void {
     $suffix = bin2hex(random_bytes(6));
     $required = 'LateRequired_' . $suffix;
     $dependent = 'LateDependent_' . $suffix;
@@ -120,6 +122,14 @@ test('attribute discovery validates one revision when a later autoload reveals a
     };
     spl_autoload_register($loader);
     try {
+        if ($directPlan) {
+            $plan = $container->get(AttributePlanBuilder::class)->build(new ReflectionClass($class));
+            expect($plan->attributes(DiscoveryRequired::class))->toHaveCount(1)
+                ->and($plan->attributes(DiscoveryDependent::class))->toHaveCount(1)
+                ->and(DiscoveryTarget::$constructions)->toBe(0)
+                ->and(DiscoveryPayload::$instances)->toBe([]);
+        }
+
         foreach ([1, 2] as $value) {
             DiscoveryPayload::$current = $value;
             $entry = $container->make($class);
@@ -140,4 +150,5 @@ test('attribute discovery validates one revision when a later autoload reveals a
         DiscoveryPayload::$current = 0;
     }
 })->with(['cached plans' => false, 'uncached plans' => true])
-    ->with(['cold metadata' => false, 'warm metadata' => true]);
+    ->with(['cold metadata' => false, 'warm metadata' => true])
+    ->with(['container creation' => false, 'direct plan' => true]);
