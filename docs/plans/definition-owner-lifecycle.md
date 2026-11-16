@@ -8,7 +8,7 @@
 
 Replacing an explicit definition must leave one authoritative registration and stop retaining its obsolete configuration. All four public registration mutations must finish publication and affected cache invalidation before releasing retired configuration, service values or resolved delegator callables. Throwing destructors must not leave shared `get()` and fresh `make()` using different registrations or leave an alias family partly invalidated.
 
-Three failures remain observable on PHP **8.4.23** and **8.5.8** in the v5.0.5 implementation (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). They were reproduced again during the fresh review; subsequent localized alias/external-lookup and class-availability corrections do not change these ownership paths. Run the public-entry-point diagnostics with development dependencies installed:
+Three failures remain observable on PHP **8.4.23** and **8.5.8** in the v5.0.5 implementation (`a56f3d70dd56bdd62947b6c322aa878e8a76ef4c`). They were reproduced again during the fresh review; subsequent localized alias/external-lookup and class-availability corrections do not change these ownership paths.
 
 The current contract is checked by [CentralDefinitionStrategyContractTest](../../tests/Contract/CentralDefinitionStrategyContractTest.php), [MutationRetirementContractTest](../../tests/Contract/MutationRetirementContractTest.php) and [MutationRetirementBoundaryContractTest](../../tests/Contract/MutationRetirementBoundaryContractTest.php). The failures below describe the original 5.x architecture.
 
