@@ -11,9 +11,14 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use LogicException;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Reflector;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class ParameterOnlyAuditMarker {}
@@ -111,3 +116,65 @@ test('repeated ordering constraints produce one precedence relation', function (
     expect(array_map(static fn(\Componenta\DI\Attribute\Composition\AttributeUsage $usage): string => $usage->attributeClass, $plan->usages))
         ->toBe([CompositionSecond::class, CompositionFirst::class]);
 })->with([new ReflectionClass(CompositionPair::class)]);
+
+final class CompositionDispatchHandler implements AttributeHandlerInterface
+{
+    /** @var list<class-string> */
+    public array $events = [];
+
+    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+    {
+        $this->events[] = $attribute::class;
+    }
+}
+
+test('valid attribute definitions reject ordering cycles before dispatch and accept an acyclic control', function (bool $after): void {
+    $handler = new CompositionDispatchHandler();
+    $first = new AttributeDefinition(
+        CompositionFirst::class,
+        $handler,
+        before: $after ? [] : [CompositionSecond::class],
+        after: $after ? [CompositionSecond::class] : [],
+    );
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition($first)
+        ->addAttributeDefinition(new AttributeDefinition(
+            CompositionSecond::class,
+            $handler,
+            before: $after ? [] : [CompositionFirst::class],
+            after: $after ? [CompositionFirst::class] : [],
+        ))
+        ->build();
+
+    expect(fn() => $container->make(CompositionPair::class))
+        ->toThrow(AttributeCompositionException::class, 'Attribute ordering for ' . CompositionPair::class . ' contains a cycle.')
+        ->and($handler->events)->toBe([]);
+
+    $control = (new ContainerBuilder())
+        ->addAttributeDefinition($first)
+        ->addAttributeDefinition(new AttributeDefinition(CompositionSecond::class, $handler))
+        ->build();
+    expect($control->make(CompositionPair::class))->toBeInstanceOf(CompositionPair::class)
+        ->and($handler->events)->toBe($after
+            ? [CompositionSecond::class, CompositionFirst::class]
+            : [CompositionFirst::class, CompositionSecond::class]);
+})->with(['before selectors' => false, 'after selectors' => true]);
+
+final class MissingAttributeDeclaration {}
+
+test('a registered ordinary class cannot execute as a DI attribute without its native marker', function (): void {
+    $name = 'MissingAttributeTarget_' . bin2hex(random_bytes(6));
+    eval(sprintf('namespace %s; #[MissingAttributeDeclaration] final class %s {}', __NAMESPACE__, $name));
+    $class = __NAMESPACE__ . '\\' . $name;
+    if (!class_exists($class, false)) {
+        throw new LogicException('Expected the invalid attribute fixture.');
+    }
+    $handler = new CompositionDispatchHandler();
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(MissingAttributeDeclaration::class, $handler))
+        ->build();
+
+    expect(fn() => $container->make($class))
+        ->toThrow(AttributeCompositionException::class, 'Registered DI attribute "' . MissingAttributeDeclaration::class . '" is not declared with #[Attribute].')
+        ->and($handler->events)->toBe([]);
+});

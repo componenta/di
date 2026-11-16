@@ -72,6 +72,38 @@ class LazyThrowingConstructorTarget
     }
 }
 
+final class OwnedConstructorFailureState
+{
+    public bool $fail = true;
+    public int $attempts = 0;
+    public int $completed = 0;
+    public ?NotFoundException $failure = null;
+}
+
+class OwnedThrowingConstructorTarget
+{
+    public string $value;
+
+    public function __construct(ContainerInterface $container, OwnedConstructorFailureState $state)
+    {
+        ++$state->attempts;
+        if ($state->fail) {
+            try {
+                $container->get('constructor-body.missing');
+            } catch (NotFoundException $error) {
+                $state->failure = $error;
+                throw $error;
+            }
+        }
+
+        $this->value = 'ready';
+        ++$state->completed;
+    }
+}
+
+#[Lazy]
+final class LazyOwnedThrowingConstructorTarget extends OwnedThrowingConstructorTarget {}
+
 final readonly class ValidationDto
 {
     public function __construct(public string $name) {}
@@ -213,6 +245,63 @@ test('built in lazy initialization keeps the strict exception boundary after get
         ->and($error)->toBeInstanceOf(ExceptionInterface::class)
         ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
+
+test('constructor bodies preserve owned exceptions and can recover without a completed failed instance', function (
+    string $class,
+    bool $lazy,
+): void {
+    if (!is_a($class, OwnedThrowingConstructorTarget::class, true)) {
+        throw new RuntimeException('Expected an owned constructor failure fixture.');
+    }
+    $state = new OwnedConstructorFailureState();
+    $container = (new ContainerBuilder())
+        ->addService(OwnedConstructorFailureState::class, $state)
+        ->build();
+    $entry = null;
+
+    $error = exceptionFrom(static function () use ($container, $class, &$entry): string {
+        $entry = $container->get($class);
+        if (!$entry instanceof OwnedThrowingConstructorTarget) {
+            throw new RuntimeException('Expected the constructor failure target.');
+        }
+        return $entry->value;
+    });
+
+    if (!$error instanceof NotFoundException) {
+        throw new RuntimeException('The constructor must preserve the owned missing-service exception.', previous: $error);
+    }
+    expect($error)->toBe($state->failure)
+        ->and($error->id)->toBe('constructor-body.missing')
+        ->and($error->getPrevious())->toBeNull()
+        ->and($state->attempts)->toBe(1)
+        ->and($state->completed)->toBe(0);
+
+    if ($lazy) {
+        if (!$entry instanceof OwnedThrowingConstructorTarget) {
+            throw new RuntimeException('The lazy object must exist before its constructor runs.');
+        }
+        expect(new \ReflectionClass($class)->isUninitializedLazyObject($entry))->toBeTrue()
+            ->and($container->get($class))->toBe($entry);
+    } else {
+        expect($entry)->toBeNull();
+    }
+
+    $state->fail = false;
+    $recovered = $container->get($class);
+    if (!$recovered instanceof OwnedThrowingConstructorTarget) {
+        throw new RuntimeException('Expected the recovered constructor target.');
+    }
+    expect($recovered->value)->toBe('ready')
+        ->and($state->attempts)->toBe(2)
+        ->and($state->completed)->toBe(1)
+        ->and($container->get($class))->toBe($recovered);
+    if ($lazy) {
+        expect($recovered)->toBe($entry);
+    }
+})->with([
+    'eager' => [OwnedThrowingConstructorTarget::class, false],
+    'lazy' => [LazyOwnedThrowingConstructorTarget::class, true],
+]);
 
 test('foreign delegator failures become DelegatorException with their cause preserved', function (): void {
     $container = (new ContainerBuilder())

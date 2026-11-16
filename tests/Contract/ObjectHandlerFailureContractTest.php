@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Init;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
@@ -20,6 +21,7 @@ use LogicException;
 use ReflectionClass;
 use Reflector;
 use RuntimeException;
+use Throwable;
 
 #[Attribute(Attribute::TARGET_ALL)]
 final class HandlerFailureMarker {}
@@ -123,3 +125,71 @@ function handlerFailureReflection(string $class): ReflectionClass
 {
     return new ReflectionClass($class);
 }
+
+final class InitFailureState
+{
+    public ?Throwable $failure = null;
+    public int $constructions = 0;
+    public int $calls = 0;
+    public int $writes = 0;
+}
+
+final class InitFailureProduct
+{
+    public function __construct(private InitFailureState $state)
+    {
+        ++$state->constructions;
+    }
+
+    #[Init([self::class, 'initialize'])]
+    public string $value = 'unchanged' {
+        set {
+            ++$this->state->writes;
+            $this->value = $value;
+        }
+    }
+
+    public static function initialize(InitFailureState $state): string
+    {
+        ++$state->calls;
+        if ($state->failure !== null) {
+            throw $state->failure;
+        }
+        return 'configured';
+    }
+}
+
+test('Init body failures preserve ownership without committing or publishing the failed object', function (bool $owned): void {
+    $state = new InitFailureState();
+    $cause = $owned ? new ResolutionException('owned initializer failure') : new RuntimeException('foreign initializer failure');
+    $state->failure = $cause;
+    $container = (new ContainerBuilder())->addService(InitFailureState::class, $state)->build();
+    $failure = null;
+    try {
+        $container->get(InitFailureProduct::class);
+    } catch (Throwable $exception) {
+        $failure = $exception;
+    }
+
+    expect($failure)->toBeInstanceOf(ResolutionException::class);
+    if (!$failure instanceof ResolutionException) {
+        throw new LogicException('Expected the initializer failure.');
+    }
+    if ($owned) {
+        expect($failure)->toBe($cause)->and($failure->getPrevious())->toBeNull();
+    } else {
+        expect($failure->getPrevious())->toBe($cause)
+            ->and($failure->propertyClass)->toBe(InitFailureProduct::class)
+            ->and($failure->propertyName)->toBe('value')
+            ->and($failure->propertyType)->toBe('string');
+    }
+    expect($state->constructions)->toBe(1)->and($state->calls)->toBe(1)->and($state->writes)->toBe(0);
+
+    $state->failure = null;
+    $product = $container->get(InitFailureProduct::class);
+    expect($product->value)->toBe('configured')
+        ->and($container->get(InitFailureProduct::class))->toBe($product)
+        ->and($state->constructions)->toBe(2)
+        ->and($state->calls)->toBe(2)
+        ->and($state->writes)->toBe(1);
+})->with(['owned DI exception' => true, 'foreign body exception' => false]);

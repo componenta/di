@@ -8,11 +8,36 @@ use Componenta\Config\Config;
 use Componenta\Config\ConfigPath;
 use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
+use Componenta\Config\Exception\ConfigException;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+
+final class RequiredSetUpDescriptorCalls
+{
+    public int $count = 0;
+}
+
+abstract class RequiredSetUpDescriptorTarget
+{
+    public float $ratio = 0.0;
+
+    public function configure(float $ratio, RequiredSetUpDescriptorCalls $calls): void
+    {
+        ++$calls->count;
+        $this->ratio = $ratio;
+    }
+}
+
+#[SetUp('configure', ['ratio' => new ConfigAttribute(new ConfigPath('required.ratio'))])]
+final class RequiredConfigSetUpTarget extends RequiredSetUpDescriptorTarget {}
+
+#[SetUp('configure', ['ratio' => new Env('REQUIRED_RATIO')])]
+final class RequiredEnvironmentSetUpTarget extends RequiredSetUpDescriptorTarget {}
 
 #[SetUp('configure', ['port' => new Env('MISSING_PORT', default: 8123)])]
 final class SetUpEnvironmentFallbackTarget
@@ -81,3 +106,50 @@ test('SetUp uses explicit Config descriptor paths and their defaults instead of 
         ->and($entry->fallback)->toBe('descriptor default')
         ->and($entry->calls)->toBe(1);
 });
+
+test('required SetUp descriptors reject absent values before invoking the method and accept present values', function (
+    bool $environment,
+): void {
+    $class = $environment ? RequiredEnvironmentSetUpTarget::class : RequiredConfigSetUpTarget::class;
+    $calls = new RequiredSetUpDescriptorCalls();
+    $container = (new ContainerBuilder(new Config([], new Environment([]))))
+        ->addService(RequiredSetUpDescriptorCalls::class, $calls)
+        ->build();
+    $error = null;
+    try {
+        $container->get($class);
+    } catch (ResolutionException $caught) {
+        $error = $caught;
+    }
+
+    if (!$error instanceof ResolutionException) {
+        throw new \RuntimeException('A required SetUp descriptor must reject its absent value.');
+    }
+    expect($error->getMessage())->toContain('Cannot unwrap #[SetUp] param "ratio"', $environment ? '#[Env]' : '#[Config]')
+        ->and($calls->count)->toBe(0);
+    $previous = $error->getPrevious();
+    if ($environment) {
+        expect($error->getMessage())->toContain('environment variable "REQUIRED_RATIO" is not defined')
+            ->and($previous)->toBeNull();
+    } else {
+        if (!$previous instanceof ConfigException) {
+            throw new \RuntimeException('A missing config descriptor must retain the Config exception.', previous: $error);
+        }
+        expect($previous->key)->toBe('required.ratio')
+            ->and($error->getMessage())->toContain($previous->getMessage());
+    }
+
+    $configured = (new ContainerBuilder(new Config(
+        ['required' => ['ratio' => 1.25]],
+        new Environment(['REQUIRED_RATIO' => '1.25']),
+    )))
+        ->addService(RequiredSetUpDescriptorCalls::class, $calls)
+        ->build();
+    $entry = $configured->get($class);
+    if (!$entry instanceof RequiredSetUpDescriptorTarget) {
+        throw new \RuntimeException('Expected a configured SetUp descriptor target.');
+    }
+    expect($entry->ratio)->toBe(1.25)
+        ->and($calls->count)->toBe(1)
+        ->and($configured->get($class))->toBe($entry);
+})->with(['Config' => false, 'Env' => true]);
