@@ -10,6 +10,7 @@ use Componenta\Config\Environment;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use stdClass;
 
 test('reusing dependency definitions with referenced sections preserves keyed invokable aliases', function (): void {
@@ -55,3 +56,34 @@ test('value normalization does not overwrite referenced caller sections even whe
         ->and($aliases)->toBe(['public-product' => 'configured-product'])
         ->and($delegators)->toBe(['configured-product' => $decorator]);
 })->with(['successful normalization' => false, 'failed validation' => true]);
+
+
+test('each factory build owns alias routing before extension callbacks mutate referenced input', function (): void {
+    $first = new stdClass();
+    $second = new stdClass();
+    $target = 'first';
+    $aliases = ['requested' => &$target];
+    $definitions = new DependencyDefinitions([
+        'aliases' => &$aliases,
+        'services' => ['first' => $first, 'second' => $second],
+        'parameter_resolvers' => [400 => static function () use (&$target): DefaultValueResolver {
+            $target = 'second';
+            return new DefaultValueResolver();
+        }],
+    ]);
+    $config = new Config([], new Environment([]));
+    $factory = new ContainerFactory();
+
+    $initial = $factory->create($config, $definitions)->container;
+    $next = $factory->create($config, $definitions)->container;
+
+    expect($target)->toBe('second')
+        ->and($initial->get('requested'))->toBe($first)
+        ->and($initial->get('requested'))->toBe($first)
+        ->and($next->get('requested'))->toBe($second)
+        ->and($next->get('requested'))->toBe($second)
+        ->and($initial->get('first'))->toBe($first)
+        ->and($initial->get('second'))->toBe($second)
+        ->and($initial->get('config'))->toBe($config)
+        ->and($next->get('config'))->toBe($config);
+});

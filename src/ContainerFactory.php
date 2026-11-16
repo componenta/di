@@ -195,7 +195,7 @@ final class ContainerFactory
 
     private function buildContainer(): Container
     {
-        $this->assertBindings();
+        $aliases = $this->assertBindings();
 
         $config = $this->config;
         $environment = $config->environment;
@@ -215,10 +215,7 @@ final class ContainerFactory
             $attributeProcessor,
         );
 
-        $aliases = new AliasResolver([
-            ...$this->aliases,
-            ConfigAttribute::KEY => Config::class,
-        ]);
+        $aliases->set(ConfigAttribute::KEY, Config::class);
         $cache = new EntryCache();
         foreach ($this->services as $id => $service) {
             $cache->putBase($aliases->resolve($id), $service);
@@ -584,7 +581,7 @@ final class ContainerFactory
         return $extension;
     }
 
-    private function assertBindings(): void
+    private function assertBindings(): AliasResolver
     {
         $aliases = new AliasResolver($this->aliases);
         /** @var array<string,array{kind:string,id:string}> $owners */
@@ -646,6 +643,7 @@ final class ContainerFactory
         foreach (array_keys($this->aliases) as $alias) {
             self::assertId($alias, 'alias');
         }
+        return $aliases;
     }
 
     private static function assertId(string $id, string $kind): void
