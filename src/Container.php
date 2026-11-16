@@ -104,23 +104,23 @@ final class Container implements
     public function get(string $id): mixed
     {
         try {
-            $entryId = $this->aliases->resolve($id);
-            if ($this->externalContainers !== null
-                && !ProtectedServiceIds::contains($id)
-                && !ProtectedServiceIds::contains($entryId)
-            ) {
-                $externalGuard = "\0external:" . $id;
-                $lookupGuard = $this->lookupGuard ??= new CycleGuard();
-                $lookupGuard->enter($externalGuard);
-                try {
-                    $external = $this->externalContainers->findOwning($id);
-                    // External has() may retarget aliases before local resolution.
-                    $entryId = $this->aliases->resolve($id);
-                    if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
-                        return $external->get($id);
+            $entryId = null;
+            if ($this->externalContainers !== null) {
+                $entryId = $this->aliases->resolve($id);
+                if (!ProtectedServiceIds::contains($id) && !ProtectedServiceIds::contains($entryId)) {
+                    $externalGuard = "\0external:" . $id;
+                    $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+                    $lookupGuard->enter($externalGuard);
+                    try {
+                        $external = $this->externalContainers->findOwning($id);
+                        // External has() may retarget aliases before local resolution.
+                        $entryId = $this->aliases->resolve($id);
+                        if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
+                            return $external->get($id);
+                        }
+                    } finally {
+                        $lookupGuard->leave($externalGuard);
                     }
-                } finally {
-                    $lookupGuard->leave($externalGuard);
                 }
             }
 
@@ -128,6 +128,7 @@ final class Container implements
                 return $entry;
             }
 
+            $entryId ??= $this->aliases->resolve($id);
             $this->resolvedEntryGuard->enterShared($id);
             try {
                 return $this->resolveAndStore($id, $entryId);

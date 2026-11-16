@@ -11,6 +11,7 @@ use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
@@ -144,4 +145,30 @@ test('standalone lazy and proxy creation uses the supplied proxy factory', funct
     expect($factory->calls)->toBe(['lazy', 'proxy'])
         ->and($lazy->value)->toBe('initialized')
         ->and($proxy->value)->toBe('factory');
+});
+
+test('standalone shared lookups preserve supplied values through alias retarget and replacement', function (): void {
+    $cache = new EntryCache(['first' => null, 'second' => false]);
+    $aliases = new AliasResolver(['requested' => 'first', 'sibling' => 'first']);
+    $container = new Container(new StandaloneEntryResolver(), $aliases, (new ContainerBuilder())->build(), $cache);
+
+    expect($container->get('requested'))->toBeNull()
+        ->and($container->get('requested'))->toBeNull()
+        ->and($container->get('sibling'))->toBeNull()
+        ->and($container->get('first'))->toBeNull();
+
+    $container->alias('requested', 'second');
+
+    expect($container->get('requested'))->toBeFalse()
+        ->and($container->get('requested'))->toBeFalse()
+        ->and($container->get('sibling'))->toBeNull()
+        ->and($container->get('second'))->toBeFalse();
+
+    $replacement = new StandaloneProduct(['source' => 'replacement']);
+    $container->set('second', $replacement);
+
+    expect($container->get('requested'))->toBe($replacement)
+        ->and($container->get('requested'))->toBe($replacement)
+        ->and($container->get('second'))->toBe($replacement)
+        ->and($container->get('sibling'))->toBeNull();
 });
