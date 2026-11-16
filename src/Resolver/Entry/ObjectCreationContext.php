@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Closure;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Object\CreationStrategy;
@@ -227,6 +228,8 @@ final class ObjectCreationContext
 
         try {
             $property->setValue($entry, $value);
+        } catch (ExceptionInterface $e) {
+            throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($property, previous: $e);
         }
