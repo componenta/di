@@ -54,8 +54,13 @@ test('callable definition admission snapshots routing references while retaining
     $resolved = $container->get('product');
     $fresh = $container->make('product');
 
+    if (!$resolved instanceof Product || !$fresh instanceof Product) {
+        throw new \LogicException('Expected factory products retaining their callable owner.');
+    }
     expect($resolved)->toEqual(new Product($original, 'create', 'original'))
-        ->and($fresh)->toEqual(new Product($original, 'create', 'original'));
+        ->and($fresh)->toEqual(new Product($original, 'create', 'original'))
+        ->and($resolved->owner)->toBe($original)
+        ->and($fresh->owner)->toBe($original);
     if ($warm) {
         expect($resolved)->toBe($shared);
     }

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract;
 
+use Attribute;
 use Componenta\Config\Config;
 use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\Capability\LifecycleHook;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
@@ -17,6 +20,11 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use Reflector;
 
 final readonly class SetUpPropertyDependency
 {
@@ -124,4 +132,42 @@ test('failed property injection prevents setup side effects', function (): void 
     expect(fn() => $container->make(FailedSetUpPropertyTarget::class))
         ->toThrow(ResolutionException::class)
         ->and($events->steps)->toBe([]);
+});
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final class SetUpCapabilityPredecessor {}
+
+#[SetUp('initialize'), SetUpCapabilityPredecessor]
+final class SetUpCapabilityTarget
+{
+    /** @var list<string> */
+    public array $events = [];
+
+    public function initialize(): void
+    {
+        $this->events[] = 'setup';
+    }
+}
+
+test('a lifecycle capability selector orders an extension before the built-in setup hook', function (): void {
+    $handler = new class () implements AttributeHandlerInterface {
+        public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+        {
+            if (!$context->entry instanceof SetUpCapabilityTarget) {
+                throw new \LogicException('Expected the setup capability target.');
+            }
+            $context->entry->events[] = 'predecessor';
+        }
+    };
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(
+            SetUpCapabilityPredecessor::class,
+            $handler,
+            before: [LifecycleHook::class],
+            phase: AttributePhase::AfterInstantiation,
+        ))
+        ->build();
+
+    expect($container->make(SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup'])
+        ->and($container->make(SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup']);
 });
