@@ -7,14 +7,17 @@ namespace Componenta\DI\Resolver\Attribute\Handler;
 use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\Request\CallbackMapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\CastableInterface;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
@@ -39,6 +42,7 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
         private readonly FactoryInterface $factory,
         private readonly CasterProviderInterface $casterProvider,
         private readonly ?ValidationProviderInterface $validationProvider = null,
+        private readonly ?AttributeCallbackInvoker $callbacks = null,
     ) {}
 
     public function resolveParameter(
@@ -76,9 +80,6 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
         ReflectionParameter $parameter,
     ): mixed {
         if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {
-            if ($attribute instanceof CasterProviderAwareInterface) {
-                $attribute->provider = $this->casterProvider;
-            }
             return $this->processMapping($request, $attribute, $parameter);
         }
 
@@ -125,11 +126,34 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
         RequestDataExtractorInterface&MapperInterface $mapper,
         ReflectionParameter $parameter,
     ): array|object {
+        $afterMap = $mapper instanceof CallbackMapperInterface ? $mapper->afterMap : null;
+        $callbacks = $this->callbacks;
+        if ($afterMap !== null && $callbacks === null) {
+            throw new InvalidConfigurationException('Request mapping afterMap requires the attribute callback binder.');
+        }
+        if ($mapper instanceof CasterProviderAwareInterface) {
+            $mapper->provider = $this->casterProvider;
+        }
+
         $typeName = $this->resolveTypeName($parameter);
         $rawData = $mapper->extract($request);
         $this->assertNamedDtoData($typeName, $rawData, $parameter);
         $this->validateData($typeName, $rawData);
         $data = $mapper->transform($rawData);
+        if ($afterMap !== null) {
+            // Fresh top-level slots prevent writes through mapper-owned references.
+            $argument = [];
+            foreach ($data as $key => $item) {
+                $argument[$key] = $item;
+            }
+            $data = $callbacks->invoke($afterMap, $argument);
+            if (!is_array($data)) {
+                throw ResolutionException::forParameter(
+                    $parameter,
+                    reason: 'request mapping afterMap must return an array',
+                );
+            }
+        }
         $this->assertNamedDtoData($typeName, $data, $parameter);
 
         if ($typeName === null) {

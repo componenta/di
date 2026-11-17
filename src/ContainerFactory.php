@@ -268,7 +268,7 @@ final class ContainerFactory
         $bootstrap->initialize($entryResolver, $executor);
 
         $attributeCallbacks = new AttributeCallbackInvoker($parameters, $container);
-        $handlers = $this->sharedAttributeHandlers($container, $proxyFactory, $plans);
+        $handlers = $this->sharedAttributeHandlers($container, $proxyFactory, $plans, $attributeCallbacks);
 
         if (!$this->replaceAttributeDefinitions) {
             $this->registerBuiltInAttributes(
@@ -475,6 +475,7 @@ final class ContainerFactory
         Container $container,
         ProxyFactoryInterface $proxyFactory,
         AttributePlanBuilder $plans,
+        AttributeCallbackInvoker $attributeCallbacks,
     ): array {
         return [
             CastHandler::class => new CastHandler($container),
@@ -486,6 +487,7 @@ final class ContainerFactory
                 new LazyFactory($container),
                 new LazyCasterProvider($container),
                 new LazyValidationProvider($container),
+                $attributeCallbacks,
             ),
         ];
     }
