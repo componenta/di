@@ -52,3 +52,34 @@ test('external containers cannot shadow protected DI entries or aliases to them'
         ->and($container->has('protected.container'))->toBeTrue()
         ->and($container->get('external.entry'))->toBe($externalValue);
 });
+
+test('protected aliases never query external ownership callbacks', function (bool $warm): void {
+    $container = (new ContainerBuilder())->build();
+    $container->alias('protected.container', ContainerInterface::class);
+    if ($warm) {
+        expect($container->get('protected.container'))->toBe($container);
+    }
+    $external = new class () implements ContainerInterface {
+        /** @var list<string> */
+        public array $calls = [];
+
+        public function has(string $id): bool
+        {
+            $this->calls[] = 'has:' . $id;
+            return true;
+        }
+
+        public function get(string $id): mixed
+        {
+            $this->calls[] = 'get:' . $id;
+            return 'external';
+        }
+    };
+    $container->addContainer($external);
+
+    expect($container->get('protected.container'))->toBe($container)
+        ->and($container->has('protected.container'))->toBeTrue()
+        ->and($external->calls)->toBe([])
+        ->and($container->get('external.entry'))->toBe('external')
+        ->and($external->calls)->toBe(['has:external.entry', 'get:external.entry']);
+})->with(['cold' => false, 'warm' => true]);
