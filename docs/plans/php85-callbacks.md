@@ -65,7 +65,7 @@ The present priority order is attributes → provided name/position → provided
 
 ### 3.1 `Transform`
 
-Proposed new declaration:
+Implemented DI 6 declaration:
 
 ```php
 #[Attribute(
@@ -100,7 +100,7 @@ Retain `Init(mixed $callable, array $params = [])` and its existing callable rep
 
 ### 3.4 Correct examples
 
-These are proposed DI 6 examples; `Transform` and callback `SetUp` are not part of DI 5:
+These examples use the implemented DI 6 API; `Transform` and callback `SetUp` are not part of DI 5:
 
 ```php
 final class CustomerInput
@@ -367,11 +367,11 @@ The runner's stability predicate is currently specific to PHP 8.5.x. A nonzero r
 | Shared binder, `Transform`, callback `SetUp`, simple-union behavior | Implemented on the authorized major branch; supported forms are tested while E1 remains pending. |
 | Correct trait-relative/mixed-visibility first-class references on a named stable runtime | Support declaration limited by E1; PHP 8.5.8 demonstrably fails. |
 | DI 6 package with PHP `^8.4`, supported-runtime CI and documented engine limitations | Independent of E1; normal library, migration and publication checks apply. |
-| Request-to-DTO callback | Blocked independently by §11's semantic decisions. |
+| Request-to-DTO callback | Optional design specified in §11; implementation is outside the accepted DI 6 scope. No unresolved engine or core-architecture dependency blocks that design. |
 
 Compatibility review must cover existing `SetUp` subclasses and named arguments, `Init` string/array/invokable inputs, extension handler definitions, decorated `CallableInvokerInterface` services, companion package constraints, and applications enabling `ClassDefinition` autowiring. Use the actual consuming packages' manifests and test suites before proposing any coordinated version bumps. No unrelated package release is required just to add syntax-aware tests here.
 
-Direct construction of the infrastructure handler `SetUpRunner` changes in this major: its constructor takes `CallableInvokerInterface`, `ObjectResolutionParameterStore`, then the shared `AttributeCallbackInvoker`, followed by the existing variadic `SetUpValueUnwrapperInterface` instances. The only in-repository construction site is `ContainerFactory`; external direct consumers insert this helper before their unwrappers. This does not change the attribute constructor names/order or add a legacy handler path.
+Direct construction of the infrastructure handler `SetUpRunner` changes in this major: its constructor takes `CallableInvokerInterface`, `ObjectResolutionParameterStore`, then the shared `AttributeCallbackInvoker`, followed by the existing variadic `SetUpValueUnwrapperInterface` instances. The only production construction site is `ContainerFactory`; external direct consumers insert this helper before their unwrappers. This does not change the attribute constructor names/order or add a legacy handler path.
 
 There is a specific major-version migration for `SetUp` subclasses: a subclass redeclaring or promoting `public string $method` must widen that property to the same `string|Closure` type or remove the redeclaration. PHP property invariance rejects the narrower redeclaration after the parent changes. A constructor-only `string` parameter that forwards to the parent without redeclaring the property can remain narrower. Document and test these cases; do not describe the widening as universally source-compatible.
 
@@ -469,6 +469,8 @@ Retain PHP `^8.4`, prepare the `6.0.x-dev` alias for publication of the 6.x line
 
 These distinctions are covered by [request transformation contracts](../../tests/Contract/RequestMappingTransformationContractTest.php) and [mapped Transform lifecycle contracts](../../tests/Contract/RequestTransformLifecycleContractTest.php). `Init` initializes property values, not the whole DTO input. Mapping into an array and manually building a DTO is possible, but array mode does not implicitly run automatic DTO validation/source provenance.
 
+Typed DTO mapping with DI is also possible today through an application parameter handler and a per-attempt mapper that delegates to the existing request handler. It preserves raw validation and final source guards, at the cost of adapter/registration code. The [current/proposed examples](request-mapping-examples.md) compare that equivalent path as well as the simpler alternatives. A bounded four-area prototype exercised the proposed examples on PHP 8.4.27 and 8.5.12; this is feasibility evidence, not a shipped feature or completion of the acceptance matrix below.
+
 #### Minimal API and owners
 
 Use **`afterMap`**, replacing the earlier tentative `transform` constructor argument: standalone `MapperInterface::transform()` does not perform this DI-owned stage.
@@ -486,7 +488,22 @@ interface CallbackMapperInterface extends MapperInterface
 
 `MapRequest` implements it. Independent custom mappers, including readonly attributes, may voluntarily implement it together with `RequestDataExtractorInterface`; existing mapper interfaces stay unchanged. The getter supplies stable callback configuration for the current attribute instance. The handler reads it once per mapping attempt and retains that local value. Do not attach a binder to mutable mapper state or select this capability through `instanceof RequestMapper`.
 
+Implementing this protocol does not register an independent attribute. Keep the existing `AttributeDefinition` registration with `ValueProvider`: its factory can reuse `AttributeDefinitionRegistry::definition(MapRequest::class)->handler` when the built-in definition is enabled. A readonly implementation can satisfy the get-only interface with an ordinary stored readonly property; it does not need a property hook. Do not add automatic interface scanning or a second request-handler registry.
+
 `RequestAttributeHandler` owns invocation and receives the existing `AttributeCallbackInvoker` as a last optional constructor argument. Its original three arguments retain their names and meaning. `ContainerFactory` passes the already-created shared binder. Old mappers and `afterMap: null` work without it; an enabled callback without a binder raises `InvalidConfigurationException` before extraction, validation or custom transformation. No new registry, callback chain, factory or general mapping pipeline is required. Preserve the existing early return for an already-resolved `ParameterAttributeValue`: do not read the getter, require a binder or invoke `afterMap` when this request provider is bypassed.
+
+#### Growth and service lifetime
+
+| Growth in application needs | Extension using this API |
+|---|---|
+| One local normalization | One closure; keep simple renames/defaults declarative. |
+| Several endpoints or request sources | Reuse a named public static callback and select sources with `MapRequest`; no per-endpoint callback registration. |
+| Several normalization steps or configurable policies | Delegate from that callback to an application service that composes its collaborators. Ordering, intermediate schemas and application policy belong there. |
+| A custom source or a reusable attribute | Opt into the protocol and reuse the existing attribute-definition mechanism. |
+
+Do not introduce a callback list, named callback registry or generic pipeline until an actual use case requires library-owned intermediate-stage semantics. A single closure does not prevent application composition. Keep reusable callbacks free of request captures or mutable request state; native function/static state and constant-held closures are still application-owned.
+
+Warm-plan freshness means each DI suffix resolves the current binding for its requested service ID. It does not recursively rebuild an already-shared application normalizer after one of its constructor dependencies is replaced. Choose that service's lifetime deliberately, replace the normalizer itself, or inject the changing policy directly into the callback. The existing container lifecycle stays unchanged; no dependency-graph invalidation feature is added.
 
 #### Data, invocation and failure contract
 
@@ -507,9 +524,9 @@ Current tests establish existing alternatives and ordering, not implementation o
 
 | Property | Required proof |
 |---|---|
-| Use case and wiring | Readonly DTO value computed from several fields plus a DI dependency; one constructor call; current dependency after a warm-plan service change. |
+| Use case and wiring | Readonly DTO value computed from several fields plus a DI dependency; one constructor call; current direct dependency after a warm-plan service change; the same named callback on payload and query endpoints without cross-call data leakage. |
 | Absence and direct API | Existing Map* and null-callback paths unchanged; standalone `transform()` does not invoke the callback; old directly-created handlers accept old mappers; missing binder fails before mapper side effects; an already-resolved value bypasses getter/binder/callback. |
-| Open extension protocol | Readonly custom mapper opts in without inheriting `RequestMapper`; getter read once and captured callback executed once. |
+| Open extension protocol | Readonly custom mapper opts in without inheriting `RequestMapper`, with explicit existing attribute-definition registration and the built-in handler; getter read once and captured callback executed once. |
 | ABI and DI isolation | Common binder acceptance, empty signature, first-parameter rejection, non-spread array, request-shaped names unable to replace DI suffix dependencies. |
 | Validation and result | Raw failure invokes neither transform nor callback; raw validator not rerun on the final schema; scalar/DTO/void outputs and final DTO numeric keys rejected before factory; array numeric keys supported. |
 | Source integrity | Removing a raw source-shaped field is allowed; known constructor conflicts rejected before initial factory invocation; later actual-class, late-discovery, nested DTO and setup guards reject before affected parameter consumption, without rollback. |
@@ -533,4 +550,4 @@ Address the measured repeated autoload issue under the separate [availability pe
 
 The following are normative choices for the proposed target, not unresolved decisions: empty-signature callbacks are allowed; first DI parameter metadata is forbidden and guarded together with the suffix; the `Transform` suffix receives no ambient public bag; explicit callback `SetUp::$params` uses string keys with existing provided-parameter matching rules; standalone property transformation needs a source; only simple unions are autowired; `Closure` uses the same availability rule as other service-type arms; different service IDs remain ambiguous even when aliases converge. If a choice changes, revise its owning contract and acceptance rows before implementing it. E1 limits only the affected native-form support promise. The optional request-mapping extension has its own contract in §11 and does not block the accepted DI 6 scope.
 
-During implementation convergence, compare code, wiring, public migration notes and observed behavior with §§2–9. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.
+During implementation convergence, compare code, wiring, public migration notes and observed behavior with §§2–9 for the accepted DI 6 features, and with §11's contract, acceptance matrix and slices if the optional mapping feature is implemented. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.

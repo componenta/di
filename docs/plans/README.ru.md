@@ -8,6 +8,7 @@
 |---|---|---|
 | Владение определениями и освобождение после мутаций | [Русский](definition-owner-lifecycle.ru.md) / [English](definition-owner-lifecycle.md) | Реализованы центральные регистрации, стратегии без карт, снимки, правила присоединения и retirement после полной инвалидации. [Миграция](../migrations/di6-definitions.ru.md). |
 | Callbacks и union-типы | [Русский](php85-callbacks.ru.md) / [English](php85-callbacks.md) | Реализованы общий binder, Transform, callback SetUp, Init и простые unions. E1 ограничивает затронутые native-формы; request-to-DTO callbacks отложены. [Миграция](../migrations/di6-callbacks.ru.md). |
+| Удобство request mapping | [Примеры «сейчас / после»](request-mapping-examples.ru.md) / [English](request-mapping-examples.md) | Необязательный дизайн `afterMap` определён в §11 плана callbacks; не реализован. Сравниваются эквивалентные пути DTO, переиспользование, регистрация custom source и ограничения. |
 | Нативная ленивость | [Русский](propertyless-lazy-lifecycle.ru.md) / [English](propertyless-lazy-lifecycle.md) | D1/A реализовано: стандартный адаптер отклоняет неподдерживаемые классы до выделения. Контракты отложенных callbacks и пользовательских адаптеров сохранены. |
 | Доступность атрибутов | [Русский](attribute-availability-performance.ru.md) / [English](attribute-availability-performance.md) | Сохраняется исправленный опрос. B2 требует обоснования затрат приложения и пересмотра контракта до G2/G3; реализация не выбрана. C не выбран. |
 
