@@ -359,13 +359,13 @@ The runner's stability predicate is currently specific to PHP 8.5.x. A nonzero r
 
 **Bounded deciding evidence:** identify an officially released PHP 8.5 patch; verify its tagged source contains the engine correction; run the upstream trait `self::`/`parent::`, named-class visibility and two-consuming-class fixtures plus the attribute-expression examples on that exact binary. Record the release/tag, binary version and outcomes. A release candidate may inform the investigation but cannot satisfy this stable-runtime support check. Do not broaden this into an engine workaround or a new DI callback-scope mechanism.
 
-**Stop and unblock:** once the released patch passes those fixtures, record the minimum verified runtime for the affected forms, tagged-source evidence and the corresponding feature regression job. This does not automatically change the package-wide Composer floor. Until then, retain the documented limitation and do not claim fully correct trait-relative callbacks on the tested 8.5.8 runtime. A capture-free inline static closure or fully qualified reference to a public helper is an application-level alternative within the verified scope; DI must not emulate or rebind native lexical scope.
+**Stop and unblock:** once the released patch passes those fixtures, record the minimum verified runtime for the affected forms, tagged-source evidence and the corresponding feature regression job. This does not automatically change the package-wide Composer floor. Until then, retain the documented limitation and do not claim fully correct trait-relative callbacks on the tested 8.5.8 and 8.5.12 runtimes. A capture-free inline static closure or fully qualified reference to a public helper is an application-level alternative within the verified scope; DI must not emulate or rebind native lexical scope.
 
 | Work or promise | Readiness |
 | --- | --- |
 | Existing `Init` native-expression examples and compatible regression fixtures | Ready; actual current behavior is recorded. |
 | Shared binder, `Transform`, callback `SetUp`, simple-union behavior | Implemented on the authorized major branch; supported forms are tested while E1 remains pending. |
-| Correct trait-relative/mixed-visibility first-class references on a named stable runtime | Support declaration limited by E1; PHP 8.5.8 demonstrably fails. |
+| Correct trait-relative/mixed-visibility first-class references on a named stable runtime | Support declaration limited by E1; PHP 8.5.8 and 8.5.12 demonstrably fail. |
 | DI 6 package with PHP `^8.4`, supported-runtime CI and documented engine limitations | Independent of E1; normal library, migration and publication checks apply. |
 | Request-to-DTO callback | Implemented as the additive option specified in §11. Existing mapper and handler usage remains supported. |
 

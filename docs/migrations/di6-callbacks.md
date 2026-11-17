@@ -4,7 +4,7 @@
 
 This guide describes the implementation on the DI 6 development branch, following the DI 5.0.6 baseline. It is not a DI 6 release announcement. The library retains PHP `^8.4`; inline callbacks and first-class callable references written directly in attribute arguments require PHP 8.5.
 
-**The package floor and native-expression support are separate.** E1 in the [callback specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) limits the support promise for affected trait first-class references; it does not block the DI 6 release or raise its PHP `^8.4` requirement. PHP 8.5.8 has a reproduced native defect in these forms. DI preserves native scope and documents the limitation rather than emulating it. See [platform limits](#8-platform-limits) below.
+**The package floor and native-expression support are separate.** E1 in the [callback specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) limits the support promise for affected trait first-class references; it does not block the DI 6 release or raise its PHP `^8.4` requirement. PHP 8.5.8 and 8.5.12 reproduce a native defect in these forms. DI preserves native scope and documents the limitation rather than emulating it. See [platform limits](#8-platform-limits) below.
 
 ## 1. Changes to review before upgrading
 
@@ -216,7 +216,7 @@ Native state is preserved. A freshly materialized inline static closure has fres
 
 ## 8. Platform limits
 
-The tested PHP 8.5.8 engine incorrectly reuses the first consuming trait scope for some attribute first-class references using `self::` or `parent::`; a named private reference can likewise retain the first consumer's visibility result. The native inline-static-closure control resolves each consumer correctly. The defect reproduces without DI.
+The tested PHP 8.5.8 and 8.5.12 engines incorrectly reuse the first consuming trait scope for some attribute first-class references using `self::` or `parent::`; a named private reference can likewise retain the first consumer's visibility result. The native inline-static-closure control resolves each consumer correctly. The defect reproduces without DI.
 
 E1 remains open for these affected forms until a released PHP patch passes the correct per-consumer scope and visibility fixtures. The resulting minimum applies to the feature support declaration, not automatically to the whole package. DI does not rebind callbacks to hide that defect. Capture-free inline static closures and fully qualified public-helper references are within the verified alternatives; do not infer support for every affected trait-relative expression from their success.
 
@@ -238,6 +238,8 @@ The PHP 8.4 suites cover library behavior and runtime-created closures. PHP 8.5 
 `MapRequest` remains final and adds `public readonly ?Closure $afterMap = null` as its **last** constructor argument. The names, order and defaults of the preceding nine arguments remain unchanged. Omitting `afterMap`, or passing `null`, preserves the existing mapping path.
 
 This addition does not deprecate or remove any existing mapping API. `RequestMapper` and all seven source-specific wrappers — `MapRequestPayload`, `MapQueryString`, `MapHeaders`, `MapCookies`, `MapRequestAttributes`, `MapServerParams` and `MapUploadedFiles` — retain their constructors and inheritance contracts. Custom `transform()` overrides, array mapping followed by `Transform`, and manual application adapters remain supported. Existing subclasses with their own `afterMap` property are unaffected unless they explicitly opt into the new interface described below.
+
+Duplicate-key merging now checks `FirstWins` before comparing values, avoiding native recursion errors for a later value that this policy ignores. `Reject` retains native strict comparison. A subclass with a getter hook for protected `$conflictPolicy` observes a read for every duplicate key, including identical values; previously equality could short-circuit that read. This ordering correction does not change constructors or remove subclass hooks. The [request-source contracts](../../tests/Contract/RequestSharedSourcesContractTest.php) cover recursive values in both source orders.
 
 For a built-in mapper targeting a DTO, the order is: **extract → validate raw data → declarative transform → `afterMap` → final guards → factory**. Raw named-key checks precede validation; the configured validator, if any, still sees raw input. The declarative transform retains its existing map → cast → defaults → sort → exclude order. The callback must return an actual array; a DTO, `Traversable`, scalar, `null` or a `void` result is invalid. An array target returns the final array without a DTO factory or implicit DTO validation. Calling `$mapper->transform()` directly does not invoke `afterMap`; the request handler owns this stage.
 
