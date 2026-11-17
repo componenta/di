@@ -80,7 +80,9 @@ final readonly class InstanceCreator
     }
 
     /**
-     * @param ReflectionClass<object> $class
+     * @template T of object
+     * @param T $entry
+     * @param ReflectionClass<T> $class
      * @param array<string|int, mixed> $params
      */
     public function initialize(object $entry, ReflectionClass $class, array $params = []): void
