@@ -90,8 +90,6 @@ final class DelegatorRegistry
         $queue = [];
         /** @var array<string, true> $queued */
         $queued = [];
-        /** @var array<string, true> $visited */
-        $visited = [];
         /** @var array<string, true> $entries */
         $entries = [];
 
@@ -105,10 +103,6 @@ final class DelegatorRegistry
 
         for ($offset = 0; isset($queue[$offset]); ++$offset) {
             $dependencyId = $queue[$offset];
-            if (isset($visited[$dependencyId])) {
-                continue;
-            }
-            $visited[$dependencyId] = true;
 
             foreach ($this->dependents[$dependencyId] ?? [] as $entry => $_) {
                 $entry = (string) $entry;
