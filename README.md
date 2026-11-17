@@ -283,6 +283,8 @@ Built-in object and parameter attributes include:
 
 Request mapping reads explicitly selected PSR-7 sources, detects source conflicts, applies configured casting and validation, and creates DTOs through the same `FactoryInterface::make()` pipeline.
 
+`MapRequest(afterMap: ...)` optionally transforms the complete mapped array with DI suffix dependencies before DTO creation. Raw validation still runs first; the result must be an array and retains final source checks. `afterMap: null` preserves the original path. Existing source-specific attributes, custom mapper subclasses, declarative options, standalone `transform()`, array plus `Transform`, and application handler adapters remain supported without migration. See the [existing and callback alternatives](docs/plans/request-mapping-examples.md) ([Русский](docs/plans/request-mapping-examples.ru.md)) for complete PHP 8.4/8.5 examples and the custom mapper protocol.
+
 ## Extension points
 
 Custom parameter resolvers implement `ParameterResolverInterface` and are registered with an integer priority. Custom attributes use `AttributeDefinition`; `CapabilityPolicy` can define composition cardinality and ordering rules. These extensions must be supplied in `DependencyDefinitions` before the container is built because the parameter and attribute pipelines are sealed after construction.
@@ -323,4 +325,4 @@ The `refactor/di6-definitions-callbacks` branch implements central definition ow
 
 The shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and simple-union autowiring are described in the [callback migration guide](docs/migrations/di6-callbacks.md). The package retains PHP `^8.4`; E1 limits only the affected native PHP 8.5 trait-callable forms.
 
-The [architecture contracts and plans](docs/plans/README.md) define acceptance criteria and future scope. Native-lazy D1/A is implemented. B2 availability polling and request-to-DTO callbacks remain separate future directions.
+The [architecture contracts and plans](docs/plans/README.md) define acceptance criteria and future scope. Native-lazy D1/A is implemented. `afterMap` adds an optional request-mapping path while retaining all previous alternatives. B2 availability polling remains a separate future direction.

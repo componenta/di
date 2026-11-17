@@ -1,12 +1,12 @@
-# Request mapping: current and proposed API
+# Request mapping: existing and callback alternatives
 
-[Русская версия](request-mapping-examples.ru.md) · [Normative contract](php85-callbacks.md#11-deferred-work-and-bounded-decisions)
+[Русская версия](request-mapping-examples.ru.md) · [Normative contract](php85-callbacks.md#11-request-mapping-and-deferred-work)
 
-**Status, 2026-11-17:** the current examples use the DI 6 branch at `49656a3`. `MapRequest(afterMap: ...)` and `CallbackMapperInterface` are proposed API; they are not implemented in that branch. Their examples were exercised in a disposable prototype on PHP 8.4.27 and 8.5.12. That proves the illustrated integration is feasible, not that the feature has passed its full acceptance matrix.
+**Status, 2026-11-17:** `MapRequest(afterMap: ...)` and `CallbackMapperInterface` are implemented on the DI 6 development branch. This guide keeps the existing solutions and adds the callback alternative. Both are supported; existing applications do not need to migrate. The examples were executed against the implementation on PHP 8.4.27 and 8.5.12.
 
 The useful addition is a DI-aware transformation of the whole mapped array before automatic DTO creation. It saves application adapter code. It does not add raw-input repair, a validation framework or business transactions.
 
-| Task | Current approach | Proposed approach |
+| Task | Existing approach, still supported | Additional callback option |
 |---|---|---|
 | Rename/default/exclude individual fields | Declarative `MapRequest` options | Keep the same options. |
 | Combine fields without DI | Override a source mapper's `transform(array): array`. | Optional local callback; no new fundamental capability. |
@@ -16,7 +16,7 @@ The useful addition is a DI-aware transformation of the whole mapped array befor
 
 ## 1. One comparable domain example
 
-The input contains `given`, `family` and an untrusted `role`. The DTO receives the computed display name and a role from a registered service. `NameFormatter` is the replaceable formatting policy. These declarations are shared by the current and proposed examples.
+The input contains `given`, `family` and an untrusted `role`. The DTO receives the computed display name and a role from a registered service. `NameFormatter` is the replaceable formatting policy. These declarations are shared by the existing and callback examples.
 
 ```php
 <?php
@@ -68,7 +68,7 @@ final class ProfileInput
 
 The callback returns a new array containing only `displayName`; it does not mutate the readonly DTO or copy the input `role` into constructor arguments. The role service here represents an application-owned value; the DI container does not perform authorization for the application.
 
-Use this public bootstrap for the following examples. `Nyholm\Psr7\ServerRequest` is only a request fixture; production code can pass its existing PSR-7 request. Put the snippets in the same namespace/file after the shared declarations. Run the current and proposed alternatives separately; the proposed snippets require the future implementation.
+Use this public bootstrap for the following examples. `Nyholm\Psr7\ServerRequest` is only a request fixture; production code can pass its existing PSR-7 request. Put the snippets in the same namespace/file after the shared declarations. Run the existing and callback alternatives separately. The direct native attribute expression in §4 requires PHP 8.5; the constant-based alternative works on PHP 8.4.
 
 ```php
 use Componenta\Config\Config;
@@ -123,7 +123,7 @@ $result = $container->call(simpleProfile(...), [ServerRequestInterface::class =>
 
 For pure multi-field logic without DI, an existing `MapRequestPayload` subclass can override `transform()`, call `parent::transform($data)` and return the new array. No callback feature is needed to construct a readonly DTO from that result.
 
-## 3. Current typed DTO + DI path
+## 3. Existing typed DTO + DI path, still supported
 
 A correct current solution can retain automatic DTO validation and source checks. The application service uses ordinary constructor injection. The adapter creates it inside `transform()`, which the built-in request handler reaches only after raw validation. `make()` intentionally creates a fresh mapping service here; this also makes the direct formatter replacement in the comparison observable.
 
@@ -234,7 +234,7 @@ $second = $container->call(createProfileCurrent(...), [ServerRequestInterface::c
 
 This is the equivalent current route: typed readonly DTO, dependency injection, raw-validation ordering and final source checks. `Map*` plus `Transform` on an **array** is shorter when an array is the desired result. Manually constructing a DTO afterward requires explicit application validation/source policy; array mode does not silently inherit the automatic DTO guarantees.
 
-## 4. Proposed path: the same normalizer, fewer adapters
+## 4. Additional callback path: the same normalizer, fewer adapters
 
 The following PHP 8.4-compatible form defines a closure constant at application bootstrap, before attribute materialization. The constant is application-owned and intentionally retains its closure; avoid request captures and mutable request state in reusable callbacks.
 
@@ -292,7 +292,7 @@ A named callback can delegate to a larger application normalizer through an ordi
 
 The replacement example above changes the **direct suffix service** `NameFormatter`. It does not promise recursive rebuilding: an already-shared `ProfileNormalizer` that captured a formatter in its constructor keeps that collaborator when only the formatter binding changes. Select the normalizer's lifetime deliberately, replace that service itself, or inject the changing policy directly. Reuse of a named function/static method also shares its native static state; a fresh closure wrapper does not reset method statics.
 
-## 5. Proposed custom source and readonly attribute
+## 5. Optional callback for a custom source and readonly attribute
 
 An independent mapper can opt in without inheriting mutable `RequestMapper`. Here middleware supplies `profile-input` as a request attribute. The property is a stored readonly property, satisfying the interface's get-only contract without a readonly property hook.
 
@@ -364,7 +364,7 @@ Implementing the interface does **not** register the attribute. The existing exp
 
 Raw DTO validation remains before mapper transformation and before `afterMap`. For example, a raw validator requiring `given` and `family` rejects an empty `given` before the normalizer runs. The resulting schema only contains `displayName`; that raw validator is not rerun on it. Computed-value invariants belong in the DTO/value object or an explicit application validator.
 
-This validator can be registered through the same bootstrap for either the current adapter or proposed callback:
+This validator can be registered through the same bootstrap for either the existing adapter or the callback alternative:
 
 ```php
 use Componenta\Validation\Provider\ValidationProviderInterface;
@@ -402,15 +402,17 @@ $container = exampleContainer(services: [ValidationProviderInterface::class => $
 |---|---|
 | Current eager DTO with outer `Transform` | Raw validation → mapper → constructor/property initialization → outer `Transform(object)`. |
 | Current lazy/proxy DTO with outer `Transform` | Raw validation → mapper → deferred object → outer `Transform(object)`; constructor/property initialization later. |
-| Proposed eager DTO | Raw validation → mapper → `afterMap(array)` → source checks → constructor/property initialization. |
-| Proposed lazy/proxy DTO | Raw validation → mapper → `afterMap(array)` → source checks → deferred object; initialization later, without replaying `afterMap`. |
+| Eager DTO with `afterMap` | Raw validation → mapper → `afterMap(array)` → source checks → constructor/property initialization. |
+| Lazy/proxy DTO with `afterMap` | Raw validation → mapper → `afterMap(array)` → source checks → deferred object; initialization later, without replaying `afterMap`. |
 
-The new stage should copy top-level array slots only when enabled. That prevents writes through top-level PHP reference cells; it does not deep-clone nested references or objects. Callback side effects are not rolled back. A failed new mapping attempt can be retried; a later lazy-initialization retry must not replay the already-completed mapping callback.
+The additional stage copies top-level array slots only when enabled. That prevents writes through top-level PHP reference cells; it does not deep-clone nested references or objects. Callback side effects are not rolled back. A failed new mapping attempt can be retried; a later lazy-initialization retry must not replay the already-completed mapping callback.
 
-## 7. What the comparison establishes
+## 7. Verification and compatibility
 
-Current examples were executed against the real branch, including validation/source-failure controls. Proposed examples were executed through a real container built from a disposable four-area prototype, with source-origin checks preventing an optimized autoloader from accidentally loading baseline classes. The same payload/query callback, different request values, direct dependency replacement, readonly custom mapper registration, raw-validation failure and final-source conflict were checked on PHP 8.4/8.5. Direct attribute method-reference syntax was checked on PHP 8.5.
+Both the existing examples and the callback alternatives were executed against the production implementation, with source-origin checks. They cover the same payload/query callback with different input values, direct dependency replacement, readonly custom mapper registration, raw-validation failure/retry and final-source conflicts. Direct attribute method-reference syntax was checked on PHP 8.5; runtime-constant forms were checked on both PHP versions.
 
-The prototype does not replace the [full implementation acceptance](php85-callbacks.md#proof-and-implementation-sequence): disabled/direct-handler paths, all binder ABI failures, late registry changes, shallow-reference ownership, owned/foreign exception identity, lazy/proxy recovery and retention, mutation checks and before/after cost measurements still need feature-specific regression proof. There is no measured application-throughput claim. The enabled path adds a linear shallow copy and normal callback/DI resolution; the disabled path must avoid that copy and callback reflection.
+The regression suites cover [public API and compatibility](../../tests/Contract/RequestMappingCallbackContractTest.php), [data/source/ABI boundaries](../../tests/Contract/RequestMappingCallbackBoundariesContractTest.php), and [lifecycle/recovery/lifetime](../../tests/Contract/RequestMappingCallbackLifecycleContractTest.php). Existing request mapping and `Transform` suites are retained. The [normative acceptance](php85-callbacks.md#proof-and-implementation-sequence) remains the contract for subsequent changes.
 
-The design is useful when the recurring requirement is **multi-field normalization with DI before automatic DTO creation**. Simple mapping and array-only transformations already have smaller solutions. Shipping this optional convenience remains a product/API decision; an unfinished core architecture or PHP 8.5 engine fix is not its technical blocker.
+The existing [runtime benchmark](../../benchmarks/RuntimeBench.php) has matched request-array cases with and without callbacks at 1, 16, 256 and 4096 keys, plus a direct DI suffix and DTO cases. Use `DI_BENCH_CASES` to select `request/array-16,request/callback-16,request/suffix,request/dto,request/dtoCallback`; `DI_BUILD_ITERATIONS` controls request-case iterations. Set `COMPONENTA_DI_BENCH_AUTOLOAD` and `COMPONENTA_DI_BENCH_SOURCE` as for the other benchmark cases. This measures local operation cost, not application throughput. The enabled path adds a linear shallow copy and ordinary callback/DI resolution; the disabled path does neither callback reflection nor that copy.
+
+`afterMap` is useful for recurring **multi-field normalization with DI before automatic DTO creation**. Simple declarative mapping, custom `transform()` implementations, array plus `Transform`, and the application adapter in §3 remain valid alternatives. No path in this guide is deprecated by the new option.

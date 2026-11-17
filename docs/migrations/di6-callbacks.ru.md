@@ -14,9 +14,10 @@
 | `SetUp::$method` | Тип расширен с `string` до `string\|Closure`; имена и порядок аргументов конструктора остаются `method`, `params`. | Удалить или расширить повторное объявление `string $method` в подклассе. Проверить прямое создание `SetUpRunner`. |
 | Setup через метод | Строка по-прежнему означает имя публичного, конкретного, нестатического метода экземпляра. | Существующие `#[SetUp('initialize')]` и именованные аргументы сохраняют смысл. |
 | `Init` | Существующий API `Init(mixed $callable, array $params = [])` сохранён. | Строки, массивы и invokable-объекты остаются допустимыми. Новый синтаксис необязателен. |
+| `MapRequest::$afterMap` | Новый последний необязательный аргумент конструктора `?Closure` с default `null`; выполняется после mapping и до создания DTO. | Обязательной миграции нет. Подключайте для вычисляемого набора полей массива/DTO; существующие mapper-ы поддерживаются без deprecation. См. §10. |
 | Autowiring простого union-типа | Выбирается единственная доступная ветвь класса/интерфейса; несколько доступных ветвей вызывают ошибку. | Проверить union-параметры, ранее получавшие default/null, и неоднозначные регистрации сервисов. |
 
-Изменения callback-функций и union-типов независимы. Существующий `Init` уже может использовать нативные выражения PHP 8.5 в линейке 5.x; новый `Transform`, callback-вариант `SetUp` и выбор union-кандидата относятся к этой ветке разработки.
+Изменения callback-функций и union-типов независимы. Существующий `Init` уже может использовать нативные выражения PHP 8.5 в линейке 5.x; новый `Transform`, callback-вариант `SetUp`, необязательный request `afterMap` и выбор union-кандидата относятся к этой ветке разработки.
 
 ## 2. Используйте поддерживаемые нативные выражения
 
@@ -82,12 +83,13 @@ final class Label
 
 ## 4. Первый параметр зарезервирован для смыслового значения
 
-Оба вида callback-функций используют единый контракт связывания аргументов:
+Эти виды callback-функций используют единый контракт связывания аргументов:
 
 | Callback-функция | Первый объявленный параметр | Остальные параметры |
 | --- | --- | --- |
 | `Transform` | Текущее значение; массив целиком передаётся одним аргументом. | Разрешаются обычной DI-цепочкой с пустым публичным набором переданных параметров. |
 | Callback `SetUp` | Созданный объект. | Разрешаются обычной DI-цепочкой с описанным ниже setup-контекстом. |
+| Request `afterMap` | Весь преобразованный массив одним аргументом. | Разрешаются обычной DI-цепочкой с пустым публичным набором переданных параметров. |
 
 Первый параметр может иметь любое имя, быть nullable или optional. Его default не заменяет смысловое значение. Объявленный тип должен принимать это значение по существующим строгим правилам DI. By-reference и variadic для первого параметра недопустимы. By-reference для последующих параметров также остаётся неподдерживаемым.
 
@@ -97,7 +99,7 @@ final class Label
 
 Callback-функция без параметров получает ноль нативных аргументов. Для преобразователя без параметров всё равно нужен допустимый источник входного значения. Во всех случаях выполняется один вызов через `PreparedCallable` и существующий callable invoker; второго DI-прохода по зарезервированному параметру нет.
 
-`Transform` не наследует внешний набор аргументов конструктора, DTO или запроса. Внешнее поле с именем дополнительного параметра не может заменить его зависимость; текущий HTTP-запрос не передаётся неявно. Нужные сервисы разрешаются собственными DI-правилами дополнительных параметров.
+`Transform` и request `afterMap` не наследуют внешний набор аргументов конструктора, DTO или запроса. Внешнее поле с именем дополнительного параметра не может заменить его зависимость; текущий HTTP-запрос не передаётся неявно. Нужные сервисы разрешаются собственными DI-правилами дополнительных параметров.
 
 ## 5. Callback-вариант `SetUp`
 
@@ -182,7 +184,7 @@ $runner = new Componenta\DI\Resolver\Entry\SetUpRunner(
 );
 ```
 
-Здесь `$parameters` — `ParametersResolver`, `$invoker` — `CallableInvokerInterface`, а `$resolutionParameters` — `ObjectResolutionParameterStore`. Стандартная фабрика создаёт один helper для setup и преобразований; приложениям с обычной фабрикой ручное связывание не требуется. Helper остаётся внутренним и не получает новой публичной регистрации сервиса. `SetUpRunner::providedParameters()` теперь принимает `?ReflectionFunctionAbstract` под прежним именем аргумента `method`, чтобы unwrappers получали метаданные дополнительных параметров как методов, так и функций.
+Здесь `$parameters` — `ParametersResolver`, `$invoker` — `CallableInvokerInterface`, а `$resolutionParameters` — `ObjectResolutionParameterStore`. Стандартная фабрика создаёт один helper для setup, преобразований и request `afterMap`; приложениям с обычной фабрикой ручное связывание не требуется. Helper остаётся внутренним и не получает новой публичной регистрации сервиса. `SetUpRunner::providedParameters()` теперь принимает `?ReflectionFunctionAbstract` под прежним именем аргумента `method`, чтобы unwrappers получали метаданные дополнительных параметров как методов, так и функций.
 
 ## 6. Autowiring union-типов меняет выбор зависимости
 
@@ -226,4 +228,102 @@ E1 остаётся открытым для этих затронутых фор
 - [Контракты callback-варианта setup](../../tests/Contract/SetUpCallbackContractTest.php): lifecycle, явные параметры, provenance mapped-источников и совместимость подкласса, переопределяющего только конструктор.
 - [Нативные callback-контракты](../../tests/Contract/Php85AttributeCallableContractTest.php) и [fixtures](../../tests/Fixtures/Php85Callbacks): совместимость `Init`, границы синтаксиса, scope/state, lazy-повторы и миграция инвариантного свойства.
 - [Контракты union-типов](../../tests/Contract/UnionAutowiringContractTest.php): выбор кандидата, неоднозначность, мутации после прогрева и поведение явных definitions.
+- [Контракты request mapping callback](../../tests/Contract/RequestMappingCallbackContractTest.php): readonly DTO, переиспользование для разных источников, замена зависимостей, совместимость прежних mapper-ов и явная регистрация своих атрибутов.
+- [Границы request mapping](../../tests/Contract/RequestMappingCallbackBoundariesContractTest.php): порядок валидации, аргументы callback-функции, финальные ключи, изоляция ссылок и владение источниками.
+- [Жизненный цикл request mapping](../../tests/Contract/RequestMappingCallbackLifecycleContractTest.php): исключения, lazy/proxy-создание, изменения метаданных, повторные попытки и время жизни callback-функций.
 - [Нормативная спецификация callback-функций](../plans/php85-callbacks.ru.md) и [отдельная проверка native PHP](../../tests/php85-platform.php).
+
+## 10. Необязательная callback-функция после request mapping
+
+`MapRequest` остаётся final и добавляет `public readonly ?Closure $afterMap = null` **последним** аргументом конструктора. Имена, порядок и defaults предшествующих девяти аргументов не меняются. Отсутствие `afterMap` или явный `null` сохраняют прежний путь mapping.
+
+Это дополнение не объявляет устаревшим и не удаляет ни один существующий mapping API. `RequestMapper` и все семь wrappers отдельных источников — `MapRequestPayload`, `MapQueryString`, `MapHeaders`, `MapCookies`, `MapRequestAttributes`, `MapServerParams` и `MapUploadedFiles` — сохраняют конструкторы и контракты наследования. Свои переопределения `transform()`, mapping в массив с последующим `Transform` и ручные адаптеры приложения остаются поддерживаемыми. Существующие подклассы со своим свойством `afterMap` не затрагиваются, пока явно не подключают описанный ниже новый интерфейс.
+
+Для встроенного mapper-а с DTO-целью порядок такой: **извлечение → валидация сырых данных → декларативное преобразование → `afterMap` → финальные проверки → фабрика**. Проверки именованных ключей сырых данных предшествуют валидации; настроенный валидатор, если он есть, по-прежнему получает сырой вход. Декларативное преобразование сохраняет прежний порядок map → cast → defaults → sort → exclude. Callback-функция обязана вернуть именно массив; DTO, `Traversable`, скаляр, `null` и результат `void` недопустимы. При цели-массиве возвращается итоговый массив без DTO-фабрики и неявной DTO-валидации. Прямой вызов `$mapper->transform()` не запускает `afterMap`: этим этапом владеет request handler.
+
+**Автоматической валидации после callback-функции нет.** Инварианты вычисленных полей принадлежат нормализатору приложения, value objects, конструктору DTO либо явно выбранному валидатору. Callback-функция не может исправить вход, уже отклонённый валидацией сырых данных. Финальные именованные ключи по-прежнему определяют аргументы DTO и закрытые сведения о происхождении mapped-данных. Передача запроса остаётся отдельной; существующие проверки владения источниками не позволяют полям подменить явный DI-источник. Известные конфликты конструктора проверяются до первого вызова фабрики; конфликты фактического класса, вложенных объектов, setup и поздно обнаруженных источников сохраняют прежние runtime-границы. Уже выполненные побочные эффекты приложения не откатываются. `exclude` выполняется до callback-функции и не является финальным allowlist.
+
+### Пример, совместимый с PHP 8.4
+
+Эта компактная версия [примеров request mapping](../plans/request-mapping-examples.ru.md) объединяет два входных поля до создания readonly DTO. `NameFormatter` разрешается через дополнительные DI-параметры callback-функции. Запускайте пример отдельным файлом с доступными Composer-зависимостями; `Nyholm\Psr7\ServerRequest` — только fixture, вместо него можно передать существующий PSR-7 запрос.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
+use Componenta\Config\Environment;
+use Componenta\DI\Attribute\MapRequest;
+use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
+use Nyholm\Psr7\ServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
+
+require __DIR__ . '/vendor/autoload.php';
+
+final readonly class Profile
+{
+    public function __construct(public string $displayName) {}
+}
+
+final class NameFormatter
+{
+    public function format(string $given, string $family): string
+    {
+        return trim($given) . ' ' . trim($family);
+    }
+}
+
+final class ProfileInput
+{
+    public static function normalize(array $data, NameFormatter $formatter): array
+    {
+        $given = $data['given'] ?? null;
+        $family = $data['family'] ?? null;
+        if (!is_string($given) || !is_string($family)) {
+            throw new InvalidArgumentException('Expected given/family strings.');
+        }
+        return ['displayName' => $formatter->format($given, $family)];
+    }
+}
+
+define('PROFILE_INPUT', ProfileInput::normalize(...));
+
+function createProfile(#[MapRequest(afterMap: PROFILE_INPUT)] Profile $profile): Profile
+{
+    return $profile;
+}
+
+$container = (new ContainerFactory())->create(
+    new Config([], new Environment([])),
+    new DependencyDefinitions([]),
+)->container;
+if (!$container instanceof Container) {
+    throw new LogicException('Expected the standard container.');
+}
+$request = (new ServerRequest('POST', '/profiles'))->withParsedBody([
+    'given' => ' Ada ', 'family' => ' Lovelace ',
+]);
+$profile = $container->call(createProfile(...), [ServerRequestInterface::class => $request]);
+// $profile->displayName === 'Ada Lovelace'
+```
+
+Определите Closure-константу до материализации атрибута. Ею владеет приложение, и она удерживает замыкание, поэтому избегайте захватов запроса и изменяемого request-состояния в переиспользуемой callback-функции. Требование пакета остаётся PHP `^8.4`. Только альтернативное прямое выражение в атрибуте ниже требует PHP 8.5; ограничения синтаксиса и нативные ограничения трейтов из §2 и §8 продолжают действовать:
+
+```php
+function createProfileNative(
+    #[MapRequest(afterMap: ProfileInput::normalize(...))] Profile $profile,
+): Profile {
+    return $profile;
+}
+```
+
+### Свои mapper-ы и прямое создание handler-а
+
+Независимый mapper может реализовать `Componenta\DI\Resolver\Parameter\Request\CallbackMapperInterface` вместе с `RequestDataExtractorInterface`. Необязательный интерфейс расширяет `MapperInterface` и требует читаемое свойство `?Closure $afterMap`. Хранимое readonly-свойство выполняет этот контракт, поэтому своему readonly-атрибуту не нужно наследовать изменяемый `RequestMapper`. Handler считывает настройку callback-функции один раз на попытку mapping. Реализация интерфейса **не** регистрирует атрибут: явно зарегистрируйте `AttributeDefinition` с `ValueProvider`, переиспользуя настроенный встроенный `RequestAttributeHandler` через `AttributeDefinitionRegistry`. В [примере своего источника](../plans/request-mapping-examples.ru.md#5-необязательный-callback-для-custom-source-и-readonly-атрибута) приведена полная регистрация.
+
+Прямое создание `new RequestAttributeHandler($factory, $casterProvider, $validationProvider)` остаётся допустимым для mapper-ов без callback-функции, включая `MapRequest(afterMap: null)`. Включённой callback-функции нужен новый последний необязательный аргумент конструктора `callbacks:` с общим внутренним `AttributeCallbackInvoker`; `ContainerFactory` передаёт его автоматически. Отсутствие binder-а вызывает ошибку до извлечения, валидации и преобразования. Уже разрешённый параметр полностью обходит mapping, включая getter callback-функции и проверку binder-а.
+
+Callback-функция выполняется один раз на попытку mapping, до lazy/proxy-инициализации DTO. Повторные попытки отложенной инициализации не запускают её снова. Кеши метаданных callback-функций не удерживают запрос, runtime-замыкание или результат; вызывающий код, исключения и живые отложенные инициализаторы всё ещё могут владеть runtime-значениями. При `afterMap: null` handler не копирует аргумент для callback-функции и не выполняет её reflection. При включённой callback-функции перед вызовом копируются верхнеуровневые ячейки массива; вложенные ссылки и объекты не клонируются глубоко.

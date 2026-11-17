@@ -14,9 +14,10 @@ This guide describes the implementation on the DI 6 development branch, followin
 | `SetUp::$method` | Widened from `string` to `string\|Closure`; constructor names/order remain `method`, `params`. | Remove or widen a subclass's redeclared `string $method` property. Review direct `SetUpRunner` construction. |
 | Method-based setup | A string still names a public, concrete, non-static instance method. | Existing `#[SetUp('initialize')]` and named arguments retain their meaning. |
 | `Init` | Existing `Init(mixed $callable, array $params = [])` API remains. | Existing string, array and invokable values remain valid. New syntax is optional. |
+| `MapRequest::$afterMap` | New last optional `?Closure` constructor argument, defaulting to `null`; runs after mapping and before DTO creation. | No migration is required. Opt in for a computed array/DTO field set; existing mappers remain supported without deprecation. See §10. |
 | Simple union autowiring | Exactly one available class/interface arm is selected; multiple available arms fail. | Review union parameters that previously reached defaults/null and ambiguous service bindings. |
 
-The callback and union changes are independent. Existing `Init` can already use native PHP 8.5 expressions on the 5.x line; the new `Transform`, callback `SetUp`, and union selection belong to this development branch.
+The callback and union changes are independent. Existing `Init` can already use native PHP 8.5 expressions on the 5.x line; the new `Transform`, callback `SetUp`, optional request `afterMap`, and union selection belong to this development branch.
 
 ## 2. Write supported native callback expressions
 
@@ -82,12 +83,13 @@ A transformer result, including `null` or the actual result of a `void` callback
 
 ## 4. The first parameter is reserved for the semantic value
 
-Both callback forms share one binding contract:
+These callback forms share one binding contract:
 
 | Callback | First declared parameter | Remaining parameters |
 | --- | --- | --- |
 | `Transform` | The current value, including a whole array as one argument. | Resolved through the normal DI chain with an empty supplied public bag. |
 | Callback `SetUp` | The constructed object. | Resolved through the normal DI chain with the setup context described below. |
+| Request `afterMap` | The whole mapped array as one argument. | Resolved through the normal DI chain with an empty supplied public bag. |
 
 The first parameter can have any name and can be nullable or optional. Its default does not replace the semantic value. Its declared type must accept that value under DI's existing strict rules. By-reference and variadic first parameters are invalid. By-reference suffix parameters remain unsupported.
 
@@ -97,7 +99,7 @@ The suffix retains original positions and all normal resolver behavior: provider
 
 A zero-parameter callback receives zero native arguments. A zero-parameter transformer still requires a valid input source. All forms invoke once through `PreparedCallable` and the existing callable invoker; there is no second DI pass over the reserved parameter.
 
-`Transform` does not inherit the outer constructor, DTO, or request argument bag. An outer field sharing a suffix parameter name cannot replace its dependency, and no current HTTP request is implicitly forwarded. Resolve needed services through the suffix's own DI rules.
+`Transform` and request `afterMap` do not inherit the outer constructor, DTO, or request argument bag. An outer field sharing a suffix parameter name cannot replace its dependency, and no current HTTP request is implicitly forwarded. Resolve needed services through the suffix's own DI rules.
 
 ## 5. Callback `SetUp`
 
@@ -182,7 +184,7 @@ $runner = new Componenta\DI\Resolver\Entry\SetUpRunner(
 );
 ```
 
-Here `$parameters` is a `ParametersResolver`, `$invoker` is a `CallableInvokerInterface`, and `$resolutionParameters` is an `ObjectResolutionParameterStore`. The default factory creates one helper for setup and transformation; applications using the normal factory need no manual wiring. The helper remains internal and has no new public service registration. `SetUpRunner::providedParameters()` now accepts `?ReflectionFunctionAbstract` under its existing `method` argument name, so both method and function suffix metadata reach unwrappers.
+Here `$parameters` is a `ParametersResolver`, `$invoker` is a `CallableInvokerInterface`, and `$resolutionParameters` is an `ObjectResolutionParameterStore`. The default factory creates one helper for setup, transformation and request `afterMap`; applications using the normal factory need no manual wiring. The helper remains internal and has no new public service registration. `SetUpRunner::providedParameters()` now accepts `?ReflectionFunctionAbstract` under its existing `method` argument name, so both method and function suffix metadata reach unwrappers.
 
 ## 6. Union autowiring changes selection
 
@@ -226,4 +228,102 @@ The PHP 8.4 suites cover library behavior and runtime-created closures. PHP 8.5 
 - [Setup callback contracts](../../tests/Contract/SetUpCallbackContractTest.php): lifecycle, explicit parameters, mapped source provenance and constructor-only subclass compatibility.
 - [Native callback contracts](../../tests/Contract/Php85AttributeCallableContractTest.php) and [fixtures](../../tests/Fixtures/Php85Callbacks): `Init` compatibility, syntax boundaries, scope/state, lazy retries and the property-invariance migration.
 - [Union contracts](../../tests/Contract/UnionAutowiringContractTest.php): candidate selection, ambiguity, warmed mutation and explicit-definition behavior.
+- [Request mapping callback contracts](../../tests/Contract/RequestMappingCallbackContractTest.php): readonly DTOs, source reuse, dependency replacement, existing mapper compatibility and explicit custom registration.
+- [Request mapping boundaries](../../tests/Contract/RequestMappingCallbackBoundariesContractTest.php): validation order, callback arguments, final keys, reference isolation and source ownership.
+- [Request mapping lifecycle](../../tests/Contract/RequestMappingCallbackLifecycleContractTest.php): exceptions, lazy/proxy creation, metadata changes, retries and callback lifetime.
 - [Normative callback specification](../plans/php85-callbacks.md) and the [standalone native PHP check](../../tests/php85-platform.php).
+
+## 10. Optional callback after request mapping
+
+`MapRequest` remains final and adds `public readonly ?Closure $afterMap = null` as its **last** constructor argument. The names, order and defaults of the preceding nine arguments remain unchanged. Omitting `afterMap`, or passing `null`, preserves the existing mapping path.
+
+This addition does not deprecate or remove any existing mapping API. `RequestMapper` and all seven source-specific wrappers — `MapRequestPayload`, `MapQueryString`, `MapHeaders`, `MapCookies`, `MapRequestAttributes`, `MapServerParams` and `MapUploadedFiles` — retain their constructors and inheritance contracts. Custom `transform()` overrides, array mapping followed by `Transform`, and manual application adapters remain supported. Existing subclasses with their own `afterMap` property are unaffected unless they explicitly opt into the new interface described below.
+
+For a built-in mapper targeting a DTO, the order is: **extract → validate raw data → declarative transform → `afterMap` → final guards → factory**. Raw named-key checks precede validation; the configured validator, if any, still sees raw input. The declarative transform retains its existing map → cast → defaults → sort → exclude order. The callback must return an actual array; a DTO, `Traversable`, scalar, `null` or a `void` result is invalid. An array target returns the final array without a DTO factory or implicit DTO validation. Calling `$mapper->transform()` directly does not invoke `afterMap`; the request handler owns this stage.
+
+There is **no automatic validation pass after the callback**. Computed-field invariants belong to the application normalizer, value objects, DTO constructor or an explicitly chosen validator. The callback cannot repair input that raw validation has already rejected. Final named keys still determine DTO arguments and private mapped-source provenance. Request transport stays separate, and the existing source-ownership guards still prevent fields from replacing an explicit DI source. Known constructor conflicts are checked before the initial factory call; actual-class, nested, setup and late-discovered conflicts retain their existing runtime boundaries. Earlier application side effects are not rolled back. `exclude` runs before the callback and is not a final allowlist.
+
+### PHP 8.4-compatible example
+
+This compact version of the [request mapping examples](../plans/request-mapping-examples.md) combines two input fields before creating a readonly DTO. `NameFormatter` is resolved through the callback's DI suffix. Run this as a separate file with Composer dependencies available; `Nyholm\Psr7\ServerRequest` is only a fixture and can be replaced by an existing PSR-7 request.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
+use Componenta\Config\Environment;
+use Componenta\DI\Attribute\MapRequest;
+use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
+use Nyholm\Psr7\ServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
+
+require __DIR__ . '/vendor/autoload.php';
+
+final readonly class Profile
+{
+    public function __construct(public string $displayName) {}
+}
+
+final class NameFormatter
+{
+    public function format(string $given, string $family): string
+    {
+        return trim($given) . ' ' . trim($family);
+    }
+}
+
+final class ProfileInput
+{
+    public static function normalize(array $data, NameFormatter $formatter): array
+    {
+        $given = $data['given'] ?? null;
+        $family = $data['family'] ?? null;
+        if (!is_string($given) || !is_string($family)) {
+            throw new InvalidArgumentException('Expected given/family strings.');
+        }
+        return ['displayName' => $formatter->format($given, $family)];
+    }
+}
+
+define('PROFILE_INPUT', ProfileInput::normalize(...));
+
+function createProfile(#[MapRequest(afterMap: PROFILE_INPUT)] Profile $profile): Profile
+{
+    return $profile;
+}
+
+$container = (new ContainerFactory())->create(
+    new Config([], new Environment([])),
+    new DependencyDefinitions([]),
+)->container;
+if (!$container instanceof Container) {
+    throw new LogicException('Expected the standard container.');
+}
+$request = (new ServerRequest('POST', '/profiles'))->withParsedBody([
+    'given' => ' Ada ', 'family' => ' Lovelace ',
+]);
+$profile = $container->call(createProfile(...), [ServerRequestInterface::class => $request]);
+// $profile->displayName === 'Ada Lovelace'
+```
+
+Define the closure constant before attribute materialization. It is application-owned and retains the closure, so avoid request captures or mutable request state in a reusable callback. PHP `^8.4` remains the package requirement. Only the alternative direct attribute expression below requires PHP 8.5; the syntax restrictions and native trait limitations in §2 and §8 still apply:
+
+```php
+function createProfileNative(
+    #[MapRequest(afterMap: ProfileInput::normalize(...))] Profile $profile,
+): Profile {
+    return $profile;
+}
+```
+
+### Custom mappers and direct handler construction
+
+An independent custom mapper may implement `Componenta\DI\Resolver\Parameter\Request\CallbackMapperInterface` alongside `RequestDataExtractorInterface`. The optional interface extends `MapperInterface` and requires a readable `?Closure $afterMap` property. A stored readonly property satisfies that contract, so readonly custom attributes need not inherit mutable `RequestMapper`. The handler reads the callback configuration once per mapping attempt. Implementing the interface does **not** register the attribute: register an `AttributeDefinition` with `ValueProvider` explicitly, reusing the configured built-in `RequestAttributeHandler` through `AttributeDefinitionRegistry`. The [custom-source example](../plans/request-mapping-examples.md#5-optional-callback-for-a-custom-source-and-readonly-attribute) includes the complete registration.
+
+Direct `new RequestAttributeHandler($factory, $casterProvider, $validationProvider)` construction remains valid for mappers without a callback, including `MapRequest(afterMap: null)`. Enabling a callback requires the new last optional constructor argument `callbacks:`, containing the shared internal `AttributeCallbackInvoker`; `ContainerFactory` supplies it automatically. A missing binder fails before extraction, validation or transformation. An already-resolved parameter bypasses mapping entirely, including the callback getter and binder check.
+
+The callback runs once per mapping attempt, before any DTO lazy/proxy initialization. Deferred initialization retries do not replay it. Callback metadata caches retain no request, runtime closure or result; callers, exceptions and live deferred initializers can still own runtime values. With `afterMap: null`, the handler performs no callback argument copy or callback reflection. With a callback, top-level array slots are copied before invocation; nested references and objects are not deeply cloned.

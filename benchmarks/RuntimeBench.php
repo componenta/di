@@ -21,11 +21,15 @@ namespace Componenta\DI\Benchmarks\Runtime {
     use Componenta\Config\Config;
     use Componenta\Config\DependencyDefinitions;
     use Componenta\Config\Environment;
+    use Componenta\DI\Attribute\MapRequest;
+    use Componenta\DI\Attribute\MapRequestPayload;
     use Componenta\DI\Attribute\SetUp;
     use Componenta\DI\Attribute\Transform;
     use Componenta\DI\Container;
     use Componenta\DI\ContainerFactory;
     use Componenta\DI\Exception\ResolutionException;
+    use Nyholm\Psr7\ServerRequest;
+    use Psr\Http\Message\ServerRequestInterface;
 
     final class Dependency {}
 
@@ -88,6 +92,44 @@ namespace Componenta\DI\Benchmarks\Runtime {
         public static function union(Left|Right|false $value = false): Left|Right|false
         {
             return $value;
+        }
+    }
+
+    final readonly class MappedValue
+    {
+        public function __construct(public string $value) {}
+    }
+
+    final class RequestMappingTargets
+    {
+        public static function array(#[MapRequest] array $input): array
+        {
+            return $input;
+        }
+
+        public static function payload(#[MapRequestPayload] array $input): array
+        {
+            return $input;
+        }
+
+        public static function callback(#[MapRequest(afterMap: MAPPING_CALLBACK)] array $input): array
+        {
+            return $input;
+        }
+
+        public static function suffix(#[MapRequest(afterMap: MAPPING_SUFFIX)] array $input): array
+        {
+            return $input;
+        }
+
+        public static function dto(#[MapRequest] MappedValue $input): MappedValue
+        {
+            return $input;
+        }
+
+        public static function dtoCallback(#[MapRequest(afterMap: MAPPING_CALLBACK)] MappedValue $input): MappedValue
+        {
+            return $input;
         }
     }
 
@@ -243,6 +285,44 @@ namespace Componenta\DI\Benchmarks\Runtime {
             },
             $iterations,
         ];
+        reportCases($cases);
+    }
+
+    if (class_exists(MapRequest::class)) {
+        $cases = [];
+        $hasCallback = property_exists(MapRequest::class, 'afterMap');
+        define(__NAMESPACE__ . '\\MAPPING_CALLBACK', static fn(array $data): array => $data);
+        define(__NAMESPACE__ . '\\MAPPING_SUFFIX', static fn(array $data, Dependency $dependency): array => $data);
+
+        // Request cases use the existing build-iteration setting. Each size is
+        // measured with the callback disabled and, where supported, enabled.
+        foreach ([1, 16, 256, 4096] as $size) {
+            $data = ['value' => 'mapped'];
+            for ($index = 1; $index < $size; ++$index) {
+                $data['field-' . $index] = $index;
+            }
+            $request = (new ServerRequest('POST', '/'))->withParsedBody($data);
+            $provided = [ServerRequestInterface::class => $request];
+            $cases['request/array-' . $size] = [
+                static fn(): mixed => $container->call([RequestMappingTargets::class, 'array'], $provided),
+                $buildIterations,
+            ];
+            if ($hasCallback) {
+                $cases['request/callback-' . $size] = [
+                    static fn(): mixed => $container->call([RequestMappingTargets::class, 'callback'], $provided),
+                    $buildIterations,
+                ];
+            }
+        }
+
+        $request = (new ServerRequest('POST', '/'))->withParsedBody(['value' => 'mapped']);
+        $provided = [ServerRequestInterface::class => $request];
+        foreach (['payload', 'dto', ...($hasCallback ? ['suffix', 'dtoCallback'] : [])] as $shape) {
+            $cases['request/' . $shape] = [
+                static fn(): mixed => $container->call([RequestMappingTargets::class, $shape], $provided),
+                $buildIterations,
+            ];
+        }
         reportCases($cases);
     }
 }

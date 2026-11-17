@@ -2,7 +2,7 @@
 
 [Русская версия](php85-callbacks.ru.md)
 
-**Implementation status and platform correction (2026-11-15):** native `Init` controls, the shared callback binder, `Transform`, callback `SetUp` and simple-union autowiring are implemented and verified on `refactor/di6-definitions-callbacks`. See the [migration guide](../migrations/di6-callbacks.md) and [implementation evidence](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-14-di6-refactoring.md). DI 6 retains PHP `^8.4`. E1 in §8 limits only the support promise for affected native trait-callable expressions; it does not block the whole DI 6 release. This supersedes the earlier whole-release gate. Request-to-DTO callbacks remain separately deferred by §11.
+**Implementation status and platform correction (2026-11-17):** native `Init` controls, the shared callback binder, `Transform`, callback `SetUp` and simple-union autowiring are implemented and verified on `refactor/di6-definitions-callbacks`. See the [migration guide](../migrations/di6-callbacks.md) and [implementation evidence](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-14-di6-refactoring.md). DI 6 retains PHP `^8.4`. E1 in §8 limits only the support promise for affected native trait-callable expressions; it does not block the whole DI 6 release. This supersedes the earlier whole-release gate. `MapRequest(afterMap: ...)` is implemented as an additive option; §11 preserves its contract and the existing mapping alternatives.
 
 The compatible v5.0.6 work stays on the 5.x line with PHP `^8.4`. This major branch does not change that release. The DI 6 implementation runs on PHP 8.4; writing inline closures or first-class callable references directly in attribute arguments requires PHP 8.5. Existing `Init` keeps its public API and accepts supported native expressions on PHP 8.5. Baseline descriptions below refer to the audited 5.x implementation.
 
@@ -23,7 +23,7 @@ This specification updates those notes against the current repository. The old n
 
 ### Scope
 
-In scope: `Transform`, callback `SetUp`, PHP 8.5 regression coverage for existing `Init`, simple union autowiring, diagnostics, lifecycle and memory contracts, documentation, and migration guidance.
+In scope: `Transform`, callback `SetUp`, PHP 8.5 regression coverage for existing `Init`, simple union autowiring, diagnostics, lifecycle and memory contracts, documentation, and migration guidance. The subsequently authorized `afterMap` extension is implemented under §11 while retaining existing mapping APIs.
 
 Out of scope: compiled containers, closure serialization, source-code extraction, new factory registries, global resolver-priority changes, automatic intersection/DNF service discovery, a callback parameter on every existing attribute, and changes to unrelated Componenta packages. Attribute availability polling has its own [performance plan](attribute-availability-performance.md).
 
@@ -37,7 +37,7 @@ The recovered DI 6 bundle remains the intended delivery target. It does not make
 | New `Transform` | An additive attribute and handler can use PHP 8.4-compatible implementation syntax. `Closure` as an attribute value does not itself require PHP 8.5; the new inline/reference expressions do. | Keep it in the planned DI 6 bundle, but recognize that it is independently implementable and potentially suitable for a minor release if delivery policy changes explicitly. |
 | Callback `SetUp` | Widening a non-final readonly attribute's public `$method` property breaks subclasses that redeclare `string $method`, because PHP properties are invariant. | A real major-version change. Prefer the existing `SetUp` lifecycle owner and preserved named argument over another public setup attribute. |
 | Simple-union autowiring | PHP 8.5 adds no required language capability here. Selecting a service where the old path used a default/null, or introducing ambiguity errors, changes resolution behavior. | Keep this independent behavioral change in DI 6. It is not required by the callback binder. |
-| Request-to-DTO callback | Optional whole-array transformation with DI dependencies before automatic DTO creation. | The minimal `MapRequest(afterMap: ...)` design is specified in §11; implementation remains outside the accepted DI 6 scope. |
+| Request-to-DTO callback | Optional whole-array transformation with DI dependencies before automatic DTO creation. | Implemented as the optional `MapRequest(afterMap: ...)` stage specified in §11. Existing mapping APIs remain supported. |
 | Package platform | Library behavior and implementation remain compatible with PHP `^8.4`; the new native attribute-expression syntax starts in PHP 8.5. | Retain `^8.4`. Document syntax and engine limitations per feature; do not derive the whole package floor or release date from E1. |
 
 A separate `SetUpCallback` attribute could avoid changing the existing property in a minor release, but it would duplicate the public representation of the same lifecycle operation. An extra callback argument requiring a placeholder method would also violate the recovered API intent. With a major release already intended, widening `SetUp` is the smaller coherent public API. Do not narrow `Init` or general runtime callable APIs merely to make their signatures look uniform.
@@ -367,7 +367,7 @@ The runner's stability predicate is currently specific to PHP 8.5.x. A nonzero r
 | Shared binder, `Transform`, callback `SetUp`, simple-union behavior | Implemented on the authorized major branch; supported forms are tested while E1 remains pending. |
 | Correct trait-relative/mixed-visibility first-class references on a named stable runtime | Support declaration limited by E1; PHP 8.5.8 demonstrably fails. |
 | DI 6 package with PHP `^8.4`, supported-runtime CI and documented engine limitations | Independent of E1; normal library, migration and publication checks apply. |
-| Request-to-DTO callback | Optional design specified in §11; implementation is outside the accepted DI 6 scope. No unresolved engine or core-architecture dependency blocks that design. |
+| Request-to-DTO callback | Implemented as the additive option specified in §11. Existing mapper and handler usage remains supported. |
 
 Compatibility review must cover existing `SetUp` subclasses and named arguments, `Init` string/array/invokable inputs, extension handler definitions, decorated `CallableInvokerInterface` services, companion package constraints, and applications enabling `ClassDefinition` autowiring. Use the actual consuming packages' manifests and test suites before proposing any coordinated version bumps. No unrelated package release is required just to add syntax-aware tests here.
 
@@ -451,11 +451,11 @@ Documentation and measurements can proceed as their feature slices finish. Docum
 
 Retain PHP `^8.4`, prepare the `6.0.x-dev` alias for publication of the 6.x line, and run the applicable PHP 8.4/8.5 CI matrix, current companion-workspace tests and dependency checks. Record syntax requirements and the affected native-form limitation in migration and release notes. E1 does not delay this packaging work or the library release; closing E1 later requires the separate exact-runtime evidence in §8. Record commands and results; do not infer application throughput from microbenchmarks. Tag/release is a separate action after implementation and normal publication checks are complete. Pending E1 must not be relabeled as support for the affected native forms.
 
-## 11. Deferred work and bounded decisions
+## 11. Request mapping and deferred work
 
 ### Request mapping callback — optional extension
 
-**Design review (2026-11-17):** this is an ergonomic extension, not a missing part of the accepted DI 6 refactoring. Its additional value is whole-array transformation with DI dependencies immediately before automatic DTO creation, without a dedicated mapper class. A recurring application case involving several input fields and a normalization service would justify prioritizing it; this repository alone does not establish that demand. The minimal recommended contract below is `implementation-ready` as a design, but the feature remains unimplemented and outside the accepted DI 6 scope. No release version is promised here.
+**Implementation (2026-11-17):** the authorized `afterMap` extension is implemented on `refactor/di6-definitions-callbacks`. It adds whole-array transformation with DI dependencies immediately before automatic DTO creation, without requiring a dedicated mapper class. It is an optional alternative: existing source-specific attributes, mapper subclasses, declarative options, standalone `transform()`, array plus `Transform`, and application handler adapters remain supported. No existing mapping path is deprecated or removed. This is a development-branch implementation, not a release announcement.
 
 #### Need and existing alternatives
 
@@ -465,11 +465,11 @@ Retain PHP `^8.4`, prepare the `6.0.x-dev` alias for publication of the 6.x line
 | Combine several fields before constructing a readonly DTO | A source-specific mapper can override `transform(array): array`. | Avoid a separate attribute class for a local transformation and resolve its additional dependencies through the common binder. |
 | Transform a mapped array parameter | `Map*` followed by `Transform` already receives the mapped array and supports DI suffix dependencies. | No essential new capability for this case. |
 | Transform an automatically mapped DTO parameter | `Transform` receives the object returned by `FactoryInterface::make()`, which can still be an uninitialized lazy object or proxy. | The new stage receives constructor-input data instead of that object; it does not force deferred initialization. |
-| Normalize before raw validation or execute application business operations | A separate application mapper/builder or explicit validation flow owns that policy. | This proposed stage does not provide it; do not add validation switches, transactions, persistence or authorization responsibilities. |
+| Normalize before raw validation or execute application business operations | A separate application mapper/builder or explicit validation flow owns that policy. | This stage does not provide it; do not add validation switches, transactions, persistence or authorization responsibilities. |
 
 These distinctions are covered by [request transformation contracts](../../tests/Contract/RequestMappingTransformationContractTest.php) and [mapped Transform lifecycle contracts](../../tests/Contract/RequestTransformLifecycleContractTest.php). `Init` initializes property values, not the whole DTO input. Mapping into an array and manually building a DTO is possible, but array mode does not implicitly run automatic DTO validation/source provenance.
 
-Typed DTO mapping with DI is also possible today through an application parameter handler and a per-attempt mapper that delegates to the existing request handler. It preserves raw validation and final source guards, at the cost of adapter/registration code. The [current/proposed examples](request-mapping-examples.md) compare that equivalent path as well as the simpler alternatives. A bounded four-area prototype exercised the proposed examples on PHP 8.4.27 and 8.5.12; this is feasibility evidence, not a shipped feature or completion of the acceptance matrix below.
+Typed DTO mapping with DI remains available through an application parameter handler and a per-attempt mapper that delegates to the existing request handler. It preserves raw validation and final source guards. The [existing/callback examples](request-mapping-examples.md) retain that equivalent path alongside the new alternative. Both routes are exercised against the implementation on PHP 8.4/8.5; no adapter migration is required.
 
 #### Minimal API and owners
 
@@ -520,7 +520,7 @@ Warm-plan freshness means each DI suffix resolves the current binding for its re
 
 #### Proof and implementation sequence
 
-Current tests establish existing alternatives and ordering, not implementation of `afterMap`. Add focused callback contracts for:
+The [public API and compatibility contracts](../../tests/Contract/RequestMappingCallbackContractTest.php), [data/source/ABI contracts](../../tests/Contract/RequestMappingCallbackBoundariesContractTest.php), and [lifecycle and recovery contracts](../../tests/Contract/RequestMappingCallbackLifecycleContractTest.php) exercise the implemented stage. The existing request mapping and mapped `Transform` suites remain unchanged. Preserve the following acceptance requirements:
 
 | Property | Required proof |
 |---|---|
@@ -534,13 +534,13 @@ Current tests establish existing alternatives and ordering, not implementation o
 | Failure and freshness | Owned exception identity, foreign previous cause, failed then successful attempt, attribute/autoloader mutation without replay. |
 | Cost | Compare callback-free paths before/after and array sizes on the enabled path; report linear shallow-copy cost and callback dependency cost, without an application-speedup claim. |
 
-Implement three coherent slices; each derives its behavior from the contract above:
+The implementation follows three coherent slices; their completion criteria remain the maintenance acceptance contract:
 
 1. **Typed DTO path:** add `CallbackMapperInterface`, final `MapRequest` argument/property, handler execution/checks and shared-binder wiring together. Cover multi-field readonly DTO creation, direct-construction compatibility, first-argument protection, array-result checks and failure-before-factory behavior. Done when the optional API works through the real container and all existing paths still pass; never publish an accepted argument that is silently ignored.
 2. **Boundary regressions, after slice 1:** prove source integrity, raw-validation order, reference-slot ownership, readonly custom mappers, warm-plan freshness, late metadata changes and lazy/proxy lifetime/retry. Done when the acceptance cases above pass and targeted deliberate defects fail. Correct local implementation drift without adding another pipeline or changing existing guards.
 3. **Documentation and qualification, after slices 1–2:** document array/DTO timing and validation limits in both migration guides, with PHP 8.4-compatible and conditional PHP 8.5 syntax examples. Run applicable full checks and scoped mutation proof; compare performance. Done when implementation matches this contract, the base-class API is unchanged, and no raw-name history or callback cache has appeared.
 
-The production surface is one new optional protocol plus `MapRequest`, `RequestAttributeHandler` and existing `ContainerFactory` wiring, accompanied by tests and migration documentation. This supersedes the broader proposal to add an argument to `RequestMapper` and every source-specific attribute. Shipping the optional feature is a product/API decision; the PHP engine and an unfinished DI 6 architecture do not prevent this minimal design.
+The production surface is one new optional protocol plus `MapRequest`, `RequestAttributeHandler` and existing `ContainerFactory` wiring, accompanied by tests and migration documentation. This supersedes the broader proposal to add an argument to `RequestMapper` and every source-specific attribute. The implementation adds this alternative without replacing existing mapping APIs. Publishing DI 6 remains separate from implementing this feature; E1 does not gate the mapping stage.
 
 ### Performance of unavailable attributes
 
@@ -550,4 +550,4 @@ Address the measured repeated autoload issue under the separate [availability pe
 
 The following are normative choices for the proposed target, not unresolved decisions: empty-signature callbacks are allowed; first DI parameter metadata is forbidden and guarded together with the suffix; the `Transform` suffix receives no ambient public bag; explicit callback `SetUp::$params` uses string keys with existing provided-parameter matching rules; standalone property transformation needs a source; only simple unions are autowired; `Closure` uses the same availability rule as other service-type arms; different service IDs remain ambiguous even when aliases converge. If a choice changes, revise its owning contract and acceptance rows before implementing it. E1 limits only the affected native-form support promise. The optional request-mapping extension has its own contract in §11 and does not block the accepted DI 6 scope.
 
-During implementation convergence, compare code, wiring, public migration notes and observed behavior with §§2–9 for the accepted DI 6 features, and with §11's contract, acceptance matrix and slices if the optional mapping feature is implemented. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.
+During implementation convergence, compare code, wiring, public migration notes and observed behavior with §§2–9 for the accepted DI 6 features, and with §11's contract, acceptance matrix and slices for the implemented optional mapping feature. Resolve missing, partial, contradictory or unrequested behavior in its owning source. In particular, remove any duplicated argument-resolution loop, unintended public metadata transport, permanent alternate callback route, changed string-method behavior, or broadened union/DNF policy. Passing tests alone does not establish that this architecture was implemented.
