@@ -27,8 +27,8 @@ final readonly class MappedRequestContext
                 $keys[$key] = true;
             }
         }
-        $context[self::KEY] = new self($keys);
-        return $context;
+        // Replace the slot itself instead of writing through a caller-owned reference.
+        return array_replace($context, [self::KEY => new self($keys)]);
     }
 
     /** @param array<string|int,mixed> $context */

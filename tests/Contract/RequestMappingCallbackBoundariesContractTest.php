@@ -373,6 +373,58 @@ test('afterMap owns top-level reference slots while preserving nested references
         ->and($object->value)->toBe('object changed');
 });
 
+test('DTO metadata does not overwrite caller reference slots returned by a mapper or callback', function (bool $callback, bool $fail, string $key): void {
+    $original = 'caller value';
+    $untouched = 'untouched';
+    $nested = 'nested';
+    $object = new \stdClass();
+    $mapped = ['value' => 'mapped', $key => &$original, 'untouched' => &$untouched, 'nested' => ['value' => &$nested], 'object' => $object];
+    $request = (new ServerRequest('GET', '/'))->withQueryParams($mapped);
+    $mapper = $callback
+        ? new MapRequest(sources: [RequestDataSource::Query], afterMap: static fn(array $data): array => $mapped)
+        : new DirectMapper(null);
+    $failure = $fail ? new ResolutionException('Chosen DTO factory failure.') : null;
+    $seen = [];
+    $container = builder($mapper)->addFactory(
+        Data::class,
+        static function (ContainerInterface $container, array $params) use (&$seen, $failure): Data {
+            $seen = [array_keys($params), $params[ServerRequestInterface::class], $params['object']];
+            $params['untouched'] = 'factory effect';
+            if (!is_array($params['nested'])) {
+                throw new \LogicException('Expected nested mapped data.');
+            }
+            $params['nested']['value'] = 'nested effect';
+            if ($failure !== null) {
+                throw $failure;
+            }
+            return new Data('mapped');
+        },
+    )->build();
+    $target = static fn(#[Input] Data $data): Data => $data;
+
+    if ($failure !== null) {
+        try {
+            $container->call($target, [ServerRequestInterface::class => $request]);
+            \PHPUnit\Framework\Assert::fail('The DTO factory must propagate its failure.');
+        } catch (ResolutionException $error) {
+            expect($error)->toBe($failure);
+        }
+    } else {
+        expect($container->call($target, [ServerRequestInterface::class => $request]))->toEqual(new Data('mapped'));
+    }
+
+    $keys = $key === ServerRequestInterface::class
+        ? ['value', ServerRequestInterface::class, 'untouched', 'nested', 'object']
+        : ['value', 'untouched', 'nested', 'object', ServerRequestInterface::class];
+    expect($original)->toBe('caller value')
+        ->and($request->getQueryParams()[$key])->toBe('caller value')
+        ->and($seen)->toBe([$keys, $request, $object])
+        ->and($untouched)->toBe('factory effect')
+        ->and($nested)->toBe('nested effect');
+})->with(['custom mapper' => [false], 'afterMap output' => [true]])
+    ->with(['factory success' => [false], 'factory failure' => [true]])
+    ->with(['request transport' => [ServerRequestInterface::class], 'private provenance' => ["\0componenta.di.mapped-request"]]);
+
 test('afterMap can remove a raw source-shaped key without replacing the trusted source', function (): void {
     ProtectedData::$constructed = 0;
     $container = builder(new MapRequest(sources: [RequestDataSource::Query], afterMap: static function (array $data): array {
