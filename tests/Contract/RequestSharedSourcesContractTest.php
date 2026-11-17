@@ -7,9 +7,12 @@ namespace Componenta\DI\Tests\Contract;
 use Componenta\DI\Attribute\MapCookies;
 use Componenta\DI\Attribute\MapHeaders;
 use Componenta\DI\Attribute\MapQueryString;
+use Componenta\DI\Attribute\MapRequest;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\MapServerParams;
 use Componenta\DI\Attribute\MapUploadedFiles;
+use Componenta\DI\Attribute\RequestDataSource;
+use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use InvalidArgumentException;
@@ -116,3 +119,33 @@ test('the built-in uploaded-files attribute resolves the request upload tree thr
         [ServerRequestInterface::class => $request],
     ))->toBe($files);
 });
+
+test('FirstWins ignores later recursive array values from request sources', function (bool $queryFirst): void {
+    $queryOwner = new \stdClass();
+    $queryValue = [];
+    $queryValue['self'] = &$queryValue;
+    $queryValue['owner'] = $queryOwner;
+    $payloadOwner = new \stdClass();
+    $payloadValue = [];
+    $payloadValue['self'] = &$payloadValue;
+    $payloadValue['owner'] = $payloadOwner;
+    $request = (new ServerRequest('POST', '/'))
+        ->withQueryParams(['value' => $queryValue])
+        ->withParsedBody(['value' => $payloadValue]);
+    $target = $queryFirst
+        ? static fn(#[MapRequest(sources: [RequestDataSource::Query, RequestDataSource::Payload], conflictPolicy: RequestDataConflictPolicy::FirstWins)] array $data): array => $data
+        : static fn(#[MapRequest(sources: [RequestDataSource::Payload, RequestDataSource::Query], conflictPolicy: RequestDataConflictPolicy::FirstWins)] array $data): array => $data;
+
+    $result = (new ContainerBuilder())->build()->call($target, [ServerRequestInterface::class => $request]);
+    if (!is_array($result) || !is_array($result['value'] ?? null)) {
+        throw new \LogicException('Expected the selected request array.');
+    }
+    $value = $result['value'];
+    if (!is_array($value['self'] ?? null)) {
+        throw new \LogicException('Expected the original recursive request value.');
+    }
+    $expected = $queryFirst ? $queryOwner : $payloadOwner;
+    expect(array_keys($result))->toBe(['value'])
+        ->and($value['owner'])->toBe($expected)
+        ->and($value['self']['owner'])->toBe($expected);
+})->with(['query first' => true, 'payload first' => false]);

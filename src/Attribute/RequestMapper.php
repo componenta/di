@@ -61,8 +61,8 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
                     $owners[$key] = $source;
                     continue;
                 }
-                if ($data[$key] === $value
-                    || $this->conflictPolicy === RequestDataConflictPolicy::FirstWins
+                if ($this->conflictPolicy === RequestDataConflictPolicy::FirstWins
+                    || $data[$key] === $value
                 ) {
                     continue;
                 }
