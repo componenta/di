@@ -97,3 +97,20 @@ test('static delegators loaded during registration do not acquire owner dependen
         spl_autoload_unregister($loader);
     }
 })->with(['already loaded' => true, 'loaded on second probe' => false]);
+
+test('native static pairs remain independent of both owner bindings and exact string callable services', function (string $method): void {
+    StaticDecorator::$calls = 0;
+    $container = (new ContainerBuilder())->addService('product', new Product('base'))->build();
+    $specification = [StaticDecorator::class, $method];
+    $container->delegator('product', $specification);
+    $original = $container->get('product');
+    $replacement = static fn(Product $entry): Product => new Product($entry->value . ':replacement');
+
+    $container->set(StaticDecorator::class, new \stdClass());
+    $container->set(StaticDecorator::class . '::' . $method, $replacement);
+
+    expect($container->get('product'))->toBe($original)
+        ->and(StaticDecorator::$calls)->toBe(1)
+        ->and($container->resolve($specification))->toBe($specification)
+        ->and($container->resolve(StaticDecorator::class . '::' . $method))->toBe($replacement);
+})->with(['declared', 'dynamic']);
