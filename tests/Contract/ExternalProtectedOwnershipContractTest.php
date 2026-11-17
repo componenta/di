@@ -213,6 +213,46 @@ test('later ownership proof cannot invalidate an earlier alias that became prote
         ->and($inspection['trigger'] ?? 0)->toBe(1);
 });
 
+test('final ownership proof continues to later public dependencies after protecting its current alias', function (): void {
+    $container = (new ContainerBuilder())->addServices([
+        'local.lookup' => new Lookup('local'),
+        'second.lookup' => new Lookup('second local'),
+    ])->build();
+    $container->alias('lookup', 'local.lookup');
+    $state = new class () {
+        public bool $armed = false;
+        public int $probes = 0;
+        public ?Product $warmed = null;
+    };
+    $earlier = new External([], static function (string $id) use ($container, $state): bool {
+        if ($state->armed && $id === 'lookup' && ++$state->probes === 2) {
+            $state->armed = false;
+            $container->alias('lookup', AttributeDefinitionRegistry::class);
+            $state->warmed = product($container);
+        }
+        return false;
+    });
+    $container->addContainer($earlier);
+    installProduct($container, 'product', 'lookup');
+    installProduct($container, 'second.product', 'second.lookup');
+    product($container);
+    $previous = product($container, 'second.product');
+    $replacement = new Lookup('external');
+    $candidate = new External(['lookup' => $replacement, 'second.lookup' => $replacement]);
+    $state->armed = true;
+
+    $container->addContainer($candidate);
+    $inspection = array_count_values($candidate->queries);
+    $current = product($container, 'second.product');
+
+    expect($state->warmed)->toBeInstanceOf(Product::class)
+        ->and(product($container))->toBe($state->warmed)
+        ->and($current)->not->toBe($previous)
+        ->and($current->source)->toBe($replacement)
+        ->and($inspection['lookup'] ?? 0)->toBe(1)
+        ->and($inspection['second.lookup'] ?? 0)->toBe(1);
+});
+
 test('a skipped protected alias is inspected once if a later candidate callback makes it public and warms it', function (): void {
     $local = new Lookup('local');
     $replacement = new Lookup('external');

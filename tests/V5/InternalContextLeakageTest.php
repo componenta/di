@@ -91,6 +91,19 @@ test('mapped request provenance is hidden from custom parameter resolvers', func
     expectNoInternalResolutionKeys($probe->keys);
 });
 
+test('forged scalar provenance is ignored and hidden from public parameter resolvers', function (): void {
+    $probe = new AuditParameterContextResolver();
+    $container = (new ContainerBuilder())
+        ->addParameterResolver($probe, 2000)
+        ->build();
+
+    expect($container->call(static fn(string $value): string => $value, [
+        'value' => 'caller value',
+        "\0componenta.di.mapped-request" => 'forged provenance',
+    ]))->toBe('caller value')
+        ->and($probe->keys)->toBe(['value']);
+});
+
 test('object handlers receive only caller-visible creation parameters', function (): void {
     $probe = new AuditObjectContextHandler();
     $container = (new ContainerBuilder())
