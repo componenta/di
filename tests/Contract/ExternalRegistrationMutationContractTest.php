@@ -249,6 +249,32 @@ test('external registration does not inspect a candidate for an already owned de
         ->and($container->get('entry'))->toBe($warmed);
 });
 
+test('registering an existing external container again skips ownership callbacks and preserves warmed dependents', function (): void {
+    $decorator = static fn(Product $entry): Product => new Product($entry->value . ':external');
+    $container = (new ContainerBuilder())
+        ->addService('entry', new Product('base'))
+        ->addDelegator('entry', 'owner')
+        ->build();
+    $inspection = new class () {
+        public bool $reject = false;
+    };
+    $external = new CallbackContainer(['owner' => $decorator], static function (string $id) use ($inspection): void {
+        if ($inspection->reject && $id === 'owner') {
+            throw new LogicException('Repeated registration must not inspect ownership again.');
+        }
+    });
+    $container->addContainer($external);
+    $warmed = $container->get('entry');
+    $queries = $external->queries;
+    $inspection->reject = true;
+
+    $container->addContainer($external);
+
+    expect($external->queries)->toBe($queries)
+        ->and($warmed)->toEqual(new Product('base:external'))
+        ->and($container->get('entry'))->toBe($warmed);
+});
+
 test('external ownership inspection preserves results warmed during successive nested registrations', function (): void {
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
     $selected = static fn(Product $entry): Product => new Product($entry->value . ':selected');

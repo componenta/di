@@ -10,9 +10,12 @@ use Componenta\Config\Environment;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Definition\ReferenceDefinition;
+use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\CycleGuard;
+use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
@@ -232,3 +235,61 @@ test('standalone shared lookups preserve supplied values through alias retarget 
         ->and($container->get('second'))->toBe($replacement)
         ->and($container->get('sibling'))->toBeNull();
 });
+
+test('standalone mutations refresh supplied delegator pipelines for affected requested ids', function (): void {
+    $decorators = (new ContainerBuilder())->addService(
+        'selected.decorator',
+        static fn(StandaloneProduct $entry): StandaloneProduct => new StandaloneProduct($entry->parameters + ['decorator' => 'initial']),
+    )->build();
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(['requested' => 'first']),
+        (new ContainerBuilder())->build(),
+        cache: new EntryCache([
+            'first' => new StandaloneProduct(['source' => 'first']),
+            'second' => new StandaloneProduct(['source' => 'second']),
+        ]),
+        delegators: new DelegatorRegistry($decorators),
+    );
+    $container->delegator('first', 'selected.decorator');
+    $container->delegator('requested', 'selected.decorator');
+
+    expect($container->get('first'))->toEqual(new StandaloneProduct(['source' => 'first', 'decorator' => 'initial']))
+        ->and($container->get('requested'))->toEqual(new StandaloneProduct(['source' => 'first', 'decorator' => 'initial']));
+
+    $decorators->set('selected.decorator', static fn(StandaloneProduct $entry): StandaloneProduct => new StandaloneProduct($entry->parameters + ['decorator' => 'replacement']));
+    $container->set('requested', new StandaloneProduct(['source' => 'replacement']));
+    $first = $container->get('first');
+
+    expect($first)->toEqual(new StandaloneProduct(['source' => 'replacement', 'decorator' => 'replacement']))
+        ->and($container->get('requested'))->toEqual(new StandaloneProduct(['source' => 'replacement', 'decorator' => 'replacement']));
+
+    $decorators->set('selected.decorator', static fn(StandaloneProduct $entry): StandaloneProduct => new StandaloneProduct($entry->parameters + ['decorator' => 'retargeted']));
+    $container->alias('requested', 'second');
+    $requested = $container->get('requested');
+
+    expect($requested)->toEqual(new StandaloneProduct(['source' => 'second', 'decorator' => 'retargeted']))
+        ->and($container->get('requested'))->toBe($requested)
+        ->and($container->get('first'))->toBe($first)
+        ->and($container->get('second'))->toEqual(new StandaloneProduct(['source' => 'second']));
+});
+
+test('standalone resolution honors the supplied cycle guard and recovers after its enclosing operation', function (bool $fresh): void {
+    $guard = new CycleGuard();
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(['requested' => 'product']),
+        (new ContainerBuilder())->build(),
+        cycleGuard: $guard,
+    );
+    $guard->enter('product');
+
+    try {
+        expect(fn() => $fresh ? $container->make('requested') : $container->get('requested'))
+            ->toThrow(CircularDependencyException::class);
+    } finally {
+        $guard->leave('product');
+    }
+
+    expect($container->get('requested'))->toEqual(new StandaloneProduct([]));
+})->with(['shared' => false, 'fresh' => true]);
