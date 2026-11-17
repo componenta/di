@@ -103,6 +103,11 @@ final class AliasResolver
         return isset($this->map[$alias]);
     }
 
+    public function target(string $alias): ?string
+    {
+        return $this->map[$alias] ?? null;
+    }
+
     /** @return array<string, string> Previous canonical ids for aliases whose target changes. */
     public function changedTargets(self $candidate): array
     {

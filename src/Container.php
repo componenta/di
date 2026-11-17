@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Componenta\Config\Config;
+use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -52,6 +54,13 @@ final class Container implements
         ?ProxyFactoryInterface $proxyFactory = null,
         array $bootstrapServices = [],
     ) {
+        foreach (ProtectedServiceIds::ids() as $id) {
+            $target = $aliases->target($id);
+            if ($target !== null && !($id === ConfigAttribute::KEY && $target === Config::class)) {
+                throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $id));
+            }
+        }
+
         $core = [
             ContainerInterface::class => $this,
             FactoryInterface::class => $this,

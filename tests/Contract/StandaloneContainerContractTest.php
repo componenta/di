@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract;
 
 use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
+use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\EntryCache;
+use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Psr\Container\ContainerInterface;
 
 final readonly class StandaloneProduct
 {
@@ -89,6 +93,62 @@ test('standalone container bootstrap refuses ids outside the supported core serv
         bootstrapServices: [$id => new \stdClass()],
     ))->toThrow(InvalidConfigurationException::class, 'Unsupported bootstrap service id "' . $id . '".');
 })->with(['application', Container::class, 7]);
+
+test('standalone construction rejects protected alias sources before attaching its resolver', function (string $id): void {
+    $resolver = new CompositeResolver(new StandaloneEntryResolver());
+    $executor = (new ContainerBuilder())->build();
+    $seed = new StandaloneProduct(['source' => 'seed']);
+    $cache = new EntryCache(['seed' => $seed]);
+
+    expect(fn() => new Container(
+        $resolver,
+        new AliasResolver([$id => 'product']),
+        $executor,
+        $cache,
+    ))->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI alias "' . $id . '".');
+
+    $container = new Container($resolver, new AliasResolver(), $executor, $cache);
+
+    expect($container->get(ContainerInterface::class))->toBe($container)
+        ->and($container->get('seed'))->toBe($seed);
+})->with([
+    Container::class,
+    ContainerInterface::class,
+    CallableExecutorInterface::class,
+    Config::class,
+    Environment::class,
+    DependencyDefinitions::class,
+    'config',
+]);
+
+test('standalone construction preserves the canonical config alias and application aliases to core services', function (): void {
+    $environment = new Environment(['MODE' => 'standalone']);
+    $config = new Config([], $environment);
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver([
+            'config' => Config::class,
+            'application.config' => 'config',
+            'application.container' => ContainerInterface::class,
+        ]),
+        (new ContainerBuilder())->build(),
+        bootstrapServices: [Config::class => $config, Environment::class => $environment],
+    );
+
+    expect($container->get('config'))->toBe($config)
+        ->and($container->get('application.config'))->toBe($config)
+        ->and($container->get('application.container'))->toBe($container)
+        ->and($container->get(Config::class))->toBe($config)
+        ->and($container->get(Environment::class))->toBe($environment);
+});
+
+test('standalone construction rejects an indirect reserved config alias through a mutable application alias', function (): void {
+    expect(fn() => new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(['config' => 'application.config', 'application.config' => Config::class]),
+        (new ContainerBuilder())->build(),
+    ))->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI alias "config".');
+});
 
 final class StandaloneProxyProduct
 {
