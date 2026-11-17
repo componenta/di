@@ -209,6 +209,12 @@ When a composite is attached to a `Container`, that container becomes the sole p
 
 The internal `prepareDefinition()`, `publishDefinition()` and `attach()` methods are not the extension mutation API. Prepared records are bound to their producing composite. An attached root requires its container's private identity capability for publication; no public accessor exposes that capability. Applications do not create capabilities, publish records, release retirement holders or call cache-invalidation helpers.
 
+### Direct container construction
+
+Direct `new Container(...)` supports an independent entry resolver and initial base values. Give each container its own mutable runtime collaborators: `AliasResolver`, `EntryCache`, delegator/external-container registries and cycle guards. An `EntryCache` may be seeded with base values, but sharing a cache already serving another container is unsupported. After construction, change registrations through the container's public mutation methods; changing retained internal objects directly bypasses its invalidation. These `@internal` collaborators do not have a common ownership guard: sharing them is not automatically rejected, and a warmed shared cache can return a value from the other container. This limitation does not prohibit sharing application service instances or providers whose own contracts allow it.
+
+The constructor rejects aliases whose source is a protected DI ID before attaching the resolver or writing core cache entries. The sole built-in exception is the direct `config → Config::class` route used by `ContainerFactory`; an indirect route through a mutable application alias is rejected. Application aliases pointing to protected services remain valid. A rejected alias configuration leaves the supplied resolver available for a corrected construction.
+
 ## Committed retirement failures
 
 All four public registration mutations follow validation, publication, complete affected invalidation, then native release of retired roots: `set()`, `alias()`, `delegator()` and `addContainer()`. A standalone composite applies the corresponding sequence to its own binding table. No mutation writes follow the start of final retirement.
