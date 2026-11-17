@@ -63,10 +63,9 @@ function product(Container $container, string $id = 'product'): Product
     return $value instanceof Product ? $value : throw new LogicException('Expected a wrapped lookup result.');
 }
 
-test('external registration preserves protected dependency pipelines without inspecting protected ownership', function (bool $alias, string $failure): void {
+test('external registration preserves protected dependency pipelines without inspecting protected ownership', function (string $owner, string $failure): void {
     $container = (new ContainerBuilder())->build();
-    $owner = $alias ? 'protected.lookup' : AttributeDefinitionRegistry::class;
-    if ($alias) {
+    if ($owner !== AttributeDefinitionRegistry::class) {
         $container->alias($owner, AttributeDefinitionRegistry::class);
     }
     $earlier = new External([], static function (string $id) use ($owner, $failure): bool {
@@ -94,8 +93,40 @@ test('external registration preserves protected dependency pipelines without ins
         ->and($container->get('marker'))->toBe($marker)
         ->and($earlier->queries)->not->toContain($owner)
         ->and($candidate->queries)->not->toContain($owner);
-})->with(['protected id' => false, 'alias to protected id' => true])
+})->with([
+    'protected id' => AttributeDefinitionRegistry::class,
+    'alias to protected id' => 'protected.lookup',
+    'numeric string alias' => '7',
+])
     ->with(['ownership claim', 'candidate callback', 'existing callback']);
+
+test('external callbacks can read an alias after retargeting it to protected core', function (bool $availability, bool $claims): void {
+    $container = (new ContainerBuilder())->addService('local.lookup', new Lookup('local'))->build();
+    $container->alias('lookup', 'local.lookup');
+    $registry = $container->get(AttributeDefinitionRegistry::class);
+    $observed = new class () {
+        public ?bool $available = null;
+        public mixed $value = null;
+    };
+    $external = new External([], static function (string $id) use ($container, $observed, $claims): bool {
+        if ($id !== 'lookup') {
+            return false;
+        }
+        $container->alias('lookup', AttributeDefinitionRegistry::class);
+        $observed->available = $container->has('lookup');
+        $observed->value = $container->get('lookup');
+        return $claims;
+    });
+    $container->addContainer($external);
+
+    $result = $availability ? $container->has('lookup') : $container->get('lookup');
+
+    expect($observed->available)->toBeTrue()
+        ->and($observed->value)->toBe($registry)
+        ->and($result)->toBe($availability ? true : $registry)
+        ->and($external->queries)->toBe(['lookup']);
+})->with(['get' => false, 'has' => true])
+    ->with(['declined ownership' => false, 'claimed ownership' => true]);
 
 test('registration rechecks protection between existing ownership callbacks and before candidate inspection', function (bool $claims): void {
     $container = (new ContainerBuilder())->addService('local.lookup', new Lookup('local'))->build();

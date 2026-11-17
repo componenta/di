@@ -190,11 +190,17 @@ final class Container implements
     public function has(string $id): bool
     {
         try {
+            $entryId = $this->aliases->resolve($id);
+            // A callback may retarget this alias to an existing core service.
+            // Its availability is known without entering another lookup cycle.
+            if (ProtectedServiceIds::contains($entryId) && $this->cache->tryGetBase($entryId, $base)) {
+                return true;
+            }
+
             $guardId = "\0has:" . $id;
             $lookupGuard = $this->lookupGuard ??= new CycleGuard();
             $lookupGuard->enter($guardId);
             try {
-                $entryId = $this->aliases->resolve($id);
                 if ($this->externalContainers !== null
                     && !ProtectedServiceIds::contains($id)
                     && !ProtectedServiceIds::contains($entryId)
