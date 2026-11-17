@@ -482,6 +482,20 @@ final class AttributePlanBuilder
 
         $this->assertPhaseOrder($target, $usages, $edges);
 
+        if ($edges === []) {
+            // Custom reflectors may return attribute indexes out of sequence.
+            $inDeclarationOrder = true;
+            for ($index = 1, $count = count($usages); $index < $count; ++$index) {
+                if ($usages[$index - 1]->declarationOrder > $usages[$index]->declarationOrder) {
+                    $inDeclarationOrder = false;
+                    break;
+                }
+            }
+            if ($inDeclarationOrder) {
+                return $usages;
+            }
+        }
+
         /** @var array<int, true> $remaining */
         $remaining = array_fill_keys(array_keys($usages), true);
         $ordered = [];
