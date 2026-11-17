@@ -345,7 +345,7 @@ One upstream limitation is separate from DI correctness. On PHP 8.5.8, an attrib
 
 The upstream correction is [php-src `44a2a2c3`](https://github.com/php/php-src/commit/44a2a2c3db9e4e06c41a0603c3826fac3b1b99f3), dated November 3, 2026. Its [official announcement and regression cases](https://news-web.php.net/php.cvs/143271) identify the **PHP-8.6 branch** and explain cached scope and visibility. That announcement alone does not prove a backport into any PHP 8.5 release. The [official November 5 announcement](https://news-web.php.net/php.internals/133012) describes 8.5.13RC1 as a testing release and November 19 as an expected release date. The November 14 evidence identifies [PHP 8.5.12](https://www.php.net/releases/8_5_12.php) as the official stable 8.5 release at that check. Neither an RC, a future NEWS date nor the PHP-8.6 commit proves that PHP 8.5.13 is released or will contain the required fix.
 
-A bounded check of the [released `php-8.5.12` source](https://github.com/php/php-src/blob/php-8.5.12/Zend/zend_ast.c#L1092-L1151) confirms that this correction is absent: the static-call branch reuses cached `fptr` and still stores it unconditionally, without the new `ZEND_FETCH_CLASS_DEFAULT` and `ZEND_ACC_PUBLIC` restrictions. The [official changelog](https://www.php.net/ChangeLog-8.php#8.5.12) dates that release to October 22, 2026. The ordinary DI CI suite passes on PHP 8.5.12, but it does not execute these portable trait fixtures; no binary-level trait result on 8.5.12 is claimed. This source check leaves E1 open for the affected support promise.
+A bounded check of the [released `php-8.5.12` source](https://github.com/php/php-src/blob/php-8.5.12/Zend/zend_ast.c#L1092-L1151) confirms that this correction is absent: the static-call branch reuses cached `fptr` and still stores it unconditionally, without the new `ZEND_FETCH_CLASS_DEFAULT` and `ZEND_ACC_PUBLIC` restrictions. The [official changelog](https://www.php.net/ChangeLog-8.php#8.5.12) dates that release to October 22, 2026. A direct run of `php -n tests/php85-platform.php` on PHP 8.5.12 on November 17, 2026 reproduces the defect: only 2 of 10 cases pass (the public named-reference and inline-closure controls); `semantic_acceptance_passed` and `stable_runtime_acceptance_passed` are both false. The ordinary DI suite passes on the same runtime. The platform fixture loads neither DI nor Composer, so these eight failures are engine behavior, not DI cache failures. E1 remains open only for the affected native support promise.
 
 ### E1 — Verify support for affected native expression forms
 
@@ -455,11 +455,27 @@ Retain PHP `^8.4`, prepare the `6.0.x-dev` alias for publication of the 6.x line
 
 ### Request-to-DTO callback (possible 6.1)
 
-The recovered notes proposed a final optional `transform` argument on `MapRequest` and its source-specific subclasses. This is not needed for `Transform` or `Init` and is not implementation-ready in this specification.
+The recovered notes proposed a final optional `transform` argument on request-mapping attributes. This is not needed for `Transform` or `Init` and is not implementation-ready in this specification. It is a separate optional feature, not unfinished implementation of the accepted DI 6 scope.
 
 Before implementation, settle whether it transforms the mapped array or the finished DTO; the earlier intent was a mapped array before DTO construction. Preserve the current concrete order: raw request validation, then mapper operations `map → cast → defaults → sort → exclude`, then any new whole-array callback, then the existing named-key/source-conflict checks and DTO creation. Require an array result and preserve raw-field provenance. Do not bypass validation or expose private transport metadata to callback dependencies.
 
-Bounded next step: inspect every `MapRequest` subclass constructor and current `RequestMapper`/`RequestAttributeHandler` call site, produce an exact signature and provenance table, and test raw-key removal/renaming, numeric keys, conflicting source attributes, callback failures, and nested DTO creation. Only then prepare its own implementation slices. No speculative signature changes belong in this audit.
+**Source review (2026-11-17):** `MapRequest` is final. The seven source-specific attributes (`MapQueryString`, `MapRequestPayload`, `MapHeaders`, `MapCookies`, `MapRequestAttributes`, `MapServerParams`, `MapUploadedFiles`) are its siblings, all extending `RequestMapper`; they inherit its constructor. A new last optional callback argument would therefore affect two constructor declarations:
+
+| Owner | Existing constructor | Candidate extension, not implemented |
+|---|---|---|
+| `RequestMapper` | `map`, nullable `conflictPolicy` | Third optional `?Closure` argument, inherited by the seven source-specific attributes |
+| `MapRequest` | `sources`, `map`, `exclude`, `conflictPolicy`, `defaults`, `cast`, `sortMap`, `attributes`, `files` | Tenth optional `?Closure` argument, forwarded to the parent |
+| `RequestAttributeHandler` | `factory`, `casterProvider`, optional `validationProvider` | Preserve old direct construction while making the existing callback binder available to callback-enabled mapping |
+
+The existing binder and request transport already provide the needed building blocks; no PHP upgrade or new object-creation architecture is required. `#[Transform]` on a DTO receives the already constructed object, so it cannot replace this pre-construction array stage. For a pure array transformation, a custom source-specific mapper can already override `transform(array): array`; the proposed feature adds declarative callbacks with DI-resolved suffix dependencies.
+
+Before deriving implementation slices, settle these local contracts:
+
+- **Provenance:** current `MappedRequestContext` records final transformed names, not a raw-field history. An arbitrary callback cannot reveal exact data lineage automatically. Keeping raw, pre-callback and final names conservatively prevents removing a source conflict, but deliberately removed fields would still conflict; keeping only final names permits that cleanup. Select the intended rule explicitly, with a raw `role` field removed before a source-bound `$role` parameter as the deciding example. Any stricter rule should be opt-in to callback-enabled mapping.
+- **Invocation owner:** prefer a callback stage in `RequestAttributeHandler` using `AttributeCallbackInvoker` with no ambient request parameter bag. Keep standalone mapper `transform()` as the existing declarative stage, and document that it does not perform DI callback invocation. Custom mappers need an optional callback-discovery contract that does not change existing mapper interfaces.
+- **Direct handler compatibility:** old construction without a binder must still handle old mappers. A callback-enabled mapper without a binder must fail explicitly rather than silently ignore the callback. Standard composition supplies the shared binder.
+
+The bounded next step is to select these policies and verify array/DTO targets, result-type rejection, one callback invocation, raw-key removal/renaming, numeric keys, source conflicts before the factory, late source discovery, nested mapping/setup, failure recovery and closure lifetime. Then update the normative contract and derive implementation slices. These are genuine behavior choices, but not an external technical blocker or a reason to delay the accepted DI 6 release.
 
 ### Performance of unavailable attributes
 
