@@ -22,6 +22,51 @@ final class RequiredSetUpDescriptorCalls
     public int $count = 0;
 }
 
+final class MissingSetUpMethodCalls
+{
+    public int $constructors = 0;
+    public int $magicCalls = 0;
+}
+
+#[SetUp('missing')]
+final class MissingSetUpMethodTarget
+{
+    public function __construct(private readonly MissingSetUpMethodCalls $calls)
+    {
+        ++$this->calls->constructors;
+    }
+
+    /** @param array<array-key,mixed> $arguments */
+    public function __call(string $name, array $arguments): void
+    {
+        ++$this->calls->magicCalls;
+    }
+}
+
+test('SetUp rejects missing declared methods before magic dispatch and never shares failed objects', function (): void {
+    $calls = new MissingSetUpMethodCalls();
+    $container = (new ContainerBuilder())->addService(MissingSetUpMethodCalls::class, $calls)->build();
+
+    foreach ([1, 2] as $attempt) {
+        $failure = null;
+        try {
+            $container->get(MissingSetUpMethodTarget::class);
+        } catch (ResolutionException $actual) {
+            $failure = $actual;
+        }
+        if (!$failure instanceof ResolutionException) {
+            throw new \LogicException('An absent declared setup method must reject object creation.');
+        }
+        $previous = $failure->getPrevious();
+        if (!$previous instanceof \LogicException) {
+            throw new \LogicException('The setup diagnostic must retain the missing method cause.', previous: $failure);
+        }
+        expect($previous->getMessage())->toBe('SetUp method "' . MissingSetUpMethodTarget::class . '::missing()" does not exist.')
+            ->and($calls->constructors)->toBe($attempt)
+            ->and($calls->magicCalls)->toBe(0);
+    }
+});
+
 abstract class RequiredSetUpDescriptorTarget
 {
     public float $ratio = 0.0;

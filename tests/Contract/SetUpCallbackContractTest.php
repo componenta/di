@@ -327,6 +327,8 @@ final class PublicContextResolver implements ParameterResolverInterface
 {
     /** @var array<string|int,mixed> */
     public array $provided = [];
+    /** @var array<int,mixed> */
+    public array $resolved = [];
 
     public function supports(ParameterTarget $target): bool
     {
@@ -336,6 +338,7 @@ final class PublicContextResolver implements ParameterResolverInterface
     public function resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): array
     {
         $this->provided = $context->provided;
+        $this->resolved = $context->resolved;
         return [$target->position, 'observed'];
     }
 }
@@ -344,6 +347,22 @@ function inspectSetupContext(object $instance, string $inspectContext): void {}
 
 #[FunctionHook(__NAMESPACE__ . '\\inspectSetupContext')]
 final class ContextRequestTarget {}
+
+test('setup suffix extensions see the constructed instance without reserved ambient inputs', function (): void {
+    $resolver = new PublicContextResolver();
+    $container = (new ContainerBuilder())->addParameterResolver($resolver, 2000)->build();
+
+    $entry = $container->make(ContextRequestTarget::class, [
+        0 => 'wrong positional instance',
+        'instance' => 'wrong named instance',
+        1 => 'ambient suffix position',
+        'visible' => 'public',
+    ]);
+
+    expect($entry)->toBeInstanceOf(ContextRequestTarget::class)
+        ->and($resolver->provided)->toBe([1 => 'ambient suffix position', 'visible' => 'public'])
+        ->and($resolver->resolved)->toBe([$entry]);
+});
 
 test('classless setup suffix extensions receive public request context without provenance or owner transport keys', function (): void {
     $resolver = new PublicContextResolver();
