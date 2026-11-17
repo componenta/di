@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
+use Closure;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -35,12 +36,16 @@ final class ExternalContainerRegistry
         return isset($this->containers[spl_object_id($container)]);
     }
 
-    public function findOwning(string $id): ?ContainerInterface
+    /** @param Closure(string):bool|null $mayInspect */
+    public function findOwning(string $id, ?Closure $mayInspect = null): ?ContainerInterface
     {
         $containers = $this->containers;
         $inspected = count($containers);
         while (true) {
             foreach ($containers as $container) {
+                if ($mayInspect !== null && !$mayInspect($id)) {
+                    return null;
+                }
                 if ($container->has($id)) {
                     return $container;
                 }

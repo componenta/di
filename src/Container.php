@@ -121,7 +121,10 @@ final class Container implements
                     $lookupGuard = $this->lookupGuard ??= new CycleGuard();
                     $lookupGuard->enter($externalGuard);
                     try {
-                        $external = $this->externalContainers->findOwning($id);
+                        $external = $this->externalContainers->findOwning(
+                            $id,
+                            fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                        );
                         // External has() may retarget aliases before local resolution.
                         $entryId = $this->aliases->resolve($id);
                         if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
@@ -196,7 +199,10 @@ final class Container implements
                     && !ProtectedServiceIds::contains($id)
                     && !ProtectedServiceIds::contains($entryId)
                 ) {
-                    $external = $this->externalContainers->findOwning($id);
+                    $external = $this->externalContainers->findOwning(
+                        $id,
+                        fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                    );
                     // External has() may retarget aliases before local availability checks.
                     $entryId = $this->aliases->resolve($id);
                     if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
@@ -465,19 +471,31 @@ final class Container implements
     {
         $candidates = [];
         $inspected = [];
+        $pending = [];
+        $mayInspect = fn(string $id): bool => !$this->isProtectedDependency($id);
         do {
             foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-                if (isset($inspected[$dependencyId])) {
+                if (isset($inspected[$dependencyId]) && !isset($pending[$dependencyId])) {
                     continue;
                 }
                 $inspected[$dependencyId] = true;
+                if ($this->isProtectedDependency($dependencyId)) {
+                    $pending[$dependencyId] = true;
+                    continue;
+                }
+                unset($pending[$dependencyId]);
                 do {
                     $revision = $this->externalContainers->revision ?? 0;
-                    $owner = $this->externalContainers?->findOwning($dependencyId);
+                    $owner = $this->externalContainers?->findOwning($dependencyId, $mayInspect);
                     if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
                         return [];
                     }
-                } while ($revision !== ($this->externalContainers->revision ?? 0));
+                } while ($revision !== ($this->externalContainers->revision ?? 0)
+                    && !$this->isProtectedDependency($dependencyId));
+                if ($this->isProtectedDependency($dependencyId)) {
+                    $pending[$dependencyId] = true;
+                    continue;
+                }
                 if ($owner === null && $container->has($dependencyId)) {
                     $candidates[] = $dependencyId;
                 }
@@ -489,20 +507,54 @@ final class Container implements
             // Keep candidate answers, but prove ownership against the completed
             // registry. Existing-owner callbacks can publish further containers.
             $dependencies = [];
+            $protectedCandidates = [];
             $revision = $this->externalContainers->revision ?? 0;
             foreach ($candidates as $dependencyId) {
-                $owner = $this->externalContainers?->findOwning($dependencyId);
+                if ($this->isProtectedDependency($dependencyId)) {
+                    $protectedCandidates[$dependencyId] = true;
+                    continue;
+                }
+                $owner = $this->externalContainers?->findOwning($dependencyId, $mayInspect);
                 if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
                     return [];
+                }
+                if ($this->isProtectedDependency($dependencyId)) {
+                    $protectedCandidates[$dependencyId] = true;
+                    continue;
                 }
                 if ($owner === null) {
                     $dependencies[] = $dependencyId;
                 }
             }
+            // A later callback can make a skipped alias externally eligible.
+            // Revisit only its unfinished inspection/proof, never a candidate answer.
+            $retryProtected = false;
+            foreach ($pending + $protectedCandidates as $dependencyId => $_) {
+                if (!$this->isProtectedDependency((string) $dependencyId)) {
+                    $retryProtected = true;
+                    break;
+                }
+            }
             // Either phase can also introduce new deferred dependency IDs.
-        } while ($revision !== ($this->externalContainers->revision ?? 0)
+        } while ($retryProtected
+            || $revision !== ($this->externalContainers->revision ?? 0)
             || count($inspected) !== count($this->delegators->deferredDependencies()));
-        return $dependencies;
+
+        // A later proof may also protect a dependency already selected above.
+        return array_values(array_filter(
+            $dependencies,
+            fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+        ));
+    }
+
+    /**
+     * Reentrant ownership callbacks can retarget aliases between queries.
+     * @phpstan-impure
+     */
+    private function isProtectedDependency(string $id): bool
+    {
+        return ProtectedServiceIds::contains($id)
+            || ProtectedServiceIds::contains($this->aliases->resolve($id));
     }
 
     /** @return array<string, string|null> */
