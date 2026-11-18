@@ -117,7 +117,7 @@ test('retiring a core seed can resolve create and initialize lazy objects throug
         ->and($lazyValue)->toBe('initialized');
 });
 
-test('seed retirement observes the complete core publication and preserves nested mutations', function (string $seedId): void {
+test('seed retirement observes the complete core publication and preserves nested mutations', function (string $firstSeedId, string $secondSeedId): void {
     $coreIds = [
         ContainerInterface::class,
         FactoryInterface::class,
@@ -133,18 +133,23 @@ test('seed retirement observes the complete core publication and preserves neste
     $config = new Config([], $environment);
     $cache = null;
     $observed = [];
-    $seed = new Seed(static function () use (&$cache, &$observed, $coreIds): void {
+    $observe = static function () use (&$cache, &$observed, $coreIds): void {
         $container = publishedContainer($cache);
+        $snapshot = [];
         foreach ($coreIds as $id) {
-            $observed[$id] = $container->get($id);
+            $snapshot[$id] = $container->get($id);
         }
-        $observed[Config::class] = $container->get(Config::class);
-        $observed[Environment::class] = $container->get(Environment::class);
+        $snapshot[Config::class] = $container->get(Config::class);
+        $snapshot[Environment::class] = $container->get(Environment::class);
+        $observed[] = $snapshot;
         $container->set('application', 'replacement');
         $container->alias('application.alias', 'application');
-    });
-    $cache = new EntryCache([$seedId => $seed, 'application' => 'original']);
-    unset($seed);
+    };
+    $cache = new EntryCache([
+        $firstSeedId => new Seed($observe),
+        $secondSeedId => new Seed($observe),
+        'application' => 'original',
+    ]);
 
     $container = new Container(
         new EntryResolver(),
@@ -155,10 +160,13 @@ test('seed retirement observes the complete core publication and preserves neste
     );
 
     $expected = array_fill_keys($coreIds, $container) + [Config::class => $config, Environment::class => $environment];
-    expect($observed)->toBe($expected)
+    expect($observed)->toBe([$expected, $expected])
         ->and($container->get('application'))->toBe('replacement')
         ->and($container->get('application.alias'))->toBe('replacement');
-})->with(['core value' => ContainerInterface::class, 'bootstrap value' => Environment::class]);
+})->with([
+    'adjacent core values' => [ContainerInterface::class, FactoryInterface::class],
+    'adjacent bootstrap values' => [Config::class, Environment::class],
+]);
 
 test('a throwing bootstrap seed preserves its native exception after publishing a usable container', function (): void {
     $cache = null;
