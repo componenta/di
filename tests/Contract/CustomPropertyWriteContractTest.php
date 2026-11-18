@@ -72,6 +72,42 @@ final class DiagnosticProperty extends MetadataProperty
     }
 }
 
+class FieldHookProperty extends MetadataProperty
+{
+    public string $name {
+        get => throw new RuntimeException('The name field must not select a native writer: ' . $this->name);
+    }
+
+    public string $class {
+        get => throw new RuntimeException('The class field must not select a native writer: ' . $this->class);
+    }
+}
+
+final class RedirectedFieldProperty extends MetadataProperty
+{
+    public string $name {
+        get => $this->name === 'value' ? 'hidden' : $this->name;
+    }
+
+    public string $class {
+        get => $this->class;
+    }
+}
+
+final class FieldHookDiagnosticProperty extends FieldHookProperty
+{
+    public function getName(): string
+    {
+        return parent::getName() === 'value' ? 'reportedValue' : parent::getName();
+    }
+
+    /** @return ReflectionClass<\stdClass> */
+    public function getDeclaringClass(): ReflectionClass
+    {
+        return new ReflectionClass(\stdClass::class);
+    }
+}
+
 /** @extends ReflectionClass<Child> */
 final class PropertyClass extends ReflectionClass
 {
@@ -115,10 +151,13 @@ afterEach(function (): void {
     State::$failure = null;
 });
 
-test('custom property metadata keeps native private-set writes and remains isolated from warmed native plans', function (bool $customFirst, bool $declaringScope): void {
+test('custom property metadata keeps native private-set writes and remains isolated from warmed native plans', function (bool $customFirst, bool $declaringScope, string $propertyClass): void {
+    if (!is_a($propertyClass, MetadataProperty::class, true)) {
+        throw new LogicException('Expected a custom property reflector.');
+    }
     $pipeline = pipeline();
     foreach ([$customFirst, !$customFirst, $customFirst] as $index => $custom) {
-        $reflection = $custom ? new PropertyClass(declaringScope: $declaringScope) : new ReflectionClass(Child::class);
+        $reflection = $custom ? new PropertyClass($propertyClass, $declaringScope) : new ReflectionClass(Child::class);
         $product = $pipeline->create($reflection);
         if (!$product instanceof Child) {
             throw new LogicException('Expected the reflected child product.');
@@ -130,7 +169,13 @@ test('custom property metadata keeps native private-set writes and remains isola
             ->and(State::$writers)->toBe(0);
     }
 })->with(['custom first' => true, 'native first' => false])
-    ->with(['child lookup scope' => false, 'declaring lookup scope' => true]);
+    ->with(['child lookup scope' => false, 'declaring lookup scope' => true])
+    ->with([
+        'attribute metadata' => MetadataProperty::class,
+        'field hooks' => FieldHookProperty::class,
+        'field hooks pointing to another slot' => RedirectedFieldProperty::class,
+        'field hooks and method metadata' => FieldHookDiagnosticProperty::class,
+    ]);
 
 test('custom property writer overrides keep ownership including an inherited override', function (string $propertyClass): void {
     if (!is_a($propertyClass, MetadataProperty::class, true)) {
@@ -150,13 +195,16 @@ test('custom property writer overrides keep ownership including an inherited ove
     }
 })->with([WriterProperty::class, InheritedWriterProperty::class]);
 
-test('a native hook failure keeps custom property diagnostics and permits a subsequent creation', function (): void {
+test('a native hook failure keeps custom property diagnostics and permits a subsequent creation', function (string $propertyClass, string $diagnosticOwner): void {
+    if (!is_a($propertyClass, MetadataProperty::class, true)) {
+        throw new LogicException('Expected a custom property reflector.');
+    }
     $pipeline = pipeline();
     $cause = new RuntimeException('custom metadata hook failure');
     State::$failure = $cause;
     $failure = null;
     try {
-        $pipeline->create(new PropertyClass(DiagnosticProperty::class));
+        $pipeline->create(new PropertyClass($propertyClass));
     } catch (ResolutionException $exception) {
         $failure = $exception;
     }
@@ -166,16 +214,19 @@ test('a native hook failure keeps custom property diagnostics and permits a subs
         throw new LogicException('Expected the failing property hook.');
     }
     expect($failure->getPrevious())->toBe($cause)
-        ->and($failure->propertyClass)->toBe(Product::class)
+        ->and($failure->propertyClass)->toBe($diagnosticOwner)
         ->and($failure->propertyName)->toBe('reportedValue')
         ->and(State::$hooks)->toBe(1);
 
     State::$failure = null;
-    $product = $pipeline->create(new PropertyClass(DiagnosticProperty::class));
+    $product = $pipeline->create(new PropertyClass($propertyClass));
     if (!$product instanceof Child) {
         throw new LogicException('Expected the recovered property product.');
     }
     expect($product->value)->toBe('INJECTED')
         ->and($product->hidden)->toBe('untouched')
         ->and(State::$hooks)->toBe(2);
-});
+})->with([
+    'method metadata' => [DiagnosticProperty::class, Product::class],
+    'field hooks and method metadata' => [FieldHookDiagnosticProperty::class, \stdClass::class],
+]);

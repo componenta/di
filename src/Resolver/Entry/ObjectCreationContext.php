@@ -236,9 +236,13 @@ final class ObjectCreationContext
                 && $property->isPrivateSet()
                 && new ReflectionMethod($property, 'setValue')->getDeclaringClass()->getName() === ReflectionProperty::class
             ) {
-                // Keep custom metadata and writer overrides, but scope an
-                // inherited native writer to the property's actual declaration.
-                $writer = new ReflectionProperty($property->class, $property->name);
+                // Select the native slot without reading overridden metadata
+                // methods or field hooks on the custom reflector.
+                /** @var ReflectionClass<object> $owner */
+                $owner = new ReflectionMethod(ReflectionProperty::class, 'getDeclaringClass')->invoke($property);
+                /** @var string $name */
+                $name = new ReflectionMethod(ReflectionProperty::class, 'getName')->invoke($property);
+                $writer = $owner->getProperty($name);
             }
             $writer->setValue($entry, $value);
         } catch (ExceptionInterface $e) {
