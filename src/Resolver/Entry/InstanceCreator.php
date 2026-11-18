@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
@@ -69,6 +70,8 @@ final readonly class InstanceCreator
 
         $arguments = $this->parameters->resolvePrepared($plan, $params);
         $beforeConstructor?->__invoke();
+        // The final policy check can reveal a source after argument resolution.
+        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts($plan->targets, $params, autoload: false);
 
         try {
             return $class->newInstanceArgs($arguments);
@@ -114,6 +117,7 @@ final readonly class InstanceCreator
 
         $arguments = $this->parameters->resolvePrepared($plan, $params);
         $beforeConstructor?->__invoke();
+        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts($plan->targets, $params, autoload: false);
 
         try {
             $constructor->invokeArgs($entry, $arguments);

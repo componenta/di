@@ -63,12 +63,13 @@ final class MappedRequestParameterSourceGuard
         iterable $targets,
         array $context,
         ?string $diagnosticOwner = null,
+        bool $autoload = true,
     ): void {
         $provenance = MappedRequestContext::get($context);
         if ($provenance === null) {
             return;
         }
-        self::assertTargetsProvenanceNoConflicts($targets, $provenance, $diagnosticOwner);
+        self::assertTargetsProvenanceNoConflicts($targets, $provenance, $diagnosticOwner, $autoload);
     }
 
     /** @param class-string|null $diagnosticOwner */
