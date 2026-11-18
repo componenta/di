@@ -24,9 +24,13 @@ interface VirtualProxyFactoryInterface
      * The default {@see ProxyFactory} requires a non-static backed instance
      * property, possibly inherited. A native-eligible target without one
      * fails before allocation with {@see \Componenta\DI\Exception\ResolutionException};
-     * use ordinary eager construction instead. Other native restrictions
-     * retain PHP's failure as the previous exception. This property
-     * requirement belongs to the default adapter; custom implementations
+     * use ordinary eager construction instead. Other native allocation restrictions
+     * retain PHP's failure as the previous exception. The backing object must
+     * also satisfy PHP's native requirements: it must not be lazy or the proxy
+     * itself, and its class must be the proxy class or a parent whose proxy subclass
+     * adds no properties and does not override __destruct() or __clone(). Native
+     * backing validation happens during initialization and retains its PHP error.
+     * These requirements belong to the default adapter; custom implementations
      * may support other mechanisms while preserving the deferred contract.
      *
      * @see ReflectionClass::newLazyProxy()
