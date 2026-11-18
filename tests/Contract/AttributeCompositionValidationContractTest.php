@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
@@ -34,6 +35,12 @@ final class CompositionMissing {}
 
 #[CompositionFirst, CompositionSecond]
 final class CompositionPair {}
+
+final class CompositionMemberPair
+{
+    #[CompositionFirst, CompositionSecond]
+    public string $value = '';
+}
 
 test('unsupported attribute targets report their actual target kind', function (string $kind): void {
     $name = 'InvalidTarget_' . bin2hex(random_bytes(5));
@@ -127,6 +134,24 @@ final class CompositionDispatchHandler implements AttributeHandlerInterface
         $this->events[] = $attribute::class;
     }
 }
+
+test('direct object preparation validates class and member compositions before dispatch', function (string $class, string $targetName): void {
+    if (!class_exists($class, false)) {
+        throw new LogicException('Expected the composition preparation fixture.');
+    }
+    $handler = new CompositionDispatchHandler();
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(CompositionFirst::class, $handler, requires: [CompositionMissing::class]));
+    $registry->register(new AttributeDefinition(CompositionSecond::class, $handler));
+    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+
+    expect(fn() => $processor->prepare(new ReflectionClass($class)))
+        ->toThrow(AttributeCompositionException::class, $targetName . ' requires ' . CompositionMissing::class . ' because of #[' . CompositionFirst::class . '].')
+        ->and($handler->events)->toBe([]);
+})->with([
+    'class' => [CompositionPair::class, CompositionPair::class],
+    'property' => [CompositionMemberPair::class, CompositionMemberPair::class . '::$value'],
+]);
 
 test('valid attribute definitions reject ordering cycles before dispatch and accept an acyclic control', function (bool $after): void {
     $handler = new CompositionDispatchHandler();
