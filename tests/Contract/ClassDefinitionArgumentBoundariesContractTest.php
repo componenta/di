@@ -32,6 +32,22 @@ final readonly class NativeVariadicDefinitionProduct
     }
 }
 
+final class NativeOmissionDefinitionProduct
+{
+    /** @var list<array{int,list<mixed>,string,array<array-key,mixed>}> */
+    public array $observed;
+
+    public function __construct(string $prefix = 'default', mixed ...$items)
+    {
+        $this->observed = [[func_num_args(), func_get_args(), $prefix, $items]];
+    }
+
+    public function configure(string $prefix = 'default', mixed ...$items): void
+    {
+        $this->observed[] = [func_num_args(), func_get_args(), $prefix, $items];
+    }
+}
+
 test('unknown definition arguments identify the complete constructor or method and argument keys', function (ClassDefinition $definition, string $target): void {
     $container = (new ContainerBuilder())->addDefinition('product', $definition)->build();
 
@@ -93,3 +109,20 @@ test('positional definition variadics fill omitted defaults and retain named tra
     expect($entry->prefix)->toBe('default')
         ->and($entry->items)->toBe(['first', 'second', 'tail' => 'third']);
 });
+
+test('named definition variadics preserve native omission of fixed constructor and method arguments', function (bool $runtime): void {
+    $container = (new ContainerBuilder())
+        ->addDefinition('product', ClassDefinition::create(NativeOmissionDefinitionProduct::class)
+            ->constructor(['tag' => 'constructor'])
+            ->call('configure', ['tag' => 'method']))
+        ->build();
+    $entry = $container->make('product', $runtime ? ['tag' => 'runtime'] : []);
+    if (!$entry instanceof NativeOmissionDefinitionProduct) {
+        throw new \LogicException('Expected the native omission definition product.');
+    }
+
+    expect($entry->observed)->toBe([
+        [0, [], 'default', ['tag' => $runtime ? 'runtime' : 'constructor']],
+        [0, [], 'default', ['tag' => 'method']],
+    ]);
+})->with([false, true]);
