@@ -189,7 +189,8 @@ final class FactoryResolver implements DefinitionResolverInterface
             return $value;
         }
 
-        $resolved = [];
+        // Retain PHP's next append index, including holes left by removed keys.
+        $resolved = $value;
         foreach ($value as $key => $item) {
             $childReferences = $references;
             $reference = ReflectionReference::fromArrayElement($value, $key);
@@ -203,6 +204,7 @@ final class FactoryResolver implements DefinitionResolverInterface
                 }
                 $childReferences[$referenceId] = true;
             }
+            unset($resolved[$key]);
             $resolved[$key] = $this->resolveDefinitionValue($item, $childReferences);
         }
 
@@ -280,8 +282,10 @@ final class FactoryResolver implements DefinitionResolverInterface
      */
     private static function snapshotDefinitionArray(array $values, array &$snapshots): array
     {
-        $snapshot = [];
+        // Replacing slots in an existing copy preserves its next append index.
+        $snapshot = $values;
         foreach ($values as $key => $value) {
+            unset($snapshot[$key]);
             if (!is_array($value)) {
                 $snapshot[$key] = $value;
                 continue;
