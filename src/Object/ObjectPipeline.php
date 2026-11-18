@@ -12,6 +12,7 @@ use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -131,6 +132,7 @@ final class ObjectPipeline
                 $creation = new ObjectCreationContext(
                     $metadata->class,
                     ResolutionMetadata::publicParameters($parameters),
+                    $this->parameterReadGuard($metadata, $parameters),
                 );
                 $this->resolutionParameters->attach($creation, $parameters);
                 $creation->initialize($entry);
@@ -159,6 +161,7 @@ final class ObjectPipeline
             $parameterSource instanceof Closure
                 ? static fn(): array => ResolutionMetadata::publicParameters($parameterSource())
                 : ResolutionMetadata::publicParameters($parameterSource),
+            $this->parameterReadGuard($metadata, $parameterSource),
         );
         $this->resolutionParameters->attach($creation, $parameterSource);
 
@@ -388,6 +391,33 @@ final class ObjectPipeline
         $attempt = $creation->freshAttempt();
         $this->resolutionParameters->copy($creation, $attempt);
         return $attempt;
+    }
+
+    /**
+     * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters
+     * @return (Closure(ObjectCreationContext):void)|null
+     */
+    private function parameterReadGuard(ObjectMetadata $metadata, array|Closure $parameters): ?Closure
+    {
+        if (!$parameters instanceof Closure && MappedRequestContext::get($parameters) === null) {
+            return null;
+        }
+        $targets = MappedRequestParameterSourceGuard::potentialSourceTargets($metadata->constructorTargets);
+        if ($targets === []) {
+            return null;
+        }
+        $store = $this->resolutionParameters;
+        $owner = $metadata->class->getName();
+
+        // Fresh attempts share this guard, but each reads its own private source.
+        return static function (ObjectCreationContext $context) use ($store, $targets, $owner): void {
+            MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
+                $targets,
+                $store->get($context),
+                $owner,
+                autoload: false,
+            );
+        };
     }
 
     /**

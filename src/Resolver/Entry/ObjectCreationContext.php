@@ -26,6 +26,7 @@ final class ObjectCreationContext
     /** @var array<string|int,mixed> */
     public array $parameters {
         get {
+            $this->beforeParameterRead?->__invoke($this);
             $parameters = $this->parameterValues;
             if ($parameters instanceof Closure) {
                 $parameters = $parameters();
@@ -48,10 +49,12 @@ final class ObjectCreationContext
     /**
      * @param ReflectionClass<object> $class
      * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters Caller-visible parameters only.
+     * @param (Closure(self):void)|null $beforeParameterRead Internal validation before exposing the public parameter bag.
      */
     public function __construct(
         public readonly ReflectionClass $class,
         array|Closure $parameters = [],
+        private readonly ?Closure $beforeParameterRead = null,
     ) {
         $this->parameterValues = $parameters;
     }
