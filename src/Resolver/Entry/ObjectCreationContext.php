@@ -12,6 +12,7 @@ use Componenta\DI\Object\CreationStrategy;
 use LogicException;
 use PropertyHookType;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionProperty;
 use Throwable;
 
@@ -227,7 +228,16 @@ final class ObjectCreationContext
         }
 
         try {
-            $property->setValue($entry, $value);
+            $writer = $property;
+            if ($property::class !== ReflectionProperty::class
+                && $property->isPrivateSet()
+                && new ReflectionMethod($property, 'setValue')->getDeclaringClass()->getName() === ReflectionProperty::class
+            ) {
+                // Keep custom metadata and writer overrides, but scope an
+                // inherited native writer to the property's actual declaration.
+                $writer = new ReflectionProperty($property->class, $property->name);
+            }
+            $writer->setValue($entry, $value);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
