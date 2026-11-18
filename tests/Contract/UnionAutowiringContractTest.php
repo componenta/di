@@ -44,6 +44,15 @@ final class ConstructorTarget
     public function __construct(public Left|Right $value) {}
 }
 
+final class DiagnosticTarget
+{
+    public function __construct(
+        public Left|Right $value,
+        public int|string $source = 0,
+        public bool $configured = true,
+    ) {}
+}
+
 final class NullableTarget
 {
     public function __construct(public Left|Right|null $value) {}
@@ -154,6 +163,30 @@ test('one available union candidate is shared across reflection calls and explic
     }
     expect($calls)->toBe(1);
 })->with(['call', 'reflection', 'definition constructor', 'definition method']);
+
+test('class definition union diagnostics preserve configured and runtime argument types', function (): void {
+    $container = builder()
+        ->addService(Left::class, new LeftValue())
+        ->addService(Right::class, new RightValue())
+        ->addDefinition('diagnostic', ClassDefinition::create(DiagnosticTarget::class)
+            ->constructor(['source' => 7, 'configured' => true])
+            ->autowire())
+        ->build();
+
+    try {
+        $container->make('diagnostic', ['source' => 'runtime', 'trace' => false]);
+    } catch (ResolutionException $error) {
+        expect($error->parameterName)->toBe('value')
+            ->and($error->getMessage())->toContain('union autowiring is ambiguous')
+            ->and($error->providedParameterTypes)->toBe([
+                'source' => 'string',
+                'configured' => 'bool',
+                'trace' => 'bool',
+            ]);
+        return;
+    }
+    throw new LogicException('Ambiguous definition autowiring must report its merged argument context.');
+});
 
 test('ambiguous union candidates fail before any factory executes', function (string $kind): void {
     $calls = [];
