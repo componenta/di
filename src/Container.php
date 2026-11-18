@@ -259,9 +259,9 @@ final class Container implements
             }
         }
 
-        // Registration may autoload code that retargets deferred dependencies.
-        $affected = $this->deferredDependenciesResolvingTo($canonical);
         $retirement = new MutationRetirement($canonical);
+        // Registration and helper autoloading may retarget deferred dependencies.
+        $affected = $this->deferredDependenciesResolvingTo($canonical);
         if ($binding !== null) {
             $this->resolver->publishDefinition($binding, $retirement, $this->definitionAuthority);
             $this->cache->removeBase($canonical, $retirement);
@@ -338,6 +338,9 @@ final class Container implements
             return;
         }
 
+        $retirement = new MutationRetirement(null);
+        // Helper autoloaders may publish nested registrations before inspection.
+        $externalContainers = $this->externalContainers ?? new ExternalContainerRegistry();
         try {
             $affected = $this->deferredDependenciesTakenOverBy($container);
         } catch (ExceptionInterface $e) {
@@ -353,8 +356,7 @@ final class Container implements
             return;
         }
 
-        $retirement = new MutationRetirement(null);
-        ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
+        ($this->externalContainers ??= $externalContainers)->register($container);
         $this->invalidateDeferredDelegators($affected, $retirement);
         $retirement->release();
     }
@@ -365,6 +367,7 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $alias));
         }
 
+        $retirement = new MutationRetirement($alias);
         // Validate the complete candidate graph before mutating the live alias
         // resolver. Runtime alias changes must preserve the same protected-core
         // Declarative bindings are validated by ContainerFactory before construction.
@@ -383,7 +386,6 @@ final class Container implements
 
         $changedTargets = $this->aliases->changedTargets($candidate);
         $before = $this->deferredDependencyTargets();
-        $retirement = new MutationRetirement($alias);
         $this->aliases->set($alias, $target);
         foreach ($changedTargets as $changedId => $previousTarget) {
             $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
@@ -414,6 +416,7 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
         }
 
+        $retirement = new MutationRetirement($id);
         try {
             $prepared = $this->delegators->prepare($id, $delegator);
             // Preparing a callable may autoload code that retargets this alias.
@@ -429,7 +432,6 @@ final class Container implements
                 previous: $e,
             );
         }
-        $retirement = new MutationRetirement($id);
         $this->delegators->register($id, $prepared, $retirement);
         $this->invalidateRequested($id, $canonical, $retirement);
         $this->invalidateDeferredDelegators([$id], $retirement);
