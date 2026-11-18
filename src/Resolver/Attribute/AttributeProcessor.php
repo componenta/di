@@ -269,6 +269,13 @@ final class AttributeProcessor
     {
         /** @var list<ReflectionProperty> $properties */
         $properties = array_values($class->getProperties());
+        foreach ($properties as $index => $property) {
+            if ($property::class === ReflectionProperty::class && $property->isPrivateSet()) {
+                // Reflection writes use the lookup class as scope. Inherited
+                // private setters require their declaration scope, including hooks.
+                $properties[$index] = $property->getDeclaringClass()->getProperty($property->getName());
+            }
+        }
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
             foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $property) {
                 if ($property->getDeclaringClass()->getName() === $parent->getName()) {
