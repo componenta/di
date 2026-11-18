@@ -249,11 +249,14 @@ final class ParametersResolver
             $arguments,
         );
         $provenance = MappedRequestContext::get($providedParameters);
-        $beforeConsumption = $provenance === null && $beforeInvocation === null ? null : static function (ParameterTarget $target) use ($provenance, $diagnosticOwner, $beforeInvocation): void {
+        $targets = $provenance === null ? [] : MappedRequestParameterSourceGuard::potentialSourceTargets($plan->targets);
+        $beforeConsumption = $targets === [] && $beforeInvocation === null ? null : static function () use ($targets, $provenance, $diagnosticOwner, $beforeInvocation): void {
             $beforeInvocation?->__invoke();
             if ($provenance !== null) {
-                MappedRequestParameterSourceGuard::assertTargetProvenanceNoConflicts(
-                    $target,
+                // Each extension receives the entire public context, including
+                // mapped values belonging to other declarations in this call.
+                MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts(
+                    $targets,
                     $provenance,
                     $diagnosticOwner,
                     autoload: false,
@@ -353,7 +356,7 @@ final class ParametersResolver
     }
 
     /**
-     * @param (Closure(ParameterTarget):void)|null $beforeConsumption
+     * @param (Closure():void)|null $beforeConsumption
      * @return ($allowOmission is true ? array{0:int,1:mixed}|null : array{0:int,1:mixed})
      */
     private function resolvePreparedParameter(
@@ -379,7 +382,7 @@ final class ParametersResolver
         try {
             $resolvers = $this->resolverList;
             foreach ($prepared->resolverSlots as $slot) {
-                $beforeConsumption?->__invoke($target);
+                $beforeConsumption?->__invoke();
                 $resolver = $resolvers[$slot];
                 if ($resolver instanceof AttributeParameterResolver) {
                     // Record the plan actually consumed by the bridge. Fresh

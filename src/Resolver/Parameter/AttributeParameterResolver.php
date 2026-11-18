@@ -44,7 +44,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
 
     /**
      * @internal
-     * @param (Closure(ParameterTarget):void)|null $beforeConsumption
+     * @param (Closure():void)|null $beforeConsumption
      * @return array{result:array{0:int,1:mixed}|null,plan:AttributePlan}
      */
     public function resolveParameterWithPlan(
@@ -66,7 +66,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             $revision = $this->plans->revision;
             $plan = $this->plans->build($target->reflection);
             AttributeExecutionOrder::assertPrefix($plan, $processed);
-            $beforeConsumption?->__invoke($target);
+            $beforeConsumption?->__invoke();
 
             $requiresAuthoritative = $plan->has(AuthoritativeValueProvider::class);
             if ($processed === []) {
@@ -93,7 +93,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
                     // policy. Recompose before dispatch without reconstructing it.
                     continue 2;
                 }
-                $beforeConsumption?->__invoke($target);
+                $beforeConsumption?->__invoke();
                 $processed[$usage->declarationOrder] = $usage;
                 if ($beforeConsumption !== null && ($handler instanceof TransformHandler || $handler instanceof CastHandler)) {
                     $value = $handler->resolveParameter(
@@ -102,9 +102,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
                         $context,
                         $plan,
                         $value,
-                        static function () use ($beforeConsumption, $target): void {
-                            $beforeConsumption($target);
-                        },
+                        $beforeConsumption,
                     );
                 } else {
                     $value = $handler->resolveParameter($attribute, $target, $context, $plan, $value);
