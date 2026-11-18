@@ -15,6 +15,7 @@ use Componenta\DI\Attribute\Config;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Make;
+use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Object\ObjectPipeline;
@@ -24,6 +25,17 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class BootstrapCoreMarker {}
+
+#[SetUp('configure')]
+final class BootstrapCoreSetupTarget
+{
+    public string $label;
+
+    public function configure(string $label): void
+    {
+        $this->label = $label;
+    }
+}
 
 test('extension factories and the completed container share the same core resolution services', function (): void {
     $ids = [ContainerValue::class, AttributeDefinitionRegistry::class, AttributePlanBuilder::class,
@@ -43,6 +55,19 @@ test('extension factories and the completed container share the same core resolu
     }
     expect($container->get(AttributeDefinitionRegistry::class)->definition(BootstrapCoreMarker::class))->toBe($definition)
         ->and($container->get(ObjectPipeline::class)->parameters())->toBe($container->get(ParametersResolver::class));
+});
+
+test('the exposed object pipeline preserves surrounding parameters for configured setup handlers', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $pipeline = $container->get(ObjectPipeline::class);
+    $created = $pipeline->create(BootstrapCoreSetupTarget::class, ['label' => 'pipeline']);
+    $resolved = $container->make(BootstrapCoreSetupTarget::class, ['label' => 'container']);
+    if (!$created instanceof BootstrapCoreSetupTarget) {
+        throw new \LogicException('Expected the configured setup target.');
+    }
+
+    expect($created->label)->toBe('pipeline')
+        ->and($resolved->label)->toBe('container');
 });
 
 test('all built-in value providers participate in the single-source capability policy', function (Closure $callback, string $attribute): void {
