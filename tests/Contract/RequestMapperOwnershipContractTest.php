@@ -44,3 +44,20 @@ test('request sorting replaces only the transformed order without rebinding call
         ->and($original)->toBe(['created' => 'DESC'])
         ->and($data)->toBe(['before' => true, 'orderBy' => ['created' => 'DESC'], 'sort' => 'name', 'after' => false]);
 });
+
+test('standalone transformation preserves the append state of an empty array', function (int $removedKey, int $nextKey): void {
+    $data = [$removedKey => 'removed'];
+    unset($data[$removedKey]);
+    $mapper = new MapRequest(cast: ['optional' => 'trim']);
+    $mapper->provider = new TestCasterProvider();
+
+    $result = $mapper->transform($data);
+    $result[] = 'next';
+    $data[] = 'next';
+
+    expect($result)->toBe([$nextKey => 'next'])->and($result)->toBe($data);
+})->with([
+    'positive' => [20, 21],
+    'negative' => [-3, -2],
+    'final integer key' => [PHP_INT_MAX, PHP_INT_MAX],
+]);

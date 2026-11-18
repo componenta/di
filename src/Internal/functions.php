@@ -225,7 +225,8 @@ function transform_request_mapper_data(
         foreach ($data as $key => $value) {
             $values[$key] = $value;
         }
-        $data = $values;
+        // Preserve the original next append key while replacing referenced slots.
+        $data = array_replace($data, $values);
         unset($values, $value);
     }
 

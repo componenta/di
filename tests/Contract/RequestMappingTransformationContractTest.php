@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\RequestMappingTransformation;
 
 use Attribute;
+use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\MapRequest;
@@ -12,6 +13,7 @@ use Componenta\DI\Attribute\RequestDataSource;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Componenta\DI\Tests\Support\TestCasterProvider;
 use Componenta\Validation\Exception\ValidationException;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\Rule\Required;
@@ -88,6 +90,33 @@ function transformed(#[ProtectedNameQuery] Profile $profile): Profile
 {
     return $profile;
 }
+
+test('casting and sorting preserve the next append key after a numeric input is renamed', function (bool $sorting): void {
+    $container = (new ContainerBuilder())
+        ->addService(CasterProviderInterface::class, new TestCasterProvider())
+        ->build();
+    $raw = [0 => 'first', 20 => ' last '];
+    $request = (new ServerRequest('GET', '/'))->withQueryParams($raw);
+    $target = $sorting
+        ? static fn(
+            #[MapRequest(sources: [RequestDataSource::Query], map: [20 => 'name'], sortMap: ['name' => ['name' => 'ASC']])]
+            array $data,
+        ): array => $data
+        : static fn(
+            #[MapRequest(sources: [RequestDataSource::Query], map: [20 => 'name'], cast: ['name' => 'trim'])]
+            array $data,
+        ): array => $data;
+    $mapped = $container->call($target, [ServerRequestInterface::class => $request]);
+    if (!is_array($mapped)) {
+        throw new \LogicException('Expected mapped array data.');
+    }
+    $mapped[] = 'next';
+
+    expect($mapped)->toBe($sorting
+        ? [0 => 'first', 'name' => ' last ', 'orderBy' => null, 21 => 'next']
+        : [0 => 'first', 'name' => 'last', 21 => 'next'])
+        ->and($request->getQueryParams())->toBe($raw);
+})->with(['cast' => false, 'sort' => true]);
 
 test('whole-array request transformation supplies readonly constructor fields without retaining removed source inputs', function (): void {
     ConstructionProbe::$calls = 0;
