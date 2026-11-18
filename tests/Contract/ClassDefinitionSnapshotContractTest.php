@@ -110,6 +110,37 @@ test('shared configured array edges keep literal objects and fresh service refer
     }
 });
 
+test('class definition snapshots own referenced siblings after an ordinary nested array', function (): void {
+    $label = 'registered label';
+    $shared = ['value' => 'registered array'];
+    $payload = [
+        'ordinary' => ['value' => 'first'],
+        'label' => &$label,
+        'left' => &$shared,
+        'right' => &$shared,
+    ];
+    $container = (new ContainerBuilder())
+        ->addDefinition('product', ClassDefinition::create(Product::class)
+            ->constructor(['payload' => $payload])
+            ->call('configure', ['payload' => $payload]))
+        ->build();
+
+    $label = 'caller changed label';
+    $shared = ['value' => 'caller replaced array'];
+    $expected = [
+        'ordinary' => ['value' => 'first'],
+        'label' => 'registered label',
+        'left' => ['value' => 'registered array'],
+        'right' => ['value' => 'registered array'],
+    ];
+
+    foreach ([$container->get('product'), $container->make('product')] as $entry) {
+        $resolved = product($entry);
+        expect($resolved->payload)->toBe($expected)
+            ->and($resolved->configured)->toBe($expected);
+    }
+});
+
 test('recursive configuration stays deferred and stable while runtime overrides remain literal', function (bool $mutual): void {
     $payload = ['label' => 'configured'];
     if ($mutual) {
