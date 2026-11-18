@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Exception\ResolutionException;
@@ -25,12 +26,14 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
 {
     public function __construct(private AttributeCallbackInvoker $callbacks) {}
 
+    /** @param (Closure():void)|null $beforeInvocation */
     public function resolveParameter(
         object $attribute,
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
         ParameterAttributeValue $value,
+        ?Closure $beforeInvocation = null,
     ): ParameterAttributeValue {
         if (!$attribute instanceof Transform) {
             throw new LogicException('TransformHandler received an unsupported parameter attribute.');
@@ -54,7 +57,11 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
         }
 
         try {
-            return ParameterAttributeValue::resolved($this->callbacks->invoke($attribute->callback, $value->value));
+            return ParameterAttributeValue::resolved($this->callbacks->invoke(
+                $attribute->callback,
+                $value->value,
+                beforeInvocation: $beforeInvocation,
+            ));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {

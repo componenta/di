@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
+use Closure;
 use Componenta\Caster\CasterInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\DefaultValue;
@@ -28,12 +29,14 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
+    /** @param (Closure():void)|null $beforeConsumption */
     public function resolveParameter(
         object $attribute,
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
         ParameterAttributeValue $value,
+        ?Closure $beforeConsumption = null,
     ): ParameterAttributeValue {
         if (!$attribute instanceof Cast) {
             throw new LogicException('CastHandler received an unsupported parameter attribute.');
@@ -59,8 +62,12 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
         }
 
         try {
+            $caster = $this->caster($attribute->name);
+            // Provider construction and lookup can reveal a source before the
+            // selected caster receives the already supplied parameter value.
+            $beforeConsumption?->__invoke();
             return ParameterAttributeValue::resolved(
-                $this->caster($attribute->name)->cast($value->value),
+                $caster->cast($value->value),
             );
         } catch (ContainerExceptionInterface $e) {
             throw $e;

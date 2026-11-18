@@ -23,15 +23,18 @@ final readonly class AttributeCallbackInvoker
     /**
      * @param array<string|int,mixed> $providedParameters
      * @param class-string|null $diagnosticOwner
+     * @param (Closure():void)|null $beforeInvocation
      */
     public function invoke(
         Closure $callback,
         mixed $argument,
         array $providedParameters = [],
         ?string $diagnosticOwner = null,
+        ?Closure $beforeInvocation = null,
     ): mixed {
         $declarations = new ReflectionFunction($callback)->getParameters();
         if ($declarations === []) {
+            $beforeInvocation?->__invoke();
             return $this->invoker->call(new PreparedCallable($callback));
         }
 
@@ -56,8 +59,10 @@ final readonly class AttributeCallbackInvoker
             $argument,
             $providedParameters,
             $diagnosticOwner,
+            $beforeInvocation,
         );
 
+        $beforeInvocation?->__invoke();
         return $this->invoker->call(new PreparedCallable($callback), $arguments);
     }
 }

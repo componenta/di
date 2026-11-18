@@ -68,9 +68,7 @@ final class MappedRequestParameterSourceGuard
         if ($provenance === null) {
             return;
         }
-        foreach ($targets as $target) {
-            self::assertTargetProvenanceNoConflicts($target, $provenance, $diagnosticOwner);
-        }
+        self::assertTargetsProvenanceNoConflicts($targets, $provenance, $diagnosticOwner);
     }
 
     /** @param class-string|null $diagnosticOwner */
@@ -78,25 +76,53 @@ final class MappedRequestParameterSourceGuard
         ParameterTarget $target,
         MappedRequestContext $provenance,
         ?string $diagnosticOwner = null,
+        bool $autoload = true,
     ): void {
-        $binding = self::targetBinding($target);
-        if ($binding === null) {
-            return;
-        }
-        $class = $diagnosticOwner ?? $target->reflection->getDeclaringClass()?->getName();
-        if ($class === null) {
-            return;
-        }
-        foreach ($binding['keys'] as $key) {
-            if ($provenance->contains($key)) {
-                self::throwConflict($class, $binding, $key);
+        self::assertTargetsProvenanceNoConflicts([$target], $provenance, $diagnosticOwner, $autoload);
+    }
+
+    /**
+     * @param iterable<ParameterTarget> $targets
+     * @param class-string|null $diagnosticOwner
+     */
+    private static function assertTargetsProvenanceNoConflicts(
+        iterable $targets,
+        MappedRequestContext $provenance,
+        ?string $diagnosticOwner,
+        bool $autoload = true,
+    ): void {
+        foreach ($autoload ? [true, false] : [false] as $discover) {
+            $pending = [];
+            foreach ($targets as $target) {
+                $complete = true;
+                $binding = self::targetBinding($target, $complete, $discover);
+                if (!$complete) {
+                    $pending[] = $target;
+                }
+                if ($binding === null) {
+                    continue;
+                }
+                $class = $diagnosticOwner ?? $target->reflection->getDeclaringClass()?->getName();
+                if ($class === null) {
+                    continue;
+                }
+                foreach ($binding['keys'] as $key) {
+                    if ($provenance->contains($key)) {
+                        self::throwConflict($class, $binding, $key);
+                    }
+                }
             }
+            // Later discovery may reveal an earlier skipped source. Only keep
+            // incomplete targets, and never rewind a caller's iterable or retry loaders.
+            $targets = $pending;
         }
     }
 
     public static function supportsTarget(ParameterTarget $target): bool
     {
-        return self::targetBinding($target) !== null;
+        $complete = true;
+        return self::targetBinding($target, $complete, true) !== null
+            || (!$complete && self::targetBinding($target, $complete, false) !== null);
     }
 
     /**
@@ -144,9 +170,9 @@ final class MappedRequestParameterSourceGuard
     }
 
     /** @return array{parameter:string,source:class-string,keys:list<string>}|null */
-    private static function targetBinding(ParameterTarget $target): ?array
+    private static function targetBinding(ParameterTarget $target, bool &$complete, bool $autoload): ?array
     {
-        $source = self::declaredTargetSource($target);
+        $source = self::declaredTargetSource($target, $complete, $autoload);
         return $source === null ? null : self::binding($target->name, $source, $target->typeNames);
     }
 
@@ -190,14 +216,28 @@ final class MappedRequestParameterSourceGuard
     }
 
     /** @return class-string|null */
-    private static function declaredTargetSource(ParameterTarget $target): ?string
+    private static function declaredTargetSource(ParameterTarget $target, bool &$complete, bool $autoload): ?string
     {
         foreach ($target->attributeClasses as $attributeClass) {
+            if (!$autoload && !self::isAvailable($attributeClass)) {
+                $complete = false;
+                continue;
+            }
             if (is_a($attributeClass, ParameterSourceAttributeInterface::class, true)) {
                 return $attributeClass;
             }
+            if (!self::isAvailable($attributeClass)) {
+                $complete = false;
+            }
         }
         return null;
+    }
+
+    private static function isAvailable(string $attributeClass): bool
+    {
+        return class_exists($attributeClass, false)
+            || interface_exists($attributeClass, false)
+            || trait_exists($attributeClass, false);
     }
 
     /**

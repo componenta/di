@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
@@ -11,6 +12,8 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
+use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
+use Componenta\DI\Resolver\Attribute\Handler\TransformHandler;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -41,11 +44,13 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
 
     /**
      * @internal
+     * @param (Closure(ParameterTarget):void)|null $beforeConsumption
      * @return array{result:array{0:int,1:mixed}|null,plan:AttributePlan}
      */
     public function resolveParameterWithPlan(
         ParameterTarget $target,
         ParameterResolutionContext $context,
+        ?Closure $beforeConsumption = null,
     ): array {
         $plan = $this->plans->build($target->reflection);
         if (!$this->hasHandler($plan)) {
@@ -61,6 +66,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             $revision = $this->plans->revision;
             $plan = $this->plans->build($target->reflection);
             AttributeExecutionOrder::assertPrefix($plan, $processed);
+            $beforeConsumption?->__invoke($target);
 
             $requiresAuthoritative = $plan->has(AuthoritativeValueProvider::class);
             if ($processed === []) {
@@ -87,14 +93,22 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
                     // policy. Recompose before dispatch without reconstructing it.
                     continue 2;
                 }
+                $beforeConsumption?->__invoke($target);
                 $processed[$usage->declarationOrder] = $usage;
-                $value = $handler->resolveParameter(
-                    $attribute,
-                    $target,
-                    $context,
-                    $plan,
-                    $value,
-                );
+                if ($beforeConsumption !== null && ($handler instanceof TransformHandler || $handler instanceof CastHandler)) {
+                    $value = $handler->resolveParameter(
+                        $attribute,
+                        $target,
+                        $context,
+                        $plan,
+                        $value,
+                        static function () use ($beforeConsumption, $target): void {
+                            $beforeConsumption($target);
+                        },
+                    );
+                } else {
+                    $value = $handler->resolveParameter($attribute, $target, $context, $plan, $value);
+                }
                 unset($pendingAttributes[$usage->declarationOrder], $attribute);
                 if ($this->plans->revision !== $revision) {
                     // Keep the resolved source and refresh only the remaining handlers.

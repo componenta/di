@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -13,6 +14,8 @@ use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterResolutionBoundary;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use ReflectionParameter;
@@ -200,6 +203,7 @@ final class ParametersResolver
      * @internal
      * @param array<string|int,mixed> $providedParameters
      * @param class-string|null $diagnosticOwner
+     * @param (Closure():void)|null $beforeInvocation
      * @return array<string|int,mixed>
      */
     public function resolvePreparedSuffix(
@@ -208,6 +212,7 @@ final class ParametersResolver
         mixed $firstArgument,
         array $providedParameters = [],
         ?string $diagnosticOwner = null,
+        ?Closure $beforeInvocation = null,
     ): array {
         if ($firstTarget->position !== 0) {
             throw new InvalidConfigurationException('The semantic callback argument must be its first declaration.');
@@ -219,6 +224,7 @@ final class ParametersResolver
             [$firstArgument],
             $firstTarget,
             $diagnosticOwner,
+            $beforeInvocation,
         );
     }
 
@@ -226,6 +232,7 @@ final class ParametersResolver
      * @param array<string|int,mixed> $providedParameters
      * @param list<mixed> $arguments
      * @param class-string|null $diagnosticOwner
+     * @param (Closure():void)|null $beforeInvocation
      * @return array<string|int,mixed>
      */
     private function resolvePreparedInvocation(
@@ -234,12 +241,25 @@ final class ParametersResolver
         array $arguments = [],
         ?ParameterTarget $reservedTarget = null,
         ?string $diagnosticOwner = null,
+        ?Closure $beforeInvocation = null,
     ): array {
         $plan = $this->refreshPlan($plan);
         $state = new ParameterResolutionContext(
             ParameterResolutionBoundary::publicParameters($plan, $providedParameters, $diagnosticOwner),
             $arguments,
         );
+        $provenance = MappedRequestContext::get($providedParameters);
+        $beforeConsumption = $provenance === null && $beforeInvocation === null ? null : static function (ParameterTarget $target) use ($provenance, $diagnosticOwner, $beforeInvocation): void {
+            $beforeInvocation?->__invoke();
+            if ($provenance !== null) {
+                MappedRequestParameterSourceGuard::assertTargetProvenanceNoConflicts(
+                    $target,
+                    $provenance,
+                    $diagnosticOwner,
+                    autoload: false,
+                );
+            }
+        };
 
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
         if ($reservedTarget !== null) {
@@ -255,7 +275,13 @@ final class ParametersResolver
 
         $omitted = false;
         foreach (array_keys($plan->parameters) as $index) {
-            $result = $this->resolvePreparedParameter($plan->parameters[$index], $state, $completed, allowOmission: true);
+            $result = $this->resolvePreparedParameter(
+                $plan->parameters[$index],
+                $state,
+                $completed,
+                allowOmission: true,
+                beforeConsumption: $beforeConsumption,
+            );
 
             // Dependencies and handlers can load source attributes, including on the current parameter.
             $current = $this->refreshPlan($plan);
@@ -326,12 +352,16 @@ final class ParametersResolver
         return $this->targetFactory->create($parameter);
     }
 
-    /** @return ($allowOmission is true ? array{0:int,1:mixed}|null : array{0:int,1:mixed}) */
+    /**
+     * @param (Closure(ParameterTarget):void)|null $beforeConsumption
+     * @return ($allowOmission is true ? array{0:int,1:mixed}|null : array{0:int,1:mixed})
+     */
     private function resolvePreparedParameter(
         PreparedParameter $prepared,
         ParameterResolutionContext $context,
         CompletedAttributeGuard $completed,
         bool $allowOmission = false,
+        ?Closure $beforeConsumption = null,
     ): ?array {
         $target = $prepared->target;
         $nativeOptional = $allowOmission
@@ -349,11 +379,12 @@ final class ParametersResolver
         try {
             $resolvers = $this->resolverList;
             foreach ($prepared->resolverSlots as $slot) {
+                $beforeConsumption?->__invoke($target);
                 $resolver = $resolvers[$slot];
                 if ($resolver instanceof AttributeParameterResolver) {
                     // Record the plan actually consumed by the bridge. Fresh
                     // discovery here could load a handler that never executed.
-                    ['result' => $result, 'plan' => $attributePlan] = $resolver->resolveParameterWithPlan($target, $context);
+                    ['result' => $result, 'plan' => $attributePlan] = $resolver->resolveParameterWithPlan($target, $context, $beforeConsumption);
                 } else {
                     $result = $resolver->resolveParameter($target, $context);
                 }
