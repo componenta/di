@@ -16,6 +16,9 @@ use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use Throwable;
 
+if (!isset($argv[1], $argv[2])) {
+    throw new LogicException('Expected the autoload and source paths.');
+}
 require $argv[1];
 $source = realpath($argv[2]);
 $containerFile = new ReflectionClass(Container::class)->getFileName();
