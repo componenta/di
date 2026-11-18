@@ -108,6 +108,7 @@ function target(string $parameters): Closure
 
 test('late sources guard every mapped field exposed to a newly dispatched parameter handler', function (
     bool $sibling,
+    bool $mappedFirst,
     bool $warm,
     bool $uncached,
     bool $conflict,
@@ -117,11 +118,13 @@ test('late sources guard every mapped field exposed to a newly dispatched parame
     Observation::reset();
     $source = 'Source_' . bin2hex(random_bytes(5));
     $target = target(sprintf(
-        '#[%sReveal(%s::class, %s)] public string $first, %spublic string $role',
+        '#[%sReveal(%s::class, %s)] public string $first%s, %spublic string $role%s',
         $sibling ? '' : $source . '("trusted"), ',
         $source,
         $conflict ? 'true' : 'false',
+        $mappedFirst ? '' : ' = "ordinary value"',
         $sibling ? '#[' . $source . '("trusted")] ' : '',
+        $mappedFirst ? '' : ' = "fallback"',
     ));
     $builder = (new ContainerBuilder())
         ->addService('trusted', 'trusted value')
@@ -130,10 +133,14 @@ test('late sources guard every mapped field exposed to a newly dispatched parame
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
     $container = $builder->build();
-    $request = (new ServerRequest('GET', '/'))->withQueryParams([
+    $query = [
         'first' => $sibling ? 'ordinary value' : 'untrusted',
         'role' => $sibling ? 'untrusted' : 'ordinary value',
-    ]);
+    ];
+    if (!$mappedFirst) {
+        unset($query['first']);
+    }
+    $request = (new ServerRequest('GET', '/'))->withQueryParams($query);
     if ($warm) {
         $container->call($target, [ServerRequestInterface::class => $request]);
         expect(Observation::$values)->toBe(['untrusted'])
@@ -169,7 +176,11 @@ test('late sources guard every mapped field exposed to a newly dispatched parame
             ->and(Observation::$invoked)->toBe(1);
     }
     expect(class_exists(__NAMESPACE__ . '\\' . $source, false))->toBeTrue();
-})->with(['same parameter' => false, 'sibling parameter' => true])
+})->with([
+    'same parameter' => [false, true],
+    'sibling parameter' => [true, true],
+    'sibling after an unmapped parameter' => [true, false],
+])
     ->with(['cold plan' => false, 'warm plan' => true])
     ->with(['cached plans' => false, 'non-memoized plans' => true])
     ->with(['source' => true, 'unrelated metadata' => false]);
