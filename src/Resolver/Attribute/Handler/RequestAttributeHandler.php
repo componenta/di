@@ -146,7 +146,8 @@ final class RequestAttributeHandler implements ParameterAttributeHandlerInterfac
             foreach ($data as $key => $item) {
                 $argument[$key] = $item;
             }
-            $data = $callbacks->invoke($afterMap, $argument);
+            // Retain the mapped array's next append key when installing the detached slots.
+            $data = $callbacks->invoke($afterMap, array_replace($data, $argument));
             if (!is_array($data)) {
                 throw ResolutionException::forParameter(
                     $parameter,
