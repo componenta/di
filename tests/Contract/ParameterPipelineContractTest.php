@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract;
 
+use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
+use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionFunction;
 use ReflectionParameter;
 
@@ -32,6 +37,20 @@ final class FixedPipelineValue implements ParameterResolverInterface
 }
 
 function pipelineAuditCallable(string $value): void {}
+
+test('the public attribute resolver returns the declared position and preserves supplied value priority', function (): void {
+    $container = (new ContainerBuilder(new Config([], new Environment(['PIPELINE_LABEL' => 'environment']))))->build();
+    $resolver = new AttributeParameterResolver($container->get(AttributePlanBuilder::class));
+    $target = new ParameterTarget(new ReflectionParameter(
+        static fn(string $prefix, #[Env('PIPELINE_LABEL')] string $value): string => $prefix . $value,
+        'value',
+    ));
+
+    expect($resolver->resolveParameter($target, new ParameterResolutionContext()))
+        ->toBe([1, 'environment'])
+        ->and($resolver->resolveParameter($target, new ParameterResolutionContext(['value' => 'provided'])))
+        ->toBe([1, 'provided']);
+});
 
 test('equal resolver priorities preserve registration order', function (): void {
     $pipeline = new ParametersResolver(new AttributePlanBuilder(new AttributeDefinitionRegistry()));

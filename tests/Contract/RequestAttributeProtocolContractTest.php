@@ -8,6 +8,9 @@ use Attribute;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Attribute\ExtractsRequestData;
+use Componenta\DI\Attribute\RequestMapper;
+use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
@@ -15,6 +18,8 @@ use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\Stream;
+use Nyholm\Psr7\UploadedFile;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -54,6 +59,53 @@ final readonly class ReadonlyMapper implements RequestDataExtractorInterface, Ma
         return ['mapped' => $data];
     }
 }
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class SharedSourceMapper extends RequestMapper implements RequestDataExtractorInterface
+{
+    use ExtractsRequestData;
+
+    public function __construct()
+    {
+        parent::__construct(['route' => 'routeId']);
+        $this->attributes = ['route', 'upload', 'missing'];
+        $this->files = ['upload', 'missing'];
+    }
+
+    public function extract(ServerRequestInterface $request): array
+    {
+        return $this->extractSharedData($request);
+    }
+}
+
+test('custom mappers retain shared source selection transformation and conflict rejection', function (): void {
+    $factory = (new ContainerBuilder())->build();
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(
+            SharedSourceMapper::class,
+            new RequestAttributeHandler($factory, new TestCasterProvider()),
+            [ValueProvider::class],
+        ))
+        ->build();
+    $target = static function (#[SharedSourceMapper] array $input): array {
+        ksort($input);
+
+        return $input;
+    };
+    $upload = new UploadedFile(Stream::create('selected'), 8, UPLOAD_ERR_OK);
+    $other = new UploadedFile(Stream::create('hidden'), 6, UPLOAD_ERR_OK);
+    $request = (new ServerRequest('POST', '/'))
+        ->withQueryParams(['route' => 'unselected'])
+        ->withAttribute('private', 'hidden')
+        ->withUploadedFiles(['upload' => $upload, 'other' => $other]);
+
+    foreach ([null, 'next'] as $route) {
+        expect($container->call($target, [ServerRequestInterface::class => $request->withAttribute('route', $route)]))
+            ->toBe(['routeId' => $route, 'upload' => $upload]);
+    }
+    expect(fn() => $container->call($target, [ServerRequestInterface::class => $request->withAttribute('upload', 'shadow')]))
+        ->toThrow(RequestDataConflictException::class);
+});
 
 test('request attributes use simple extraction unless the complete mapping protocol is implemented', function (
     Closure $target,
