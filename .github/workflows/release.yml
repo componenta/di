@@ -64,7 +64,7 @@ jobs:
           php-version: '8.4'
           coverage: pcov
           extensions: fileinfo, mbstring
-          ini-values: memory_limit=1G
+          ini-values: memory_limit=2G
           tools: composer:v2
 
       - name: Validate Composer metadata
