@@ -222,6 +222,8 @@ $result = $container->call([$controller, 'show'], ['id' => 42]);
 
 When a pipeline has already resolved arguments, pass a PreparedCallable adapter to call() with the final native argument list. This skips further DI injection and attribute processing for that invocation. Named arguments and PHP defaults keep their native behavior; variadic values must already be expanded. The adapter exposes the original callable for intercepting executors. Executor decorators should forward it intact, along with the arguments. Ordinary subsequent calls resolve their arguments normally.
 
+The prepared adapter forwards arguments by value and does not support by-reference parameters. For a native callable that requires references, pass the original callable directly to `CallableInvoker` with an argument array containing those references.
+
 Reflection autowiring is used for a concrete class when no explicit binding exists. An explicit factory takes precedence.
 
 Reflection-based constructor injection, `call()`, and `SetUp` support variadic parameters without a separate context argument:

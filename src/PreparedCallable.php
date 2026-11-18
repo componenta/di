@@ -11,6 +11,9 @@ namespace Componenta\DI;
  * list. DI must not inject or transform those arguments again. Executor
  * decorators can forward the adapter normally; intercepting executors can
  * inspect the original callable without losing its attributes.
+ *
+ * Arguments cross this adapter by value. For by-reference parameters, pass the
+ * original callable directly to CallableInvoker with a reference-bearing array.
  */
 final readonly class PreparedCallable
 {
