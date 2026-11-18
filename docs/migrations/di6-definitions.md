@@ -215,6 +215,8 @@ Direct `new Container(...)` supports an independent entry resolver and initial b
 
 The constructor rejects aliases whose source is a protected DI ID before attaching the resolver or writing core cache entries. The sole built-in exception is the direct `config → Config::class` route used by `ContainerFactory`; an indirect route through a mutable application alias is rejected. Application aliases pointing to protected services remain valid. A rejected alias configuration leaves the supplied resolver available for a corrected construction.
 
+Core and bootstrap values are published after all runtime collaborators are initialized. Replaced seed values remain retained until the complete batch is published, so their destructors can resolve services through the supplied cache's published container. The constructor makes no further state writes after releasing those values; nested public mutations remain in effect. Destructor failures retain native PHP exception behavior and are not converted by the constructor into `MutationRetirementException`.
+
 ## Committed retirement failures
 
 All four public registration mutations follow validation, publication, complete affected invalidation, then native release of retired roots: `set()`, `alias()`, `delegator()` and `addContainer()`. A standalone composite applies the corresponding sequence to its own binding table. No mutation writes follow the start of final retirement.

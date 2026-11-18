@@ -94,15 +94,22 @@ final class Container implements
         $this->resolver->attach($this->definitionAuthority);
 
         $this->cache = $cache ?? new EntryCache();
-        foreach ($core + $validated as $id => $service) {
-            $this->cache->putBase($id, $service);
-        }
-
         $this->delegators = $delegators ?? new DelegatorRegistry($this);
         $this->externalContainers = $externalContainers;
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
         $this->resolvedEntryGuard = new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
+
+        // Supplied core seeds can reenter from destructors. Publish the complete
+        // core only after every collaborator is ready, then release old values.
+        $replacedCore = [];
+        foreach ($core + $validated as $id => $service) {
+            if ($this->cache->tryGetBase($id, $previous)) {
+                $replacedCore[] = $previous;
+            }
+            $this->cache->putBase($id, $service);
+        }
+        unset($previous, $replacedCore);
     }
 
     /**
