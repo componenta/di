@@ -49,6 +49,34 @@ final class EmptyCallableContainer implements ContainerInterface
     }
 }
 
+test('rejects an empty method receiver before consulting its backing container', function (): void {
+    $container = new class () implements ContainerInterface {
+        /** @var list<string> */
+        public array $lookups = [];
+
+        public function has(string $id): bool
+        {
+            $this->lookups[] = $id;
+            throw new \LogicException('Malformed method specifications must not query services.');
+        }
+
+        public function get(string $id): mixed
+        {
+            throw new \LogicException('No service was advertised: ' . $id);
+        }
+    };
+    $resolver = new CallableResolver($container);
+
+    try {
+        $resolver->resolve(['', 'run']);
+        \PHPUnit\Framework\Assert::fail('An empty method receiver must be rejected.');
+    } catch (InvalidCallableException $exception) {
+        expect($exception->callableDescription)->toBe('::run')
+            ->and($exception->getPrevious())->toBeNull()
+            ->and($container->lookups)->toBe([]);
+    }
+});
+
 test('unresolvable methods distinguish a missing service from a missing or inaccessible method', function (
     mixed $specification,
     string $message,
