@@ -48,6 +48,19 @@ test(
             'bound.entry' => 'target.entry',
         ],
     ], 'Invokable alias "bound.entry" conflicts with existing target "target.entry"'],
+    'invokable class hidden by alias' => [[
+        ConfigKey::INVOKABLES => [\stdClass::class],
+        ConfigKey::ALIASES => [\stdClass::class => 'target.entry'],
+    ], 'Invokable id "stdClass" is also an alias'],
+    'factory and invokable share one canonical id' => [[
+        ConfigKey::FACTORIES => [\stdClass::class => static fn(): object => new \stdClass()],
+        ConfigKey::INVOKABLES => [\stdClass::class],
+    ], 'Canonical DI id "stdClass" has multiple bindings'],
+    'service alias and invokable share one canonical id' => [[
+        ConfigKey::SERVICES => ['bound.entry' => new \stdClass()],
+        ConfigKey::INVOKABLES => [\stdClass::class],
+        ConfigKey::ALIASES => ['bound.entry' => \stdClass::class],
+    ], 'Canonical DI id "stdClass" has multiple bindings'],
     'two services share one canonical id' => [[
         ConfigKey::SERVICES => [
             'canonical.entry' => new \stdClass(),
