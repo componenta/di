@@ -29,7 +29,7 @@ Environment + ordered providers
     -> ContainerValue { container, the same Config }
 ```
 
-`ContainerFactory` is the only public container-construction API. It preserves the exact `Config` and `Environment` instances supplied by the application.
+`ContainerFactory` is the standard construction API for applications. It preserves the exact `Config` and `Environment` instances supplied by the application. Direct `new Container(...)` is also supported under the [runtime collaborator ownership limits](docs/migrations/di6-definitions.md#direct-container-construction).
 
 ## Quick start
 
