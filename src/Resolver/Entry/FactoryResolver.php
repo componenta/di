@@ -185,15 +185,18 @@ final class FactoryResolver implements DefinitionResolverInterface
         if ($value instanceof ReferenceDefinition) {
             return $this->container->get($value->value);
         }
-        if (!is_array($value)) {
+        if (!is_array($value) || $value === []) {
             return $value;
         }
 
-        // Retain PHP's next append index, including holes left by removed keys.
-        $resolved = $value;
+        $resolved = [];
         foreach ($value as $key => $item) {
-            $childReferences = $references;
             $reference = ReflectionReference::fromArrayElement($value, $key);
+            if ($reference === null && !is_array($item) && !$item instanceof ReferenceDefinition) {
+                continue;
+            }
+
+            $childReferences = $references;
             if ($reference !== null) {
                 $referenceId = $reference->getId();
                 if (isset($references[$referenceId])) {
@@ -204,11 +207,11 @@ final class FactoryResolver implements DefinitionResolverInterface
                 }
                 $childReferences[$referenceId] = true;
             }
-            unset($resolved[$key]);
             $resolved[$key] = $this->resolveDefinitionValue($item, $childReferences);
         }
 
-        return $resolved;
+        // Preserve unchanged slots and native array state; detach only changed slots.
+        return $resolved === [] ? $value : array_replace($value, $resolved);
     }
 
     private function resolveFactory(string $id, PreparedFactoryDefinition $definition): callable|LazyServiceFactoryInterface
@@ -282,10 +285,8 @@ final class FactoryResolver implements DefinitionResolverInterface
      */
     private static function snapshotDefinitionArray(array $values, array &$snapshots): array
     {
-        // Replacing slots in an existing copy preserves its next append index.
-        $snapshot = $values;
+        $snapshot = [];
         foreach ($values as $key => $value) {
-            unset($snapshot[$key]);
             if (!is_array($value)) {
                 $snapshot[$key] = $value;
                 continue;
@@ -306,8 +307,9 @@ final class FactoryResolver implements DefinitionResolverInterface
             $snapshot[$key] = &$snapshots[$referenceId];
         }
 
-        /** @var T $snapshot Array shape and values are unchanged; only reference ownership differs. */
-        return $snapshot;
+        $result = $snapshot === [] ? $values : array_replace($values, $snapshot);
+        /** @var T $result Array shape and values are unchanged; only reference ownership differs. */
+        return $result;
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool

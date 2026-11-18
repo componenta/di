@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\ClassDefinitionArrayState;
 
 use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class Product
@@ -83,5 +84,51 @@ test('class definition arrays retain their final available integer key and appen
         expect(static function () use ($resolved): void {
             $resolved[] = 'exhausted';
         })->toThrow(\Error::class, 'Cannot add element to the array');
+    }
+});
+
+test('class definition snapshots detach referenced slots without reordering mixed keys', function (): void {
+    $value = 'initial';
+    $service = new \stdClass();
+    $payload = [7 => 'first', 'referenced' => &$value, 'dependency' => Definition::reference('dependency'), -2 => 'last'];
+    $container = (new ContainerBuilder())
+        ->addService('dependency', $service)
+        ->addDefinition('product', ClassDefinition::create(Product::class)
+            ->constructor(['payload' => $payload])
+            ->call('configure', ['payload' => $payload]))
+        ->build();
+    $value = 'changed';
+
+    foreach ([$container->get('product'), $container->make('product')] as $product) {
+        if (!$product instanceof Product) {
+            throw new \LogicException('Expected a configured product.');
+        }
+        expect($product->payload)->toBe([7 => 'first', 'referenced' => 'initial', 'dependency' => $service, -2 => 'last'])
+            ->and($product->configured)->toBe([7 => 'first', 'referenced' => 'initial', 'dependency' => $service, -2 => 'last']);
+    }
+});
+
+test('literal class definition arrays remain independent when resolved objects change them', function (): void {
+    $payload = ['value' => 'original', 'nested' => ['value' => 'nested']];
+    $container = (new ContainerBuilder())
+        ->addDefinition('product', ClassDefinition::create(Product::class)
+            ->constructor(['payload' => $payload])
+            ->call('configure', ['payload' => $payload]))
+        ->build();
+    $first = $container->make('product');
+    $second = $container->make('product');
+    if (!$first instanceof Product) {
+        throw new \LogicException('Expected a configured product.');
+    }
+    $first->payload['value'] = 'changed';
+    $reference = &$first->configured['nested'];
+    $reference = ['value' => 'changed'];
+
+    foreach ([$second, $container->make('product')] as $product) {
+        if (!$product instanceof Product) {
+            throw new \LogicException('Expected a configured product.');
+        }
+        expect($product->payload)->toBe($payload)
+            ->and($product->configured)->toBe($payload);
     }
 });
