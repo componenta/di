@@ -320,6 +320,9 @@ final class ParametersResolver
         }
 
         $completed->assertUnchanged();
+        // Final metadata discovery can reveal a custom source without adding
+        // a registered DI attribute to the completed composition.
+        $beforeConsumption?->__invoke();
         return $arguments;
     }
 
