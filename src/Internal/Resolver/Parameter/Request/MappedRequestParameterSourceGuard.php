@@ -83,18 +83,28 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
-     * Selects potential sources for one invocation without retrying autoloaders.
-     * Loaded non-source classes cannot change their ancestry; every unresolved
-     * declaration must remain guarded if it becomes available later.
+     * Selects potential sources without retrying autoloaders. An optional
+     * provenance snapshot narrows checks to keys fixed for one invocation.
+     * Loaded non-source classes cannot change their ancestry. Keep unresolved
+     * declarations whenever their keys can conflict, even if loaded later.
      *
      * @internal
      * @param iterable<ParameterTarget> $targets
      * @return list<ParameterTarget>
      */
-    public static function potentialSourceTargets(iterable $targets): array
+    public static function potentialSourceTargets(iterable $targets, ?MappedRequestContext $provenance = null): array
     {
         $potential = [];
         foreach ($targets as $target) {
+            if ($provenance !== null) {
+                $matches = $provenance->contains($target->name);
+                foreach ($target->typeNames as $typeName) {
+                    $matches = $matches || $provenance->contains($typeName);
+                }
+                if (!$matches) {
+                    continue;
+                }
+            }
             $complete = true;
             $source = self::declaredTargetSource($target, $complete, autoload: false);
             if ($source !== null || !$complete) {

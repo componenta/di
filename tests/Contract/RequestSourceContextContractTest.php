@@ -246,3 +246,59 @@ test('a sibling source revealed by a transformer dependency guards its remaining
         ->and(Observation::$invoked)->toBe(1);
 })->with(['cached plans' => false, 'non-memoized plans' => true])
     ->with(['source' => true, 'unrelated metadata' => false]);
+
+final readonly class TypedValue
+{
+    public function __construct(public string $label = 'ordinary default') {}
+}
+
+test('a late source guards mapped type keys before a custom handler sees the context', function (
+    bool $uncached,
+    bool $conflict,
+): void {
+    Observation::reset();
+    Observation::$armed = true;
+    Observation::$field = TypedValue::class;
+    $source = 'TypeSource_' . bin2hex(random_bytes(5));
+    $dto = 'TypedDto_' . bin2hex(random_bytes(5));
+    eval(sprintf(
+        'namespace %s; final class %s { public function __construct(#[%s("typed.trusted"), Reveal(%s::class, %s)] public TypedValue $value) { ++Observation::$constructed; } }',
+        __NAMESPACE__,
+        $dto,
+        $source,
+        $source,
+        $conflict ? 'true' : 'false',
+    ));
+    $target = eval(sprintf(
+        'namespace %s; return static function (#[\\Componenta\\DI\\Attribute\\MapRequest(sources: [\\Componenta\\DI\\Attribute\\RequestDataSource::Query])] %s $dto): string { ++Observation::$invoked; return $dto->value->label; };',
+        __NAMESPACE__,
+        $dto,
+    ));
+    if (!$target instanceof Closure) {
+        throw new \LogicException('Expected the typed public request-mapping target.');
+    }
+    $builder = (new ContainerBuilder())
+        ->addService('typed.trusted', new TypedValue('trusted value'))
+        ->addAttributeDefinition(new AttributeDefinition(Reveal::class, new ContextObserver(), [ValueTransformer::class]));
+    if ($uncached) {
+        $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
+    }
+    $container = $builder->build();
+    $request = (new ServerRequest('GET', '/'))->withQueryParams([TypedValue::class => 'untrusted']);
+
+    if ($conflict) {
+        expect(fn() => $container->call($target, [ServerRequestInterface::class => $request]))
+            ->toThrow(RequestParameterSourceConflictException::class, TypedValue::class)
+            ->and(Observation::$values)->toBe([])
+            ->and(Observation::$constructed)->toBe(0)
+            ->and(Observation::$invoked)->toBe(0);
+        $request = $request->withQueryParams([]);
+    }
+    expect($container->call($target, [ServerRequestInterface::class => $request]))
+        ->toBe($conflict ? 'trusted value' : 'ordinary default')
+        ->and(Observation::$values)->toBe([$conflict ? null : 'untrusted'])
+        ->and(Observation::$handlerArguments)->toBe([5])
+        ->and(Observation::$constructed)->toBe(1)
+        ->and(Observation::$invoked)->toBe(1);
+})->with(['cached plans' => false, 'non-memoized plans' => true])
+    ->with(['source' => true, 'unrelated metadata' => false]);

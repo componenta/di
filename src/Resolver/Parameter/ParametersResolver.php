@@ -249,7 +249,7 @@ final class ParametersResolver
             $arguments,
         );
         $provenance = MappedRequestContext::get($providedParameters);
-        $targets = $provenance === null ? [] : MappedRequestParameterSourceGuard::potentialSourceTargets($plan->targets);
+        $targets = $provenance === null ? [] : MappedRequestParameterSourceGuard::potentialSourceTargets($plan->targets, $provenance);
         $beforeConsumption = $targets === [] && $beforeInvocation === null ? null : static function () use ($targets, $provenance, $diagnosticOwner, $beforeInvocation): void {
             $beforeInvocation?->__invoke();
             if ($provenance !== null) {
