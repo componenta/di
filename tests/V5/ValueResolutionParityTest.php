@@ -37,6 +37,12 @@ final class CastDefaultParityDto
     ) {}
 }
 
+final class CastDefaultPropertyParityDto
+{
+    #[Cast('int', default: '7')]
+    public int $value;
+}
+
 final class CastPropertyParityDto
 {
     #[Cast('int')]
@@ -92,9 +98,9 @@ final class AttributedTypedOverrideDto
 final class TypedEnvironmentParityDto
 {
     public function __construct(
-        #[Env('PORT')]
+        #[Env('DATABASE_PORT')]
         public int $port,
-        #[Env('DEBUG')]
+        #[Env('HTTP_DEBUG')]
         public bool $debug,
     ) {}
 }
@@ -171,9 +177,11 @@ test('Cast parameter resolution stays in the parameter resolver chain', function
 });
 
 test('Cast keeps its attribute-owned default contract', function (): void {
-    $dto = parityValueContainer()->make(CastDefaultParityDto::class);
+    $container = parityValueContainer();
 
-    expect($dto->value)->toBe(7);
+    expect($container->make(CastDefaultParityDto::class)->value)->toBe(7)
+        ->and($container->make(CastDefaultPropertyParityDto::class)->value)->toBe(7)
+        ->and($container->make(CastDefaultPropertyParityDto::class, ['value' => '0'])->value)->toBe(0);
 });
 
 test('Cast property reads object creation parameters rather than initialized property state', function (): void {
@@ -251,10 +259,15 @@ test('attributed typed overrides must satisfy the type named by their key', func
         ])->dependency)->toBe($validSecondOverride);
 });
 
-test('Env converts values for scalar target types', function (): void {
+test('Env uses explicit names and converts values for scalar target types', function (): void {
     $container = ContainerBuilder::configure(new Config(
         [],
-        new Environment(['PORT' => '3306', 'DEBUG' => 'true']),
+        new Environment([
+            'DATABASE_PORT' => '3306',
+            'HTTP_DEBUG' => 'true',
+            'PORT' => '9999',
+            'DEBUG' => 'false',
+        ]),
     ))->build();
 
     $dto = $container->make(TypedEnvironmentParityDto::class);
