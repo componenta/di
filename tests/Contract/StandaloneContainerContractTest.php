@@ -236,6 +236,79 @@ test('standalone shared lookups preserve supplied values through alias retarget 
         ->and($container->get('sibling'))->toBeNull();
 });
 
+test('standalone cache seeds keep caller reference changes out of cold and warmed aliases', function (bool $warm): void {
+    $original = new StandaloneProduct(['source' => 'original']);
+    $seed = $original;
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(['first.alias' => 'seed', 'second.alias' => 'seed']),
+        (new ContainerBuilder())->build(),
+        cache: new EntryCache(['seed' => &$seed]),
+    );
+    if ($warm) {
+        expect($container->get('first.alias'))->toBe($original);
+    }
+    $seed = new StandaloneProduct(['source' => 'caller replacement']);
+
+    expect($container->get('first.alias'))->toBe($original)
+        ->and($container->get('second.alias'))->toBe($original)
+        ->and($container->get('seed'))->toBe($original)
+        ->and($seed)->not->toBe($original);
+})->with(['cold aliases' => false, 'warmed alias' => true]);
+
+test('standalone entry replacement does not write through a caller seed reference', function (): void {
+    $original = new StandaloneProduct(['source' => 'original']);
+    $seed = $original;
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(['alias' => 'seed']),
+        (new ContainerBuilder())->build(),
+        cache: new EntryCache(['seed' => &$seed]),
+    );
+    expect($container->get('alias'))->toBe($original);
+    $replacement = new StandaloneProduct(['source' => 'container replacement']);
+
+    $container->set('seed', $replacement);
+
+    expect($seed)->toBe($original)
+        ->and($container->get('seed'))->toBe($replacement)
+        ->and($container->get('alias'))->toBe($replacement);
+});
+
+test('standalone core bootstrap isolates protected entries from supplied seed reference cells', function (): void {
+    $original = new \stdClass();
+    $seed = $original;
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(['core.alias' => ContainerInterface::class]),
+        (new ContainerBuilder())->build(),
+        cache: new EntryCache([ContainerInterface::class => &$seed]),
+    );
+    expect($seed)->toBe($original);
+    $seed = new \stdClass();
+
+    expect($container->get(ContainerInterface::class))->toBe($container)
+        ->and($container->get('core.alias'))->toBe($container)
+        ->and($seed)->not->toBe($container);
+});
+
+test('standalone seed ownership preserves nested references and service object identity', function (): void {
+    $nested = 'initial';
+    $object = new \stdClass();
+    $service = ['nested' => &$nested, 'object' => $object];
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        new AliasResolver(),
+        (new ContainerBuilder())->build(),
+        cache: new EntryCache(['seed' => &$service]),
+    );
+    $nested = 'updated';
+    $service['caller.only'] = true;
+    $value = $container->get('seed');
+
+    expect($value)->toBe(['nested' => 'updated', 'object' => $object]);
+});
+
 test('standalone mutations refresh supplied delegator pipelines for affected requested ids', function (): void {
     $decorators = (new ContainerBuilder())->addService(
         'selected.decorator',

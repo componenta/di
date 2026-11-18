@@ -29,7 +29,10 @@ final class EntryCache
     /** @param array<string, mixed> $base */
     public function __construct(array $base = [])
     {
-        $this->base = $base;
+        // Own the entry slots; caller references must not bypass invalidation.
+        foreach ($base as $id => $value) {
+            $this->base[$id] = $value;
+        }
     }
 
     public function tryGetBase(string $id, mixed &$value): bool
