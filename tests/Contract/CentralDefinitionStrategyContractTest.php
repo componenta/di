@@ -93,6 +93,21 @@ final readonly class RetiringValue
     }
 }
 
+test('standalone definition registration rejects an empty id before invoking a strategy', function (): void {
+    $strategy = new ValueStrategy();
+    $resolver = new CompositeResolver($strategy);
+    $resolver->setDefinition('entry', new ValueDefinition('original'));
+    $strategy->supportsCalls = 0;
+    $strategy->validationCalls = 0;
+
+    expect(fn() => $resolver->setDefinition('', new ValueDefinition('rejected')))
+        ->toThrow(InvalidConfigurationException::class, 'Definition ids must be non-empty strings.')
+        ->and($strategy->supportsCalls)->toBe(0)
+        ->and($strategy->validationCalls)->toBe(0)
+        ->and($resolver->can(''))->toBeFalse()
+        ->and($resolver->resolve('entry'))->toBe('original');
+});
+
 test('explicit definitions use the first supporting strategy and its validated payload ahead of fallbacks', function (): void {
     $first = new ValueStrategy();
     $later = new ValueStrategy();
