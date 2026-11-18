@@ -136,12 +136,14 @@ final class MappedRequestParameterSourceGuard
                 if ($binding === null) {
                     continue;
                 }
-                $class = $diagnosticOwner ?? $target->reflection->getDeclaringClass()?->getName();
-                if ($class === null) {
-                    continue;
-                }
                 foreach ($binding['keys'] as $key) {
                     if ($provenance->contains($key)) {
+                        // Diagnostic metadata may execute custom reflector code.
+                        // Do not run it for a target with no conflicting key.
+                        $class = $diagnosticOwner ?? $target->reflection->getDeclaringClass()?->getName();
+                        if ($class === null) {
+                            break;
+                        }
                         self::throwConflict($class, $binding, $key);
                     }
                 }
