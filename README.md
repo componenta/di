@@ -130,7 +130,7 @@ protected function getServices(): array
 
 ### Factories
 
-The complete runtime factory ABI is `(ContainerValue $context, array $params)`. A callable may declare a compatible prefix of these arguments. Invalid signatures are rejected while the container is built.
+The complete runtime factory ABI is `(ContainerValue $context, array $params)`. A callable may declare a compatible prefix of these arguments. Known direct non-string callables are checked when their definitions are registered, including during container construction. Strings and unresolved service-method specifications are resolved and validated when the factory is requested; registration does not instantiate a deferred factory owner.
 
 ```php
 protected function getFactories(): array
@@ -319,7 +319,11 @@ External PSR-11 containers may be registered with `Container::addContainer()`. E
 
 ## Runtime behavior
 
-`get()` caches a shared result, including the result of its delegator pipeline. `make()` creates a fresh object and accepts runtime parameters. Reflection metadata, prepared parameter plans and alias paths are cached only in memory inside one container. Resolver selection for entries without an explicit definition checks current availability on each lookup, including the current state of composition rules.
+For local entries, `get()` caches a shared result, including the result of the requested ID's delegator pipeline. An external container that owns the requested ID supplies each `get()` result directly and controls its sharing; local result caches and delegators are not applied to that result.
+
+`make()` resolves the local definition or fallback strategy on every call and accepts runtime parameters. It bypasses shared values, external containers and delegators, and requires an object result. A factory still controls the identity of its product and may return an existing object.
+
+Reflection metadata, prepared parameter plans and alias paths are cached only in memory inside one container. Resolver selection for entries without an explicit definition checks current availability on each lookup, including the current state of composition rules.
 
 Development and production use the same `ContainerFactory`, normalization, validation, and resolver chain. Runtime dependency values are never exported, so non-serializable values have the same behavior in both environments.
 
