@@ -15,7 +15,6 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionObject;
 use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
@@ -637,21 +636,22 @@ final class AttributePlanBuilder
     private static function cacheKey(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): ?string {
-        return match (true) {
-            $target instanceof ReflectionObject => null,
-            $target instanceof ReflectionClass => 'class:' . $target->getName(),
-            $target instanceof ReflectionProperty => sprintf(
+        // Derived reflectors can change metadata and carry application state.
+        // Only exact native reflectors are stable enough for named shared plans.
+        return match ($target::class) {
+            ReflectionClass::class => 'class:' . $target->getName(),
+            ReflectionProperty::class => sprintf(
                 'property:%s::$%s',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            $target instanceof ReflectionMethod && is_closure_reflector($target) => null,
-            $target instanceof ReflectionMethod => sprintf(
+            ReflectionMethod::class => is_closure_reflector($target) ? null : sprintf(
                 'method:%s::%s()',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            default => self::parameterCacheKey($target),
+            ReflectionParameter::class => self::parameterCacheKey($target),
+            default => null,
         };
     }
 

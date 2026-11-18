@@ -185,7 +185,7 @@ final class ObjectPipeline
      */
     private function metadata(string|ReflectionClass $class): ObjectMetadata
     {
-        $cacheable = !$class instanceof ReflectionObject;
+        $cacheable = is_string($class) || $class::class === ReflectionClass::class;
         while (true) {
             $revision = $this->registry->revision;
             if ($revision !== $this->metadataRevision) {
@@ -240,7 +240,11 @@ final class ObjectPipeline
     private function constructorPlan(ObjectMetadata $metadata): PreparedParameterPlan
     {
         $name = $metadata->class->getName();
-        $cached = $this->constructorPlans[$name] ?? null;
+        // Native ReflectionObject constructors still describe their class, but
+        // a derived reflector may supply different or application-owned targets.
+        $cacheable = $metadata->class::class === ReflectionClass::class
+            || $metadata->class::class === ReflectionObject::class;
+        $cached = $cacheable ? ($this->constructorPlans[$name] ?? null) : null;
         $parameters = $this->parameters();
 
         if ($cached !== null && $parameters->isCurrentPlan($cached)) {
@@ -248,7 +252,7 @@ final class ObjectPipeline
         }
 
         $plan = $parameters->prepareTargets($metadata->constructorTargets);
-        if ($parameters->canCachePlans) {
+        if ($cacheable && $parameters->canCachePlans) {
             $this->constructorPlans[$name] = $plan;
         }
 

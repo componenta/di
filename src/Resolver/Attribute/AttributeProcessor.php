@@ -18,7 +18,6 @@ use Componenta\DI\Internal\ObjectAttributeSequence;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionObject;
 use ReflectionProperty;
 use Throwable;
 
@@ -225,7 +224,7 @@ final class AttributeProcessor
     private function executionPlan(ReflectionClass $class): array
     {
         $name = $class->getName();
-        $cacheable = !$class instanceof ReflectionObject;
+        $cacheable = $class::class === ReflectionClass::class;
         do {
             $revision = $this->registry->revision;
             $cached = $this->cache[$name] ?? null;
