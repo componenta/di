@@ -85,3 +85,89 @@ test('deferred object initialization retries the parameter source after configur
         ->and($configures)->toBe(2)
         ->and($entry->value)->toBe(2);
 })->with([PipelineLazySourceProduct::class, PipelineProxySourceProduct::class]);
+
+final readonly class PipelineAttemptSource
+{
+    public function __construct(public int $generation) {}
+}
+
+final class PipelineFiberState
+{
+    public bool $suspend = true;
+}
+
+abstract class PipelineCancellableProduct
+{
+    public function __construct(public PipelineAttemptSource $source, \Closure $onConstruct)
+    {
+        $onConstruct();
+    }
+}
+
+#[Lazy]
+final class PipelineCancellableLazy extends PipelineCancellableProduct {}
+
+#[Proxy]
+final class PipelineCancellableProxy extends PipelineCancellableProduct {}
+
+test('deferred initialization owns one source snapshot per completed or cancelled Fiber attempt', function (string $class, string $completion): void {
+    if (!is_a($class, PipelineCancellableProduct::class, true)) {
+        throw new \LogicException('Expected a cancellable pipeline fixture.');
+    }
+    $pipeline = (new ContainerBuilder())->build()->get(ObjectPipeline::class);
+    $sources = 0;
+    $references = [];
+    $state = new PipelineFiberState();
+    $onConstruct = static function () use ($state): void {
+        if ($state->suspend) {
+            \Fiber::suspend('constructing');
+        }
+    };
+    $entry = $pipeline->create($class, resolveParameters: static function () use (&$sources, &$references, $onConstruct): array {
+        $source = new PipelineAttemptSource(++$sources);
+        $references[] = \WeakReference::create($source);
+        return ['source' => $source, 'onConstruct' => $onConstruct];
+    });
+    if (!$entry instanceof PipelineCancellableProduct) {
+        throw new \LogicException('Expected a deferred cancellable product.');
+    }
+    $fiber = new \Fiber(static fn(): int => $entry->source->generation);
+
+    expect($sources)->toBe(0)
+        ->and($fiber->start())->toBe('constructing')
+        ->and($sources)->toBe(1);
+
+    if ($completion === 'resume') {
+        $fiber->resume();
+        expect($fiber->getReturn())->toBe(1);
+    } elseif ($completion === 'throw') {
+        $cause = new RuntimeException('interrupt constructor');
+        try {
+            $fiber->throw($cause);
+            throw new \LogicException('The interrupted constructor must fail.');
+        } catch (\Componenta\DI\Exception\ResolutionException $error) {
+            expect($error->getPrevious())->toBe($cause);
+        }
+        unset($error);
+    }
+    $fiberReference = \WeakReference::create($fiber);
+    unset($fiber);
+    gc_collect_cycles();
+
+    expect($fiberReference->get())->toBeNull()
+        ->and((new \ReflectionClass($entry))->isUninitializedLazyObject($entry))->toBe($completion !== 'resume');
+
+    $state->suspend = false;
+    $expectedGeneration = $completion === 'resume' ? 1 : 2;
+    expect($entry->source->generation)->toBe($expectedGeneration)
+        ->and($sources)->toBe($expectedGeneration)
+        ->and($entry->source->generation)->toBe($expectedGeneration)
+        ->and($sources)->toBe($expectedGeneration);
+    if ($completion !== 'resume') {
+        expect($references[0]->get())->toBeNull();
+    }
+    unset($entry);
+    gc_collect_cycles();
+    expect(array_all($references, static fn(\WeakReference $reference): bool => $reference->get() === null))->toBeTrue();
+})->with([PipelineCancellableLazy::class, PipelineCancellableProxy::class])
+    ->with(['cancel', 'resume', 'throw']);
