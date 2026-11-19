@@ -180,3 +180,17 @@ test('a later extension selects the current caller route and retains its factory
         ->and($owner)->toBe($replacement)
         ->and($original->label)->toBe('original');
 })->with(['parameter resolver' => false, 'attribute definition' => true]);
+
+test('native static extension factories retain their callable owner when a same-named service exists', function (bool $attribute): void {
+    $original = new ExtensionFactory($attribute, 'native');
+    $shadow = new ExtensionFactory($attribute, 'service');
+    $di = extensionContainer($attribute, [StaticExtensionFactory::class, 'first'], [
+        ConfigKey::SERVICES => [
+            'extension.factory' => $original,
+            StaticExtensionFactory::class => $shadow,
+        ],
+    ]);
+
+    expect($di->call(static fn(#[SelectedValue] string $selected): string => $selected))->toBe('native:first')
+        ->and($di->get(StaticExtensionFactory::class))->toBe($shadow);
+})->with(['parameter resolver' => false, 'attribute definition' => true]);
