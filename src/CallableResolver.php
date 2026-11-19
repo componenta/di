@@ -34,6 +34,10 @@ class CallableResolver implements CallableResolverInterface
                 return $this->resolveString($callable);
             }
 
+            if (is_array($callable)) {
+                $callable = self::snapshotCallable($callable);
+            }
+
             if (is_callable($callable)) {
                 return $callable;
             }
@@ -54,6 +58,9 @@ class CallableResolver implements CallableResolverInterface
     {
         if ($this->container->has($callable)) {
             $entry = $this->container->get($callable);
+            if (is_array($entry)) {
+                $entry = self::snapshotCallable($entry);
+            }
             if (is_callable($entry)) {
                 return $entry;
             }
@@ -144,6 +151,21 @@ class CallableResolver implements CallableResolverInterface
         }
 
         throw InvalidCallableException::forMissingService($objectOrClass);
+    }
+
+    /**
+     * @param array<array-key,mixed> $callable
+     * @return array<array-key,mixed>
+     */
+    private static function snapshotCallable(array $callable): array
+    {
+        // Validation may autoload application code that changes referenced
+        // slots. Keep the selected route through validation and return.
+        $snapshot = [];
+        foreach ($callable as $key => $value) {
+            $snapshot[$key] = $value;
+        }
+        return $snapshot;
     }
 
     private function isStaticMethod(string $class, string $method): bool
