@@ -110,7 +110,12 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             }
 
             $propertyValue = $hasValue ? $context->parameters[$name] : $attribute->default;
-            $context->writeProperty($target, $this->caster($attribute->name)->cast($propertyValue));
+            $caster = $this->caster($attribute->name);
+            if ($hasValue) {
+                // Preparing the caster may reveal a source after the value was read.
+                $context->assertParametersReadable();
+            }
+            $context->writeProperty($target, $caster->cast($propertyValue));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {

@@ -26,7 +26,7 @@ final class ObjectCreationContext
     /** @var array<string|int,mixed> */
     public array $parameters {
         get {
-            $this->beforeParameterRead?->__invoke($this);
+            $this->assertParametersReadable();
             $parameters = $this->parameterValues;
             if ($parameters instanceof Closure) {
                 $parameters = $parameters();
@@ -57,6 +57,12 @@ final class ObjectCreationContext
         private readonly ?Closure $beforeParameterRead = null,
     ) {
         $this->parameterValues = $parameters;
+    }
+
+    /** Validate parameter access through the same guard as the public parameter bag. */
+    public function assertParametersReadable(): void
+    {
+        $this->beforeParameterRead?->__invoke($this);
     }
 
     public function disableConstructor(): void

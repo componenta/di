@@ -81,6 +81,7 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
         }
 
         try {
+            $beforeInvocation = null;
             if ($context->propertyClaimed($target)) {
                 $value = $context->readProperty($target);
             } else {
@@ -96,9 +97,15 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
                     );
                 }
                 $value = $context->parameters[$name];
+                // Validate the supplied value again after callback dependencies.
+                $beforeInvocation = $context->assertParametersReadable(...);
             }
 
-            $context->writeProperty($target, $this->callbacks->invoke($attribute->callback, $value));
+            $context->writeProperty($target, $this->callbacks->invoke(
+                $attribute->callback,
+                $value,
+                beforeInvocation: $beforeInvocation,
+            ));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
