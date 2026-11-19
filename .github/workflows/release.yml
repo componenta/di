@@ -137,7 +137,13 @@ jobs:
             exit 0
           fi
 
+          release_flags=()
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            release_flags+=(--prerelease)
+          fi
+
           gh release create "$tag" \
+            "${release_flags[@]}" \
             --target "$GITHUB_SHA" \
             --title "$tag" \
             --generate-notes
