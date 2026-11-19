@@ -112,6 +112,25 @@ jobs:
           php benchmarks/BuildPhasesBench.php >/dev/null
           php benchmarks/ParameterPlanBench.php >/dev/null
 
+  native-trait-callables:
+    name: Native trait callables PHP 8.5.13
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup minimum verified native runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.5.13'
+          coverage: none
+
+      - name: Check native trait scope and visibility
+        run: |
+          php -n -r 'printf("PHP %s\n", PHP_VERSION); exit(PHP_VERSION === "8.5.13" ? 0 : 1);'
+          php -n tests/php85-platform.php
+
   consumer-lowest:
     name: Lowest production dependencies PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
@@ -121,6 +140,7 @@ jobs:
         php:
           - '8.4'
           - '8.5'
+          - '8.6'
 
     steps:
       - name: Checkout

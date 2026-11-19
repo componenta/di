@@ -1,6 +1,6 @@
 # Componenta DI
 
-**Unreleased DI 6 development branch.** `refactor/di6-definitions-callbacks` implements the approved definition and callback plans on top of v5.0.6. Review the [definition migration](docs/migrations/di6-definitions.md) and [callback/union migration](docs/migrations/di6-callbacks.md). DI 6 retains PHP `^8.4`; new inline/reference expressions in attribute arguments require PHP 8.5. E1 covers only the affected native trait-callable forms, independently of library release readiness; see the [platform specification](docs/plans/php85-callbacks.md#8-php-version-and-release-compatibility).
+**Unreleased DI 6 development branch.** `refactor/di6-definitions-callbacks` implements the approved definition and callback plans on top of v5.0.6. Review the [definition migration](docs/migrations/di6-definitions.md) and [callback/union migration](docs/migrations/di6-callbacks.md). DI 6 retains PHP `^8.4`; new inline/reference expressions in attribute arguments require PHP 8.5. PHP 8.5.13 is the minimum verified stable patch for the affected native trait-callable forms (E1); see the [platform specification](docs/plans/php85-callbacks.md#8-php-version-and-release-compatibility).
 
 Componenta DI is a PSR-11 dependency injection container for PHP 8.4+. It provides reflection autowiring, explicit factories and services, ordered delegators, callable invocation, lazy objects, request mapping, and composable PHP attributes.
 
@@ -339,6 +339,6 @@ After DI resolves an explicitly invoked callable and enters its body, exceptions
 
 The `refactor/di6-definitions-callbacks` branch implements central definition ownership, strategies without registration maps, configuration snapshots and retirement after complete mutation publication. Public extension changes are described in the [definition migration guide](docs/migrations/di6-definitions.md).
 
-The shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and simple-union autowiring are described in the [callback migration guide](docs/migrations/di6-callbacks.md). The package retains PHP `^8.4`; E1 limits only the affected native PHP 8.5 trait-callable forms.
+The shared callback binder, `Transform`, callback `SetUp`, native `Init` controls and simple-union autowiring are described in the [callback migration guide](docs/migrations/di6-callbacks.md). The package retains PHP `^8.4`; the affected native trait-callable forms pass E1 on stable PHP 8.5.13, their minimum verified patch.
 
 The [architecture contracts and plans](docs/plans/README.md) define acceptance criteria and future scope. Native-lazy D1/A is implemented. `afterMap` adds an optional request-mapping path while retaining all previous alternatives. B2 availability polling remains a separate future direction.

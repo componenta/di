@@ -4,7 +4,7 @@
 
 This guide describes the implementation on the DI 6 development branch, following the DI 5.0.6 baseline. It is not a DI 6 release announcement. The library retains PHP `^8.4`; inline callbacks and first-class callable references written directly in attribute arguments require PHP 8.5.
 
-**The package floor and native-expression support are separate.** E1 in the [callback specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) limits the support promise for affected trait first-class references; it does not block the DI 6 release or raise its PHP `^8.4` requirement. PHP 8.5.8 and 8.5.12 reproduce a native defect in these forms. DI preserves native scope and documents the limitation rather than emulating it. See [platform limits](#8-platform-limits) below.
+**The package floor and native-expression support are separate.** E1 in the [callback specification](../plans/php85-callbacks.md#8-php-version-and-release-compatibility) limits the support promise for affected trait first-class references; it does not block the DI 6 release or raise its PHP `^8.4` requirement. PHP 8.5.13 is the minimum verified stable patch for these forms: E1 passes all ten native cases. The tested PHP 8.5.8 and 8.5.12 engines reproduce the defect. DI preserves native scope. See [platform limits](#8-platform-limits) below.
 
 ## 1. Changes to review before upgrading
 
@@ -218,7 +218,7 @@ Native state is preserved. A freshly materialized inline static closure has fres
 
 The tested PHP 8.5.8 and 8.5.12 engines incorrectly reuse the first consuming trait scope for some attribute first-class references using `self::` or `parent::`; a named private reference can likewise retain the first consumer's visibility result. The native inline-static-closure control resolves each consumer correctly. The defect reproduces without DI.
 
-E1 remains open for these affected forms until a released PHP patch passes the correct per-consumer scope and visibility fixtures. The resulting minimum applies to the feature support declaration, not automatically to the whole package. DI does not rebind callbacks to hide that defect. Capture-free inline static closures and fully qualified public-helper references are within the verified alternatives; do not infer support for every affected trait-relative expression from their success.
+E1 is completed on stable PHP 8.5.13, released November 19, 2026. The official archive checksum is verified, its `Zend/zend_ast.c` matches the release tag, and the isolated binary passes all ten per-consumer scope/visibility cases. The [specification records the exact release provenance and CI regression](../plans/php85-callbacks.md#8-php-version-and-release-compatibility). PHP 8.5.13 is the minimum verified patch for these forms; the package requirement remains `^8.4`. DI does not rebind callbacks. On the affected older engines, use a capture-free inline static closure or a fully qualified public-helper reference within the verified syntax.
 
 The PHP 8.4 suites cover library behavior and runtime-created closures. PHP 8.5 subprocess tests cover the new attribute syntax and materialization failures. Keep both in ordinary verification. The separate `composer test-platform` runner currently checks affected semantics plus a stable PHP 8.5.x version; its nonzero result on PHP 8.4, a release candidate or PHP 8.6+ is not a general library compatibility verdict.
 
