@@ -299,7 +299,7 @@ A callback or extension that has already started may have performed side effects
 
 ## Extension points
 
-Custom parameter resolvers implement `ParameterResolverInterface` and are registered with an integer priority. Custom attributes use `AttributeDefinition`; `CapabilityPolicy` can define composition cardinality and ordering rules. These extensions must be supplied in `DependencyDefinitions` before the container is built because the parameter and attribute pipelines are sealed after construction.
+Custom parameter resolvers implement `ParameterResolverInterface` and are registered with an integer priority. Custom attributes use `AttributeDefinition`; its `before` and `after` selectors define composition order. `CapabilityPolicy` sets the maximum number of attributes with a capability on one target. These extensions must be supplied in `DependencyDefinitions` before the container is built because the parameter and attribute pipelines are sealed after construction.
 
 `AttributeDefinition` owns its capability, selector and rule arrays from construction, before validation can invoke an autoloader. Rebinding a caller's referenced array member cannot change registered semantics, handler ordering or rule selection. Handler and rule objects retain their identity and current application state; they are not cloned.
 
