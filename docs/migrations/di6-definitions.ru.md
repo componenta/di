@@ -12,12 +12,15 @@
 | `new FactoryResolver($factories, $container, $proxyFactory)` | `new FactoryResolver($container, $proxyFactory)`; публичные определения регистрируются в composite либо передаются через прямой протокол проверки и исполнения |
 | `new InvokableResolver($invokables)` | `new InvokableResolver()`; объекты `InvokableDefinition` регистрируются в composite либо проверяются и исполняются напрямую |
 | Методы `setDefinition()`, `can()` и `resolve()` у этих двух резолверов | Методы `setDefinition()`, `can()` и `resolve()` у composite либо `validateDefinition()` и `resolveDefinition()` у стратегии |
+| `CompositeResolver::supportsDefinition()` | Удалён; общий предикат допуска дескриптора не предоставляется. Регистрируйте через standalone `setDefinition()` либо `Container::set()` присоединённого корня. |
 | Вложенные composites, наблюдающие последующие регистрации ребёнка | Независимые снимки текущих привязок и упорядоченных провайдеров ребёнка |
 | Прямое изменение или повторное использование composite, уже присоединённого к контейнеру | `Container::set()` для этого корня; отдельная композиция для другого контейнера |
 | Любой `InvalidConfigurationException` считается отклонённой регистрацией | Сначала обрабатывается `MutationRetirementException`: мутация уже зафиксирована |
 | `DependencyConfiguration::normalize()` используется для проверки ABI фабрики или допустимости класса | Проверка при допуске во время `ContainerFactory::create()`, standalone `setDefinition()` либо прямой проверки стратегией |
 
 Интерфейс изменяемого листового резолвера удалён. Адаптера совместимости, сохраняющего скрытую карту регистраций в листовом резолвере, нет. Обычные fallback-резолверы по-прежнему реализуют [`EntryResolverInterface`](../../src/Resolver/Entry/EntryResolverInterface.php); reflection fallback сохраняет эту роль.
+
+`setDefinition()` и `Container::set()` выполняют настоящую регистрацию с публикацией после успешного допуска; не используйте их как пробный вызов без изменения состояния. `can($id)` сообщает о доступности entry, а не о допустимости произвольного дескриптора. Собственная стратегия может классифицировать поддерживаемые виды через `DefinitionResolverInterface::supportsDefinition()`, но её ответ не предсказывает допуск упорядоченной цепочкой провайдеров другого composite. Внутренний `prepareDefinition()` не заменяет публичную предварительную проверку. Обрабатывайте ошибки настоящей регистрации с учётом описанных ниже границ публикации и освобождения старого состояния.
 
 ## Владение регистрациями и поведение приложения
 

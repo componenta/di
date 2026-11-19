@@ -12,12 +12,15 @@ Applications using `ContainerFactory`, public definitions and `Container::set()`
 | `new FactoryResolver($factories, $container, $proxyFactory)` | `new FactoryResolver($container, $proxyFactory)`; register public definitions on a composite or use the direct validation/execution protocol |
 | `new InvokableResolver($invokables)` | `new InvokableResolver()`; register `InvokableDefinition` objects on a composite or validate/execute one directly |
 | Leaf `setDefinition()`, `can()` and `resolve()` on those two resolvers | Composite `setDefinition()`, `can()` and `resolve()`, or strategy `validateDefinition()` and `resolveDefinition()` |
+| `CompositeResolver::supportsDefinition()` | Removed; no aggregate descriptor-admission predicate is exposed. Register through standalone `setDefinition()` or the attached root's `Container::set()`. |
 | Nested composites that observe later child registrations | Independent snapshots of the child's current bindings and ordered providers |
 | Direct mutation or reuse of a composite already attached to a container | `Container::set()` for that root; a separate composition for another container |
 | Every `InvalidConfigurationException` treated as rejected registration | Handle `MutationRetirementException` first: the mutation already committed |
 | `DependencyConfiguration::normalize()` used to validate factory ABI or class eligibility | Admission during `ContainerFactory::create()`, standalone `setDefinition()`, or direct strategy validation |
 
 The mutable leaf interface is removed. There is no compatibility adapter that preserves a hidden leaf registration map. Ordinary fallback resolvers continue implementing [`EntryResolverInterface`](../../src/Resolver/Entry/EntryResolverInterface.php); reflection fallback keeps that role.
+
+`setDefinition()` and `Container::set()` perform real registration, including publication on successful admission; do not use them as dry runs. `can($id)` reports entry availability, not whether an arbitrary descriptor would be accepted. A strategy you own can classify its input kinds through `DefinitionResolverInterface::supportsDefinition()`, but that answer does not predict admission by another composite's ordered provider chain. The internal `prepareDefinition()` method is not a replacement public preflight API. Handle actual registration failures using the publication and retirement boundaries described below.
 
 ## Registration ownership and application behavior
 
