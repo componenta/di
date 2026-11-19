@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
 use Throwable;
+use TypeError;
 
 /**
  * Thin callable-invocation wrapper.
@@ -34,16 +36,36 @@ final class CallableInvoker implements CallableInvokerInterface
      */
     public function call(mixed $callable, array $params = []): mixed
     {
+        // Shape validation does not resolve names or invoke autoloaders.
+        if (!is_callable($callable, syntax_only: true)) {
+            throw InvalidCallableException::forValue($callable);
+        }
+
         try {
-            if (!is_callable($callable)) {
-                throw InvalidCallableException::forValue($callable);
-            }
+            // Capture once: validation can change referenced callable slots.
+            // Keep the native call immediately after its recorded source line.
+            $captureLine = __LINE__ + 1;
+            $resolved = Closure::fromCallable($callable);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw InvalidCallableException::forValue($callable, $e);
+            $origin = $e->getTrace()[0] ?? [];
+            $nativeFailure = $e instanceof TypeError
+                && $e->getFile() === __FILE__
+                && $e->getLine() === $captureLine
+                && ($origin['class'] ?? null) === Closure::class
+                && ($origin['function'] ?? null) === 'fromCallable'
+                && ($origin['file'] ?? null) === __FILE__
+                && ($origin['line'] ?? null) === $captureLine;
+            // PHP's conversion error wraps an existing autoload/diagnostic error.
+            // Remove only this call's native layer, preserving any original cause.
+            $cause = $nativeFailure ? $e->getPrevious() : $e;
+            if ($cause instanceof ExceptionInterface) {
+                throw $cause;
+            }
+            throw InvalidCallableException::forValue($callable, $cause);
         }
 
-        return call_user_func_array($callable, $params);
+        return call_user_func_array($resolved, $params);
     }
 }
