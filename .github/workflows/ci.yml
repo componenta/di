@@ -258,6 +258,18 @@ jobs:
       - name: Check mutation score
         run: composer test-mutation -- --parallel
 
+      - name: Upload mutation diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-php-8.4
+          path: |
+            .phpunit.cache/mutation-report.json
+            .phpunit.cache/mutation-workers/
+          include-hidden-files: true
+          # Bootstrap failures may occur before either report is written.
+          if-no-files-found: warn
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

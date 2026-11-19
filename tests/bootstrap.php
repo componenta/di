@@ -48,6 +48,7 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
         $mutationConfiguration = $pestContainer->get(\Pest\Mutate\Repositories\ConfigurationRepository::class);
         /** @var list<string> $arguments */
         $arguments = COMPONENTA_DI_MUTATION_ARGUMENTS;
+        $reportArguments = $arguments;
         $arguments = $mutationConfiguration->cliConfiguration->fromArguments($arguments);
         array_shift($arguments);
         $php = \Componenta\DI\Tests\Support\MutationRuntime::command();
@@ -72,6 +73,13 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
                 $fallback,
                 $coverage,
                 $configuration->parallel ? $configuration->processes : 1,
+            ),
+        );
+        \Pest\Mutate\Event\Facade::instance()->registerSubscriber(
+            new \Componenta\DI\Tests\Support\MutationReport(
+                $packageDirectory,
+                $packageDirectory . '/.phpunit.cache/mutation-report.json',
+                $reportArguments,
             ),
         );
     }
