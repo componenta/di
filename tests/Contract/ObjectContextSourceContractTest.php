@@ -305,3 +305,83 @@ test('object policies that do not read context parameters preserve deferred supp
         ->and($product->state)->toBe($strategy === 'NoConstructor' ? 'pending' : 'resolved')
         ->and($suppliers)->toBe($strategy === 'NoConstructor' ? 0 : 1);
 })->with(['NoConstructor', 'Lazy', 'Proxy']);
+
+test('deferred supplier source discovery rejects mapped context before handler side effects', function (bool $uncached): void {
+    $suffix = bin2hex(random_bytes(5));
+    $source = __NAMESPACE__ . '\\SupplierSource_' . $suffix;
+    $class = 'SupplierProduct_' . $suffix;
+    eval(sprintf(
+        'namespace %s; #[ReadParameters("supplied")] final class %s extends Product { public function __construct(#[\\%s("trusted")] string $role) { ++Observation::$constructors; $this->state = $role; } }',
+        __NAMESPACE__,
+        $class,
+        $source,
+    ));
+    $name = __NAMESPACE__ . '\\' . $class;
+    if (!is_a($name, Product::class, true)) {
+        throw new LogicException('Expected the supplier discovery fixture.');
+    }
+
+    $availability = new class () {
+        public bool $enabled = false;
+    };
+    $loader = static function (string $requested) use ($source, $availability): void {
+        if ($requested === $source && $availability->enabled && !class_exists($source, false)) {
+            class_alias(EntryId::class, $source);
+        }
+    };
+    spl_autoload_register($loader);
+    try {
+        $enableSource = static function () use ($availability): void {
+            $availability->enabled = true;
+        };
+        $pipeline = builder($uncached)->build()->get(ObjectPipeline::class);
+        $factory = new class ($pipeline, $enableSource) implements FactoryInterface {
+            public int $suppliers = 0;
+
+            public function __construct(
+                private readonly ObjectPipeline $pipeline,
+                private readonly Closure $beforeSupply,
+            ) {}
+
+            public function make(string $entry, array $params = []): object
+            {
+                if (!class_exists($entry)) {
+                    throw new LogicException('Expected a declared supplier discovery DTO.');
+                }
+                return $this->pipeline->create($entry, resolveParameters: function () use ($params): array {
+                    ++$this->suppliers;
+                    ($this->beforeSupply)();
+                    return $params;
+                });
+            }
+        };
+        $container = (new ContainerBuilder())
+            ->addAttributeDefinition(new AttributeDefinition(
+                DeferredMapper::class,
+                new RequestAttributeHandler($factory, new TestCasterProvider()),
+                [ValueProvider::class],
+            ))
+            ->build();
+        $callable = target($name, deferred: true);
+        $request = (new ServerRequest('GET', '/'))->withQueryParams(['role' => 'untrusted']);
+
+        expect(fn() => $container->call($callable, [ServerRequestInterface::class => $request]))
+            ->toThrow(RequestParameterSourceConflictException::class, 'role')
+            ->and($factory->suppliers)->toBe(1)
+            ->and(Observation::$values)->toBe([])
+            ->and(Observation::$constructors)->toBe(0)
+            ->and(Observation::$invoked)->toBe(0);
+
+        $product = $container->call($callable, [ServerRequestInterface::class => $request->withQueryParams([])]);
+        if (!$product instanceof Product) {
+            throw new LogicException('Expected the recovered supplier discovery DTO.');
+        }
+        expect($product->state)->toBe('trusted')
+            ->and($factory->suppliers)->toBe(2)
+            ->and(Observation::$values)->toBe([['supplied', 'absent']])
+            ->and(Observation::$constructors)->toBe(1)
+            ->and(Observation::$invoked)->toBe(1);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['cached' => false, 'non-memoized' => true]);

@@ -157,3 +157,51 @@ it('does not share an object when a constructor or lifecycle hook loads a policy
         ->and($container->make($class)->state)->toBe('default')
         ->and(ConstructionState::$constructors)->toBe(1);
 })->with(['constructor' => false, 'lifecycle hook' => true]);
+
+it('rejects a policy loaded before lazy initialization without resolving constructor dependencies', function (string $strategy): void {
+    $suffix = bin2hex(random_bytes(5));
+    $alias = 'PendingConstructorPolicy_' . $suffix;
+    $target = 'PendingConstructorTarget_' . $suffix;
+    $fullAlias = __NAMESPACE__ . '\\' . $alias;
+    eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        #[\Componenta\DI\Attribute\%s, %s] final class %s extends ConstructionState {
+            public function __construct(#[\Componenta\DI\Attribute\EntryId('observable-dependency')] object $dependency) {
+                ++self::$constructors;
+                $this->state = 'constructed';
+            }
+        }
+        PHP,
+        __NAMESPACE__,
+        $strategy,
+        $alias,
+        $target,
+    ));
+    $class = __NAMESPACE__ . '\\' . $target;
+    if (!is_a($class, ConstructionState::class, true)) {
+        throw new LogicException('Expected the pending constructor policy fixture.');
+    }
+    $dependencies = 0;
+    $container = (new ContainerBuilder())
+        ->addFactory('observable-dependency', static function () use (&$dependencies): object {
+            ++$dependencies;
+            return new \stdClass();
+        })
+        ->build();
+    ConstructionState::$constructors = 0;
+    $pending = $container->make($class);
+    expect($dependencies)->toBe(0)->and(ConstructionState::$constructors)->toBe(0);
+
+    class_alias(NoConstructor::class, $fullAlias);
+
+    expect(fn() => $pending->state)->toThrow(AttributeCompositionException::class, 'BeforeInstantiation completed')
+        ->and($dependencies)->toBe(0)
+        ->and(ConstructionState::$constructors)->toBe(0);
+
+    $fresh = $container->make($class);
+    expect($fresh->state)->toBe('default')
+        ->and(fn() => $pending->state)->toThrow(AttributeCompositionException::class, 'BeforeInstantiation completed')
+        ->and($dependencies)->toBe(0)
+        ->and(ConstructionState::$constructors)->toBe(0);
+})->with(['Lazy', 'Proxy']);
