@@ -92,6 +92,8 @@ jobs:
           JSON
           composer update --working-dir="$consumer_workspace/consumer" \
             --prefer-lowest --prefer-stable --no-dev --no-interaction --no-progress --prefer-dist
+          cmp "$consumer_workspace/package/composer.json" "$consumer_workspace/consumer/vendor/componenta/di/composer.json"
+          diff -r "$consumer_workspace/package/src" "$consumer_workspace/consumer/vendor/componenta/di/src"
           php tests/consumer-smoke.php "$consumer_workspace/consumer/vendor/autoload.php"
 
   coverage:
