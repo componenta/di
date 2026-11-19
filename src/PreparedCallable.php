@@ -20,9 +20,12 @@ final readonly class PreparedCallable
     /** @var callable */
     public mixed $callable;
 
-    public function __construct(callable $callable)
+    /** @param callable $callable */
+    public function __construct(callable|array $callable)
     {
-        $this->callable = is_array($callable) ? self::snapshotCallable($callable) : $callable;
+        // Native callable parameter validation can autoload before this body.
+        // Accept arrays separately so their slots are captured before validation.
+        $this->callable = is_array($callable) ? self::validateCallable(self::snapshotCallable($callable)) : $callable;
     }
 
     public function __invoke(mixed ...$arguments): mixed
@@ -46,5 +49,13 @@ final readonly class PreparedCallable
 
         /** @var T $snapshot */
         return $snapshot;
+    }
+
+    /** @return callable */
+    private static function validateCallable(callable $callable): mixed
+    {
+        // Native argument validation preserves autoload exceptions. A callable
+        // return check would wrap them and repeat callable diagnostics.
+        return $callable;
     }
 }

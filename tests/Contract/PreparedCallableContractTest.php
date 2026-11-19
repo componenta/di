@@ -101,3 +101,147 @@ test('prepared callables preserve native object identity and state', function ()
     $owner->value = 'second';
     expect($container->call($prepared, ['suffix' => 'current']))->toBe('second:current');
 });
+
+final class StaticOwner
+{
+    public static function original(): string
+    {
+        return 'original';
+    }
+
+    public static function redirected(): string
+    {
+        return 'original:redirected';
+    }
+}
+
+final class ReplacementOwner
+{
+    public static function original(): string
+    {
+        return 'replacement';
+    }
+
+    public static function redirected(): string
+    {
+        return 'replacement:redirected';
+    }
+}
+
+final class AutoloadAttempt
+{
+    public bool $fail = true;
+    public int $loads = 0;
+}
+
+test('prepared callables capture referenced routes before validation can run an autoloader', function (
+    string $mutation,
+    ?string $nextResult,
+): void {
+    $requested = __NAMESPACE__ . '\\PendingOwner_' . bin2hex(random_bytes(5));
+    $owner = $requested;
+    $method = 'original';
+    /** @var callable-array $specification */
+    $specification = [&$owner, &$method];
+    $loads = 0;
+    $loader = static function (string $class) use ($requested, $mutation, &$owner, &$method, &$loads): void {
+        if ($class !== $requested) {
+            return;
+        }
+        ++$loads;
+        class_alias(StaticOwner::class, $class);
+        if ($mutation === 'owner' || $mutation === 'both') {
+            $owner = ReplacementOwner::class;
+        } elseif ($mutation === 'invalid owner') {
+            $owner = '';
+        }
+        if ($mutation === 'method' || $mutation === 'both') {
+            $method = 'redirected';
+        }
+    };
+    spl_autoload_register($loader);
+
+    try {
+        $prepared = new PreparedCallable($specification);
+        expect($prepared->callable)->toBe([$requested, 'original'])
+            ->and($prepared())->toBe('original')
+            ->and(container()->call($prepared))->toBe('original')
+            ->and($loads)->toBe(1);
+
+        if ($nextResult === null) {
+            expect(static fn(): PreparedCallable => new PreparedCallable($specification))->toThrow(\TypeError::class);
+        } else {
+            expect((new PreparedCallable($specification))())->toBe($nextResult);
+        }
+        expect($loads)->toBe(1);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with([
+    'receiver changed' => ['owner', 'replacement'],
+    'method changed' => ['method', 'original:redirected'],
+    'both changed' => ['both', 'replacement:redirected'],
+    'receiver invalidated' => ['invalid owner', null],
+]);
+
+test('prepared callables reject malformed inputs during construction', function (mixed $input): void {
+    $create = static function () use ($input): PreparedCallable {
+        // @phpstan-ignore argument.type (Intentionally invalid public callable input.)
+        return new PreparedCallable($input);
+    };
+
+    expect($create)->toThrow(\TypeError::class);
+})->with([
+    'empty array' => [[]],
+    'missing method' => [[StaticOwner::class, 'missing']],
+    'non-string method' => [[StaticOwner::class, 12]],
+    'invalid receiver' => [[12, 'original']],
+    'sparse array' => [[1 => StaticOwner::class, 2 => 'original']],
+    'extra element' => [[StaticOwner::class, 'original', 'extra']],
+    'missing function' => [__NAMESPACE__ . '\\missingFunction'],
+    'non-invokable object' => [new \stdClass()],
+]);
+
+test('prepared callable validation preserves autoload failures and permits a fresh attempt', function (
+    bool $array,
+    string $kind,
+): void {
+    $requested = __NAMESPACE__ . '\\FailingOwner_' . bin2hex(random_bytes(5));
+    /** @var (array{non-falsy-string,'original'}&callable)|(non-falsy-string&callable) $specification */
+    $specification = $array ? [$requested, 'original'] : $requested . '::original';
+    $cause = match ($kind) {
+        'type error' => new \TypeError('Prepared callable autoload failed.'),
+        'DI exception' => new \Componenta\DI\Exception\ResolutionException('Prepared callable autoload failed.'),
+        default => new \DomainException('Prepared callable autoload failed.'),
+    };
+    $attempt = new AutoloadAttempt();
+    $loader = static function (string $class) use ($requested, $cause, $attempt): void {
+        if ($class !== $requested) {
+            return;
+        }
+        ++$attempt->loads;
+        if ($attempt->fail) {
+            throw $cause;
+        }
+        class_alias(StaticOwner::class, $class);
+    };
+    spl_autoload_register($loader);
+
+    try {
+        try {
+            $unexpected = new PreparedCallable($specification);
+            \PHPUnit\Framework\Assert::fail('Autoload failure unexpectedly produced a ' . get_debug_type($unexpected->callable) . ' callable.');
+        } catch (\Throwable $error) {
+            expect($error)->toBe($cause)->and($attempt->loads)->toBe(1);
+        }
+
+        $attempt->fail = false;
+        $prepared = new PreparedCallable($specification);
+        expect($prepared->callable)->toBe($specification)
+            ->and($prepared())->toBe('original')
+            ->and($attempt->loads)->toBe(2);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['array' => true, 'string' => false])
+    ->with(['foreign exception', 'type error', 'DI exception']);
