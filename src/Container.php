@@ -91,7 +91,6 @@ final class Container implements
 
         $this->resolver = $resolver instanceof CompositeResolver ? $resolver : new CompositeResolver($resolver);
         $this->definitionAuthority = new \stdClass();
-        $this->resolver->attach($this->definitionAuthority);
 
         $this->cache = $cache ?? new EntryCache();
         $this->delegators = $delegators ?? new DelegatorRegistry($this);
@@ -99,6 +98,10 @@ final class Container implements
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
         $this->resolvedEntryGuard = new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
+
+        // Failed collaborator loading must not consume a standalone resolver.
+        // Attach only after initialization succeeds, before publishing core values.
+        $this->resolver->attach($this->definitionAuthority);
 
         // Supplied core seeds can reenter from destructors. Publish the complete
         // core only after every collaborator is ready, then release old values.

@@ -91,6 +91,35 @@ test('cold collaborator autoloading never exposes an unusable published containe
     ]);
 });
 
+test('failed collaborator loading leaves the standalone resolver available for construction retry', function (string $collaborator): void {
+    $root = dirname(__DIR__, 2);
+    $process = proc_open([
+        PHP_BINARY,
+        '-n',
+        $root . '/tests/Fixtures/ContainerConstructionRetry.php',
+        $root . '/vendor/autoload.php',
+        $root . '/src',
+        $collaborator,
+    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($process)) {
+        throw new LogicException('Could not start the construction retry fixture.');
+    }
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    expect(proc_close($process))->toBe(0, $stdout . $stderr)
+        ->and($stderr)->toBe('')
+        ->and(json_decode($stdout, true, flags: JSON_THROW_ON_ERROR))->toBe([
+            'autoload_observed' => true,
+            'original_failure_preserved' => true,
+            'retry_error' => null,
+            'result' => ['value' => 'ready', 'self' => true, 'call' => 'invoked'],
+        ]);
+})->with(['entry cache' => 'cache', 'delegators' => 'delegators', 'cycle guard' => 'cycles', 'proxy factory' => 'proxy']);
+
 test('retiring a core seed can resolve create and initialize lazy objects through the published container', function (): void {
     $cache = null;
     $shared = null;
