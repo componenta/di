@@ -362,3 +362,156 @@ test('pending attributes survive repeated refreshes without restoring an inactiv
             ->and(new ReflectionClass(Product::class)->isUninitializedLazyObject($owner->product))->toBeTrue();
     }
 })->with(['eager', 'Lazy', 'Proxy'])->with(['cached plans' => false, 'uncached plans' => true]);
+
+
+abstract class PairOwner extends Owner
+{
+    public Product $second;
+}
+
+test('multiple property Proxy discoveries preserve the active before-phase prefix', function (
+    bool $uncached,
+    bool $preloaded,
+): void {
+    $suffix = bin2hex(random_bytes(6));
+    $class = 'PairOwner_' . $suffix;
+    $proxy = 'PairProxy_' . $suffix;
+    $alias = __NAMESPACE__ . '\\' . $proxy;
+    eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        #[\Componenta\DI\Attribute\SetUp('setup')]
+        final class %s extends PairOwner
+        {
+            #[\Componenta\DI\Attribute\Make(Product::class), %s]
+            public Product $product;
+            #[\Componenta\DI\Attribute\Make(Product::class), %s]
+            public Product $second;
+            #[LoadBefore(%s)] public function load(): void {}
+        }
+        PHP,
+        __NAMESPACE__,
+        $class,
+        $proxy,
+        $proxy,
+        var_export($alias, true),
+    ));
+    $name = __NAMESPACE__ . '\\' . $class;
+    if (!is_a($name, PairOwner::class, true)) {
+        throw new LogicException('Expected the owner with two deferred products.');
+    }
+    if ($preloaded) {
+        class_alias(Proxy::class, $alias);
+    }
+    $container = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
+        LoadBefore::class,
+        new BeforeHandler(),
+        rules: $uncached ? [new UncachedRule()] : [],
+        phase: AttributePhase::BeforeInstantiation,
+    ))->build();
+    expect($container->has($name))->toBeTrue()->and(Trace::$events)->toBe([]);
+
+    $owner = $container->make($name);
+    $reflection = new ReflectionClass(Product::class);
+    expect($owner->ready)->toBeTrue()
+        ->and(Trace::$events)->toBe(['loader', 'constructor', 'setup'])
+        ->and(Trace::$attributes)->toBe(1)
+        ->and(Trace::$products)->toBe(0)
+        ->and($reflection->isUninitializedLazyObject($owner->product))->toBeTrue()
+        ->and($reflection->isUninitializedLazyObject($owner->second))->toBeTrue()
+        ->and($owner->product)->not->toBe($owner->second)
+        ->and($owner->product->value)->toBe('initialized')
+        ->and(Trace::$products)->toBe(1)
+        ->and($owner->second->value)->toBe('initialized')
+        ->and(Trace::$products)->toBe(2);
+})->with(['cached plans' => false, 'uncached plans' => true])
+    ->with(['late aliases' => false, 'preloaded control' => true]);
+
+#[Attribute(Attribute::TARGET_METHOD)]
+final readonly class LoadAfter
+{
+    public function __construct(public string $alias)
+    {
+        ++Trace::$attributes;
+    }
+}
+
+final readonly class AfterHandler implements AttributeHandlerInterface
+{
+    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+    {
+        if (!$attribute instanceof LoadAfter || !$context->entry instanceof Owner) {
+            throw new LogicException('Expected the after-phase loader on an existing owner.');
+        }
+        Trace::$events[] = 'after loader';
+        if (!class_exists($attribute->alias, false)) {
+            class_alias(Proxy::class, $attribute->alias);
+        }
+    }
+}
+
+test('property Proxy discovered after completed injection is rejected before sharing', function (
+    bool $uncached,
+    bool $preloaded,
+): void {
+    $suffix = bin2hex(random_bytes(6));
+    $class = 'AfterOwner_' . $suffix;
+    $proxy = 'AfterProxy_' . $suffix;
+    $alias = __NAMESPACE__ . '\\' . $proxy;
+    eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        #[\Componenta\DI\Attribute\SetUp('setup')]
+        final class %s extends Owner
+        {
+            #[\Componenta\DI\Attribute\Make(Product::class), %s]
+            public Product $product {
+                set {
+                    Trace::$events[] = 'property';
+                    $this->product = $value;
+                }
+            }
+            #[LoadAfter(%s)] public function load(): void {}
+        }
+        PHP,
+        __NAMESPACE__,
+        $class,
+        $proxy,
+        var_export($alias, true),
+    ));
+    $name = __NAMESPACE__ . '\\' . $class;
+    if (!is_a($name, Owner::class, true)) {
+        throw new LogicException('Expected the after-phase owner.');
+    }
+    if ($preloaded) {
+        class_alias(Proxy::class, $alias);
+    }
+    $container = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
+        LoadAfter::class,
+        new AfterHandler(),
+        rules: $uncached ? [new UncachedRule()] : [],
+        phase: AttributePhase::AfterInstantiation,
+    ))->build();
+    $events = ['constructor', 'property', 'setup', 'after loader'];
+
+    if (!$preloaded) {
+        expect(fn(): mixed => $container->get($name))->toThrow(AttributeCompositionException::class, 'was already executed')
+            ->and(Trace::$events)->toBe($events)
+            ->and(Trace::$products)->toBe(1);
+        Trace::$events = [];
+    }
+
+    $owner = $container->get($name);
+    expect($owner)->toBeInstanceOf(Owner::class);
+    if (!$owner instanceof Owner) {
+        throw new LogicException('Expected the successfully configured owner.');
+    }
+    expect(Trace::$events)->toBe($events)
+        ->and(Trace::$attributes)->toBe($preloaded ? 1 : 2)
+        ->and(Trace::$products)->toBe($preloaded ? 0 : 1)
+        ->and(new ReflectionClass(Product::class)->isUninitializedLazyObject($owner->product))->toBeTrue()
+        ->and($container->get($name))->toBe($owner)
+        ->and($owner->product->value)->toBe('initialized')
+        ->and(Trace::$products)->toBe($preloaded ? 1 : 2);
+})->with(['cached plans' => false, 'uncached plans' => true])
+    ->with(['late alias' => false, 'preloaded control' => true]);
