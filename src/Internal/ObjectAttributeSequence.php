@@ -7,8 +7,10 @@ namespace Componenta\DI\Internal;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -107,11 +109,48 @@ final class ObjectAttributeSequence
                 continue;
             }
 
+            $ordered = $this->withoutInactivePredecessors($ordered);
             AttributeExecutionOrder::assertOrderedPrefix($ordered, $this->executed);
             $this->plans = $plans;
             $this->ordered = array_values($ordered);
             $this->owners = $owners;
             $this->revision = $revision;
         }
+    }
+
+    /**
+     * @param array<string,AttributeUsage> $ordered
+     * @return array<string,AttributeUsage>
+     */
+    private function withoutInactivePredecessors(array $ordered): array
+    {
+        if ($this->phase !== AttributePhase::BeforeInstantiation || $this->executed === []) {
+            return $ordered;
+        }
+
+        $executed = array_keys($this->executed);
+        $position = 0;
+        foreach ($ordered as $key => $usage) {
+            if (!isset($executed[$position])) {
+                break;
+            }
+            if ($key === $executed[$position]) {
+                ++$position;
+                continue;
+            }
+            if (!isset($this->executed[$key])
+                && $usage->target instanceof ReflectionProperty
+                && $usage->definition->handler instanceof MakeHandler
+                && $usage->is(Proxy::class)
+            ) {
+                // A newly discovered property Proxy has no before-phase action.
+                // Its real injection still runs after construction. Preserve
+                // argument materialization for every otherwise valid prefix.
+                unset($ordered[$key]);
+                continue;
+            }
+            break;
+        }
+        return $ordered;
     }
 }
