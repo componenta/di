@@ -18,6 +18,7 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
@@ -257,6 +258,51 @@ test('a sibling source revealed by a transformer dependency guards its remaining
         ->and(Observation::$invoked)->toBe(1);
 })->with(['cached plans' => false, 'non-memoized plans' => true])
     ->with(['source' => true, 'unrelated metadata' => false]);
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class SourceMarker implements ParameterSourceAttributeInterface {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class RevealSourceMarker
+{
+    public function __construct(string $source)
+    {
+        class_alias(SourceMarker::class, $source);
+    }
+}
+
+test('unavailable metadata before a late source cannot hide mapped conflicts from context consumers', function (bool $uncached): void {
+    Observation::reset();
+    Observation::$field = 'role';
+    $suffix = bin2hex(random_bytes(5));
+    $unknown = 'Unavailable_' . $suffix;
+    $source = 'LateSource_' . $suffix;
+    $target = target(sprintf(
+        '#[%s] public string $first, #[%s, RevealSourceMarker(%s::class)] public string $role',
+        $unknown,
+        $source,
+        $source,
+    ));
+    $builder = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
+        RevealSourceMarker::class,
+        new ContextObserver(),
+        [ValueTransformer::class],
+    ));
+    if ($uncached) {
+        $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
+    }
+    $container = $builder->build();
+    $request = (new ServerRequest('GET', '/'))->withQueryParams(['first' => 'ordinary', 'role' => 'untrusted']);
+
+    expect(fn() => $container->call($target, [ServerRequestInterface::class => $request]))
+        ->toThrow(RequestParameterSourceConflictException::class, 'role')
+        ->and(Observation::$values)->toBe([])
+        ->and(Observation::$handlerArguments)->toBe([])
+        ->and(Observation::$constructed)->toBe(0)
+        ->and(Observation::$invoked)->toBe(0)
+        ->and(class_exists(__NAMESPACE__ . '\\' . $source, false))->toBeTrue()
+        ->and(class_exists(__NAMESPACE__ . '\\' . $unknown, false))->toBeFalse();
+})->with(['cached plans' => false, 'non-memoized plans' => true]);
 
 final readonly class TypedValue
 {
