@@ -14,6 +14,7 @@ use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\FactoryResolver;
 use Componenta\DI\Resolver\Entry\InvokableResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Psr\Container\ContainerInterface;
 use WeakReference;
 
 final readonly class Product
@@ -52,6 +53,31 @@ test('direct factory strategy callers retain independent validated descriptors f
         ->and($strategy->resolveDefinition('entry', $first, ['label' => 'two']))->toEqual(new Product('first:two'))
         ->and($strategy->supportsDefinition($first))->toBeFalse()
         ->and($strategy->supportsDefinition(new ReferenceDefinition('other')))->toBeFalse();
+});
+
+test('direct factory strategies reject an invalid container context before invoking the factory', function (): void {
+    $container = new class () implements ContainerInterface {
+        public function has(string $id): bool
+        {
+            return $id === ContainerValue::class;
+        }
+        public function get(string $id): mixed
+        {
+            return new \stdClass();
+        }
+    };
+    $calls = 0;
+    $strategy = new FactoryResolver($container, new ProxyFactory());
+    $prepared = $strategy->validateDefinition('entry', new FactoryDefinition(
+        static function () use (&$calls): Product {
+            ++$calls;
+            return new Product();
+        },
+    ));
+
+    expect(fn() => $strategy->resolveDefinition('entry', $prepared))
+        ->toThrow(InvalidConfigurationException::class, 'ContainerValue bootstrap service is unavailable.')
+        ->and($calls)->toBe(0);
 });
 
 test('factory strategies do not retain a descriptor or its captured payload after its caller releases it', function (): void {

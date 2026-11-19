@@ -17,6 +17,7 @@ use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Resolver\TypeHints;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use Psr\Container\ContainerInterface;
@@ -379,6 +380,43 @@ test('union candidate availability probes have stable order', function (): void 
         $target = new ParameterTarget(new ReflectionFunction($function)->getParameters()[0]);
         expect($resolver->resolveParameter($target, new ParameterResolutionContext()))->toBeNull()
             ->and($external->seen)->toBe([Left::class, Right::class]);
+    }
+});
+
+test('simple union type candidates expose a sorted list for either declaration order', function (): void {
+    foreach ([__NAMESPACE__ . '\\select', __NAMESPACE__ . '\\reverse'] as $function) {
+        $parameter = new ReflectionFunction($function)->getParameters()[0];
+
+        expect(TypeHints::simpleUnionClassNames($parameter->getType()))->toBe([Left::class, Right::class]);
+    }
+});
+
+test('direct union autowiring normalizes a foreign container failure with parameter diagnostics', function (): void {
+    $cause = new LogicException('The external container failed.');
+    $external = new class ($cause) implements ContainerInterface {
+        public int $gets = 0;
+        public function __construct(private readonly LogicException $cause) {}
+        public function has(string $id): bool
+        {
+            return $id === Left::class;
+        }
+        public function get(string $id): mixed
+        {
+            ++$this->gets;
+            throw $this->cause;
+        }
+    };
+    $resolver = new AutowireByTypeResolver($external);
+    $target = new ParameterTarget(new ReflectionFunction(__NAMESPACE__ . '\\select')->getParameters()[0]);
+
+    try {
+        $resolver->resolveParameter($target, new ParameterResolutionContext());
+        \PHPUnit\Framework\Assert::fail('The external container failure must reject union resolution.');
+    } catch (ResolutionException $failure) {
+        expect($failure->getPrevious())->toBe($cause)
+            ->and($failure->parameterName)->toBe('value')
+            ->and($failure->parameterPosition)->toBe(0)
+            ->and($external->gets)->toBe(1);
     }
 });
 
