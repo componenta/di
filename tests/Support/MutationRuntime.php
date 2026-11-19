@@ -9,7 +9,8 @@ use Symfony\Component\Process\Process;
 
 final class MutationRuntime
 {
-    private static ?bool $builtInMbstring = null;
+    /** @var array<string, bool> */
+    private static array $mbstringAvailability = [];
 
     /** @return list<string> */
     public static function command(): array
@@ -22,29 +23,31 @@ final class MutationRuntime
             array_push($command, '-c', $ini);
         }
         array_push($command, '-d', 'extension_dir=' . ini_get('extension_dir'));
-        if ($ini === false && extension_loaded('mbstring') && !self::hasBuiltInMbstring()) {
+        array_push($command, '-d', 'opcache.enable_cli=0');
+        if (extension_loaded('mbstring') && !self::loadsMbstring($command)) {
             array_push($command, '-d', 'extension=mbstring');
         }
-        array_push($command, '-d', 'opcache.enable_cli=0');
 
         return $command;
     }
 
-    private static function hasBuiltInMbstring(): bool
+    /** @param list<string> $command */
+    private static function loadsMbstring(array $command): bool
     {
-        if (self::$builtInMbstring !== null) {
-            return self::$builtInMbstring;
+        $configuration = serialize([$command, getenv('PHP_INI_SCAN_DIR')]);
+        if (isset(self::$mbstringAvailability[$configuration])) {
+            return self::$mbstringAvailability[$configuration];
         }
-        // With no ini, a loaded extension may be built in or supplied with -d.
+        // A parent CLI extension flag is not inherited, even with a selected ini.
         $probe = new Process([
-            PHP_BINARY, '-n', '-r', 'echo extension_loaded("mbstring") ? "1" : "0";',
+            ...$command, '-r', 'echo extension_loaded("mbstring") ? "1" : "0";',
         ], timeout: 5.0);
         $probe->mustRun();
 
-        return self::$builtInMbstring = match ($probe->getOutput()) {
+        return self::$mbstringAvailability[$configuration] = match ($probe->getOutput()) {
             '1' => true,
             '0' => false,
-            default => throw new RuntimeException('Cannot determine whether mbstring is built into the PHP runtime.'),
+            default => throw new RuntimeException('Cannot determine whether mbstring is available to the mutation worker.'),
         };
     }
 }

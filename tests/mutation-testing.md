@@ -22,6 +22,8 @@ The bootstrap self-check also runs safely inside an active mutation. It temporar
 
 Mutation workers preserve the parent PHP configuration (`-c` or `-n`, extension directory and required extensions). Before mutation generation, the launcher executes the unmodified full test suite using the same worker command. A failed control run aborts mutation testing; failures caused by a broken worker environment must not count as detected mutations.
 
+The mbstring check uses the selected worker configuration. A module supplied through the parent's CLI flags is preserved even when an ini is loaded; a built-in module or one already loaded by the worker's ini is not loaded twice.
+
 Mutations on declarations and other lines without a per-test coverage mapping are executed against the full test suite by `MutationFallback`. When parallel execution is enabled, these full-suite checks run in batches using the requested process count. Their outcomes stay in memory for this run and are handed back to Pest when it encounters each mutation. This records the actual test outcome instead of treating missing coverage metadata as evidence that the code was never exercised. It does not add covered lines or exclude source files. The control output and each fallback outcome are saved under `.phpunit.cache/mutation-workers/` for inspection.
 
 The reported Pest score includes timeouts. Review timeout cases separately and report the fraction detected by completed test runs as well when assessing the threshold.

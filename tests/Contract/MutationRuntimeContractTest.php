@@ -42,11 +42,12 @@ test('mutation workers inherit the selected PHP configuration', function (): voi
     }
 });
 
-test('mutation workers without an ini preserve mbstring without startup diagnostics', function (): void {
+test('mutation workers preserve mbstring without startup diagnostics', function (bool $withIni, bool $extensionInIni): void {
     $active = getenv('PEST_MUTATION_TESTING') !== false;
     if ($active) {
         StreamWrapper::disable();
     }
+    $ini = null;
     try {
         $bareRuntime = new Process([
             PHP_BINARY, '-n', '-r', 'exit(extension_loaded("mbstring") ? 0 : 1);',
@@ -54,8 +55,21 @@ test('mutation workers without an ini preserve mbstring without startup diagnost
         $bareRuntime->run();
         expect($bareRuntime->getExitCode())->toBeIn([0, 1]);
 
-        $command = [PHP_BINARY, '-n', '-d', 'extension_dir=' . ini_get('extension_dir')];
-        if ($bareRuntime->getExitCode() === 1) {
+        $command = [PHP_BINARY];
+        if ($withIni) {
+            $created = tempnam(sys_get_temp_dir(), 'mutation-extension-ini-');
+            if ($created === false) {
+                throw new \RuntimeException('Cannot create PHP configuration fixture.');
+            }
+            $ini = $created;
+            file_put_contents($ini, "precision=9\nopcache.enable_cli=0\n"
+                . ($extensionInIni && $bareRuntime->getExitCode() === 1 ? "extension=mbstring\n" : ''));
+            array_push($command, '-c', $ini);
+        } else {
+            $command[] = '-n';
+        }
+        array_push($command, '-d', 'extension_dir=' . ini_get('extension_dir'));
+        if ($bareRuntime->getExitCode() === 1 && !$extensionInIni) {
             array_push($command, '-d', 'extension=mbstring');
         }
         $root = dirname(__DIR__, 2);
@@ -71,15 +85,25 @@ test('mutation workers without an ini preserve mbstring without startup diagnost
             'PEST_MUTATION_TESTING' => false,
             'PEST_MUTATION_FILE' => false,
             'XDEBUG_MODE' => 'off',
+            'PHP_INI_SCAN_DIR' => '',
         ], timeout: 10.0);
         $process->run();
 
         expect($process->getExitCode())->toBe(0, $process->getErrorOutput())
             ->and($process->getErrorOutput())->toBe('')
-            ->and($process->getOutput())->toBe(json_encode([false, true, 'ÉTÉ', false], JSON_THROW_ON_ERROR));
+            ->and($process->getOutput())->toBe(json_encode([
+                $ini === null ? false : realpath($ini), true, 'ÉTÉ', false,
+            ], JSON_THROW_ON_ERROR));
     } finally {
+        if ($ini !== null) {
+            unlink($ini);
+        }
         if ($active) {
             StreamWrapper::enable();
         }
     }
-});
+})->with([
+    'without an ini' => [false, false],
+    'with an ini and CLI extension' => [true, false],
+    'with an ini extension' => [true, true],
+]);
