@@ -123,11 +123,15 @@ function validate_parameter_resolution_result(
         );
     }
 
+    // Callable validation can autoload code that changes referenced tuple slots.
+    // Keep the position and value that were selected for this validation.
+    [$position, $value] = $result;
+
     if ($target->variadic) {
-        return [$target->position, VariadicArguments::validate($target, $result[1], $context)];
+        return [$position, VariadicArguments::validate($target, $value, $context)];
     }
 
-    if (!$target->accepts($result[1])) {
+    if (!$target->accepts($value)) {
         throw ResolutionException::forParameter(
             $target->reflection,
             reason: sprintf(
@@ -139,8 +143,7 @@ function validate_parameter_resolution_result(
         );
     }
 
-    /** @var array{0:int,1:mixed} $result */
-    return $result;
+    return [$position, $value];
 }
 
 /**
