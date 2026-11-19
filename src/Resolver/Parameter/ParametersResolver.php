@@ -532,7 +532,7 @@ final class ParametersResolver
     {
         /** @var list<int> $slots */
         $slots = [];
-        $revision = $this->revision;
+        $registrationCount = count($this->registrations);
 
         try {
             foreach ($this->resolverList as $slot => $resolver) {
@@ -550,7 +550,9 @@ final class ParametersResolver
             );
         }
 
-        if ($revision !== $this->revision) {
+        // Nested resolution can refresh attribute metadata during autoload.
+        // Only actual additions change the resolver chain being classified.
+        if ($registrationCount !== count($this->registrations)) {
             throw new InvalidConfigurationException(
                 'Parameter resolver supports() must not mutate the resolver chain.',
             );
