@@ -96,6 +96,9 @@ class CallableResolver implements CallableResolverInterface
         if (!method_exists($class, $method)) {
             throw InvalidCallableException::forMethod($class, $method);
         }
+        if ($this->isStaticMethod($class, $method)) {
+            throw InvalidCallableException::forMethod($class, $method);
+        }
         throw InvalidCallableException::forMissingService($class);
     }
 

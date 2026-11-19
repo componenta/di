@@ -21,6 +21,11 @@ final class CallableWithoutService
     {
         return 'hidden';
     }
+
+    protected static function protectedHidden(): string
+    {
+        return 'protected';
+    }
 }
 
 final class OtherCallableWithoutService
@@ -103,8 +108,33 @@ test('unresolvable methods distinguish a missing service from a missing or inacc
         'Method "' . CallableWithoutService::class . '::hidden()" does not exist.',
         CallableWithoutService::class . '::hidden',
     ],
+    'hidden static method string' => [
+        CallableWithoutService::class . '::hidden',
+        'Method "' . CallableWithoutService::class . '::hidden()" does not exist.',
+        CallableWithoutService::class . '::hidden',
+    ],
+    'protected static method' => [
+        [CallableWithoutService::class, 'protectedHidden'],
+        'Method "' . CallableWithoutService::class . '::protectedHidden()" does not exist.',
+        CallableWithoutService::class . '::protectedHidden',
+    ],
+    'protected static method string' => [
+        CallableWithoutService::class . '::protectedHidden',
+        'Method "' . CallableWithoutService::class . '::protectedHidden()" does not exist.',
+        CallableWithoutService::class . '::protectedHidden',
+    ],
+    'unregistered instance method string' => [
+        CallableWithoutService::class . '::instance',
+        'Service "' . CallableWithoutService::class . '" is not defined in the container.',
+        CallableWithoutService::class,
+    ],
     'missing method' => [
         [CallableWithoutService::class, 'missing'],
+        'Method "' . CallableWithoutService::class . '::missing()" does not exist.',
+        CallableWithoutService::class . '::missing',
+    ],
+    'missing method string' => [
+        CallableWithoutService::class . '::missing',
         'Method "' . CallableWithoutService::class . '::missing()" does not exist.',
         CallableWithoutService::class . '::missing',
     ],
