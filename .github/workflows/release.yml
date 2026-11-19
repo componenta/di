@@ -23,6 +23,8 @@ jobs:
             os: ubuntu-latest
           - php: '8.4'
             os: windows-latest
+          - php: '8.5'
+            os: windows-latest
 
     steps:
       - name: Checkout
@@ -33,7 +35,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          extensions: fileinfo, mbstring
+          extensions: fileinfo, mbstring, pdo_sqlite
           tools: composer:v2
 
       - name: Validate Composer metadata
@@ -63,7 +65,7 @@ jobs:
         with:
           php-version: '8.4'
           coverage: pcov
-          extensions: fileinfo, mbstring
+          extensions: fileinfo, mbstring, pdo_sqlite
           ini-values: memory_limit=2G
           tools: composer:v2
 
