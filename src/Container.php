@@ -490,7 +490,6 @@ final class Container implements
         $candidates = [];
         $inspected = [];
         $pending = [];
-        $owned = [];
         $mayInspect = fn(string $id): bool => !$this->isProtectedDependency($id);
         do {
             foreach ($this->delegators->deferredDependencies() as $dependencyId) {
@@ -502,7 +501,7 @@ final class Container implements
                     $pending[$dependencyId] = true;
                     continue;
                 }
-                unset($pending[$dependencyId], $owned[$dependencyId]);
+                unset($pending[$dependencyId]);
                 do {
                     $revision = $this->externalContainers->revision ?? 0;
                     $owner = $this->externalContainers?->findOwning($dependencyId, $mayInspect);
@@ -515,9 +514,7 @@ final class Container implements
                     $pending[$dependencyId] = true;
                     continue;
                 }
-                if ($owner !== null) {
-                    $owned[$dependencyId] = $dependencyId;
-                } elseif ($container->has($dependencyId)) {
+                if ($owner === null && $container->has($dependencyId)) {
                     $candidates[] = $dependencyId;
                 }
                 if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
@@ -545,28 +542,6 @@ final class Container implements
                 }
                 if ($owner === null) {
                     $dependencies[] = $dependencyId;
-                }
-            }
-            // A callback for another dependency can relinquish an earlier owner,
-            // even without changing registry membership. The candidate has not
-            // been queried for those IDs yet, so resume their inspection if needed.
-            foreach ($owned as $dependencyId) {
-                if ($this->isProtectedDependency($dependencyId)) {
-                    $pending[$dependencyId] = true;
-                    unset($owned[$dependencyId]);
-                    continue;
-                }
-                $owner = $this->externalContainers?->findOwning($dependencyId, $mayInspect);
-                if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
-                    return [];
-                }
-                if ($this->isProtectedDependency($dependencyId)) {
-                    $pending[$dependencyId] = true;
-                    unset($owned[$dependencyId]);
-                    continue;
-                }
-                if ($owner === null) {
-                    unset($owned[$dependencyId], $inspected[$dependencyId]);
                 }
             }
             // A later callback can make a skipped alias externally eligible.
