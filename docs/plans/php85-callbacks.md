@@ -355,7 +355,7 @@ An isolated CLI built from that stable archive reports `PHP_VERSION=8.5.13`. On 
 
 **Minimum verified platform for these forms: PHP 8.5.13.** E1 no longer blocks their support declaration on that runtime. PHP 8.5.8 and 8.5.12 remain documented affected controls; the Composer package requirement remains `^8.4`. DI continues to use native lexical scope without rebinding or emulation. Capture-free inline static closures and fully qualified public-helper references remain alternatives on affected engines.
 
-The [CI `native-trait-callables` job](../../.github/workflows/ci.yml) runs the existing native acceptance command on exactly PHP 8.5.13 and checks the binary version before execution. It needs neither Composer nor DI. This regression belongs to the affected feature's support promise; ordinary `composer check` remains usable on PHP 8.4.
+The [CI `native-trait-callables` job](../../.github/workflows/ci.yml) builds a minimal CLI from the official PHP 8.5.13 archive with the pinned SHA256, checks the actual binary version, then runs the existing native acceptance command by absolute binary path. The source build avoids a package installer silently supplying another patch version. It needs neither Composer nor DI. This regression belongs to the affected feature's support promise; ordinary `composer check` remains usable on PHP 8.4.
 
 The command's JSON deliberately leaves `release_provenance_verified` and `tagged_source_verified` false: the runner cannot establish those facts. The independent archive/tag verification above provides that evidence. Do not rewrite raw runner output to claim checks it did not perform.
 
