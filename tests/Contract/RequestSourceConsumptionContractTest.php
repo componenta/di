@@ -184,10 +184,11 @@ final class RevealHandler implements ParameterAttributeHandlerInterface
     }
 }
 
-test('an attribute constructor can reveal a source without exposing mapped data to pending handlers', function (bool $uncached): void {
+test('an attribute constructor can reveal a source without exposing mapped data to pending handlers', function (bool $uncached, bool $missingMetadataFirst): void {
     $source = 'ConstructorSource_' . bin2hex(random_bytes(5));
     $target = target(sprintf(
-        '#[%s("trusted"), Reveal(%s::class), \\Componenta\\DI\\Attribute\\Transform(OBSERVER)] string $role',
+        '#[%s%s("trusted"), Reveal(%s::class), \\Componenta\\DI\\Attribute\\Transform(OBSERVER)] string $role',
+        $missingMetadataFirst ? 'UnavailableMetadata, ' : '',
         $source,
         $source,
     ));
@@ -204,7 +205,8 @@ test('an attribute constructor can reveal a source without exposing mapped data 
         ->and(Observation::$values)->toBe([])
         ->and(Observation::$constructed)->toBe(0)
         ->and(Observation::$invoked)->toBe(0);
-})->with(['cached plans' => false, 'non-memoized plans' => true]);
+})->with(['cached plans' => false, 'non-memoized plans' => true])
+    ->with(['source first' => false, 'unavailable metadata first' => true]);
 
 test('unrelated late metadata preserves custom handler arguments and ordinary mapped values', function (bool $uncached): void {
     $metadata = 'NeutralMetadata_' . bin2hex(random_bytes(5));
