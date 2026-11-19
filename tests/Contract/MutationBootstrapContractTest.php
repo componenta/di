@@ -64,3 +64,71 @@ test('mutation bootstrap applies function substitutions before Composer can load
         }
     }
 });
+
+test('native cold fixtures apply inherited mutation substitutions without warming collaborators', function (string $target, string $fixture, ?string $scenario): void {
+    $mutationActive = getenv('PEST_MUTATION_TESTING') !== false;
+    if ($mutationActive) {
+        // Symfony Process needs native file locks while managing child pipes on Windows.
+        StreamWrapper::disable();
+    }
+    try {
+        $packageDirectory = dirname(__DIR__, 2);
+        $original = realpath($packageDirectory . '/src/' . $target);
+        if ($original === false) {
+            throw new RuntimeException('Cannot locate the native child mutation target.');
+        }
+        $replacement = tempnam(sys_get_temp_dir(), 'di-child-mutation-');
+        if ($replacement === false) {
+            throw new RuntimeException('Cannot create the native child mutation fixture.');
+        }
+
+        try {
+            file_put_contents($replacement, "<?php throw new RuntimeException('DI_NATIVE_CHILD_MUTATION_SENTINEL');\n");
+            $command = [
+                PHP_BINARY,
+                '-n',
+                $packageDirectory . '/tests/Fixtures/' . $fixture,
+                $packageDirectory . '/vendor/autoload.php',
+                $packageDirectory . '/src',
+            ];
+            if ($scenario !== null) {
+                $command[] = $scenario;
+            }
+
+            $ordinary = new Process($command, $packageDirectory, [
+                'PEST_MUTATION_TESTING' => false,
+                'PEST_MUTATION_FILE' => false,
+            ]);
+            $ordinary->run();
+            expect($ordinary->getExitCode())->toBe(0, $ordinary->getOutput() . $ordinary->getErrorOutput());
+
+            $control = new Process($command, $packageDirectory, [
+                'PEST_MUTATION_TESTING' => $original,
+                'PEST_MUTATION_FILE' => $original,
+            ]);
+            $control->run();
+            expect($control->getExitCode())->toBe(0, $control->getOutput() . $control->getErrorOutput())
+                ->and($control->getOutput())->toBe($ordinary->getOutput())
+                ->and($control->getErrorOutput())->toBe('');
+
+            $mutated = new Process($command, $packageDirectory, [
+                'PEST_MUTATION_TESTING' => $original,
+                'PEST_MUTATION_FILE' => $replacement,
+            ]);
+            $mutated->run();
+            expect($mutated->getExitCode())->toBeGreaterThan(0, $mutated->getOutput() . $mutated->getErrorOutput())
+                ->and($mutated->getOutput() . $mutated->getErrorOutput())->toContain('DI_NATIVE_CHILD_MUTATION_SENTINEL');
+        } finally {
+            unlink($replacement);
+        }
+    } finally {
+        if ($mutationActive) {
+            StreamWrapper::enable();
+        }
+    }
+})->with(['class' => 'Container.php', 'Composer function file' => 'Internal/functions.php'])
+    ->with([
+        'bootstrap collaborator' => ['ContainerBootstrapCold.php', null],
+        'runtime mutation collaborator' => ['ContainerMutationCold.php', 'alias'],
+        'construction retry collaborator' => ['ContainerConstructionRetry.php', 'cache'],
+    ]);

@@ -11,6 +11,7 @@ use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
+use Componenta\DI\Tests\Support\SubprocessAutoload;
 use LogicException;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -19,7 +20,8 @@ use Throwable;
 if (!isset($argv[1], $argv[2])) {
     throw new LogicException('Expected the autoload and source paths.');
 }
-require $argv[1];
+require_once dirname(__DIR__) . '/Support/SubprocessAutoload.php';
+SubprocessAutoload::load($argv[1]);
 $source = realpath($argv[2]);
 $containerFile = new ReflectionClass(Container::class)->getFileName();
 if ($source === false || $containerFile === false || realpath($containerFile) !== $source . DIRECTORY_SEPARATOR . 'Container.php') {

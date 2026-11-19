@@ -14,7 +14,7 @@ use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
-use Composer\Autoload\ClassLoader;
+use Componenta\DI\Tests\Support\SubprocessAutoload;
 use LogicException;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -22,10 +22,8 @@ use ReflectionClass;
 if (!isset($argv[1], $argv[2], $argv[3])) {
     throw new LogicException('Expected the autoload path, source path and mutation scenario.');
 }
-$loader = require $argv[1];
-if (!$loader instanceof ClassLoader) {
-    throw new LogicException('Expected the selected checkout autoloader.');
-}
+require_once dirname(__DIR__) . '/Support/SubprocessAutoload.php';
+$loader = SubprocessAutoload::load($argv[1]);
 $source = realpath($argv[2]);
 $containerFile = new ReflectionClass(Container::class)->getFileName();
 if ($source === false || $containerFile === false || realpath($containerFile) !== $source . DIRECTORY_SEPARATOR . 'Container.php') {
