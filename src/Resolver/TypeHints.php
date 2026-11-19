@@ -160,6 +160,10 @@ final class TypeHints
     /** @param ReflectionClass<object>|null $declaringClass */
     private static function matchesCallable(mixed $value, ?ReflectionClass $declaringClass): bool
     {
+        if ($value instanceof Closure) {
+            return true;
+        }
+
         // PHP checks userland callable parameters in the receiving declaration's
         // scope. Global and internal targets must not inherit TypeHints' access.
         $scope = $declaringClass?->isUserDefined() === true ? $declaringClass->getName() : null;

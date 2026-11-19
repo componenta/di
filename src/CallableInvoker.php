@@ -36,6 +36,10 @@ final class CallableInvoker implements CallableInvokerInterface
      */
     public function call(mixed $callable, array $params = []): mixed
     {
+        if ($callable instanceof Closure) {
+            return call_user_func_array($callable, $params);
+        }
+
         // Shape validation does not resolve names or invoke autoloaders.
         if (!is_callable($callable, syntax_only: true)) {
             throw InvalidCallableException::forValue($callable);
