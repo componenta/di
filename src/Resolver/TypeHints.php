@@ -135,13 +135,23 @@ final class TypeHints
         }
 
         if ($type instanceof ReflectionUnionType) {
+            $callableType = null;
             foreach ($type->getTypes() as $nested) {
+                // Native unions accept ordinary types before inspecting callable
+                // syntax, which can autoload application code unnecessarily.
+                if ($nested instanceof ReflectionNamedType
+                    && $nested->isBuiltin()
+                    && $nested->getName() === 'callable'
+                ) {
+                    $callableType = $nested;
+                    continue;
+                }
                 if (self::matches($nested, $value, $declaringClass)) {
                     return true;
                 }
             }
 
-            return false;
+            return $callableType !== null && self::matches($callableType, $value, $declaringClass);
         }
 
         if ($type instanceof ReflectionIntersectionType) {
