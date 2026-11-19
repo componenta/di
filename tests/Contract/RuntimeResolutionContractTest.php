@@ -12,6 +12,8 @@ use Componenta\Config\Environment;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Exception\ResolutionException;
+use PHPUnit\Framework\Assert;
 
 final class RuntimeFactoryProduct
 {
@@ -112,6 +114,38 @@ test('get is shared while make creates a fresh factory result with runtime param
         ->and($shared->capture)->toBe($capture)
         ->and($fresh->capture)->toBe($capture);
 });
+
+test('a non-object make failure permits retry and preserves the shared factory value', function (mixed $result, string $type): void {
+    $calls = 0;
+    $container = runtimeContainer([
+        ConfigKey::FACTORIES => [
+            'factory.result' => static function (ContainerValue $value, array $params) use ($result, &$calls): mixed {
+                ++$calls;
+
+                return $params['result'] ?? $result;
+            },
+        ],
+    ]);
+    expect($container->get('factory.result'))->toBe($result);
+
+    try {
+        $container->make('factory.result');
+        Assert::fail('make() must reject a non-object factory result.');
+    } catch (ResolutionException $failure) {
+        expect($failure->serviceId)->toBe('factory.result')
+            ->and($failure->actualType)->toBe($type)
+            ->and($failure->getPrevious())->toBeNull();
+    }
+
+    $fresh = new \stdClass();
+    expect($container->make('factory.result', ['result' => $fresh]))->toBe($fresh)
+        ->and($container->get('factory.result'))->toBe($result)
+        ->and($calls)->toBe(3);
+})->with([
+    'null result' => [null, 'null'],
+    'false result' => [false, 'bool'],
+    'array result' => [['value' => 'shared'], 'array'],
+]);
 
 test('class definitions invokables aliases and delegators share one ordered resolver path', function (): void {
     $container = runtimeContainer([
