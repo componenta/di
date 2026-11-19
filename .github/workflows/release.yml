@@ -116,6 +116,22 @@ jobs:
             exit 1
           fi
 
+          remote_tag="$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+          tag_target=''
+          tag_peeled_target=''
+          while IFS=$'\t' read -r target reference; do
+            if [[ "$reference" == "refs/tags/$tag" ]]; then
+              tag_target="$target"
+            elif [[ "$reference" == "refs/tags/$tag^{}" ]]; then
+              tag_peeled_target="$target"
+            fi
+          done <<< "$remote_tag"
+          tag_target="${tag_peeled_target:-$tag_target}"
+          if [[ -n "$tag_target" && "$tag_target" != "$GITHUB_SHA" ]]; then
+            echo "Release tag $tag points to $tag_target, expected tested commit $GITHUB_SHA." >&2
+            exit 1
+          fi
+
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists."
             exit 0
