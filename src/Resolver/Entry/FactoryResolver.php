@@ -220,6 +220,15 @@ final class FactoryResolver implements DefinitionResolverInterface
 
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
+            if (is_array($factory)) {
+                // A service can return caller-owned routing references. Capture
+                // this invocation before validation can autoload application code.
+                $snapshot = [];
+                foreach ($factory as $key => $value) {
+                    $snapshot[$key] = $value;
+                }
+                $factory = $snapshot;
+            }
         } elseif (is_array($factory)
             && !is_callable($factory)
             && isset($factory[0])
