@@ -209,7 +209,8 @@ final class ObjectCreationContext
             );
         }
 
-        return $property->isInitialized($entry)
+        // A getter can compute a value before its backing slot is initialized.
+        return $property->isInitialized($entry) || $property->hasHook(PropertyHookType::Get)
             ? $property->getValue($entry)
             : null;
     }
