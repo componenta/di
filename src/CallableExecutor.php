@@ -127,10 +127,20 @@ final class CallableExecutor implements CallableExecutorInterface
         if (is_array($callable) && !method_exists($callable[0], (string) $callable[1])) {
             return null;
         }
-        if (is_string($callable) && str_contains($callable, '::')) {
-            [$class, $method] = explode('::', $callable, 2);
+        if (is_string($callable) && ($separator = strrpos($callable, '::')) !== false) {
+            $class = substr($callable, 0, $separator);
+            $method = substr($callable, $separator + 2);
             if (!method_exists($class, $method)) {
                 return null;
+            }
+            if (str_contains($class, '::')) {
+                // Normalize only reflection's input for a native class alias;
+                // invocation and the cache key keep the original callable.
+                $metadataCallable = [$class, $method];
+                if (!is_callable($metadataCallable)) {
+                    return null;
+                }
+                $callable = $metadataCallable;
             }
         }
 
