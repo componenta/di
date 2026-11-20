@@ -77,3 +77,94 @@ test('a failing unmodified worker prevents mutation scores from being accepted',
         }
     }
 });
+
+test('parallel fallback drains every worker before waiting for another worker to finish', function (
+    string $stream,
+    int $replacementValue,
+    MutationTestResult $expected,
+): void {
+    $active = getenv('PEST_MUTATION_TESTING') !== false;
+    if ($active) {
+        StreamWrapper::disable();
+    }
+    $directory = sys_get_temp_dir() . '/mutation-batch-' . bin2hex(random_bytes(8));
+    if (!mkdir($directory)) {
+        throw new \RuntimeException('Cannot create mutation batch fixtures.');
+    }
+    $source = $directory . '/original.php';
+    $waiting = $directory . '/waiting.php';
+    $writing = $directory . '/writing.php';
+    $runs = $directory . '/runs';
+    $reports = $directory . '/reports';
+
+    try {
+        file_put_contents($source, '<?php return 42;');
+        file_put_contents($waiting, '<?php while (!file_exists(__DIR__ . "/ready")) { usleep(1000); } return 42;');
+        file_put_contents($writing, '<?php fwrite(' . $stream . ', str_repeat("x", 2 * 1024 * 1024));'
+            . 'file_put_contents(__DIR__ . "/ready", "ready"); return ' . $replacementValue . ';');
+        $waitingTest = new MutationTest(new Mutation(new SplFileInfo($source, '', ''), 'waiting', 'fixture', 1, 1, '', $waiting));
+        $writingTest = new MutationTest(new Mutation(new SplFileInfo($source, '', ''), 'writing', 'fixture', 1, 1, '', $writing));
+        $command = [PHP_BINARY, '-n', '-r',
+            'file_put_contents($argv[1], ".", FILE_APPEND); exit((require getenv("PEST_MUTATION_FILE")) === 42 ? 0 : 1);',
+            $runs,
+        ];
+        $fallback = new MutationFallback($command, $directory, timeout: 5.0, reportDirectory: $reports);
+
+        $fallback->prime([$waitingTest, $writingTest], 2);
+        foreach ([$writingTest, $waitingTest, $writingTest] as $test) {
+            $fallback->notify(new Uncovered($test));
+        }
+
+        expect($waitingTest->result())->toBe(MutationTestResult::Untested)
+            ->and($writingTest->result())->toBe($expected)
+            ->and(file_get_contents($runs))->toBe('..')
+            ->and(file_get_contents($reports . '/waiting.log'))->toBe('exit=0' . PHP_EOL)
+            ->and(file_get_contents($reports . '/writing.log'))->toBe(
+                'exit=' . ($replacementValue === 42 ? 0 : 1) . PHP_EOL . str_repeat('x', 2 * 1024 * 1024),
+            );
+    } finally {
+        foreach (glob($reports . '/*') ?: [] as $path) {
+            unlink($path);
+        }
+        if (is_dir($reports)) {
+            rmdir($reports);
+        }
+        foreach (glob($directory . '/*') ?: [] as $path) {
+            unlink($path);
+        }
+        rmdir($directory);
+        if ($active) {
+            StreamWrapper::enable();
+        }
+    }
+})->with(['stdout' => 'STDOUT', 'stderr' => 'STDERR'])->with([
+    'behavior preserved' => [42, MutationTestResult::Untested],
+    'behavior changed' => [41, MutationTestResult::Tested],
+]);
+
+test('parallel fallback still reports a worker that exceeds its own timeout', function (): void {
+    $active = getenv('PEST_MUTATION_TESTING') !== false;
+    if ($active) {
+        StreamWrapper::disable();
+    }
+    $source = tempnam(sys_get_temp_dir(), 'mutation-timeout-');
+    if ($source === false) {
+        throw new \RuntimeException('Cannot create the timeout fixture.');
+    }
+
+    try {
+        file_put_contents($source, '<?php while (true) { usleep(1000); }');
+        $test = new MutationTest(new Mutation(new SplFileInfo($source, '', ''), 'timeout', 'fixture', 1, 1, '', $source));
+        $fallback = new MutationFallback([PHP_BINARY, '-n', '-r', 'require getenv("PEST_MUTATION_FILE");'], __DIR__, timeout: 0.05);
+
+        $fallback->prime([$test], 1);
+        $fallback->notify(new Uncovered($test));
+
+        expect($test->result())->toBe(MutationTestResult::Timeout);
+    } finally {
+        unlink($source);
+        if ($active) {
+            StreamWrapper::enable();
+        }
+    }
+});

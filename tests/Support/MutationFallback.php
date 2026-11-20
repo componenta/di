@@ -48,8 +48,26 @@ final class MutationFallback implements UncoveredSubscriber
                     $process->start();
                     $running[] = [$test, $process];
                 }
-                foreach ($running as [$test, $process]) {
-                    $this->primed[$test->getId()] = $this->finish($test, $process);
+                while ($running !== []) {
+                    foreach ($running as $index => [$test, $process]) {
+                        try {
+                            // Polling drains both output pipes without waiting for
+                            // one worker while another is blocked on a full pipe.
+                            if ($process->isRunning()) {
+                                $process->checkTimeout();
+                                continue;
+                            }
+                            $result = $this->finish($test, $process);
+                        } catch (ProcessTimedOutException) {
+                            $result = MutationTestResult::Timeout;
+                            $this->report($test->getId(), $process);
+                        }
+                        $this->primed[$test->getId()] = $result;
+                        unset($running[$index]);
+                    }
+                    if ($running !== []) {
+                        usleep(1000);
+                    }
                 }
             } finally {
                 foreach ($running as [$_test, $process]) {
