@@ -4,6 +4,8 @@
 
 **Implementation status (2026-11-14):** the central binding table, registration-free strategies, snapshots, attachment rules and complete mutation retirement are implemented on `refactor/di6-definitions-callbacks` in commit `87d7a775`. This is unreleased next-major work; the compatible 5.x line retains its earlier architecture. See the [migration guide](../migrations/di6-definitions.md) and [implementation evidence](https://github.com/componenta/di/blob/80cb69a59f001a7d9c49af6e254ff3f58ffa8504/docs/audit/2026-11-14-di6-refactoring.md) for verification and remaining gates. The baseline analysis below describes the audited 5.x implementation. The normative contract and acceptance criteria remain the implementation target.
 
+The open [dynamic external-provider ownership report](external-provider-ownership.md) is a separate contract question. The completed local binding/retirement design does not supply a revision for state hidden inside an external PSR-11 provider.
+
 ## Objective and evidence
 
 Replacing an explicit definition must leave one authoritative registration and stop retaining its obsolete configuration. All four public registration mutations must finish publication and affected cache invalidation before releasing retired configuration, service values or resolved delegator callables. Throwing destructors must not leave shared `get()` and fresh `make()` using different registrations or leave an alias family partly invalidated.

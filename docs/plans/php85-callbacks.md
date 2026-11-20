@@ -6,6 +6,8 @@
 
 The compatible v5.0.6 work stays on the 5.x line with PHP `^8.4`. This major branch does not change that release. The DI 6 implementation runs on PHP 8.4; writing inline closures or first-class callable references directly in attribute arguments requires PHP 8.5. Existing `Init` keeps its public API and accepts supported native expressions on PHP 8.5. Baseline descriptions below refer to the audited 5.x implementation.
 
+The open [legacy relative-callable context report](relative-callable-context.md) concerns deprecated string/array values and invocation context. It is separate from the implemented native closure-expression support and the satisfied E1 platform gate.
+
 ## 1. Goal and recovered intent
 
 Allow local, typed behavior to be written directly in PHP attributes while retaining one parameter-resolution pipeline, one object lifecycle, and native PHP callback scope. Add deterministic autowiring of simple union types as an independent DI 6 feature.

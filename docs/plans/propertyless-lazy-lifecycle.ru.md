@@ -4,6 +4,8 @@
 
 [English version](propertyless-lazy-lifecycle.md)
 
+Конкурентный доступ из разных Fiber к одному уже общему lazy-объекту описан как отдельная [граница нативной платформы](native-lazy-fiber.ru.md). Завершённая capability-проверка D1/A не добавляет синхронизацию такого объекта.
+
 ## 1. Подтверждённый дефект и его значение
 
 Привязанные к проверенному commit исходные границы: [`ProxyFactory::makeLazy()` L21](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/ProxyFactory.php#L21) и [`makeProxy()` L40](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/ProxyFactory.php#L40); deferred-контракты [`LazyObjectFactoryInterface` L20](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/LazyObjectFactoryInterface.php#L20) и [`VirtualProxyFactoryInterface` L20](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/VirtualProxyFactoryInterface.php#L20); отложенный lifecycle [`ObjectPipeline::lazy()` L296](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Object/ObjectPipeline.php#L296) и [`proxy()` L343](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Object/ObjectPipeline.php#L343); фабрика продукта [`MakeHandler::create()` L213](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Resolver/Attribute/Handler/MakeHandler.php#L213); делегирование выбранному адаптеру [`Container::makeLazy()` L293](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Container.php#L293) и [`makeProxy()` L298](https://github.com/componenta/di/blob/897f8b10ca6537e7b2f96d20b2e00ed52571ff6f/src/Container.php#L298).

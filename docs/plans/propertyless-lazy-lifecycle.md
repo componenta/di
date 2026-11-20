@@ -4,6 +4,8 @@
 
 [Русская версия](propertyless-lazy-lifecycle.ru.md)
 
+Concurrent access to one already shared lazy object from different Fibers is a separate [native runtime boundary](native-lazy-fiber.md). The completed D1/A capability check does not add synchronization of that object.
+
 ## 1. Confirmed defect and significance
 
 At the audited baseline, `ProxyFactory::makeLazy()` and `makeProxy()` returned the result of PHP's native allocation methods without checking whether the returned object was actually lazy. For native-eligible target classes, PHP deliberately returns an ordinary object when the class has no backed instance property: this includes classes with no properties, only static properties, or only virtual property hooks. The initializer or backing factory is then never called. Calling `ReflectionClass::initializeLazyObject()` afterward does not repair that result.
