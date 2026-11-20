@@ -69,10 +69,11 @@ final class BootstrapResolutionGuard
     /** @param list<ParameterResolverInterface> $resolvers */
     public function finish(array $resolvers): void
     {
-        $this->active = false;
         try {
             do {
                 $revision = $this->plans->revision;
+                $attributeCount = count($this->attributeUses);
+                $parameterCount = count($this->parameterUses);
                 foreach ($this->attributeUses as $use) {
                     $current = CompletedAttributeGuard::semantics($this->plans->build($use['target']), $use['phase']);
                     if ($current !== $use['usages']) {
@@ -98,10 +99,15 @@ final class BootstrapResolutionGuard
                         }
                     }
                 }
-                // Discovery and immutable resolver classification can autoload
-                // semantics on an earlier target. Recheck proof, never replay work.
-            } while ($revision !== $this->plans->revision);
+                // Discovery and immutable classification can resolve new targets.
+                // Poll before counting their uses: autoload can append records
+                // without changing the revision seen by this poll's snapshot.
+                $nextRevision = $this->plans->revision;
+            } while ($revision !== $nextRevision
+                || $attributeCount !== count($this->attributeUses)
+                || $parameterCount !== count($this->parameterUses));
         } finally {
+            $this->active = false;
             $this->attributeUses = [];
             $this->parameterUses = [];
         }

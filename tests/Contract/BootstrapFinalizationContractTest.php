@@ -26,6 +26,11 @@ final class BootstrapFinalizationExtension {}
 #[Attribute(Attribute::TARGET_PROPERTY)]
 final class BootstrapFinalizationUnrelatedMetadata {}
 
+final class BootstrapFinalizationCapture
+{
+    public ?Container $container = null;
+}
+
 abstract class BootstrapFinalizationState
 {
     public static int $constructions = 0;
@@ -40,11 +45,12 @@ abstract class BootstrapFinalizationState
 
 final readonly class BootstrapFinalizationClassifier implements ParameterResolverInterface
 {
-    public function __construct(private string $marker) {}
+    public function __construct(private string $marker, private ?string $declaringClass = null) {}
 
     public function supports(ParameterTarget $target): bool
     {
-        return $target->reflection->getAttributes($this->marker, ReflectionAttribute::IS_INSTANCEOF) !== [];
+        return ($this->declaringClass === null || $target->reflection->getDeclaringClass()?->getName() === $this->declaringClass)
+            && $target->reflection->getAttributes($this->marker, ReflectionAttribute::IS_INSTANCEOF) !== [];
     }
 
     public function resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): ?array
@@ -142,3 +148,154 @@ test('bootstrap finalization permits unrelated metadata loaded by later resolver
         spl_autoload_unregister($autoload);
     }
 });
+
+test('bootstrap finalization records dependencies first created during the final proof', function (string $kind, bool $changesSemantics): void {
+    BootstrapFinalizationState::$constructions = 0;
+    $suffix = bin2hex(random_bytes(5));
+    $attribute = 'ReentrantFinalizationAttribute_' . $suffix;
+    $target = 'ReentrantFinalizationTarget_' . $suffix;
+    $marker = __NAMESPACE__ . '\\ReentrantFinalizationMarker_' . $suffix;
+    $body = $kind === 'property'
+        ? sprintf('#[%s] public ?\\stdClass $dependency = null;', $attribute)
+        : sprintf('public function __construct(#[%s("selected")] string $value = "fallback") { parent::__construct($value); }', $attribute);
+    eval(sprintf('namespace %s; final class %s extends BootstrapFinalizationState { %s }', __NAMESPACE__, $target, $body));
+    $class = __NAMESPACE__ . '\\' . $target;
+    $captured = new BootstrapFinalizationCapture();
+    $loads = 0;
+    $autoload = static function (string $requested) use ($marker, $attribute, $class, $kind, $changesSemantics, $captured, &$loads): void {
+        if ($requested !== $marker) {
+            return;
+        }
+        ++$loads;
+        eval(sprintf('namespace %s; #[\\Attribute(\\Attribute::TARGET_PARAMETER)] final class %s {}', __NAMESPACE__, substr($marker, strrpos($marker, '\\') + 1)));
+        $di = $captured->container;
+        if (!$di instanceof Container) {
+            throw new LogicException('Expected the bootstrapping container.');
+        }
+        $di->get($class);
+        $alias = $changesSemantics
+            ? ($kind === 'property' ? Inject::class : EntryId::class)
+            : BootstrapFinalizationUnrelatedMetadata::class;
+        class_alias($alias, __NAMESPACE__ . '\\' . $attribute);
+    };
+    spl_autoload_register($autoload);
+
+    try {
+        $config = [
+            ConfigKey::SERVICES => ['selected' => 'injected'],
+            ConfigKey::ATTRIBUTE_DEFINITIONS => [
+                static function (Container $di) use ($captured): AttributeDefinition {
+                    $captured->container = $di;
+                    $di->call(static fn(string $seed = 'seed'): string => $seed);
+                    return new AttributeDefinition(BootstrapFinalizationExtension::class);
+                },
+            ],
+            ConfigKey::PARAMETER_RESOLVERS => [500 => new BootstrapFinalizationClassifier($marker)],
+        ];
+        $build = static fn() => container($config);
+
+        if ($changesSemantics) {
+            expect($build)->toThrow(InvalidConfigurationException::class, $class);
+        } else {
+            $di = $build();
+            $cached = $di->get($class);
+            if (!$cached instanceof BootstrapFinalizationState) {
+                throw new LogicException('Expected the bootstrap dependency.');
+            }
+            expect($di->get($class))->toBe($cached)
+                ->and($cached->dependency)->toBeNull()
+                ->and($cached->value)->toBe('fallback');
+            $fresh = $di->make($class);
+            if (!$fresh instanceof BootstrapFinalizationState) {
+                throw new LogicException('Expected the fresh dependency.');
+            }
+            expect($fresh)->not->toBe($cached)
+                ->and($fresh->dependency)->toBeNull()
+                ->and($fresh->value)->toBe('fallback');
+        }
+
+        expect(BootstrapFinalizationState::$constructions)->toBe($changesSemantics ? 1 : 2)
+            ->and($loads)->toBe(1);
+    } finally {
+        spl_autoload_unregister($autoload);
+    }
+})->with(['property', 'parameter'])->with([true, false]);
+
+test('bootstrap finalization rechecks dependencies discovered by the final availability poll', function (string $kind, bool $changesSemantics): void {
+    BootstrapFinalizationState::$constructions = 0;
+    $suffix = bin2hex(random_bytes(5));
+    $attribute = 'PollFinalizationAttribute_' . $suffix;
+    $target = 'PollFinalizationTarget_' . $suffix;
+    $seed = __NAMESPACE__ . '\\PollFinalizationSeed_' . $suffix;
+    $pending = __NAMESPACE__ . '\\PollFinalizationPending_' . $suffix;
+    $trigger = __NAMESPACE__ . '\\PollFinalizationTrigger_' . $suffix;
+    $body = $kind === 'property'
+        ? sprintf('#[%s] public ?\\stdClass $dependency = null;', $attribute)
+        : sprintf('public function __construct(#[%s("selected")] string $value = "fallback") { parent::__construct($value); }', $attribute);
+    eval(sprintf('namespace %s; final class %s extends BootstrapFinalizationState { %s }', __NAMESPACE__, $target, $body));
+    eval(sprintf('namespace %s; #[PollFinalizationPending_%s] final class PollFinalizationSeed_%s { public function __construct(public string $value = "seed") {} }', __NAMESPACE__, $suffix, $suffix));
+    $class = __NAMESPACE__ . '\\' . $target;
+    $captured = new BootstrapFinalizationCapture();
+    $armed = false;
+    $loads = 0;
+    $autoload = static function (string $requested) use ($trigger, $pending, $attribute, $class, $kind, $changesSemantics, $captured, &$armed, &$loads): void {
+        if ($requested === $trigger) {
+            eval(sprintf('namespace %s; #[\\Attribute(\\Attribute::TARGET_PARAMETER)] final class %s {}', __NAMESPACE__, substr($trigger, strrpos($trigger, '\\') + 1)));
+            $armed = true;
+        }
+        if ($requested !== $pending || !$armed || $loads !== 0) {
+            return;
+        }
+        ++$loads;
+        $di = $captured->container;
+        if (!$di instanceof Container) {
+            throw new LogicException('Expected the bootstrapping container.');
+        }
+        $di->get($class);
+        $alias = $changesSemantics
+            ? ($kind === 'property' ? Inject::class : EntryId::class)
+            : BootstrapFinalizationUnrelatedMetadata::class;
+        class_alias($alias, __NAMESPACE__ . '\\' . $attribute);
+        // The original marker deliberately remains unavailable. Only the new
+        // dependency reveals metadata after this poll's pending-class snapshot.
+    };
+    spl_autoload_register($autoload);
+
+    try {
+        $config = [
+            ConfigKey::SERVICES => ['selected' => 'injected'],
+            ConfigKey::ATTRIBUTE_DEFINITIONS => [
+                static function (Container $di) use ($seed, $captured): AttributeDefinition {
+                    $captured->container = $di;
+                    $di->get($seed);
+                    return new AttributeDefinition(BootstrapFinalizationExtension::class);
+                },
+            ],
+            ConfigKey::PARAMETER_RESOLVERS => [500 => new BootstrapFinalizationClassifier($trigger, $seed)],
+        ];
+        $build = static fn() => container($config);
+
+        if ($changesSemantics) {
+            expect($build)->toThrow(InvalidConfigurationException::class, $class);
+        } else {
+            $di = $build();
+            $cached = $di->get($class);
+            $fresh = $di->make($class);
+            if (!$cached instanceof BootstrapFinalizationState || !$fresh instanceof BootstrapFinalizationState) {
+                throw new LogicException('Expected bootstrap and fresh dependencies.');
+            }
+            expect($di->get($class))->toBe($cached)
+                ->and($fresh)->not->toBe($cached)
+                ->and($cached->dependency)->toBeNull()
+                ->and($fresh->dependency)->toBeNull()
+                ->and($cached->value)->toBe('fallback')
+                ->and($fresh->value)->toBe('fallback');
+        }
+
+        expect(BootstrapFinalizationState::$constructions)->toBe($changesSemantics ? 1 : 2)
+            ->and($loads)->toBe(1)
+            ->and(class_exists($pending, false))->toBeFalse();
+    } finally {
+        spl_autoload_unregister($autoload);
+    }
+})->with(['property', 'parameter'])->with([true, false]);
