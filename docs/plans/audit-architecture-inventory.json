@@ -4,9 +4,9 @@
   "reference_head": "43c464187f80c95802fc36191350ae68b70a469e",
   "historical_tree": "80cb69a59f001a7d9c49af6e254ff3f58ffa8504",
   "historical_directory_removed_in": "79890e0",
-  "review_kind": "architecture-document inventory; original preservation ran no new source audit/tests/benchmarks; pass23 policy evidence is attributed separately",
+  "review_kind": "architecture-document inventory; original preservation ran no new source audit/tests/benchmarks; pass23 policy evidence is attributed separately; pass24 instance-callable owner-precedence evidence is attributed in its separate supplement",
   "historical_markdown_count": 31,
-  "open_topic_count": 10,
+  "open_topic_count": 11,
   "open_report_count": 8,
   "open_topics": [
     {
@@ -60,6 +60,16 @@
       "action_ru": "Описать границу поддержки и предпочесть полные callable/closures. Полный нативный паритет — отдельный выбор потребителя: нужны контекст lexical/called-class/receiver конкретного вызова и нативные controls. Установленная регрессия DI 6 или нарушение обещанной поддержки не показаны."
     },
     {
+      "id": "instance_callable_separator_precedence",
+      "title_en": "Instance-callable shorthand owner precedence for separator-bearing class aliases",
+      "title_ru": "Приоритет владельца строкового instance-callable для class alias с разделителем",
+      "document": "relative-callable-context",
+      "status": "contract_decision",
+      "source": "Pass 24; baseline 802d2e572cc5aa507b3a61cb267a17d69572f669; native/DI controls on PHP 8.4.28 and 8.5.13; separate native-valid string fix 45eb1ab1400aba19a0662e0cd8ee4559ea0e85d8",
+      "action_en": "Preserve exact opaque service-ID precedence and existing qualified ancestor dispatch. Prefer explicit method arrays until owner parsing, loaded-name/autoload policy and delegator dependency invalidation are specified together. Probing an owner via get() can instantiate it and add callbacks; unconditional last-delimiter parsing can select another owner. No instance-shorthand policy is implemented by the separate native-valid string metadata fix.",
+      "action_ru": "Сохранить приоритет точного непрозрачного service ID и существующий qualified ancestor dispatch. Использовать явный method array, пока совместно не определены разбор владельца, политика loaded-name/autoload и инвалидация зависимостей delegator. Проба владельца через get() может создать объект и добавить callbacks; безусловный последний разделитель может выбрать другого владельца. Отдельная правка metadata native-valid строки не реализует политику instance-shorthand."
+    },
+    {
       "id": "standalone_api",
       "title_en": "Supported standalone creation/attribute/request APIs",
       "title_ru": "Поддерживаемые самостоятельные creation/attribute/request API",
@@ -81,7 +91,10 @@
       "evidence": {
         "pass": 23,
         "reference_head": "748357fa00c108ab5be0d29f46eb1185c547eb42",
-        "php_versions": ["8.4.28", "8.5.13"],
+        "php_versions": [
+          "8.4.28",
+          "8.5.13"
+        ],
         "phpstan_version": "2.3.5",
         "phpstan_level": "max",
         "runtime_defect_established": false,
@@ -810,5 +823,20 @@
     "production_tree": "971dc4709d472411e1f08b73f01700b976c9e096",
     "executions": 12,
     "architecture_implementation_selected": false
+  },
+  "pass24_supplement": {
+    "date": "2026-11-20",
+    "baseline": "802d2e572cc5aa507b3a61cb267a17d69572f669",
+    "report_en": "relative-callable-context.md",
+    "report_ru": "relative-callable-context.ru.md",
+    "topic": "instance_callable_separator_precedence",
+    "native_valid_callable_fix": "45eb1ab1400aba19a0662e0cd8ee4559ea0e85d8",
+    "runtimes": [
+      "8.4.28",
+      "8.5.13"
+    ],
+    "instance_shorthand_policy_implemented": false,
+    "prior_recheck_counts_unchanged": true,
+    "callable_cache_key_fix": "e85289b21e6bcc894a6fa54cd9b327fdca3d6840"
   }
 }

@@ -198,3 +198,123 @@ This matrix specifies future work. The historical seven-case diagnostic is evide
 | Performance | Compare unchanged ordinary call paths and selected legacy cases with identical settings; report measured overhead and avoid claiming an unmeasured speedup. |
 
 The plan has no dependency on dynamic external-provider ownership or a general object-lifecycle refactor. The decision is whether a specific deprecated compatibility requirement justifies carrying additional per-call context. Until that decision and proof exist, the ordinary implementation and its current scope/lifetime boundaries remain the baseline.
+
+## 8. Separate policy boundary: separator-bearing aliases in instance-method strings
+
+### Status and distinction from the earlier callable-value limitation
+
+**Added in pass 24, 2026-11-20: proposed; no instance-routing change selected.** PHP 8.4.28 and 8.5.13 both allow `class_alias()` to create a class name containing `::`. That creates a second compatibility question for the DI convenience form `Class::instanceMethod`. This section concerns **the target string resolved by `CallableResolver`**, whereas sections 1–7 concern a value supplied to another declaration's `callable` parameter. Neither question selects the other's policy.
+
+An already native-valid **static** method string is a narrower, independently fixable case: PHP interprets its final `::` as the method separator. The independent correction was published in [`45eb1ab`](https://github.com/componenta/di/commit/45eb1ab1400aba19a0662e0cd8ee4559ea0e85d8). The executor preserves that method's parameter metadata by splitting there and adapting only the reflection input when a class alias itself contains `::`. In that correction, the actual invocation string and existing cache key stay unchanged. [`CallableAliasedClassSeparatorContractTest`](../../tests/Contract/CallableAliasedClassSeparatorContractTest.php) protects native static controls, dependency injection, warm calls, magic arguments and exact service-ID precedence. This correction does not change `CallableResolver` or introduce a new precedence rule for instance shorthand.
+
+A second independent defect, corrected in [`e85289b`](https://github.com/componenta/di/commit/e85289b21e6bcc894a6fa54cd9b327fdca3d6840), concerned method-array cache keys. Concatenating owner and method with `::` allowed two distinct pairs to reuse a parameter plan after warming, changing supplied argument values. The class portion is now length-prefixed; [`CallableQualifiedCacheBoundaryContractTest`](../../tests/Contract/CallableQualifiedCacheBoundaryContractTest.php) checks both warm orders and class/object owners against native results. That correction changes only private key encoding and preserves invocation routing. It does not select an instance-string precedence policy.
+
+A class/instance-method string is not itself a valid native callable. DI can resolve its owner through the container and produce an object/method pair. The current convenience parser splits at the **first** delimiter. This supports an existing legacy qualified-method route such as `Child::Parent::run`, where the resulting native pair is `[$child, 'Parent::run']`. That pair is accepted with `E_DEPRECATED` on the recorded runtimes. An arbitrary `[$object, 'missing::tail']` with no valid qualifier is rejected by PHP; it is not a supported magic-method counterexample.
+
+The delimiter choice becomes ambiguous when a real alias named `Child::Parent` exists and identifies an unrelated class with a non-static `run()` method. Both container owners can be registered. Selecting the last delimiter because its prefix is a loaded class changes an already working target from the child service's parent method to the unrelated alias service. The original complete string is still native-invalid in this example, since the unrelated method is non-static; native static-callable precedence does not resolve this ambiguity.
+
+### Reproducible public witness
+
+Save this block as `instance-alias-routing.php` outside a checkout with development dependencies, then run `php instance-alias-routing.php /absolute/path/to/di`. It uses public container methods and records native deprecations without converting them into exceptions. All method bodies execute in the successful observations. The alias is an engine class alias; it is not the container's service-alias feature.
+
+```php
+<?php
+declare(strict_types=1);
+require $argv[1] . '/tests/bootstrap.php';
+
+class Audit24RoutingBase
+{
+    public function run(string $named = 'base'): array { return ['base', $named]; }
+}
+class Audit24RoutingChild extends Audit24RoutingBase {}
+class Audit24RoutingOther
+{
+    public function run(string $named = 'other'): array { return ['other', $named]; }
+}
+class Audit24RoutingTarget
+{
+    public function run(string $named = 'target'): array { return ['target', $named]; }
+}
+function routingObservation(Closure $operation): array
+{
+    $warnings = [];
+    set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+        $warnings[] = ['level' => $level, 'message' => $message];
+        return true;
+    });
+    try { return ['value' => $operation(), 'warnings' => $warnings]; }
+    catch (Throwable $error) { return ['error' => $error::class, 'message' => $error->getMessage(), 'warnings' => $warnings]; }
+    finally { restore_error_handler(); }
+}
+
+$container = (new Componenta\DI\Tests\Support\ContainerBuilder())->build();
+$child = new Audit24RoutingChild();
+$container->set(Audit24RoutingChild::class, $child);
+$qualifiedMethod = Audit24RoutingBase::class . '::run';
+$target = Audit24RoutingChild::class . '::' . $qualifiedMethod;
+$arguments = ['named' => 'supplied'];
+$before = [
+    'native_object_pair' => routingObservation(static fn() => call_user_func_array([$child, $qualifiedMethod], $arguments)),
+    'native_string' => routingObservation(static fn() => call_user_func_array($target, $arguments)),
+    'di_string' => routingObservation(static fn() => $container->call($target, $arguments)),
+];
+
+$longerAlias = Audit24RoutingChild::class . '::' . Audit24RoutingBase::class;
+class_alias(Audit24RoutingOther::class, $longerAlias);
+$container->set($longerAlias, new Audit24RoutingOther());
+$arrayControl = (new Componenta\DI\Tests\Support\ContainerBuilder())->build();
+$arrayControl->set($longerAlias, new Audit24RoutingOther());
+$after = [
+    'native_object_pair' => routingObservation(static fn() => call_user_func_array([$child, $qualifiedMethod], $arguments)),
+    'native_string' => routingObservation(static fn() => call_user_func_array($target, $arguments)),
+    'di_string' => routingObservation(static fn() => $container->call($target, $arguments)),
+    'explicit_alias_pair' => routingObservation(static fn() => $arrayControl->call([$longerAlias, 'run'], $arguments)),
+];
+
+$plainAlias = Audit24RoutingTarget::class . '::Alias';
+class_alias(Audit24RoutingTarget::class, $plainAlias);
+$instance = new Audit24RoutingTarget();
+$unambiguousControl = (new Componenta\DI\Tests\Support\ContainerBuilder())->build();
+$unambiguousControl->set($plainAlias, $instance);
+$unambiguous = [
+    'native_object_pair' => routingObservation(static fn() => call_user_func_array([$instance, 'run'], $arguments)),
+    'native_string' => routingObservation(static fn() => call_user_func_array($plainAlias . '::run', $arguments)),
+    'di_alias_pair' => routingObservation(static fn() => $unambiguousControl->call([$plainAlias, 'run'], $arguments)),
+    'di_alias_string' => routingObservation(static fn() => $unambiguousControl->call($plainAlias . '::run', $arguments)),
+];
+echo json_encode(['php' => PHP_VERSION, 'before_alias' => $before, 'after_alias' => $after, 'unambiguous_alias' => $unambiguous], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), "\n";
+```
+
+Fresh executions on both recorded runtimes establish this matrix. Explicit array controls use separate containers: this probes instance-string owner selection, independently of shared cache-key encoding.
+
+| Route | Before the longer alias | After the longer alias |
+| --- | --- | --- |
+| Native `[$child, 'Base::run']` | `['base', 'supplied']`, with deprecation | Same value and deprecation. |
+| Native complete string `Child::Base::run` | `TypeError`; class-qualified string is not a native callable | `TypeError`; the alias method is non-static. |
+| DI complete string | `['base', 'supplied']`, with deprecation | Same existing child-service route. |
+| DI explicit `[$longerAlias, 'run']` | Not registered in this phase | `['other', 'supplied']`, using the explicitly selected alias owner. |
+
+For the separate `Target::Alias` example, the native object pair and DI alias pair both return `['target', 'supplied']`. Its raw native string throws `TypeError`; the DI alias string currently throws `InvalidCallableException`. The latter is a confirmed convenience-form limitation. It does not justify silently changing the ambiguous qualified route above. A candidate that preferred every loaded last-delimiter prefix reproduced exactly that owner reassignment and was rejected before publication.
+
+### Compatibility choices and proposed recommendation
+
+| Option | Benefit | Compatibility cost and required proof |
+| --- | --- | --- |
+| **A. Preserve current instance-string interpretation; document explicit pairs** | No route, callback count or invalidation policy changes. `Container::call([$alias, 'run'], $arguments)` already identifies the intended registered owner. | The separator-bearing alias string remains unsupported in the unambiguous example. Document the distinction between a native static string and a DI instance convenience form. |
+| **B. Support selected additional alias strings while preserving established qualified routes** | Could make string/array forms interchangeable for a specified subset of unusual aliases. | Requires a proven ownership decision before executing an owner factory. Loaded-class existence alone is insufficient, and repository source does not reveal every object returned by a service ID. Publish behavior for collisions and unavailable classes. |
+| **C. Select a new, explicit string-routing precedence** | Can offer one deterministic rule for the expanded form. | An alias-first rule can replace an existing receiver; a legacy-first rule can retain surprising ambiguity. Either needs consumer inventory, migration and a release compatibility decision. Do not implement it as a parsing cleanup. |
+
+**Recommendation:** retain A until an actual consumer requires string parity for separator-bearing instance aliases. Use an explicit `[$alias, 'method']` pair, or an explicit receiver pair when the application already owns the object. Preserve the complete string's existing exact-service-ID precedence and already native-valid callable handling. Options B/C are conditional architecture work, not part of the static metadata correction.
+
+Trying `get($firstOwner)` merely to discover whether its object accepts the qualified method is not a metadata-only probe. It can construct an unrelated owner, execute a factory/delegator/provider, fail, suspend or mutate registrations before an alias fallback. Constructing an extra receiver without its constructor would not prove the actual service's routing and is also excluded. Do not replay an owner factory or target callback to compare possible interpretations. The benefit being considered is compatibility for a selected input form; no security or performance improvement has been demonstrated.
+
+### Implementation sequence if B or C is selected
+
+1. **Inventory consumers and select the precedence.** Distinguish exact opaque service IDs, native static strings, ordinary instance strings, qualified ancestor-method strings and alias-owner arrays. Record unknown downstream usage as unknown. Include services whose product is unrelated to the ID's class spelling.
+2. **Specify routing before effects.** Define collisions, visibility, lexical/called scope, case-insensitive class aliases, autoload availability and failure ownership. State which information is sufficient without constructing either candidate owner. If that cannot preserve the selected legacy behavior, require an explicit pair instead of adding speculative lookups.
+3. **Unify execution and dependency tracking under the selected rule.** `CallableResolver::resolveClassMethod()` selects the owner, while [`DelegatorRegistry::dependencyIds()`](../../src/Internal/DelegatorRegistry.php) currently records the first-delimiter owner conservatively. Changing only the resolver can leave a cached delegator route stale when `set($longerAlias, $replacement)` replaces its actual owner. Ensure both paths track the same selected owner and retain complete-string ID dependencies. Do not change static native routes that have no container-owned instance.
+4. **Preserve invocation identity and lifetime.** Keep the original accepted receiver/method, native visibility/deprecation boundaries and per-invocation argument ownership. Metadata normalization must not rebind callbacks, populate shared plans with receivers, repeat factories or merge distinct owner/method pairs into one cache key. Include cold/warm, replacement and nested/Fiber transitions where that owner can be resolved lazily.
+5. **Add consumer-level regressions and migration examples.** Begin with the fixture above and explicit array controls. Prove one owner lookup and one target execution for each supported route, exception recovery without duplicate effects, and correct delegator invalidation after owner replacement. State any intentionally changed legacy behavior in EN/RU release notes.
+6. **Qualify the chosen implementation.** Run supported PHP 8.4/8.5 suites, focused native controls, maximum-level static analysis, style and targeted mutation checks. Measure additional lookup/autoload/allocation cost against the unchanged ordinary path before making any performance claim.
+
+Acceptance requires preserving the existing qualified route unless a documented migration deliberately changes it; supporting an explicitly selected alias route; retaining opaque-ID precedence and native-valid static behavior; preventing speculative owner construction or callback replay; and observing replacement of the actual owner in cached delegator calls. Until that consumer policy and proof exist, `CallableResolver` and delegator dependency ownership remain unchanged.

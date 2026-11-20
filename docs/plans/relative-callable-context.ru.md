@@ -198,3 +198,123 @@ A уточняет совместимость, но не исправляет д
 | Производительность | Сравнить неизменённые обычные вызовы и выбранные legacy-случаи на одинаковых настройках; сообщать измеренную стоимость без необоснованного обещания ускорения. |
 
 План не зависит от динамического внешнего владения или общего рефакторинга времени жизни объектов. Решение состоит в том, оправдывает ли конкретная потребность устаревшей совместимости передачу дополнительного контекста вызова. До такого решения и доказательства исходной точкой остаются обычная реализация и её текущие границы scope/lifetime.
+
+## 8. Отдельная граница политики: aliases с разделителем в строках методов экземпляра
+
+### Статус и отличие от предыдущего ограничения callable-значений
+
+**Добавлено в проходе 24, 2026-11-20: предложено; изменение маршрутизации экземпляров не выбрано.** PHP 8.4.28 и 8.5.13 позволяют `class_alias()` создавать имя класса с `::` внутри. Это создаёт второй вопрос совместимости для удобной DI-формы `Class::instanceMethod`. Здесь рассматривается **строка цели, которую разрешает `CallableResolver`**; разделы 1–7 относятся к значению, передаваемому параметру `callable` другого объявления. Решение одного вопроса не выбирает политику другого.
+
+Уже допустимая native-строка **статического** метода — более узкий независимо исправимый случай: PHP считает разделителем метода последнее `::`. Независимое исправление опубликовано в [`45eb1ab`](https://github.com/componenta/di/commit/45eb1ab1400aba19a0662e0cd8ee4559ea0e85d8). Executor сохраняет metadata параметров такого метода: разбирает последний разделитель и адаптирует только вход reflection, когда сам alias содержит `::`. В этом исправлении фактическая строка вызова и существующий ключ кеша остаются прежними. [`CallableAliasedClassSeparatorContractTest`](../../tests/Contract/CallableAliasedClassSeparatorContractTest.php) проверяет native static controls, внедрение зависимости, прогретые вызовы, magic-аргументы и приоритет точного service ID. Исправление не меняет `CallableResolver` и не выбирает новую политику для сокращённой строки метода экземпляра.
+
+Второй независимый дефект исправлен в [`e85289b`](https://github.com/componenta/di/commit/e85289b21e6bcc894a6fa54cd9b327fdca3d6840): склейка владельца и метода через `::` позволяла разным массивным callable после прогрева использовать один parameter plan и менять переданные значения аргументов. Теперь часть класса имеет префикс длины; [`CallableQualifiedCacheBoundaryContractTest`](../../tests/Contract/CallableQualifiedCacheBoundaryContractTest.php) проверяет оба порядка прогрева и class/object owners относительно native-результатов. Правка меняет только приватное кодирование ключа и сохраняет маршрут вызова. Политика приоритета instance-строк ею не выбирается.
+
+Строка с классом и нестатическим методом сама по себе не является native callable. DI может получить владельца из контейнера и создать пару объект/метод. Текущий удобный разбор использует **первый** разделитель. Это поддерживает уже работающий legacy-маршрут `Child::Parent::run`, превращающийся в native-пару `[$child, 'Parent::run']`. На проверенных версиях она допустима с `E_DEPRECATED`. Произвольная `[$object, 'missing::tail']` без допустимого квалификатора отвергается PHP; это не пример поддерживаемого magic-вызова.
+
+Выбор разделителя становится неоднозначным, когда реальный alias `Child::Parent` указывает на посторонний класс с нестатическим `run()`. В контейнере могут быть зарегистрированы оба владельца. Выбор последнего разделителя только потому, что его префикс — загруженный класс, перенаправляет работающий вызов с родительского метода child-сервиса на посторонний alias-сервис. Полная строка в этом примере по-прежнему недопустима как native callable: посторонний метод нестатический. Приоритет допустимого native static callable эту неоднозначность не решает.
+
+### Воспроизводимый публичный пример
+
+Сохраните блок как `instance-alias-routing.php` вне checkout с dev-зависимостями и выполните `php instance-alias-routing.php /absolute/path/to/di`. Пример использует публичные методы контейнера и записывает native deprecations, не превращая их в исключения. В успешных наблюдениях тела методов действительно исполняются. Alias создаётся механизмом PHP, а не таблицей aliases сервисов контейнера.
+
+```php
+<?php
+declare(strict_types=1);
+require $argv[1] . '/tests/bootstrap.php';
+
+class Audit24RoutingBase
+{
+    public function run(string $named = 'base'): array { return ['base', $named]; }
+}
+class Audit24RoutingChild extends Audit24RoutingBase {}
+class Audit24RoutingOther
+{
+    public function run(string $named = 'other'): array { return ['other', $named]; }
+}
+class Audit24RoutingTarget
+{
+    public function run(string $named = 'target'): array { return ['target', $named]; }
+}
+function routingObservation(Closure $operation): array
+{
+    $warnings = [];
+    set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+        $warnings[] = ['level' => $level, 'message' => $message];
+        return true;
+    });
+    try { return ['value' => $operation(), 'warnings' => $warnings]; }
+    catch (Throwable $error) { return ['error' => $error::class, 'message' => $error->getMessage(), 'warnings' => $warnings]; }
+    finally { restore_error_handler(); }
+}
+
+$container = (new Componenta\DI\Tests\Support\ContainerBuilder())->build();
+$child = new Audit24RoutingChild();
+$container->set(Audit24RoutingChild::class, $child);
+$qualifiedMethod = Audit24RoutingBase::class . '::run';
+$target = Audit24RoutingChild::class . '::' . $qualifiedMethod;
+$arguments = ['named' => 'supplied'];
+$before = [
+    'native_object_pair' => routingObservation(static fn() => call_user_func_array([$child, $qualifiedMethod], $arguments)),
+    'native_string' => routingObservation(static fn() => call_user_func_array($target, $arguments)),
+    'di_string' => routingObservation(static fn() => $container->call($target, $arguments)),
+];
+
+$longerAlias = Audit24RoutingChild::class . '::' . Audit24RoutingBase::class;
+class_alias(Audit24RoutingOther::class, $longerAlias);
+$container->set($longerAlias, new Audit24RoutingOther());
+$arrayControl = (new Componenta\DI\Tests\Support\ContainerBuilder())->build();
+$arrayControl->set($longerAlias, new Audit24RoutingOther());
+$after = [
+    'native_object_pair' => routingObservation(static fn() => call_user_func_array([$child, $qualifiedMethod], $arguments)),
+    'native_string' => routingObservation(static fn() => call_user_func_array($target, $arguments)),
+    'di_string' => routingObservation(static fn() => $container->call($target, $arguments)),
+    'explicit_alias_pair' => routingObservation(static fn() => $arrayControl->call([$longerAlias, 'run'], $arguments)),
+];
+
+$plainAlias = Audit24RoutingTarget::class . '::Alias';
+class_alias(Audit24RoutingTarget::class, $plainAlias);
+$instance = new Audit24RoutingTarget();
+$unambiguousControl = (new Componenta\DI\Tests\Support\ContainerBuilder())->build();
+$unambiguousControl->set($plainAlias, $instance);
+$unambiguous = [
+    'native_object_pair' => routingObservation(static fn() => call_user_func_array([$instance, 'run'], $arguments)),
+    'native_string' => routingObservation(static fn() => call_user_func_array($plainAlias . '::run', $arguments)),
+    'di_alias_pair' => routingObservation(static fn() => $unambiguousControl->call([$plainAlias, 'run'], $arguments)),
+    'di_alias_string' => routingObservation(static fn() => $unambiguousControl->call($plainAlias . '::run', $arguments)),
+];
+echo json_encode(['php' => PHP_VERSION, 'before_alias' => $before, 'after_alias' => $after, 'unambiguous_alias' => $unambiguous], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), "\n";
+```
+
+Свежие исполнения на обеих указанных версиях дают следующую матрицу. Явные array controls используют отдельные контейнеры: исследуется выбор владельца instance-строки, а не независимая корректность общего кодирования cache keys.
+
+| Маршрут | До создания длинного alias | После создания длинного alias |
+| --- | --- | --- |
+| Native `[$child, 'Base::run']` | `['base', 'supplied']` с deprecation | Те же результат и deprecation. |
+| Native полная строка `Child::Base::run` | `TypeError`: строка не является native callable | `TypeError`: метод alias нестатический. |
+| DI полная строка | `['base', 'supplied']` с deprecation | Тот же существующий маршрут через child-сервис. |
+| DI явная `[$longerAlias, 'run']` | На этой стадии не зарегистрирована | `['other', 'supplied']` через явно выбранного alias-владельца. |
+
+В отдельном примере `Target::Alias` native-пара с объектом и DI-пара с alias обе возвращают `['target', 'supplied']`. Его прямая native-строка вызывает `TypeError`; DI-строка с alias сейчас вызывает `InvalidCallableException`. Последнее — подтверждённое ограничение удобной строковой формы. Оно не оправдывает незаметную смену владельца в неоднозначном qualified-маршруте выше. Кандидат, всегда предпочитающий загруженный префикс последнего разделителя, воспроизвёл именно такую смену владельца и был отклонён до публикации.
+
+### Варианты совместимости и предлагаемая рекомендация
+
+| Вариант | Выигрыш | Цена совместимости и необходимое доказательство |
+| --- | --- | --- |
+| **A. Сохранить трактовку строк экземпляров; описать явные пары** | Маршрут, число callback-вызовов и политика инвалидации не меняются. `Container::call([$alias, 'run'], $arguments)` уже однозначно задаёт зарегистрированного владельца. | Строка alias с разделителем остаётся неподдерживаемой в однозначном примере. Документация должна различать native static строку и удобную DI-форму экземпляра. |
+| **B. Поддержать выбранные дополнительные alias-строки, сохраняя существующие qualified-маршруты** | Для определённого подмножества необычных aliases можно сблизить строковую и массивную формы. | Выбор владельца надо доказать до запуска его фабрики. Наличие загруженного класса недостаточно; исходники репозитория не описывают все объекты, которые могут возвращаться по service ID. Нужен контракт коллизий и недоступных классов. |
+| **C. Выбрать новый явный приоритет строковых маршрутов** | Даёт одно определённое правило для расширенной формы. | Приоритет alias может заменить существующий receiver; приоритет legacy-маршрута сохраняет неоднозначность. Оба варианта требуют inventory потребителей, миграции и решения о совместимости релиза. Это не косметическое исправление парсинга. |
+
+**Рекомендация:** сохранить A до появления реального потребителя, которому требуется строковой паритет для instance aliases с разделителем. Использовать явную `[$alias, 'method']` либо пару с receiver, если объект уже принадлежит приложению. Сохранить приоритет точного service ID полной строки и обработку уже допустимого native callable. B/C — условная архитектурная работа, не часть исправления metadata статического вызова.
+
+Пробный `get($firstOwner)` ради проверки qualified-метода не является чистой metadata-операцией. Он может создать постороннего владельца, запустить фабрику/delegator/provider, завершиться ошибкой, приостановиться или изменить регистрации до перехода к alias. Создание дополнительного receiver без конструктора тоже не доказывает маршрут фактического сервиса и исключается. Нельзя повторять фабрику владельца или целевой callback для сравнения трактовок. Рассматриваемый выигрыш — совместимость выбранной формы; улучшение безопасности или производительности не продемонстрировано.
+
+### Последовательность реализации при выборе B или C
+
+1. **Собрать потребителей и выбрать приоритет.** Различать точные opaque service IDs, native static строки, обычные instance строки, qualified ancestor-методы и пары с alias-владельцем. Неизвестное downstream-использование оставить неизвестным. Учесть сервисы, продукт которых не соответствует классовому написанию ID.
+2. **Определить маршрут до побочных эффектов.** Описать коллизии, visibility, лексический/called scope, регистронезависимые aliases, доступность при autoload и владельца ошибок. Указать, каких сведений достаточно без создания любого из кандидатов. Если существующее поведение так сохранить нельзя, требовать явную пару вместо пробных lookup.
+3. **Согласовать выполнение и отслеживание зависимостей.** `CallableResolver::resolveClassMethod()` выбирает владельца, а [`DelegatorRegistry::dependencyIds()`](../../src/Internal/DelegatorRegistry.php) сейчас консервативно записывает владельца до первого разделителя. Изменение только resolver может оставить устаревший закешированный delegator при `set($longerAlias, $replacement)`. Оба пути должны учитывать одного фактического владельца и зависимость от полного строкового ID. Не менять static native-маршруты без контейнерного экземпляра-владельца.
+4. **Сохранить идентичность вызова и lifetime.** Удержать выбранные receiver/method, native visibility/deprecation и владение аргументами отдельного вызова. Нормализация metadata не должна перепривязывать callbacks, сохранять receiver в shared plan, повторять фабрики или смешивать разные пары owner/method в одном cache key. Проверить cold/warm, замену владельца, вложенные/Fiber-переходы там, где владелец разрешается отложенно.
+5. **Добавить потребительские регрессии и миграционные примеры.** Начать с приведённого witness и явных array controls. Доказать одно получение владельца и одно исполнение цели для выбранного маршрута, восстановление после ошибок без повторных эффектов и инвалидацию delegator после замены владельца. Намеренно изменённое legacy-поведение описать в EN/RU release notes.
+6. **Квалифицировать выбранную реализацию.** Выполнить поддерживаемые PHP 8.4/8.5 suites, отдельные native controls, максимальный статический анализ, style и целевые mutation checks. Прежде чем заявлять улучшение производительности, измерить дополнительные lookup/autoload/allocation относительно неизменённого обычного пути.
+
+Критерии готовности: сохранение qualified-маршрута, если документированная миграция явно не меняет его; поддержка выбранного alias-маршрута; сохранение приоритета opaque IDs и native static поведения; отсутствие пробного создания владельцев и повторов callbacks; наблюдение замены фактического владельца закешированным delegator-вызовом. До выбора потребительской политики и её доказательства `CallableResolver` и ownership зависимостей delegator остаются прежними.
