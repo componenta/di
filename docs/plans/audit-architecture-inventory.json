@@ -4,9 +4,9 @@
   "reference_head": "43c464187f80c95802fc36191350ae68b70a469e",
   "historical_tree": "80cb69a59f001a7d9c49af6e254ff3f58ffa8504",
   "historical_directory_removed_in": "79890e0",
-  "review_kind": "architecture-document inventory; original preservation ran no new source audit/tests/benchmarks; pass23 policy evidence is attributed separately; pass24 instance-callable owner-precedence evidence is attributed in its separate supplement",
+  "review_kind": "architecture-document inventory; original preservation ran no new source audit/tests/benchmarks; pass23 policy evidence is attributed separately; pass24 instance-callable owner-precedence evidence is attributed in its separate supplement; pass25 late-loaded delegator dependency-index evidence and alternatives are attributed in relative-callable-context section9",
   "historical_markdown_count": 31,
-  "open_topic_count": 11,
+  "open_topic_count": 12,
   "open_report_count": 8,
   "open_topics": [
     {
@@ -68,6 +68,18 @@
       "source": "Pass 24; baseline 802d2e572cc5aa507b3a61cb267a17d69572f669; native/DI controls on PHP 8.4.28 and 8.5.13; separate native-valid string fix 45eb1ab1400aba19a0662e0cd8ee4559ea0e85d8",
       "action_en": "Preserve exact opaque service-ID precedence and existing qualified ancestor dispatch. Prefer explicit method arrays until owner parsing, loaded-name/autoload policy and delegator dependency invalidation are specified together. Probing an owner via get() can instantiate it and add callbacks; unconditional last-delimiter parsing can select another owner. No instance-shorthand policy is implemented by the separate native-valid string metadata fix.",
       "action_ru": "Сохранить приоритет точного непрозрачного service ID и существующий qualified ancestor dispatch. Использовать явный method array, пока совместно не определены разбор владельца, политика loaded-name/autoload и инвалидация зависимостей delegator. Проба владельца через get() может создать объект и добавить callbacks; безусловный последний разделитель может выбрать другого владельца. Отдельная правка metadata native-valid строки не реализует политику instance-shorthand."
+    },
+    {
+      "id": "late_delegator_dependency_index",
+      "title_en": "Dependency-index timing for delegators registered before their owner loads",
+      "title_ru": "Время уточнения зависимостей delegator, зарегистрированного до загрузки владельца",
+      "document": "relative-callable-context",
+      "section_en": "9-separate-policy-boundary-delegators-registered-before-their-owner-loads",
+      "section_ru": "9-отдельная-граница-политики-регистрация-delegator-до-загрузки-владельца",
+      "status": "conditional",
+      "source": "Pass25; relative-callable-context section9; PHP8.4.28/8.5.13 public witness; loaded-native correction f4869bc01534018917d2e6f43783196f0ac690d0",
+      "action_en": "Keep conservative registration dependencies unless a consumer requires stronger post-resolution identity. An exact index needs route evidence from existing lookup, atomic revision-guarded chain/index publication, actual-owner and exact-ID takeover invalidation, receiver retirement and failure recovery. Do not add eager autoload or callback replay to infer ownership.",
+      "action_ru": "Сохранить консервативные зависимости регистрации до требования более сильной identity после разрешения. Для точного индекса нужны сведения выполненного lookup, атомарная публикация цепочки/индекса с проверкой revision, инвалидация по настоящему владельцу и точному ID, retirement receiver и восстановление после ошибок. Не выяснять владельца ранним autoload или повтором callbacks."
     },
     {
       "id": "standalone_api",

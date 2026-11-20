@@ -209,6 +209,10 @@ An already native-valid **static** method string is a narrower, independently fi
 
 A second independent defect, corrected in [`e85289b`](https://github.com/componenta/di/commit/e85289b21e6bcc894a6fa54cd9b327fdca3d6840), concerned method-array cache keys. Concatenating owner and method with `::` allowed two distinct pairs to reuse a parameter plan after warming, changing supplied argument values. The class portion is now length-prefixed; [`CallableQualifiedCacheBoundaryContractTest`](../../tests/Contract/CallableQualifiedCacheBoundaryContractTest.php) checks both warm orders and class/object owners against native results. That correction changes only private key encoding and preserves invocation routing. It does not select an instance-string precedence policy.
 
+Pass 25 separately corrected delegator execution and invalidation without selecting a new owner policy. [`f4869bc`](https://github.com/componenta/di/commit/f4869bc01534018917d2e6f43783196f0ac690d0) excludes a shorter first-delimiter owner from the dependencies of an already native-valid static alias string. Qualified ancestor arrays accepted by PHP require native `Closure` capture for direct invocation. The initial correction in [`871b5cd`](https://github.com/componenta/di/commit/871b5cd4aa2402b4f0d289196e5b3ea01349a077) was refined in [`4ffd8f7`](https://github.com/componenta/di/commit/4ffd8f74de69a1ff1b971c468689f7cd95ea878a): retain the original normalized array in the chain cache and capture immediately before each invocation. A static closure alone does not retain its object receiver. [`QualifiedDelegatorInvocationContractTest`](../../tests/Contract/QualifiedDelegatorInvocationContractTest.php) checks ancestor selection, references, strict binding, replacement and native called scope; [`QualifiedDelegatorLifetimeContractTest`](../../tests/Contract/QualifiedDelegatorLifetimeContractTest.php) checks receiver retention, complete invalidation before destructor reentry and failure aggregation. The open question below remains which container owner an ambiguous instance string should select.
+
+The same accepted qualified-array invocation boundary is corrected for ordinary factories in [`aa7147e`](https://github.com/componenta/di/commit/aa7147e8cf0ad1e23165e15211e4e5d32d2fa747) and bootstrap extension factories in [`4073702`](https://github.com/componenta/di/commit/407370273885fc8be7419b8750b58eb6c621f79e). Both preserve the original receiver through the call. Those execution fixes do not implement a new string-owner or legacy relative-value context policy.
+
 A class/instance-method string is not itself a valid native callable. DI can resolve its owner through the container and produce an object/method pair. The current convenience parser splits at the **first** delimiter. This supports an existing legacy qualified-method route such as `Child::Parent::run`, where the resulting native pair is `[$child, 'Parent::run']`. That pair is accepted with `E_DEPRECATED` on the recorded runtimes. An arbitrary `[$object, 'missing::tail']` with no valid qualifier is rejected by PHP; it is not a supported magic-method counterexample.
 
 The delimiter choice becomes ambiguous when a real alias named `Child::Parent` exists and identifies an unrelated class with a non-static `run()` method. Both container owners can be registered. Selecting the last delimiter because its prefix is a loaded class changes an already working target from the child service's parent method to the unrelated alias service. The original complete string is still native-invalid in this example, since the unrelated method is non-static; native static-callable precedence does not resolve this ambiguity.
@@ -312,9 +316,89 @@ Trying `get($firstOwner)` merely to discover whether its object accepts the qual
 
 1. **Inventory consumers and select the precedence.** Distinguish exact opaque service IDs, native static strings, ordinary instance strings, qualified ancestor-method strings and alias-owner arrays. Record unknown downstream usage as unknown. Include services whose product is unrelated to the ID's class spelling.
 2. **Specify routing before effects.** Define collisions, visibility, lexical/called scope, case-insensitive class aliases, autoload availability and failure ownership. State which information is sufficient without constructing either candidate owner. If that cannot preserve the selected legacy behavior, require an explicit pair instead of adding speculative lookups.
-3. **Unify execution and dependency tracking under the selected rule.** `CallableResolver::resolveClassMethod()` selects the owner, while [`DelegatorRegistry::dependencyIds()`](../../src/Internal/DelegatorRegistry.php) currently records the first-delimiter owner conservatively. Changing only the resolver can leave a cached delegator route stale when `set($longerAlias, $replacement)` replaces its actual owner. Ensure both paths track the same selected owner and retain complete-string ID dependencies. Do not change static native routes that have no container-owned instance.
+3. **Unify execution and dependency tracking under the selected rule.** `CallableResolver::resolveClassMethod()` selects the owner, while [`DelegatorRegistry::dependencyIds()`](../../src/Internal/DelegatorRegistry.php) records the first-delimiter owner for the existing non-native instance shorthand. Already native-valid static alias strings do not acquire that instance dependency. Changing only the resolver can leave a cached delegator route stale when `set($longerAlias, $replacement)` replaces its actual owner. Ensure both paths track the same selected owner and retain complete-string ID dependencies. Do not change static native routes that have no container-owned instance.
 4. **Preserve invocation identity and lifetime.** Keep the original accepted receiver/method, native visibility/deprecation boundaries and per-invocation argument ownership. Metadata normalization must not rebind callbacks, populate shared plans with receivers, repeat factories or merge distinct owner/method pairs into one cache key. Include cold/warm, replacement and nested/Fiber transitions where that owner can be resolved lazily.
 5. **Add consumer-level regressions and migration examples.** Begin with the fixture above and explicit array controls. Prove one owner lookup and one target execution for each supported route, exception recovery without duplicate effects, and correct delegator invalidation after owner replacement. State any intentionally changed legacy behavior in EN/RU release notes.
 6. **Qualify the chosen implementation.** Run supported PHP 8.4/8.5 suites, focused native controls, maximum-level static analysis, style and targeted mutation checks. Measure additional lookup/autoload/allocation cost against the unchanged ordinary path before making any performance claim.
 
-Acceptance requires preserving the existing qualified route unless a documented migration deliberately changes it; supporting an explicitly selected alias route; retaining opaque-ID precedence and native-valid static behavior; preventing speculative owner construction or callback replay; and observing replacement of the actual owner in cached delegator calls. Until that consumer policy and proof exist, `CallableResolver` and delegator dependency ownership remain unchanged.
+Acceptance requires preserving the existing qualified route unless a documented migration deliberately changes it; supporting an explicitly selected alias route; retaining opaque-ID precedence and native-valid static behavior; preventing speculative owner construction or callback replay; and observing replacement of the actual owner in cached delegator calls. Until that consumer policy and proof exist, `CallableResolver` and delegator dependency ownership for non-native instance shorthand remain unchanged.
+
+## 9. Separate policy boundary: delegators registered before their owner loads
+
+**Added in pass 25, 2026-11-20: existing conservative behavior; a stronger guarantee is proposed, not selected or implemented.** This is a timing question for the dependency index, independent of section 8's choice between two instance-string owners. A confirmed loaded-native case was fixed separately in [`f4869bc`](https://github.com/componenta/di/commit/f4869bc01534018917d2e6f43783196f0ac690d0): when the complete native callable already exists at registration, its unused first prefix is neither autoloaded nor recorded as an instance owner. The complete string remains a dependency because an exact service ID can take precedence. [`StaticDelegatorInvalidationContractTest`](../../tests/Contract/StaticDelegatorInvalidationContractTest.php) protects that boundary, identity, callback count and actual instance-owner replacement.
+
+### Observed behavior and cost
+
+If the owner is unavailable during `delegator()` registration, [`DelegatorRegistry::dependencyIds()`](../../src/Internal/DelegatorRegistry.php) conservatively records the possible first owner. A later class load can make the complete string a native static callable. Resolution then uses that callable without fetching the owner service, but the original dependency index remains conservative. Replacing the unused possible owner invalidates the product and runs its decorator again on the next `get()`.
+
+Fresh public executions on PHP **8.4.28** and **8.5.13**, in the pass-25 checkout based on `2060c4347c1f57fce2ce2037dda4a41504413fa7` with the loaded-native correction above, produced the same observations:
+
+| Owner introduced after registration | Registration probes of first prefix | Registration probes of complete owner | Native string route after loading | Product identity after `set(firstPrefix, ...)` | Decorator calls |
+| --- | ---: | ---: | --- | --- | ---: |
+| Ordinary class alias | 2 | 2; the owner equals the prefix | Preserved | Replaced | 2 |
+| Class alias containing `::` | 2 | 0 | Preserved | Replaced | 2 |
+
+This is not unique to separator-bearing aliases and is not a regression introduced by the loaded-native correction. The cost is observable shared-identity replacement and possible repetition of application side effects. It is not evidence of a security vulnerability, an incorrect native target, or a measured general performance regression. Existing references to the earlier product remain valid; the next container lookup returns a newly decorated value.
+
+An independent rerun on published [`4651ddb`](https://github.com/componenta/di/tree/4651ddbfab0679ce7f1591c2473ab0484791b04e), including the final pass-25 receiver-lifetime fixes, reproduced all rows on both runtimes.
+
+### Reproducible public witness
+
+Save the following as `late-delegator-index.php` outside a checkout with development dependencies and run `php late-delegator-index.php /absolute/path/to/di`. The complete native route is checked through public `resolve()`. Autoload counters cover registration only and are read before introducing the class alias. The probe does not assert that replay is desirable; it records the current boundary.
+
+```php
+<?php
+declare(strict_types=1);
+require $argv[1] . '/vendor/autoload.php';
+final class Audit25LateStaticDecorator
+{
+    public static int $calls = 0;
+    public static function decorate(object $entry): object { ++self::$calls; return (object) ['base' => $entry, 'call' => self::$calls]; }
+}
+$rows = [];
+foreach ([false, true] as $separatorAlias) {
+    Audit25LateStaticDecorator::$calls = 0;
+    $prefix = 'Audit25LateIndex_' . ($separatorAlias ? 'Separator' : 'Ordinary') . '_' . bin2hex(random_bytes(4));
+    $class = $prefix . ($separatorAlias ? '::Alias' : '');
+    $spec = $class . '::decorate';
+    $container = (new Componenta\DI\Tests\Support\ContainerBuilder())->addService('product', new stdClass())->build();
+    $attempts = [];
+    $loader = static function (string $requested) use ($prefix, &$attempts): void { if (str_starts_with($requested, $prefix)) $attempts[] = $requested; };
+    spl_autoload_register($loader);
+    try {
+        $container->delegator('product', $spec);
+        $admission = $attempts;
+        class_alias(Audit25LateStaticDecorator::class, $class);
+        $first = $container->get('product');
+        $nativeRoute = $container->resolve($spec) === $spec;
+        $container->set($prefix, new stdClass());
+        $second = $container->get('product');
+        $rows[] = ['form'=>$separatorAlias?'separator_alias_loaded_after_registration':'ordinary_alias_loaded_after_registration','admission_prefix_probes'=>count(array_filter($admission, static fn(string $s):bool=>$s===$prefix)), 'admission_complete_owner_probes'=>count(array_filter($admission, static fn(string $s):bool=>$s===$class)), 'native_route'=>$nativeRoute, 'shared_identity_preserved_after_prefix_set'=>$first===$second,'calls'=>Audit25LateStaticDecorator::$calls];
+    } finally { spl_autoload_unregister($loader); }
+}
+echo json_encode(['php'=>PHP_VERSION,'origin'=>(new ReflectionClass(Componenta\DI\Internal\DelegatorRegistry::class))->getFileName(),'rows'=>$rows], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),"\n";
+```
+
+### Why this needs a policy decision
+
+At registration, an unknown spelling may later identify a static class method, an instance method resolved through a service, or a still-unavailable callable. Dropping its possible owner immediately can leave a genuine instance delegator stale when that owner changes. Probing additional class candidates eagerly changes autoload order and can execute application code earlier. Replaying a factory or callback to compare interpretations is not a valid inspection strategy. Arbitrary application class loading also has no container-wide notification contract.
+
+The existing conservative index prioritizes invalidating every possible actual instance dependency. A stronger promise—once a route resolves to native static code, unrelated owner mutations preserve the decorated identity—requires deciding when dependencies become exact and how that change is published alongside the cached callable chain.
+
+| Choice | Benefit | Cost and required proof |
+| --- | --- | --- |
+| **A. Keep the current conservative index and document late availability** | Preserves admission timing, existing real-owner invalidation and all current API shapes. | Some later-irrelevant owner mutations rebuild cached products. Applications requiring strict identity can register after loading the callable or provide an already resolved callable/closure. |
+| **B. Record actual routing dependencies when resolving a chain** | Could eliminate unnecessary replay after native-static resolution while retaining genuine service dependencies. | Requires route metadata beyond the existing callable-only resolver result, atomic index/cache publication and safe replacement of prior dependencies. Exact-string service takeover must remain observable. |
+| **C. Introduce an explicit availability/version signal for participating loaders** | Can make selected ownership changes observable before the next route use. | Adds an application integration contract; it cannot promise detection of arbitrary class loading. It still needs a policy for unaffected loaders, reentry and suspended work. |
+
+**Recommendation:** keep A unless a consumer requires the stronger identity guarantee. B is the focused candidate for that requirement; C should be considered only with an existing application loader/version contract. No additional eager autoload, owner construction or repeated callback should be introduced merely to reduce the index's conservatism. Section 8 still controls ambiguous instance-string precedence.
+
+### Implementation plan if the stronger guarantee is selected
+
+1. **Define the promise and consumers.** Decide when an initially conservative dependency becomes exact, whether already returned objects are excluded, and which late-loading sources participate. Inventory stateful delegators whose replay matters; do not assume all consumers are pure.
+2. **Return route evidence without extra execution.** Design a per-resolution descriptor containing the actual callable and dependency IDs. Retain complete-string service-ID precedence and actual instance-owner dependencies. Derive evidence from the lookup already performed; do not call `has()`, `get()`, an autoloader or the target again for proof. Decide whether the descriptor is an internal adapter or requires an explicit public interface addition.
+3. **Publish the callable chain and dependency index together.** Capture the registration revision before resolving. Reentrant registration or Fiber suspension must invalidate stale publication. Replace old dependency edges only when the same completed chain is still current. Preserve transitive invalidation, alias retargeting and exact-ID takeover.
+4. **Respect ownership and retirement.** Removing an old callable/dependency must not release a receiver before all state changes finish. Preserve the existing retirement boundary and exception aggregation. Verify that abandoned or failed resolution does not install partial edges or retain receiver graphs.
+5. **Verify the selected behavior and quantify its cost.** Add public regressions for loaded versus late-loaded ordinary/separator aliases, declared and magic static targets, genuine instance methods, exact-ID services, alias retargeting, external-provider ownership, registration reentry, suspended resolutions and failure recovery. Check supported PHP versions, static analysis and focused mutation controls. Measure cold lookup and warm invocation overhead before claiming a performance benefit.
+
+**Acceptance:** native static resolution followed by an irrelevant owner mutation retains product identity and executes the decorator once, if that guarantee is chosen; actual owner replacement and exact-ID takeover still rebuild it; no extra autoload or application callbacks are used to infer the route; stale in-flight work cannot restore obsolete dependency edges; receiver lifetime and unrelated cached products remain unchanged. Until these conditions and compatibility choices are agreed, the bounded observation above remains documented current behavior, not a promise of automatic reindexing.
