@@ -31,6 +31,9 @@ final class BootstrapResolutionGuard
     /** @var list<array{target:ParameterTarget,prefix:list<ParameterResolverInterface>,winner:?ParameterResolverInterface}> */
     private array $parameterUses = [];
 
+    /** @var list<ParameterResolverInterface>|null */
+    private ?array $finalResolvers = null;
+
     public function __construct(private readonly AttributePlanBuilder $plans) {}
 
     public bool $isActive {
@@ -58,10 +61,26 @@ final class BootstrapResolutionGuard
     public function recordParameter(ParameterTarget $target, array $prefix, bool $resolved = true): void
     {
         if ($this->active) {
+            $winner = $resolved && $prefix !== [] ? $prefix[array_key_last($prefix)] : null;
+            $needsProof = $this->finalResolvers === null;
+            foreach ($this->finalResolvers ?? [] as $resolver) {
+                if ($resolver === $winner) {
+                    break;
+                }
+                if (!in_array($resolver, $prefix, true)) {
+                    $needsProof = true;
+                    break;
+                }
+            }
+            if (!$needsProof) {
+                // Resolution with the complete sealed prefix needs no bootstrap
+                // proof. In-flight work may still return an older prefix.
+                return;
+            }
             $this->parameterUses[] = [
                 'target' => $target,
                 'prefix' => $prefix,
-                'winner' => $resolved && $prefix !== [] ? $prefix[array_key_last($prefix)] : null,
+                'winner' => $winner,
             ];
         }
     }
@@ -69,10 +88,10 @@ final class BootstrapResolutionGuard
     /** @param list<ParameterResolverInterface> $resolvers */
     public function finish(array $resolvers): void
     {
+        $this->finalResolvers = $resolvers;
         try {
             do {
                 $revision = $this->plans->revision;
-                $attributeCount = count($this->attributeUses);
                 $parameterCount = count($this->parameterUses);
                 foreach ($this->attributeUses as $use) {
                     $current = CompletedAttributeGuard::semantics($this->plans->build($use['target']), $use['phase']);
@@ -100,14 +119,13 @@ final class BootstrapResolutionGuard
                     }
                 }
                 // Discovery and immutable classification can resolve new targets.
-                // Poll before counting their uses: autoload can append records
-                // without changing the revision seen by this poll's snapshot.
+                // Recheck proof after metadata changes, never replay completed work.
+                // The final poll can also resume work with an older resolver prefix.
                 $nextRevision = $this->plans->revision;
-            } while ($revision !== $nextRevision
-                || $attributeCount !== count($this->attributeUses)
-                || $parameterCount !== count($this->parameterUses));
+            } while ($revision !== $nextRevision || $parameterCount !== count($this->parameterUses));
         } finally {
             $this->active = false;
+            $this->finalResolvers = null;
             $this->attributeUses = [];
             $this->parameterUses = [];
         }

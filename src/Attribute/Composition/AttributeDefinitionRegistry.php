@@ -40,10 +40,28 @@ final class AttributeDefinitionRegistry
     /** Also changes when a previously unavailable attribute class becomes loadable. */
     public int $revision {
         get {
+            if ($this->unavailableAttributes === []) {
+                return $this->generation;
+            }
+            $checked = [];
+            $pending = $this->unavailableAttributes;
+            while ($pending !== []) {
+                foreach ($pending as $attribute => $_) {
+                    $checked[$attribute] = true;
+                    if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
+                        // The fallback interface probe can autoload a class.
+                        unset($this->unavailableAttributes[$attribute]);
+                        ++$this->generation;
+                    }
+                }
+                // Reentrant discovery can append names after the foreach snapshot.
+                // Probe each newly tracked name once, without retrying old misses.
+                $pending = array_diff_key($this->unavailableAttributes, $checked);
+            }
             foreach ($this->unavailableAttributes as $attribute => $_) {
-                if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
-                    // The fallback interface probe can autoload a class. Its
-                    // declaration must invalidate plans in this same poll.
+                // A later loader can declare a name already checked in this poll.
+                // Observe every completed declaration without invoking loaders again.
+                if (class_exists($attribute, false) || interface_exists($attribute, false)) {
                     unset($this->unavailableAttributes[$attribute]);
                     ++$this->generation;
                 }

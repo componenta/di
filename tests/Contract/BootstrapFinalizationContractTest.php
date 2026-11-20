@@ -29,6 +29,7 @@ final class BootstrapFinalizationUnrelatedMetadata {}
 final class BootstrapFinalizationCapture
 {
     public ?Container $container = null;
+    public bool $ready = false;
 }
 
 abstract class BootstrapFinalizationState
@@ -221,7 +222,7 @@ test('bootstrap finalization records dependencies first created during the final
     }
 })->with(['property', 'parameter'])->with([true, false]);
 
-test('bootstrap finalization rechecks dependencies discovered by the final availability poll', function (string $kind, bool $changesSemantics): void {
+test('bootstrap finalization rechecks dependencies discovered by the final availability poll', function (string $kind, bool $changesSemantics, bool $deferred): void {
     BootstrapFinalizationState::$constructions = 0;
     $suffix = bin2hex(random_bytes(5));
     $attribute = 'PollFinalizationAttribute_' . $suffix;
@@ -236,9 +237,17 @@ test('bootstrap finalization rechecks dependencies discovered by the final avail
     eval(sprintf('namespace %s; #[PollFinalizationPending_%s] final class PollFinalizationSeed_%s { public function __construct(public string $value = "seed") {} }', __NAMESPACE__, $suffix, $suffix));
     $class = __NAMESPACE__ . '\\' . $target;
     $captured = new BootstrapFinalizationCapture();
+    $qualifiedAttribute = __NAMESPACE__ . '\\' . $attribute;
+    $alias = $changesSemantics
+        ? ($kind === 'property' ? Inject::class : EntryId::class)
+        : BootstrapFinalizationUnrelatedMetadata::class;
     $armed = false;
     $loads = 0;
-    $autoload = static function (string $requested) use ($trigger, $pending, $attribute, $class, $kind, $changesSemantics, $captured, &$armed, &$loads): void {
+    $autoload = static function (string $requested) use ($trigger, $pending, $qualifiedAttribute, $class, $alias, $deferred, $captured, &$armed, &$loads): void {
+        if ($requested === $qualifiedAttribute && $captured->ready) {
+            class_alias($alias, $requested);
+            return;
+        }
         if ($requested === $trigger) {
             eval(sprintf('namespace %s; #[\\Attribute(\\Attribute::TARGET_PARAMETER)] final class %s {}', __NAMESPACE__, substr($trigger, strrpos($trigger, '\\') + 1)));
             $armed = true;
@@ -252,10 +261,11 @@ test('bootstrap finalization rechecks dependencies discovered by the final avail
             throw new LogicException('Expected the bootstrapping container.');
         }
         $di->get($class);
-        $alias = $changesSemantics
-            ? ($kind === 'property' ? Inject::class : EntryId::class)
-            : BootstrapFinalizationUnrelatedMetadata::class;
-        class_alias($alias, __NAMESPACE__ . '\\' . $attribute);
+        if ($deferred) {
+            $captured->ready = true;
+        } else {
+            class_alias($alias, $qualifiedAttribute);
+        }
         // The original marker deliberately remains unavailable. Only the new
         // dependency reveals metadata after this poll's pending-class snapshot.
     };
@@ -298,4 +308,5 @@ test('bootstrap finalization rechecks dependencies discovered by the final avail
     } finally {
         spl_autoload_unregister($autoload);
     }
-})->with(['property', 'parameter'])->with([true, false]);
+})->with(['property', 'parameter'])->with([true, false])
+    ->with(['declared during poll' => false, 'loadable after reentrant discovery' => true]);
