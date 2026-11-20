@@ -154,7 +154,13 @@ final class DelegatorRegistry
         $callables = [];
         foreach ($this->raw[$id] as $delegator) {
             try {
-                $callables[] = $this->normalize($delegator);
+                $callable = $this->normalize($delegator);
+                // PHP accepts qualified ancestor methods as callables, but a
+                // direct array invocation cannot execute them. Capture the
+                // selected route while retaining strict and reference binding.
+                $callables[] = is_array($callable) && str_contains($callable[1], '::')
+                    ? Closure::fromCallable($callable)
+                    : $callable;
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
