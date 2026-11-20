@@ -138,7 +138,13 @@ final class DelegatorRegistry
         }
         foreach ($callables as $callable) {
             try {
-                $entry = $callable($entry, $container);
+                // A qualified array needs native capture for direct invocation.
+                // Keep the original cached route: a static closure does not own
+                // the object receiver or preserve its retirement lifetime.
+                $invoke = is_array($callable) && str_contains($callable[1], '::')
+                    ? Closure::fromCallable($callable)
+                    : $callable;
+                $entry = $invoke($entry, $container);
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -154,13 +160,7 @@ final class DelegatorRegistry
         $callables = [];
         foreach ($this->raw[$id] as $delegator) {
             try {
-                $callable = $this->normalize($delegator);
-                // PHP accepts qualified ancestor methods as callables, but a
-                // direct array invocation cannot execute them. Capture the
-                // selected route while retaining strict and reference binding.
-                $callables[] = is_array($callable) && str_contains($callable[1], '::')
-                    ? Closure::fromCallable($callable)
-                    : $callable;
+                $callables[] = $this->normalize($delegator);
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
