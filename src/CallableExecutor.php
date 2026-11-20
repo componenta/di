@@ -97,6 +97,13 @@ final class CallableExecutor implements CallableExecutorInterface
             $callable = $callable[0];
         }
 
+        if (is_array($callable) && str_contains((string) $callable[1], '::')) {
+            // Native qualified methods have a concrete selected declaration even
+            // though method_exists() cannot inspect this array representation.
+            // Prepare its native capture per call without caching the receiver.
+            $callable = Closure::fromCallable($callable);
+        }
+
         if ($callable instanceof Closure) {
             // Prepared targets retain ReflectionParameter instances and those
             // reflectors retain their declaring Closure. Caching such a plan,
