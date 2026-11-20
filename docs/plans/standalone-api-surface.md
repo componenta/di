@@ -65,3 +65,86 @@ No speedup, memory reduction or security hardening is claimed from this policy w
 | Downstream migration if a surface is deprecated | Every inventoried supported use has an executable replacement example; release notes state the compatibility effect. |
 
 Completion means a published support matrix, reviewed consumer inventory and tests of the selected guarantees. A higher mutation score by itself does not close this proposal.
+
+## Additional policy scope: conditional return types for class-name IDs
+
+### Status, scope and current contract
+
+**Evidence added on 2026-11-20, pass 23:** the conditional PHPDoc return types on [`Container::get()` / `make()`](../../src/Container.php) and [`FactoryInterface::make()`](../../src/FactoryInterface.php) promise `T` for a `class-string<T>` argument. The underlying registration API treats ordinary IDs as names: a class-name ID can identify an unrelated object, and `get()` can return a scalar. This is a confirmed mismatch between an unconditional static inference and an allowed configuration. It does not establish a runtime resolution defect or select a change to the API. The witness below was checked against [`748357f`](https://github.com/componenta/di/tree/748357fa00c108ab5be0d29f46eb1185c547eb42), with PHP 8.4.28, PHP 8.5.13 and PHPStan 2.3.5 at maximum level.
+
+The exact surface is the concrete `Container::get()` PHPDoc and the concrete/interface `make()` PHPDoc. The native signatures already say `mixed` and `object`, respectively. PSR-11's `ContainerInterface::get()` does not gain the concrete container's generic promise. The existing standalone-creator support decision above and the [configuration normalization typing decision](configuration-normalization-contract.md) remain separate.
+
+The [runtime behavior](../../README.md#runtime-behavior) allows local definitions to choose their product. `make()` only requires an object: it resolves a local definition or fallback and bypasses shared values, external containers and delegators. `get()` additionally admits seeded or replaced values, aliases, external results and a requested ID's delegator result. None of these ordinary IDs receives a general product-subtype check merely because its spelling denotes a PHP class. A restriction to compatible products would therefore change which applications are accepted, not just correct an annotation. Protected core identities have their own existing rules and are outside this proposal.
+
+### Reproducible consumer witness
+
+After loading the package's Composer autoloader, this uses only public configuration and factory APIs:
+
+```php
+use Componenta\Config\Config;
+use Componenta\Config\ConfigKey;
+use Componenta\Config\DependencyDefinitions;
+use Componenta\Config\Environment;
+use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
+use Componenta\DI\Definition\ClassDefinition;
+
+class Expected {}
+final class Actual {}
+
+function expected(Container $container): Expected
+{
+    return $container->make(Expected::class);
+}
+
+$container = (new ContainerFactory())->create(
+    new Config([], new Environment([])),
+    new DependencyDefinitions([
+        ConfigKey::FACTORIES => [
+            Expected::class => new ClassDefinition(Actual::class),
+        ],
+    ]),
+)->container;
+if (!$container instanceof Container) {
+    throw new RuntimeException('Unsupported container implementation.');
+}
+
+$actual = $container->make(Expected::class); // Runtime product: Actual.
+expected($container); // Native return-type TypeError in expected().
+```
+
+The consumer function passes PHPStan at `level: max`, including the repository's `treatPhpDocTypesAsCertain: false` setting. Changing only its call to `get(Expected::class)` also passes. A wrapper taking `FactoryInterface` and calling `make(Expected::class)` passes as well. At runtime all three wrappers fail for the unrelated binding; direct `get()` and `make()` succeed and return `Actual`. The failure belongs to the consumer's native return declaration, outside DI's completed resolution. Both cold and warm shared `get()` exhibit the same result.
+
+The independent controls distinguish that mismatch from a general analyzer or DI failure:
+
+| Control | Observation on both PHP versions |
+|---|---|
+| Ordinary autowiring of `Expected` | All three typed wrappers return `Expected`; shared `get()` identity and fresh default `make()` identity remain correct. |
+| An explicit `ClassDefinition` for a subclass of `Expected` | All typed wrappers return the compatible subclass. |
+| Factory registered under `Expected::class` returning `7` | Direct `get()` returns `7`; its typed wrapper throws a native `TypeError` on cold and warm calls. No object result is claimed for scalar `make()`. |
+| Opaque ID with an unrelated object definition | Wrappers declaring `mixed` for `get()` and `object` for `make()` pass static analysis and return that object. An opaque scalar service also works with the `mixed` wrapper. |
+| Native function returning an `object` or `mixed` parameter as `Expected` | PHPStan reports `return.type`; a compatible object succeeds at runtime, while an unrelated object or scalar causes the same native `TypeError`. No ignore, cast or asserted type is used. |
+
+This witness is evidence about the advertised generic inference. It is not a new mutation-score target and does not require a permanent test that forces an unsafe wrapper to remain accepted by the analyzer.
+
+### Options and compatibility costs
+
+| Option | Benefit | Cost and obligations |
+|---|---|---|
+| A. Describe unrestricted lookup accurately: `mixed` for `get()`, `object` for `make()` | Static results match every currently supported registration. Runtime inputs, resolution and identities can stay unchanged. | Removes convenient inferred types from ordinary class autowiring and compatible interface bindings. Consumers may need explicit verified narrowing; release notes, repository examples and a downstream inventory are required. An annotation-only patch can still be a significant static API break. |
+| B. Offer an explicitly verified typed operation, alongside accurate unrestricted lookup | A `class-string<T>` result promise can be established by checking the actual result before returning it. A separately supplied expected class could also support opaque IDs. | Adds a public operation or facade to maintain. Define naming, class/interface inputs, mismatch exception, autoload effects, and the relation between requested ID and expected type. It must perform exactly one underlying lookup/creation, preserve successful product identity and avoid replaying factories, delegators or callbacks. Add it only for demonstrated consumer demand. |
+| C. Retain conditional inference as an explicit application assumption | Preserves existing static ergonomics and avoids immediate migration for applications that maintain compatible class-name bindings. | Document that the application must preserve the subtype invariant through registration, aliases, mutation, delegates and providers as applicable. The analyzer cannot infer this invariant from the current APIs, and documentation does not make the unrestricted promise sound. Accept this only as a deliberate policy or transition, with clearly scoped examples and a stated limitation. |
+
+Silently adding `instanceof`/`is_a` enforcement to current `get()` or `make()` is excluded from this documentation change: it would reject a valid opaque-ID registration and, for `get()`, constrain arbitrary delegated or external values. Silently weakening the three PHPDocs would choose option A without assessing its consumers. Neither is an automatic consequence of this proof.
+
+**Recommendation and trigger:** inventory consumer usage before selecting the static API policy. Prioritize a decision when an actual integration uses class-name IDs with unrelated products, accepts mutable or plugin-provided registrations, or relies on these generic results to enter a typed boundary. For a guarantee intended to cover every accepted configuration, use accurate unrestricted return types as the baseline and consider a verified typed operation only when its ergonomic benefit is demonstrated. If the project instead retains the application assumption, publish that limitation explicitly; do not describe it as a runtime-enforced class guarantee. This proposal leaves today's behavior and annotations unchanged while that choice is made.
+
+### Implementation sequence and acceptance
+
+1. **Inventory all three declaration surfaces and their consumers.** Include concrete-container calls, calls through `FactoryInterface`, ordinary autowiring, compatible interface bindings, class-name aliases, factories, raw services and mutable registrations. Treat unavailable downstream code as unknown. Keep `make()`'s bypass of delegators/external containers explicit.
+2. **Select and publish the guarantee in both languages.** Decide whether class-name inference is unconditional, explicitly verified or conditional on an application-maintained invariant. Specify migration and release compatibility before changing PHPDoc or adding an operation.
+3. **Preserve the runtime contract of existing methods.** A static policy change must not incidentally forbid valid bindings, change shared/fresh identity, add lookup replay or move application callbacks. Any separately proposed restriction needs its own evidence and approval.
+4. **Implement the smallest chosen surface and examples.** For a verified operation, define one lookup followed by one result check, including interfaces, subclasses, unrelated objects, scalars and null. Define error ownership and timing without changing current generic lookup exceptions. For an assumption policy, show the configurations that satisfy and violate it.
+5. **Verify a real consumer matrix.** Run focused PHPStan maximum-level fixtures without ignores, casts or false assertions, plus runtime controls on supported PHP 8.4/8.5. Under accurate returns, an unchecked `Expected` wrapper must no longer pass. Under a verified operation, its `T` promise must hold or produce the documented mismatch error before returning. Under the assumption policy, the existing counterexample remains an explicit limitation rather than a closed correctness defect.
+
+Acceptance also requires cold/warm shared results, alias and mutation transitions relevant to `get()`, and positive autowire/compatible-binding/opaque-ID cases. Test delegated or external mismatches only for an operation that actually uses those paths. Preserve one execution and object identity for successful verified lookups. PSR-11's native contract, protected core identities, constructor argument validation, application-code trust, low-level prepared callbacks and standalone collaborator-sharing rules are not redesigned by this policy decision. No security or performance improvement is claimed.

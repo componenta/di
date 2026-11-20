@@ -4,8 +4,10 @@
   "reference_head": "43c464187f80c95802fc36191350ae68b70a469e",
   "historical_tree": "80cb69a59f001a7d9c49af6e254ff3f58ffa8504",
   "historical_directory_removed_in": "79890e0",
-  "review_kind": "architecture-document inventory; no new source audit/tests/benchmarks",
+  "review_kind": "architecture-document inventory; original preservation ran no new source audit/tests/benchmarks; pass23 policy evidence is attributed separately",
   "historical_markdown_count": 31,
+  "open_topic_count": 10,
+  "open_report_count": 8,
   "open_topics": [
     {
       "id": "availability_b2",
@@ -66,6 +68,27 @@
       "source": "H12 architecture section and RU §6.1; H13 §6",
       "action_en": "Preserve existing direct-method tests. Decide the published support surface, prepare() validation timing and constructorless beforeConstructor behavior. Do not remove a method because the repository has no caller or describe already tested routes as untested.",
       "action_ru": "Сохранить существующие direct-method tests. Решить опубликованную область поддержки, время проверки prepare() и beforeConstructor для constructorless-путей. Не удалять метод по отсутствию repo-caller и не объявлять уже проверенные маршруты непокрытыми."
+    },
+    {
+      "id": "static_return_types",
+      "title_en": "Static return types for class-name IDs",
+      "title_ru": "Статический тип результата для class-name ID",
+      "document": "standalone-api-surface",
+      "section_en": "additional-policy-scope-conditional-return-types-for-class-name-ids",
+      "section_ru": "дополнительная-граница-политики-условный-тип-результата-для-class-name-id",
+      "status": "contract_decision",
+      "source": "Pass 23; baseline 748357fa00c108ab5be0d29f46eb1185c547eb42; standalone-api-surface supplement",
+      "evidence": {
+        "pass": 23,
+        "reference_head": "748357fa00c108ab5be0d29f46eb1185c547eb42",
+        "php_versions": ["8.4.28", "8.5.13"],
+        "phpstan_version": "2.3.5",
+        "phpstan_level": "max",
+        "runtime_defect_established": false,
+        "api_policy_selected": false
+      },
+      "action_en": "Public runtime/PHPStan witness and controls are preserved in the supplement. Conditional T inference for concrete get() and concrete/interface make() exceeds permitted unrelated object products; get() also permits scalars. Inventory consumers before choosing accurate mixed/object, a verified typed operation or an explicit application assumption. No runtime defect is established; existing methods and PHPDoc remain unchanged.",
+      "action_ru": "Публичный runtime/PHPStan witness и controls сохранены в дополнении. Условный вывод T для concrete get() и concrete/interface make() сильнее допустимых посторонних object products; get() также допускает scalar. Собрать consumers до выбора точных mixed/object, проверяемой typed operation либо явного допущения приложения. Runtime-дефект не установлен; нынешние методы и PHPDoc сохранены."
     },
     {
       "id": "configuration_normalization",
