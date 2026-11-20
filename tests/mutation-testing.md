@@ -1,5 +1,7 @@
 # Mutation testing
 
+[Русская версия](mutation-testing.ru.md)
+
 Install the package's Composer development dependencies, then run:
 
 ```sh
@@ -40,12 +42,21 @@ CI uploads the manifest and fallback logs as the separate `mutation-php-8.4` art
 
 Cold-container fixtures run in separate native PHP processes. Their `SubprocessAutoload` bootstrap applies an inherited Pest mutation before loading the target, including a matching Composer `autoload.files` entry. These children do not contribute executed lines to the parent's coverage report.
 
-The mutation selection adapter therefore declares one additional dependency: mutations on already covered lines of `src/Container.php` also select `ContainerColdMutationContractTest`, provided that test file is registered in the current Pest suite. Registered paths are canonicalized with `realpath()` before comparison. A scoped invocation that did not load the cold test file does not gain that selector or silently load additional tests.
+The mutation selection adapter therefore declares these source-specific dependencies for mutations on already covered lines:
 
-The value `P\Tests\Contract\ContainerColdMutationContractTest::` is the generated class selector for the pinned Pest 4 version. It is a worker filter dependency, not a claim that this class executed the Container lines in the parent process. The adapter already uses the temporary mutation coverage file to transport whole-class selectors to Pest. This addition uses that same transport; it does not add source files, executable lines or coverage hits. Empty and `null` line entries remain unchanged. The original coverage input is not modified in place.
+| Source | Additional registered contract | Boundary |
+|---|---|---|
+| `src/Container.php` | `ContainerColdMutationContractTest` | Cold protected-alias validation |
+| `src/ContainerFactory.php` | `ContainerFactoryCompletionContractTest` | Container initialization before the factory returns |
+
+Each additional contract must be registered in the current Pest suite. Registered paths are canonicalized with `realpath()` before comparison. A scoped invocation that did not load a listed test file does not gain its selector or silently load additional tests.
+
+The values `P\Tests\Contract\ContainerColdMutationContractTest::` and `P\Tests\Contract\ContainerFactoryCompletionContractTest::` are the generated class selectors for the pinned Pest 4 version. These are worker filter dependencies, not claims that the classes executed the source lines in the parent process. The adapter already uses the temporary mutation coverage file to transport whole-class selectors to Pest. These additions use that same transport; they do not add source files, executable lines or coverage hits. Empty and `null` line entries remain unchanged. The original coverage input is not modified in place.
 
 `MutationCoverage::covers()` and uncovered-mutant fallback use a compact mask of measured covered lines captured before selectors are added. Keeping only that mask avoids retaining the much larger per-test coverage relation map during mutation execution. The fallback policy and covered/uncovered classification are unchanged.
 
-This declaration is intentionally limited to `src/Container.php`. Other native subprocess coverage boundaries still require explicit review; this is not general coverage aggregation for child processes. Existing cold bootstrap/retry cases can also be selected through their shared test class when an in-process test covers the relevant line, but that does not establish complete child line coverage for every source file. When Pest is upgraded or the cold contract file is renamed, verify the generated selector and the bounded worker regression again.
+These declarations are intentionally limited to the two listed sources. Other native subprocess coverage boundaries still require explicit review; this is not general coverage aggregation for child processes. Existing cold bootstrap/retry cases can also be selected through their shared test class when an in-process test covers the relevant line, but that does not establish complete child line coverage for every source file. When Pest is upgraded or a listed contract file is renamed, verify its generated selector and bounded worker regression again.
 
 The regression uses a real `ForeachEmptyIterable` mutation of the protected-alias validation loop. With `RuntimeMutationContractTest` and `ContainerColdMutationContractTest` in the initial suite, measured coverage alone selects only the former and the mutant survives. Adding the declared cold selector makes the existing alias case fail because the protected-target exception is missing and the public alias resolves to `decorated-core`. An identity replacement passes. A run containing only `RuntimeMutationContractTest` retains its original selector and passes its identity control. This checks source behavior and selection without manufacturing coverage for the native child.
+
+The factory completion contract uses a cold autoloader failure to check that construction reports collaborator initialization errors before returning a container, preserves the original cause and permits retry. Removing the final `get(Config::class)` violates that contract. Other tests can cover this line in the parent process while the cold contract remains absent from its measured test IDs; its empty-factory case does not reach completion. The explicit factory mapping keeps the registered cold contract in the worker selection for that mutation. `MutationCoverageContractTest` checks both source mappings, unrelated sources, unregistered contracts, unchanged input and preservation of empty and `null` line entries.

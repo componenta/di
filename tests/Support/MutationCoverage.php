@@ -20,6 +20,9 @@ final class MutationCoverage implements StartMutationGenerationSubscriber
         'src/Container.php' => [
             'tests/Contract/ContainerColdMutationContractTest.php' => 'P\\Tests\\Contract\\ContainerColdMutationContractTest::',
         ],
+        'src/ContainerFactory.php' => [
+            'tests/Contract/ContainerFactoryCompletionContractTest.php' => 'P\\Tests\\Contract\\ContainerFactoryCompletionContractTest::',
+        ],
     ];
 
     /** @var array<string,array<int,true>> */
