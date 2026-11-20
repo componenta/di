@@ -58,6 +58,18 @@ final class Child extends Ancestor
     }
 }
 
+final class StaticMagicChild extends Ancestor
+{
+    public static int $magicCalls = 0;
+
+    /** @param array<array-key, mixed> $arguments */
+    public static function __callStatic(string $method, array $arguments): never
+    {
+        ++self::$magicCalls;
+        throw new LogicException('The static magic route is not the selected instance method.');
+    }
+}
+
 function allowingQualifiedCallable(Closure $operation): mixed
 {
     set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
@@ -167,3 +179,30 @@ test('qualified delegators preserve strict binding and body failure ownership', 
         }
     });
 })->with(['strict', 'owned', 'foreign']);
+
+test('qualified instance dependencies retain their owner when its class also exposes static magic', function (bool $pair): void {
+    allowingQualifiedCallable(static function () use ($pair): void {
+        StaticMagicChild::$magicCalls = 0;
+        $owner = new StaticMagicChild();
+        $method = Ancestor::class . '::decorate';
+        $container = (new ContainerBuilder())
+            ->addServices(['entry' => 'value', 'suffix' => 'suffix', StaticMagicChild::class => $owner])
+            ->build();
+        $container->delegator('entry', $pair
+            ? [StaticMagicChild::class, $method]
+            : StaticMagicChild::class . '::' . $method);
+
+        expect($container->get('entry'))->toBe('value:original:suffix')
+            ->and($container->get('entry'))->toBe('value:original:suffix')
+            ->and($owner->calls)->toBe(1);
+
+        $replacement = new StaticMagicChild('replacement');
+        $container->set(StaticMagicChild::class, $replacement);
+
+        expect($container->get('entry'))->toBe('value:replacement:suffix')
+            ->and($container->get('entry'))->toBe('value:replacement:suffix')
+            ->and($owner->calls)->toBe(1)
+            ->and($replacement->calls)->toBe(1)
+            ->and(StaticMagicChild::$magicCalls)->toBe(0);
+    });
+})->with(['instance shorthand' => false, 'service pair control' => true]);
