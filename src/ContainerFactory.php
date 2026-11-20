@@ -563,9 +563,13 @@ final class ContainerFactory
                     $spec[1],
                 ));
             }
-            $extension = $factory($container);
+            $invoke = str_contains($spec[1], '::') ? Closure::fromCallable($factory) : $factory;
+            $extension = $invoke($container);
         } elseif (is_callable($spec)) {
-            $extension = $spec($container);
+            // Native qualified ancestor pairs require capture before direct invocation.
+            // Retain the original array until invocation completes, including static receivers.
+            $invoke = is_array($spec) && str_contains($spec[1], '::') ? Closure::fromCallable($spec) : $spec;
+            $extension = $invoke($container);
         } else {
             throw new InvalidConfigurationException(sprintf(
                 'Unsupported extension specification %s.',
