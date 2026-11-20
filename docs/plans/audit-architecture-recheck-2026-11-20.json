@@ -1,0 +1,772 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-20",
+  "purpose": "Executed architecture boundary witnesses after preserving the reports; no architecture implementation selected.",
+  "behavior_probe_head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+  "src_git_tree": "971dc4709d472411e1f08b73f01700b976c9e096",
+  "production_source_files": 170,
+  "observations": [
+    {
+      "probe": "bootstrap-finalization-boundaries-0.php",
+      "report": "bootstrap-finalization-boundaries.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.4.28",
+      "probe_sha256": "13af818ebef04dc5c48dabfde56b10d1db0f71238f7bb8bca9cd92fba3fb588b",
+      "command": "php -n <probe>/bootstrap-finalization-boundaries-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "caec5c2479d9f5bc901964dd90c6672f3335f3b47d6675241c04e181f488ce07",
+      "observation": {
+        "before": 0,
+        "first_poll": 0,
+        "readiness_changed": true,
+        "declared_after_first": false,
+        "second_poll": 1,
+        "declared_after_second": true,
+        "loader_calls": {
+          "Audit21HiddenReadiness\\First": 3,
+          "Audit21HiddenReadiness\\Later": 4
+        }
+      }
+    },
+    {
+      "probe": "bootstrap-finalization-boundaries-0.php",
+      "report": "bootstrap-finalization-boundaries.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.5.13",
+      "probe_sha256": "13af818ebef04dc5c48dabfde56b10d1db0f71238f7bb8bca9cd92fba3fb588b",
+      "command": "php -n <probe>/bootstrap-finalization-boundaries-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "caec5c2479d9f5bc901964dd90c6672f3335f3b47d6675241c04e181f488ce07",
+      "observation": {
+        "before": 0,
+        "first_poll": 0,
+        "readiness_changed": true,
+        "declared_after_first": false,
+        "second_poll": 1,
+        "declared_after_second": true,
+        "loader_calls": {
+          "Audit21HiddenReadiness\\First": 3,
+          "Audit21HiddenReadiness\\Later": 4
+        }
+      }
+    },
+    {
+      "probe": "bootstrap-finalization-boundaries-1.php",
+      "report": "bootstrap-finalization-boundaries.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.4.28",
+      "probe_sha256": "207f5519572e1dfd72b10483bef47188c0c5f1c91ffd8f828dc4825209ad45a6",
+      "command": "php -n <probe>/bootstrap-finalization-boundaries-1.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "f9e58c40ffbbdb584fa66a7cb737304eea3fc0d525502749d2b7a87663a681b8",
+      "observation": {
+        "status": "accepted",
+        "events": [
+          "retained until proof",
+          "destructor"
+        ],
+        "released": true,
+        "cached": "null",
+        "fresh": "stdClass"
+      }
+    },
+    {
+      "probe": "bootstrap-finalization-boundaries-1.php",
+      "report": "bootstrap-finalization-boundaries.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.5.13",
+      "probe_sha256": "207f5519572e1dfd72b10483bef47188c0c5f1c91ffd8f828dc4825209ad45a6",
+      "command": "php -n <probe>/bootstrap-finalization-boundaries-1.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "f9e58c40ffbbdb584fa66a7cb737304eea3fc0d525502749d2b7a87663a681b8",
+      "observation": {
+        "status": "accepted",
+        "events": [
+          "retained until proof",
+          "destructor"
+        ],
+        "released": true,
+        "cached": "null",
+        "fresh": "stdClass"
+      }
+    },
+    {
+      "probe": "configuration-normalization-contract-0.php",
+      "report": "configuration-normalization-contract.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.4.28",
+      "probe_sha256": "a91477faf9875165d0a1ffee380c8dc5b5e27d90bcb441d823ea84715646b2ad",
+      "command": "php -n <probe>/configuration-normalization-contract-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "e3293080c318f02f40d60ff211eda28a8218cdd45dbb92caff9fa7201e476584",
+      "observation": {
+        "text": "array (\n  0 => 'stdClass',\n)array (\n  'product' => 'stdClass',\n)"
+      }
+    },
+    {
+      "probe": "configuration-normalization-contract-0.php",
+      "report": "configuration-normalization-contract.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.5.13",
+      "probe_sha256": "a91477faf9875165d0a1ffee380c8dc5b5e27d90bcb441d823ea84715646b2ad",
+      "command": "php -n <probe>/configuration-normalization-contract-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "e3293080c318f02f40d60ff211eda28a8218cdd45dbb92caff9fa7201e476584",
+      "observation": {
+        "text": "array (\n  0 => 'stdClass',\n)array (\n  'product' => 'stdClass',\n)"
+      }
+    },
+    {
+      "probe": "external-provider-ownership-0.php",
+      "report": "external-provider-ownership.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.4.28",
+      "probe_sha256": "551f2b5aeb08e7432a60eb1e1e078a65a6a3e34710e465469ad1c8b69a36a32c",
+      "command": "php -n <probe>/external-provider-ownership-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "5238652f62eb0189a09613bc189ac6873a9bfb2d25e36fb3f1994da60ef333dd",
+      "observation": {
+        "php": "8.4.28",
+        "source_directory": "<checkout>/src",
+        "container_source": "<checkout>/src/Container.php",
+        "container_sha256": "19abd5e35993d9f4f27b410f6f1e305f82218ede681301a1c23551c4b3638875",
+        "probe_sha256": "551f2b5aeb08e7432a60eb1e1e078a65a6a3e34710e465469ad1c8b69a36a32c",
+        "results": [
+          {
+            "release_on_second_id_probe": 0,
+            "second_id_checks": 1,
+            "final_owner": "previous",
+            "actual": "first:previous",
+            "expected": "first:previous",
+            "shared_identity_preserved": true,
+            "candidate_registration_queries": [],
+            "ok": true,
+            "provider_contract_checks": {
+              "earlier_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "candidate_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "earlier_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              }
+            }
+          },
+          {
+            "release_on_second_id_probe": 1,
+            "second_id_checks": 1,
+            "final_owner": "replacement",
+            "actual": "first:previous",
+            "expected": "first:replacement",
+            "shared_identity_preserved": true,
+            "candidate_registration_queries": [],
+            "ok": false,
+            "provider_contract_checks": {
+              "earlier_first": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "earlier_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              }
+            }
+          },
+          {
+            "release_on_second_id_probe": 2,
+            "second_id_checks": 1,
+            "final_owner": "previous",
+            "actual": "first:previous",
+            "expected": "first:previous",
+            "shared_identity_preserved": true,
+            "candidate_registration_queries": [],
+            "ok": true,
+            "provider_contract_checks": {
+              "earlier_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "candidate_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "earlier_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "probe": "external-provider-ownership-0.php",
+      "report": "external-provider-ownership.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.5.13",
+      "probe_sha256": "551f2b5aeb08e7432a60eb1e1e078a65a6a3e34710e465469ad1c8b69a36a32c",
+      "command": "php -n <probe>/external-provider-ownership-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "8adb96819ff56c58dccc46621787b195f972f2f5334d426f860ef49e01f68e08",
+      "observation": {
+        "php": "8.5.13",
+        "source_directory": "<checkout>/src",
+        "container_source": "<checkout>/src/Container.php",
+        "container_sha256": "19abd5e35993d9f4f27b410f6f1e305f82218ede681301a1c23551c4b3638875",
+        "probe_sha256": "551f2b5aeb08e7432a60eb1e1e078a65a6a3e34710e465469ad1c8b69a36a32c",
+        "results": [
+          {
+            "release_on_second_id_probe": 0,
+            "second_id_checks": 1,
+            "final_owner": "previous",
+            "actual": "first:previous",
+            "expected": "first:previous",
+            "shared_identity_preserved": true,
+            "candidate_registration_queries": [],
+            "ok": true,
+            "provider_contract_checks": {
+              "earlier_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "candidate_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "earlier_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              }
+            }
+          },
+          {
+            "release_on_second_id_probe": 1,
+            "second_id_checks": 1,
+            "final_owner": "replacement",
+            "actual": "first:previous",
+            "expected": "first:replacement",
+            "shared_identity_preserved": true,
+            "candidate_registration_queries": [],
+            "ok": false,
+            "provider_contract_checks": {
+              "earlier_first": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "earlier_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              }
+            }
+          },
+          {
+            "release_on_second_id_probe": 2,
+            "second_id_checks": 1,
+            "final_owner": "previous",
+            "actual": "first:previous",
+            "expected": "first:previous",
+            "shared_identity_preserved": true,
+            "candidate_registration_queries": [],
+            "ok": true,
+            "provider_contract_checks": {
+              "earlier_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "candidate_first": {
+                "has": true,
+                "get": "same value",
+                "valid": true
+              },
+              "earlier_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              },
+              "candidate_missing": {
+                "has": false,
+                "get": "NotFoundException",
+                "valid": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "probe": "native-lazy-fiber-0.php",
+      "report": "native-lazy-fiber.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.4.28",
+      "probe_sha256": "2e53497f7292cadfc147af3d934201df1fcb8e5b53e97c95e5385dfc2f1a42ad",
+      "command": "php -n <probe>/native-lazy-fiber-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "368290e5ef45994bea21b4a4597f2a35008a0f7e253445d1b09a1311058b520c",
+      "observation": {
+        "native-ghost": {
+          "first": "constructing",
+          "during": "starting",
+          "after": "ready",
+          "fiberResult": "ready"
+        },
+        "native-proxy": {
+          "first": "constructing",
+          "during": "Error: Typed property Product::$value must not be accessed before initialization",
+          "after": "ready",
+          "fiberResult": "ready"
+        },
+        "di-ghost": {
+          "first": "constructing",
+          "during": "starting",
+          "after": "ready",
+          "fiberResult": "ready"
+        },
+        "di-proxy": {
+          "first": "constructing",
+          "during": "Error: Typed property Product::$value must not be accessed before initialization",
+          "after": "ready",
+          "fiberResult": "ready"
+        }
+      }
+    },
+    {
+      "probe": "native-lazy-fiber-0.php",
+      "report": "native-lazy-fiber.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.5.13",
+      "probe_sha256": "2e53497f7292cadfc147af3d934201df1fcb8e5b53e97c95e5385dfc2f1a42ad",
+      "command": "php -n <probe>/native-lazy-fiber-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "368290e5ef45994bea21b4a4597f2a35008a0f7e253445d1b09a1311058b520c",
+      "observation": {
+        "native-ghost": {
+          "first": "constructing",
+          "during": "starting",
+          "after": "ready",
+          "fiberResult": "ready"
+        },
+        "native-proxy": {
+          "first": "constructing",
+          "during": "Error: Typed property Product::$value must not be accessed before initialization",
+          "after": "ready",
+          "fiberResult": "ready"
+        },
+        "di-ghost": {
+          "first": "constructing",
+          "during": "starting",
+          "after": "ready",
+          "fiberResult": "ready"
+        },
+        "di-proxy": {
+          "first": "constructing",
+          "during": "Error: Typed property Product::$value must not be accessed before initialization",
+          "after": "ready",
+          "fiberResult": "ready"
+        }
+      }
+    },
+    {
+      "probe": "relative-callable-context-0.php",
+      "report": "relative-callable-context.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.4.28",
+      "probe_sha256": "de2f5a5d751b50b02b8ee46b8972c2981665cd7fdefa650df010937107ac7310",
+      "command": "php -n <probe>/relative-callable-context-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "c7b1b357e77c38616688764f536b8bde04a56a245afd04df913bc2a33e6be923",
+      "observation": {
+        "php": "8.4.28",
+        "results": {
+          "static runtime class": {
+            "native": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                }
+              ]
+            },
+            "di": {
+              "error": "Componenta\\DI\\Exception\\ResolutionException",
+              "message": "Cannot resolve parameter \"$callback\" of Audit20CallableOwner::accept(): value provided for \"$callback\" does not satisfy declared type.",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                }
+              ]
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                }
+              ]
+            }
+          },
+          "instance runtime receiver": {
+            "native": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                }
+              ]
+            },
+            "di": {
+              "error": "Componenta\\DI\\Exception\\ResolutionException",
+              "message": "Cannot resolve parameter \"$callback\" of Audit20CallableOwner::acceptInstance(): value provided for \"$callback\" does not satisfy declared type.",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                }
+              ]
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                }
+              ]
+            }
+          },
+          "lexical private control": {
+            "native": {
+              "value": "owner-private",
+              "warnings": []
+            },
+            "di": {
+              "value": "owner-private",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "owner-private",
+              "warnings": []
+            }
+          },
+          "protected control": {
+            "native": {
+              "value": "child-protected",
+              "warnings": []
+            },
+            "di": {
+              "value": "child-protected",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "child-protected",
+              "warnings": []
+            }
+          },
+          "child private rejection control": {
+            "native": {
+              "error": "TypeError",
+              "message": "Audit20CallableOwner::accept(): Argument #1 ($callback) must be of type callable, array given, called in <probe>/relative-callable-context-0.php on line 46",
+              "warnings": []
+            },
+            "di": {
+              "error": "Componenta\\DI\\Exception\\ResolutionException",
+              "message": "Cannot resolve parameter \"$callback\" of Audit20CallableOwner::accept(): value provided for \"$callback\" does not satisfy declared type.",
+              "warnings": []
+            },
+            "prepared": {
+              "error": "TypeError",
+              "message": "Audit20CallableOwner::accept(): Argument #1 ($callback) must be of type callable, array given",
+              "warnings": []
+            }
+          },
+          "fully qualified workaround": {
+            "native": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "di": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": []
+            }
+          },
+          "closure workaround": {
+            "native": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "di": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "probe": "relative-callable-context-0.php",
+      "report": "relative-callable-context.md",
+      "head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+      "php_version": "8.5.13",
+      "probe_sha256": "de2f5a5d751b50b02b8ee46b8972c2981665cd7fdefa650df010937107ac7310",
+      "command": "php -n <probe>/relative-callable-context-0.php <checkout>",
+      "working_directory": "<checkout>",
+      "exit_code": 0,
+      "raw_output_sha256": "4b277a6264c746c0eb6092f67fe0c125f9a0c27629b9edd6e5493e5493e9ea97",
+      "observation": {
+        "php": "8.5.13",
+        "results": {
+          "static runtime class": {
+            "native": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                }
+              ]
+            },
+            "di": {
+              "error": "Componenta\\DI\\Exception\\ResolutionException",
+              "message": "Cannot resolve parameter \"$callback\" of Audit20CallableOwner::accept(): value provided for \"$callback\" does not satisfy declared type.",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                }
+              ]
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"static\" in callables is deprecated"
+                }
+              ]
+            }
+          },
+          "instance runtime receiver": {
+            "native": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                }
+              ]
+            },
+            "di": {
+              "error": "Componenta\\DI\\Exception\\ResolutionException",
+              "message": "Cannot resolve parameter \"$callback\" of Audit20CallableOwner::acceptInstance(): value provided for \"$callback\" does not satisfy declared type.",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                }
+              ]
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": [
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                },
+                {
+                  "level": 8192,
+                  "message": "Use of \"self\" in callables is deprecated"
+                }
+              ]
+            }
+          },
+          "lexical private control": {
+            "native": {
+              "value": "owner-private",
+              "warnings": []
+            },
+            "di": {
+              "value": "owner-private",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "owner-private",
+              "warnings": []
+            }
+          },
+          "protected control": {
+            "native": {
+              "value": "child-protected",
+              "warnings": []
+            },
+            "di": {
+              "value": "child-protected",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "child-protected",
+              "warnings": []
+            }
+          },
+          "child private rejection control": {
+            "native": {
+              "error": "TypeError",
+              "message": "Audit20CallableOwner::accept(): Argument #1 ($callback) must be of type callable, array given, called in <probe>/relative-callable-context-0.php on line 46",
+              "warnings": []
+            },
+            "di": {
+              "error": "Componenta\\DI\\Exception\\ResolutionException",
+              "message": "Cannot resolve parameter \"$callback\" of Audit20CallableOwner::accept(): value provided for \"$callback\" does not satisfy declared type.",
+              "warnings": []
+            },
+            "prepared": {
+              "error": "TypeError",
+              "message": "Audit20CallableOwner::accept(): Argument #1 ($callback) must be of type callable, array given",
+              "warnings": []
+            }
+          },
+          "fully qualified workaround": {
+            "native": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "di": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": []
+            }
+          },
+          "closure workaround": {
+            "native": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "di": {
+              "value": "child-public",
+              "warnings": []
+            },
+            "prepared": {
+              "value": "child-public",
+              "warnings": []
+            }
+          }
+        }
+      }
+    }
+  ],
+  "normalization": [
+    "Only absolute probe-directory and checkout-directory paths in output were replaced with <probe> and <checkout>.",
+    "raw_output_sha256 hashes the unmodified saved output; probe_sha256 hashes the executed PHP file including its final newline."
+  ],
+  "limits": [
+    "Exit code zero means the witness completed; it does not mean the demonstrated mismatch was fixed.",
+    "The context-dependent workaround fragment relative-callable-context-1.php was syntax checked, not executed separately.",
+    "This is the small portable relative-callable witness, not a repeat of the historical 1551-case matrix.",
+    "The historical large-alias timing matrix and comparative availability timings were not repeated as independent latency measurements."
+  ]
+}

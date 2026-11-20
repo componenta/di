@@ -2,6 +2,10 @@
 
 [Русская версия](attribute-availability-performance.ru.md)
 
+## Recheck after report preservation
+
+The [subsequent audit](audit-architecture-recheck-2026-11-20.md#security-and-performance-assessment) repeated the current-source harness as a smoke on both PHP versions. It reproduced 24/192 missing-name calls per affected creation and zero on shared hits. The concurrent smoke timings are not a new paired latency comparison.
+
 **Current DI 6 status — 2026-11-20: proposed; not implemented.** Retain the corrected runtime on `refactor/di6-definitions-callbacks`. B2 remains a conditional architecture direction, not a selected production optimization. The [DI 6 recheck below](#2026-11-20-di-6-recheck) records current counts **24/192**, measured latency costs, and the separate bootstrap contract boundaries. The earlier 5.x experiments and their **22/176** counts remain historical evidence only.
 
 **Decision:** retain the corrected polling behavior on the current DI 6 refactoring branch. Do not implement a broad availability optimization from this plan. Fix independently demonstrated coherence defects locally. If application workloads justify changing the synchronization contract later, prefer B2: explicit availability refresh and pure generation observation within the existing owners. C is not selected. No production optimization slice is `implementation-ready`; the conditional B2 work remains `blocked` by the contract and qualification requirements below.

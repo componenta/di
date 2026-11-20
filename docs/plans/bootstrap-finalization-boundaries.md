@@ -2,6 +2,10 @@
 
 [Русская версия](bootstrap-finalization-boundaries.ru.md)
 
+## Recheck after report preservation
+
+The subsequent [evidence recheck](audit-architecture-recheck-2026-11-20.md) records fresh executions on PHP 8.4.28 and 8.5.13 after report preservation, with [machine-readable output](audit-architecture-recheck-2026-11-20.json). Historical revision labels and statements about what was not executed during the initial preservation step remain historical; the recheck supplies the later evidence. No architecture option is implemented by that verification.
+
 **Status: proposed; not implemented.** This report records two confirmed boundaries of the DI 6 refactoring branch and proposes separate contract decisions. It does not introduce an availability notification API, a new cleanup phase, or a promise to detect private autoloader readiness. The local convergence and discovery fixes remain in place.
 
 **Recommendation:** require influencing attribute declarations to be available before bootstrap dependencies consume them. Design an optional, explicit availability signal only if a real integration requires dynamic readiness. Separately, introduce a terminal reference-release phase with conservative failure when observable metadata changes before successful container publication. The latter changes failure behavior and needs a deliberate architecture decision.

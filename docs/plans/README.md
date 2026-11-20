@@ -6,6 +6,8 @@ The accepted refactoring scope is implemented on `refactor/di6-definitions-callb
 
 The November 20 architecture-report inventory is now preserved here. [The source-to-plan inventory](audit-architecture-inventory.md) records historical proposals, completed corrections, superseded designs and deliberately unchanged contracts. Open reports below are proposals, not authorization to change runtime behavior or a claim that all limitations are DI regressions.
 
+The subsequent [fresh recheck](audit-architecture-recheck-2026-11-20.md) records executed architecture witnesses, added behavior tests, verification results and evidence limits. Its [JSON observations](audit-architecture-recheck-2026-11-20.json) are stored alongside the reports.
+
 ## Open decisions and conditional proposals
 
 | Area | Report | Decision and expected benefit |

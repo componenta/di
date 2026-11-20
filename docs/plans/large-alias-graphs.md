@@ -2,6 +2,10 @@
 
 [Русская версия](large-alias-graphs.ru.md)
 
+## Recheck after report preservation
+
+The [subsequent audit](audit-architecture-recheck-2026-11-20.md) re-read the alias implementation and retained this conditional proposal. It did not repeat the historical alias timing matrix or establish a new application latency budget.
+
 **Status, 2026-11-20:** preserved conditional performance proposal. No graph rewrite, alias limit or new public contract is selected. Proceed only when a real consumer profile shows material startup cost in alias construction. This is separate from missing-attribute polling in [B2](attribute-availability-performance.md) and from already corrected alias-family invalidation in [definition ownership](definition-owner-lifecycle.md).
 
 ## 1. Problem and historical evidence

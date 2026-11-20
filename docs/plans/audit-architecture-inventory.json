@@ -777,5 +777,15 @@
         "audit20-objects-mutation-triage.md": "ab55ef7af917722d0d8824ab740eb994034380587dc185bbd41a90e34f91c349"
       }
     }
-  ]
+  ],
+  "subsequent_verification": {
+    "date": "2026-11-20",
+    "report_en": "audit-architecture-recheck-2026-11-20.md",
+    "report_ru": "audit-architecture-recheck-2026-11-20.ru.md",
+    "observations": "audit-architecture-recheck-2026-11-20.json",
+    "behavior_probe_head": "4683598c61ecc2673372d51a58f6f9262d9e5cc6",
+    "production_tree": "971dc4709d472411e1f08b73f01700b976c9e096",
+    "executions": 12,
+    "architecture_implementation_selected": false
+  }
 }

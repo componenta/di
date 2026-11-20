@@ -2,6 +2,10 @@
 
 [Русская версия](native-lazy-fiber.ru.md)
 
+## Recheck after report preservation
+
+The subsequent [evidence recheck](audit-architecture-recheck-2026-11-20.md) records fresh executions on PHP 8.4.28 and 8.5.13 after report preservation, with [machine-readable output](audit-architecture-recheck-2026-11-20.json). Historical revision labels and statements about what was not executed during the initial preservation step remain historical; the recheck supplies the later evidence. No architecture option is implemented by that verification.
+
 **Status, 2026-11-20:** preserved native-runtime boundary, not a confirmed DI 6 regression. No synchronization architecture is selected. The recommendation is to document the boundary and let an application that requires serialized initialization choose its publication and scheduling policy. A library feature requires a concrete consumer requirement and the separate design below. This is independent of the completed [propertyless native-lazy correction](propertyless-lazy-lifecycle.md).
 
 ## 1. Observation and evidence boundary

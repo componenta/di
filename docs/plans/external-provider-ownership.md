@@ -2,6 +2,10 @@
 
 **Status (2026-11-20): proposed; not implemented.** Audit finding **A20-C1** remains open. This report records a confirmed consistency boundary and the decision needed before changing the external-provider contract. It does not authorize a new protocol or restore the withdrawn repeated-`has()` patch. [Русская версия](external-provider-ownership.ru.md).
 
+## Recheck after report preservation
+
+The subsequent [evidence recheck](audit-architecture-recheck-2026-11-20.md) records fresh executions on PHP 8.4.28 and 8.5.13 after report preservation, with [machine-readable output](audit-architecture-recheck-2026-11-20.json). Historical revision labels and statements about what was not executed during the initial preservation step remain historical; the recheck supplies the later evidence. No architecture option is implemented by that verification.
+
 ## 1. Scope and confirmed effect
 
 DI tracks which external PSR-11 containers are registered and invalidates local deferred delegator pipelines when a registration takes over their dependency IDs. It cannot observe arbitrary changes inside an already registered provider. A provider's `has()` can change ownership of a different ID without changing registry membership. The registration operation can consequently publish a new direct owner while retaining an old dependent shared result.

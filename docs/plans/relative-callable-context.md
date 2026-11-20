@@ -2,6 +2,10 @@
 
 **Status (2026-11-20): proposed; not implemented.** Audit result **A20-P3** is a confirmed compatibility limitation. A violation of an explicit support promise or a regression introduced by DI 6 has **not** been established. The architectural option in this report is conditional on a real requirement for parity with deprecated PHP forms. [Русская версия](relative-callable-context.ru.md).
 
+## Recheck after report preservation
+
+The subsequent [evidence recheck](audit-architecture-recheck-2026-11-20.md) records fresh executions on PHP 8.4.28 and 8.5.13 after report preservation, with [machine-readable output](audit-architecture-recheck-2026-11-20.json). Historical revision labels and statements about what was not executed during the initial preservation step remain historical; the recheck supplies the later evidence. No architecture option is implemented by that verification.
+
 ## 1. The observed difference
 
 For an inherited method, PHP distinguishes its lexical declaring class from its actual called class and, for an instance call, its receiver. DI's ordinary parameter acceptance path knows the reflected parameter's declaring class. It does not carry all three parts of the current invocation into `TypeHints::matchesCallable()`.

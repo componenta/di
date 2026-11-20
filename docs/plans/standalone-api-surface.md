@@ -2,6 +2,10 @@
 
 [Русская версия](standalone-api-surface.ru.md)
 
+## Recheck after report preservation
+
+The [subsequent audit](audit-architecture-recheck-2026-11-20.md#published-test-coverage) adds direct parameter, object-pipeline and entry-strategy contract tests on both supported PHP series. This strengthens coverage of current behavior without selecting a wider API support promise. The existing prohibition on sharing mutable collaborators between Containers remains in force.
+
 **Status, 2026-11-20:** preserved architecture proposal, partly covered by later contract tests. No removal, visibility change or new runtime policy is selected. The remaining decision is which low-level surfaces are independently supported, and which exact preparation/callback guarantees they carry. Current source reference: [`43c4641`](https://github.com/componenta/di/tree/43c464187f80c95802fc36191350ae68b70a469e).
 
 ## Problem and provenance
