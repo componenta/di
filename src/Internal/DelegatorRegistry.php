@@ -188,6 +188,15 @@ final class DelegatorRegistry
 
             $ids = [$delegator => true];
             if (str_contains($delegator, '::')) {
+                $nativeOwner = substr($delegator, 0, (int) strrpos($delegator, '::'));
+                // Engine aliases can contain delimiters. A loaded native callable
+                // bypasses container owner lookup, including the first prefix.
+                if ((class_exists($nativeOwner, false) || interface_exists($nativeOwner, false))
+                    && is_callable($delegator)
+                ) {
+                    return array_map('strval', array_keys($ids));
+                }
+
                 [$owner, $method] = explode('::', $delegator, 2);
                 if ($owner !== '' && $method !== '') {
                     // The interface probe can autoload a class after the first probe failed.
