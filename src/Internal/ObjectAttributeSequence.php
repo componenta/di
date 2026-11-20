@@ -8,12 +8,15 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Proxy;
+use Componenta\DI\Exception\ExceptionInterface;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Throwable;
 
 /** Tracks one object phase across targets without replaying dispatched handlers. @internal */
 final class ObjectAttributeSequence
@@ -109,8 +112,14 @@ final class ObjectAttributeSequence
                 continue;
             }
 
-            $ordered = $this->withoutInactivePredecessors($ordered);
+            $inactive = [];
+            $ordered = $this->withoutInactivePredecessors($ordered, $inactive);
             AttributeExecutionOrder::assertOrderedPrefix($ordered, $this->executed);
+            foreach ($inactive as $usage) {
+                if (!$this->materializeInactivePredecessor($usage, $owners[spl_object_id($usage)], $revision)) {
+                    continue 2;
+                }
+            }
             $this->plans = $plans;
             $this->ordered = array_values($ordered);
             $this->owners = $owners;
@@ -120,9 +129,10 @@ final class ObjectAttributeSequence
 
     /**
      * @param array<string,AttributeUsage> $ordered
+     * @param list<AttributeUsage> $inactive
      * @return array<string,AttributeUsage>
      */
-    private function withoutInactivePredecessors(array $ordered): array
+    private function withoutInactivePredecessors(array $ordered, array &$inactive): array
     {
         if ($this->phase !== AttributePhase::BeforeInstantiation || $this->executed === []) {
             return $ordered;
@@ -143,14 +153,32 @@ final class ObjectAttributeSequence
                 && $usage->definition->handler instanceof MakeHandler
                 && $usage->is(Proxy::class)
             ) {
-                // A newly discovered property Proxy has no before-phase action.
-                // Its real injection still runs after construction. Preserve
-                // argument materialization for every otherwise valid prefix.
+                // Its before handler is inactive, but native arguments still
+                // run before construction, once the known prefix is valid.
+                $inactive[] = $usage;
                 unset($ordered[$key]);
                 continue;
             }
             break;
         }
         return $ordered;
+    }
+
+    private function materializeInactivePredecessor(AttributeUsage $usage, int $owner, int $revision): bool
+    {
+        try {
+            // The new owners snapshot is not published yet. Keep this instance
+            // across discovery retries without replaying its native arguments.
+            $this->pending[$owner][$usage->declarationOrder] ??= $usage->newInstance();
+            return $revision === $this->builder->revision;
+        } catch (ExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            $target = $this->targets[$owner];
+            if ($target instanceof ReflectionProperty) {
+                throw ResolutionException::forProperty($target, previous: $exception);
+            }
+            throw $exception;
+        }
     }
 }
