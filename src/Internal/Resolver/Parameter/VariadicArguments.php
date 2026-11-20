@@ -35,6 +35,15 @@ final class VariadicArguments
             throw self::failure($target, $context, 'variadic value must be an array of arguments');
         }
 
+        // Native by-value calls select every argument before type checks can autoload.
+        // Detach only the argument slots, preserving nested references and array state.
+        $selected = [];
+        foreach ($value as $key => $item) {
+            $selected[$key] = $item;
+        }
+        $value = array_replace($value, $selected);
+        unset($selected, $item);
+
         $fixedNames = [];
         foreach ($target->reflection->getDeclaringFunction()->getParameters() as $parameter) {
             if (!$parameter->isVariadic()) {
