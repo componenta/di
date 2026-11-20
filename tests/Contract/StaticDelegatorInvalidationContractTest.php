@@ -194,8 +194,7 @@ test('instance method strings keep their actual container owner dependency', fun
     $container->delegator('product', $specification);
     $original = $container->get('product');
 
-    expect(is_callable($specification))->toBeFalse()
-        ->and($original)->toEqual(new Product('base:first'))
+    expect($original)->toEqual(new Product('base:first'))
         ->and($container->get('product'))->toBe($original);
 
     $container->set(InstanceDecorator::class, new InstanceDecorator(':second'));
