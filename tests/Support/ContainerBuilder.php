@@ -82,7 +82,11 @@ final class ContainerBuilder
     public function addInvokable(string $classOrAlias, ?string $class = null): self
     {
         $invokables = $this->section(ConfigKey::INVOKABLES);
-        $invokables[$class === null ? count($invokables) : $classOrAlias] = $class ?? $classOrAlias;
+        if ($class === null) {
+            $invokables[] = $classOrAlias;
+        } else {
+            $invokables[$classOrAlias] = $class;
+        }
         $this->sections[ConfigKey::INVOKABLES] = $invokables;
 
         return $this;
