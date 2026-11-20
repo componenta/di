@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Closure;
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
@@ -54,7 +55,14 @@ final class FactoryResolver implements DefinitionResolverInterface
                 throw InvalidConfigurationException::forUnsupportedDefinition($validated, self::class);
             }
 
-            $factory = $this->resolveFactory($id, $validated);
+            // A captured static callable does not retain its object receiver.
+            $resolvedFactory = $this->resolveFactory($id, $validated);
+            $factory = $resolvedFactory;
+            // Qualified ancestor arrays are native callables but cannot be
+            // invoked directly. Capture their route without changing binding.
+            if (is_array($factory) && str_contains($factory[1], '::')) {
+                $factory = Closure::fromCallable($factory);
+            }
             $container = $this->container->get(ContainerValue::class);
             if (!$container instanceof ContainerValue) {
                 throw new InvalidConfigurationException('ContainerValue bootstrap service is unavailable.');
