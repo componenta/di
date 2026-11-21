@@ -45,11 +45,11 @@ test('metadata preparation does not keep reflected objects alive', function (str
     $reflection = reflectionLifetimeTarget($object, $objectReflection);
 
     if ($service === 'attribute plans') {
-        expect($container->get(AttributePlanBuilder::class)->build($reflection)->target)->toBe($reflection);
+        expect($container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build($reflection)->target)->toBe($reflection);
     } elseif ($service === 'attribute processor') {
-        $container->get(AttributeProcessor::class)->prepare($reflection);
+        $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->prepare($reflection);
     } else {
-        $container->get(ObjectPipeline::class)->prepare($reflection);
+        $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->prepare($reflection);
     }
     unset($reflection, $object);
     gc_collect_cycles();
@@ -94,9 +94,9 @@ test('object reflections keep their own metadata when class plans are already wa
 
     foreach ($targets as $target) {
         if ($pipeline) {
-            $container->get(ObjectPipeline::class)->create($target);
+            $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->create($target);
         } else {
-            $container->get(AttributeProcessor::class)->process(
+            $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->process(
                 $target,
                 AttributePhase::AfterInstantiation,
                 new ObjectCreationContext($target),

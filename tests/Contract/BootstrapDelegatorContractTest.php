@@ -130,12 +130,12 @@ test('bootstrap extensions use the delegators composed by all providers', functi
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make(BootstrapValueTarget::class);
+    $target = $container->makeAs(BootstrapValueTarget::class, BootstrapValueTarget::class);
 
     expect($target->attribute)->toBe('attribute:decorated')
         ->and($target->convention)->toBe('resolver:first:second')
-        ->and($container->get(BootstrapValueHandler::class)->value)->toBe($target->attribute)
-        ->and($container->get(BootstrapValueResolver::class)->value)->toBe($target->convention);
+        ->and($container->getAs(BootstrapValueHandler::class, BootstrapValueHandler::class)->value)->toBe($target->attribute)
+        ->and($container->getAs(BootstrapValueResolver::class, BootstrapValueResolver::class)->value)->toBe($target->convention);
 })->with([
     'extensions first, resolver service' => [false, false],
     'decorators first, resolver service' => [true, false],

@@ -146,7 +146,7 @@ test('ordered provider composition survives the complete DI consumer boundary', 
     if (!$container instanceof \Componenta\DI\Container) {
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
-    $builtInDefaults = $container->make(ProviderBuiltInDefaultsTarget::class);
+    $builtInDefaults = $container->makeAs(ProviderBuiltInDefaultsTarget::class, ProviderBuiltInDefaultsTarget::class);
 
     expect($composition->dependencies->sections[ConfigKey::PARAMETER_RESOLVERS_REPLACE])
         ->toBeFalse()
@@ -158,7 +158,7 @@ test('ordered provider composition survives the complete DI consumer boundary', 
         ->and($container->get('atomic.service'))->toBe('provider-b')
         ->and($container->get('composed.alias'))->toBe('second')
         ->and($container->get('decorated.service'))->toBe('base:a:b')
-        ->and($container->make(ProviderComposedTarget::class)->composed)->toBe('provider-b');
+        ->and($container->makeAs(ProviderComposedTarget::class, ProviderComposedTarget::class)->composed)->toBe('provider-b');
 });
 
 test('provider merge preserves keyed overrides and numeric invokable order at the DI boundary', function (): void {
@@ -199,7 +199,7 @@ test('provider merge preserves keyed overrides and numeric invokable order at th
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    expect($container->get(ProviderFactoryProduct::class)->origin)->toBe('b')
+    expect($container->getAs(ProviderFactoryProduct::class, ProviderFactoryProduct::class)->origin)->toBe('b')
         ->and($container->get(ProviderFirstFactoryProduct::class))->toBeInstanceOf(ProviderFirstFactoryProduct::class)
         ->and($container->get(ProviderSecondFactoryProduct::class))->toBeInstanceOf(ProviderSecondFactoryProduct::class)
         ->and($container->get('selected.invokable'))->toBeInstanceOf(ProviderSecondInvokable::class)

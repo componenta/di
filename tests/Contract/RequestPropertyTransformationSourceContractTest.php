@@ -180,7 +180,7 @@ test('transforming a provider-owned property does not materialize unused context
     }
     $container = builder($uncached)->build();
 
-    $entry = $container->get(ObjectPipeline::class)->create($class, resolveParameters: static function (): never {
+    $entry = $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->create($class, resolveParameters: static function (): never {
         throw new \LogicException('The provider supplies the value without reading the public parameter bag.');
     });
 

@@ -8,6 +8,7 @@ use Composer\InstalledVersions;
 use Pest\Mutate\Event\Events\TestSuite\FinishMutationSuite;
 use Pest\Mutate\Event\Events\TestSuite\FinishMutationSuiteSubscriber;
 use Pest\Mutate\Support\MutationTestResult;
+use RuntimeException;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
@@ -22,6 +23,7 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
         private string $directory,
         private string $path,
         private array $arguments = [],
+        private ?MutationWorkerCheck $workers = null,
     ) {}
 
     public function notify(FinishMutationSuite $event): void
@@ -30,6 +32,7 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
         $formatter = new OutputFormatter(false);
         $files = [];
         $outcomes = [];
+        $workerFailures = [];
         foreach ($event->mutationSuite->repository->all() as $collection) {
             foreach ($collection->tests() as $test) {
                 $mutation = $test->mutation;
@@ -38,13 +41,20 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
                 $files[$file] ??= ['sha256' => hash_file('sha256', $source) ?: null];
                 $duration = $test->duration();
                 $result = $test->result();
+                $startupFailed = $this->workers !== null
+                    && $result !== MutationTestResult::None
+                    && $result !== MutationTestResult::Uncovered
+                    && !$this->workers->consumeStartup($mutation);
+                if ($startupFailed) {
+                    $workerFailures[] = $test->getId();
+                }
                 $outcomes[] = [
                     'id' => $test->getId(),
                     'file' => $file,
                     'line' => $mutation->startLine,
                     'end_line' => $mutation->endLine,
                     'mutator' => $mutation->mutator,
-                    'result' => $result->value,
+                    'result' => $startupFailed ? 'worker_failure' : $result->value,
                     'diff' => $formatter->format($mutation->diff),
                     'duration_seconds' => $duration > 0 ? $duration : null,
                     'duration_unavailable_reason' => $duration > 0 ? null : match ($result) {
@@ -64,7 +74,7 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
         $report = [
             'schema_version' => 1,
             'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
-            'complete' => $repository->notRun() === 0,
+            'complete' => $repository->notRun() === 0 && $workerFailures === [],
             'head' => $this->head(),
             'root' => Path::canonicalize($root),
             'php' => ['version' => PHP_VERSION, 'binary' => PHP_BINARY, 'os' => PHP_OS_FAMILY],
@@ -79,14 +89,20 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
                 'uncovered' => $repository->uncovered(),
                 'none' => $repository->notRun(),
             ],
-            'pest_score' => $event->mutationSuite->score(),
+            'pest_score' => $workerFailures === [] ? $event->mutationSuite->score() : null,
             'outcomes' => $outcomes,
         ];
+        if ($workerFailures !== []) {
+            $report['worker_failures'] = $workerFailures;
+        }
 
         new Filesystem()->dumpFile(
             $this->path,
             json_encode($report, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         );
+        if ($workerFailures !== []) {
+            throw new RuntimeException(sprintf('Mutation worker startup failed for %d replacements. See %s.', count($workerFailures), $this->path));
+        }
     }
 
     private function head(): ?string

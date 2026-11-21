@@ -21,13 +21,14 @@ final class MutationFallback implements UncoveredSubscriber
         private readonly string $directory,
         private readonly float $timeout = 120.0,
         private readonly ?string $reportDirectory = null,
+        private readonly ?string $controlSource = null,
     ) {}
 
     public function verifyControl(): void
     {
         $process = new Process($this->command, $this->directory, [
-            'PEST_MUTATION_TESTING' => false,
-            'PEST_MUTATION_FILE' => false,
+            'PEST_MUTATION_TESTING' => $this->controlSource ?? false,
+            'PEST_MUTATION_FILE' => $this->controlSource ?? false,
             'XDEBUG_MODE' => 'off',
         ], timeout: $this->timeout);
         $process->run();

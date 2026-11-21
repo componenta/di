@@ -81,8 +81,8 @@ function environmentParitySnapshot(
         throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $shared = $container->get(EnvironmentParityProduct::class);
-    $fresh = $container->make(EnvironmentParityProduct::class, ['runtime' => 'fresh']);
+    $shared = $container->getAs(EnvironmentParityProduct::class, EnvironmentParityProduct::class);
+    $fresh = $container->makeAs(EnvironmentParityProduct::class, EnvironmentParityProduct::class, ['runtime' => 'fresh']);
 
     try {
         $container->get('missing.service');
@@ -94,7 +94,7 @@ function environmentParitySnapshot(
     return [
         'config_identity' => $container->get(Config::class) === $config,
         'environment_identity' => $container->get(Environment::class) === $environment,
-        'environment_mode' => $container->get(Environment::class)->get('APP_ENV') === $mode,
+        'environment_mode' => $container->getAs(Environment::class, Environment::class)->get('APP_ENV') === $mode,
         'config_has_dependencies' => $config->has(ConfigKey::DEPENDENCIES),
         'shared_identity' => $container->get(EnvironmentParityProduct::class) === $shared,
         'fresh_identity' => $fresh !== $shared,

@@ -49,7 +49,7 @@ test('repeated calls validate current composition rule arguments', function (boo
     $container = (new ContainerBuilder())->addAttributeDefinition(
         new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]),
     )->build();
-    $executor = $container->get(CallableExecutorInterface::class);
+    $executor = $container->getAs(CallableExecutorInterface::class, CallableExecutorInterface::class);
     $callable = $named ? __NAMESPACE__ . '\\withCurrentLimit'
         : static fn(#[PositiveLimit(new CurrentRuleLimit())] string $value = 'ok'): string => $value;
 
@@ -109,7 +109,7 @@ test('an earlier availability check does not change optional dependency resoluti
     $container = (new ContainerBuilder())->addAttributeDefinition(
         new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]),
     )->build();
-    $executor = $container->get(CallableExecutorInterface::class);
+    $executor = $container->getAs(CallableExecutorInterface::class, CallableExecutorInterface::class);
     $callable = static fn(?ClassWithLimit $service = null): ?ClassWithLimit => $service;
 
     try {

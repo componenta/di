@@ -78,12 +78,12 @@ test('interleaved object handlers isolate their state and release a cancelled cr
             rules: $uncached ? [new UncachedRule()] : [],
         ))
         ->build();
-    $warm = $container->make(Product::class, ['payload' => new Payload('warm')]);
+    $warm = $container->makeAs(Product::class, Product::class, ['payload' => new Payload('warm')]);
     expect($warm->payload->label)->toBe('warm');
     unset($warm);
 
-    $first = new Fiber(static fn(): Product => $container->make(Product::class, ['payload' => new Payload('first')]));
-    $second = new Fiber(static fn(): Product => $container->make(Product::class, ['payload' => new Payload('second')]));
+    $first = new Fiber(static fn(): Product => $container->makeAs(Product::class, Product::class, ['payload' => new Payload('first')]));
+    $second = new Fiber(static fn(): Product => $container->makeAs(Product::class, Product::class, ['payload' => new Payload('second')]));
 
     expect($first->start())->toBe('first')
         ->and($second->start())->toBe('second')
@@ -106,5 +106,5 @@ test('interleaved object handlers isolate their state and release a cancelled cr
     gc_collect_cycles();
     expect(array_all($handler->references['second'], static fn(WeakReference $reference): bool => $reference->get() === null))
         ->toBeTrue()
-        ->and($container->make(Product::class, ['payload' => new Payload('next')])->payload->label)->toBe('next');
+        ->and($container->makeAs(Product::class, Product::class, ['payload' => new Payload('next')])->payload->label)->toBe('next');
 })->with(['cached plans' => false, 'uncached rules' => true]);

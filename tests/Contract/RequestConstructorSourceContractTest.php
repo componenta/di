@@ -121,7 +121,7 @@ test('request sources revealed by the final constructor callback are checked bef
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
-    $parameters = $builder->build()->get(ParametersResolver::class);
+    $parameters = $builder->build()->getAs(ParametersResolver::class, ParametersResolver::class);
     $factory = new PreparingFactory(
         new InstanceCreator($parameters),
         $initialize,

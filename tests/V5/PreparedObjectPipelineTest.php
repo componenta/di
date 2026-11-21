@@ -70,8 +70,8 @@ test('NoConstructor keeps inaccessible constructors resolvable', function (): vo
 test('plain autowiring applies constructor defaults and explicit overrides', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    $defaults = $container->make(AuditFastConstructorEntry::class);
-    $overrides = $container->make(AuditFastConstructorEntry::class, ['number' => 42]);
+    $defaults = $container->makeAs(AuditFastConstructorEntry::class, AuditFastConstructorEntry::class);
+    $overrides = $container->makeAs(AuditFastConstructorEntry::class, AuditFastConstructorEntry::class, ['number' => 42]);
 
     expect([$defaults->number, $defaults->name])->toBe([1, 'default'])
         ->and([$overrides->number, $overrides->name])->toBe([42, 'default'])
@@ -84,6 +84,6 @@ test('by-reference constructors remain unsupported while variadics accept explic
     $dependency = new AuditFastDependency();
 
     expect(fn() => $container->make(AuditByReferenceConstructorEntry::class))->toThrow(ResolutionException::class)
-        ->and($container->make(AuditVariadicConstructorEntry::class)->captured)->toBe([])
-        ->and($container->make(AuditVariadicConstructorEntry::class, ['dependencies' => [$dependency]])->captured)->toBe([$dependency]);
+        ->and($container->makeAs(AuditVariadicConstructorEntry::class, AuditVariadicConstructorEntry::class)->captured)->toBe([])
+        ->and($container->makeAs(AuditVariadicConstructorEntry::class, AuditVariadicConstructorEntry::class, ['dependencies' => [$dependency]])->captured)->toBe([$dependency]);
 });

@@ -47,11 +47,7 @@ final class AttributeExecutionOrder
         foreach ($executed as $key => $previous) {
             $currentKey = $keys[$index++] ?? null;
             $current = $currentKey === null ? null : $ordered[$currentKey];
-            if ($current === null
-                || $currentKey !== $key
-                || $current->declarationOrder !== $previous->declarationOrder
-                || $current->definition !== $previous->definition
-            ) {
+            if ($current === null || $currentKey !== $key || !self::sameDeclaration($current, $previous)) {
                 throw new AttributeCompositionException(sprintf(
                     'Attribute order for "%s" changed after #[%s] was already executed. Load its predecessors before execution.',
                     $previous->target->getName(),
@@ -59,6 +55,24 @@ final class AttributeExecutionOrder
                 ));
             }
         }
+    }
+
+    public static function assertMaterializedUsage(AttributeUsage $current, AttributeUsage $materialized): void
+    {
+        if (!self::sameDeclaration($current, $materialized)) {
+            throw new AttributeCompositionException(sprintf(
+                'Attribute declaration for "%s" changed after #[%s] was already instantiated. Load its attributes before execution.',
+                $materialized->target->getName(),
+                $materialized->attributeClass,
+            ));
+        }
+    }
+
+    private static function sameDeclaration(AttributeUsage $current, AttributeUsage $previous): bool
+    {
+        return $current->declarationOrder === $previous->declarationOrder
+            && $current->definition === $previous->definition
+            && $current->attributeClass === $previous->attributeClass;
     }
 
     private function __construct() {}

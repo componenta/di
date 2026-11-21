@@ -104,7 +104,7 @@ test('third party parameter attributes execute through the shared attribute reso
         ))
         ->build();
 
-    expect($container->make(CustomValueDto::class)->value)->toBe('custom');
+    expect($container->makeAs(CustomValueDto::class, CustomValueDto::class)->value)->toBe('custom');
 });
 
 test('third party capabilities can define their own cardinality without runtime behavior', function (): void {

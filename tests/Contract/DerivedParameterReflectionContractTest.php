@@ -48,6 +48,7 @@ final class DerivedMethod extends ReflectionMethod
 final class DerivedParameter extends ReflectionParameter
 {
     private readonly ReflectionFunctionAbstract $declaring;
+    public bool $hideAttributes = true;
 
     /** @param string|array{class-string,string} $function */
     public function __construct(string|array $function, object $payload)
@@ -62,7 +63,7 @@ final class DerivedParameter extends ReflectionParameter
     /** @return array<int, ReflectionAttribute<object>> */
     public function getAttributes(?string $name = null, int $flags = 0): array
     {
-        return [];
+        return $this->hideAttributes ? [] : parent::getAttributes($name, $flags);
     }
 
     public function getDeclaringFunction(): ReflectionFunctionAbstract
@@ -93,7 +94,7 @@ test('parameter targets keep native and derived declarations independent', funct
 
 test('parameter resolution uses each native or derived declaration after warming the other', function (bool $method, bool $nativeFirst): void {
     $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
-    $resolver = $container->get(ParametersResolver::class);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $native = new ReflectionParameter(declaration($method), 0);
     $derived = new DerivedParameter(declaration($method), new \stdClass());
 
@@ -103,9 +104,22 @@ test('parameter resolution uses each native or derived declaration after warming
 })->with(['function' => false, 'method' => true])
     ->with(['derived first' => false, 'native first' => true]);
 
+test('a retained target with a derived reflector keeps using its current attribute plan', function (bool $method): void {
+    $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $reflection = new DerivedParameter(declaration($method), new \stdClass());
+    $target = $resolver->target($reflection);
+
+    expect($resolver->resolveTargets([$target]))->toBe(['fallback']);
+    $reflection->hideAttributes = false;
+    expect($resolver->resolveTargets([$target]))->toBe(['source']);
+    $reflection->hideAttributes = true;
+    expect($resolver->resolveTargets([$target]))->toBe(['fallback']);
+})->with(['function' => false, 'method' => true]);
+
 test('parameter metadata releases derived reflectors and their declaring function state', function (bool $method, bool $resolve): void {
     $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
-    $resolver = $container->get(ParametersResolver::class);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $factory = new ParameterTargetFactory();
     $payload = new \stdClass();
     $derived = new DerivedParameter(declaration($method), $payload);
@@ -128,3 +142,18 @@ test('parameter metadata releases derived reflectors and their declaring functio
         ->and($resolver->resolve([$native]))->toBe(['source']);
 })->with(['function' => false, 'method' => true])
     ->with(['target factory' => false, 'prepared resolver' => true]);
+
+test('parameter resolution does not extend the lifetime of an explicitly supplied target', function (bool $derived): void {
+    $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $reflection = $derived
+        ? new DerivedParameter(declaration(true), new \stdClass())
+        : new ReflectionParameter(declaration(true), 0);
+    $target = new ParameterTarget($reflection);
+    $reference = WeakReference::create($target);
+
+    expect($resolver->resolveTargets([$target]))->toBe([$derived ? 'fallback' : 'source']);
+    unset($target, $reflection);
+
+    expect($reference->get())->toBeNull();
+})->with(['native reflector' => false, 'derived reflector' => true]);

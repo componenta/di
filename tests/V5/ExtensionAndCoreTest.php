@@ -76,7 +76,7 @@ test('custom parameter resolvers participate in the same ordered pipeline', func
         ->addParameterResolver(new MessageParameterResolver(), 350)
         ->build();
 
-    expect($container->make(CustomResolverDto::class)->message)->toBe('from-resolver');
+    expect($container->makeAs(CustomResolverDto::class, CustomResolverDto::class)->message)->toBe('from-resolver');
 });
 
 test('explicit caller parameters keep their v4 precedence over lower-priority custom resolvers', function (): void {
@@ -84,6 +84,6 @@ test('explicit caller parameters keep their v4 precedence over lower-priority cu
         ->addParameterResolver(new MessageParameterResolver(), 350)
         ->build();
 
-    expect($container->make(CustomResolverDto::class, ['message' => 'explicit'])->message)
+    expect($container->makeAs(CustomResolverDto::class, CustomResolverDto::class, ['message' => 'explicit'])->message)
         ->toBe('explicit');
 });

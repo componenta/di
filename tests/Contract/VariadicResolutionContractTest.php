@@ -85,7 +85,7 @@ test('constructor variadics preserve preceding autowiring and defaults', functio
 
 test('SetUp receives its explicit variadic collection', function (): void {
     $di = (new ContainerBuilder())->build();
-    expect($di->make(ConfiguredProduct::class)->parts)->toBe(['setup-one', 'setup-two']);
+    expect($di->makeAs(ConfiguredProduct::class, ConfiguredProduct::class)->parts)->toBe(['setup-one', 'setup-two']);
 });
 
 test('array variadics preserve each array argument', function (): void {

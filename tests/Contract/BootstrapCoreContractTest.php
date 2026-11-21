@@ -53,15 +53,15 @@ test('extension factories and the completed container share the same core resolu
     foreach ($ids as $id) {
         expect($container->get($id))->toBe($seen[$id]);
     }
-    expect($container->get(AttributeDefinitionRegistry::class)->definition(BootstrapCoreMarker::class))->toBe($definition)
-        ->and($container->get(ObjectPipeline::class)->parameters())->toBe($container->get(ParametersResolver::class));
+    expect($container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition(BootstrapCoreMarker::class))->toBe($definition)
+        ->and($container->getAs(ObjectPipeline::class, ObjectPipeline::class)->parameters())->toBe($container->getAs(ParametersResolver::class, ParametersResolver::class));
 });
 
 test('the exposed object pipeline preserves surrounding parameters for configured setup handlers', function (): void {
     $container = (new ContainerBuilder())->build();
-    $pipeline = $container->get(ObjectPipeline::class);
+    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
     $created = $pipeline->create(BootstrapCoreSetupTarget::class, ['label' => 'pipeline']);
-    $resolved = $container->make(BootstrapCoreSetupTarget::class, ['label' => 'container']);
+    $resolved = $container->makeAs(BootstrapCoreSetupTarget::class, BootstrapCoreSetupTarget::class, ['label' => 'container']);
     if (!$created instanceof BootstrapCoreSetupTarget) {
         throw new \LogicException('Expected the configured setup target.');
     }

@@ -182,7 +182,7 @@ function profileBuilder(): ContainerBuilder
 /** @param class-string $attribute */
 function callbackDefinition(string $attribute, Container $container): AttributeDefinition
 {
-    $registry = $container->get(AttributeDefinitionRegistry::class);
+    $registry = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class);
     $handler = $registry->definition(MapRequest::class)?->handler;
     if (!$handler instanceof RequestAttributeHandler) {
         throw new LogicException('Expected the configured request attribute handler.');

@@ -123,7 +123,7 @@ test('container factory materializes deferred attribute and parameter resolver s
         ->addParameterResolver([DeferredExtensionFactoryService::class, 'conventionResolver'], 350)
         ->build();
 
-    $dto = $container->make(DeferredExtensionDto::class);
+    $dto = $container->makeAs(DeferredExtensionDto::class, DeferredExtensionDto::class);
 
     expect($dto->value)->toBe('from-service-method')
         ->and($dto->fallback)->toBe('from-deferred-resolver');
@@ -134,7 +134,7 @@ test('deferred extension factories can use constructor autowiring during bootstr
         ->addAttributeDefinition([DeferredAutowiredAttributeFactory::class, 'attribute'])
         ->build();
 
-    $factory = $container->get(DeferredAutowiredAttributeFactory::class);
+    $factory = $container->getAs(DeferredAutowiredAttributeFactory::class, DeferredAutowiredAttributeFactory::class);
 
     expect($factory)->toBeInstanceOf(DeferredAutowiredAttributeFactory::class)
         ->and($factory->dependency)->toBeInstanceOf(DeferredAutowiredDependency::class);
@@ -159,7 +159,7 @@ test('container factory accepts deferred extension service method forms', functi
     if (!$container instanceof Container) {
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
-    $dto = $container->make(DeferredExtensionDto::class);
+    $dto = $container->makeAs(DeferredExtensionDto::class, DeferredExtensionDto::class);
 
     expect($dto->value)->toBe('from-service-method')
         ->and($dto->fallback)->toBe('from-deferred-resolver');
@@ -192,7 +192,7 @@ test('container factory materializes closure function and service-id extension f
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $dto = $container->make(DeferredExtensionDto::class);
+    $dto = $container->makeAs(DeferredExtensionDto::class, DeferredExtensionDto::class);
 
     expect($attributeFactoryCalls)->toBe(1)
         ->and($dto->value)->toBe('from-service-method')

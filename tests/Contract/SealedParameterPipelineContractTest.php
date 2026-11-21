@@ -28,7 +28,7 @@ test('a built container rejects late parameter resolvers and retains its origina
             return [$target->position, 'replacement'];
         }
     };
-    $parameters = $container->get(ParametersResolver::class);
+    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
 
     expect(fn() => $parameters->add($resolver, 2000))->toThrow(InvalidConfigurationException::class, 'sealed')
         ->and($container->call($callable))->toBe('original');

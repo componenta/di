@@ -204,3 +204,30 @@ test('instance method strings keep their actual container owner dependency', fun
         ->and($replacement)->toEqual(new Product('base:second'))
         ->and($container->get('product'))->toBe($replacement);
 });
+
+test('a late native static route drops the unused owner dependency and keeps exact-id precedence', function (bool $separatorAlias): void {
+    StaticDecorator::$calls = 0;
+    $prefix = __NAMESPACE__ . '\\PendingOwner_' . bin2hex(random_bytes(5));
+    $class = $separatorAlias ? $prefix . '::Decorator' : $prefix;
+    $specification = $class . '::declared';
+    $container = (new ContainerBuilder())->addService('product', new Product('base'))->build();
+    $container->delegator('product', $specification);
+    class_alias(StaticDecorator::class, $class);
+
+    $original = $container->get('product');
+    $container->set($prefix, new \stdClass());
+
+    expect($container->get('product'))->toBe($original)
+        ->and(StaticDecorator::$calls)->toBe(1);
+
+    $container->set('product', new Product('refreshed'));
+    $rebuilt = $container->get('product');
+    $container->set($prefix, new \stdClass());
+    expect($rebuilt)->toEqual(new Product('refreshed:declared'))
+        ->and($container->get('product'))->toBe($rebuilt)
+        ->and(StaticDecorator::$calls)->toBe(2);
+
+    $container->set($specification, static fn(Product $entry): Product => new Product($entry->value . ':explicit'));
+    expect($container->get('product'))->toEqual(new Product('refreshed:explicit'))
+        ->and(StaticDecorator::$calls)->toBe(2);
+})->with(['ordinary class alias' => false, 'class alias with delimiter' => true]);

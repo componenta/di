@@ -139,7 +139,7 @@ test('inherited private setters retain property injection and native hooks throu
 
     foreach ([1, 2] as $_attempt) {
         State::$events = [];
-        $product = $container->make($class);
+        $product = $container->makeAs($class, $class);
         expect(State::$events)->toBe($deferred ? [] : ['constructor', 'hook:injected', 'virtual:injected', 'setup:INJECTED'])
             ->and($product->plain)->toBe('injected')
             ->and($product->protectedValue())->toBe('injected')
@@ -162,7 +162,7 @@ test('failed inherited private setter initialization retries readonly injection 
     $container = builder($uncached, $first)->build();
     $cause = new RuntimeException('inherited hook unavailable');
     State::$failure = $cause;
-    $product = $container->make($class);
+    $product = $container->makeAs($class, $class);
     $reflection = new ReflectionClass($class);
     $failure = null;
     try {

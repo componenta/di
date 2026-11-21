@@ -53,7 +53,7 @@ it('creates ClassDefinition results using only explicit instructions and native 
             ->call('configure', ['value' => 'explicit']))
         ->build();
 
-    $entry = $di->get(ExplicitProduct::class);
+    $entry = $di->getAs(ExplicitProduct::class, ExplicitProduct::class);
 
     expect($entry->events)->toBe(['constructor', 'method-default', 'explicit'])
         ->and($entry->value)->toBe('native-default')
@@ -94,8 +94,8 @@ it('uses autowiring only as an explicit fallback for constructor and method argu
         ->addDefinition(FallbackProduct::class, $definition)
         ->build();
 
-    $defaults = $di->make(FallbackProduct::class);
-    $override = $di->make(FallbackProduct::class, ['dependency' => $explicit]);
+    $defaults = $di->makeAs(FallbackProduct::class, FallbackProduct::class);
+    $override = $di->makeAs(FallbackProduct::class, FallbackProduct::class, ['dependency' => $explicit]);
 
     expect($defaults->dependency)->toBe($enabled ? $shared : null)
         ->and($defaults->configured)->toBe($enabled ? $shared : null)
@@ -125,7 +125,7 @@ it('preserves explicitly supplied variadic arguments and omitted native defaults
         ->call('append', ['third', 'fourth']);
     $di = (new ContainerBuilder())->addDefinition(VariadicProduct::class, $definition)->build();
 
-    $entry = $di->make(VariadicProduct::class, $override ? [0 => 'runtime'] : []);
+    $entry = $di->makeAs(VariadicProduct::class, VariadicProduct::class, $override ? [0 => 'runtime'] : []);
 
     expect($entry->values)->toBe([$override ? 'runtime' : 'default', 'first', 'second', 'third', 'fourth']);
 })->with(['native default' => false, 'runtime override' => true]);
@@ -140,8 +140,8 @@ it('keeps factory and invokable results outside the attribute lifecycle', functi
     };
     $di = \Componenta\DI\Tests\Support\container($sections);
 
-    $shared = $di->get(ExplicitProduct::class);
-    $fresh = $di->make(ExplicitProduct::class);
+    $shared = $di->getAs(ExplicitProduct::class, ExplicitProduct::class);
+    $fresh = $di->makeAs(ExplicitProduct::class, ExplicitProduct::class);
 
     expect($shared->events)->toBe(['constructor'])
         ->and($fresh->events)->toBe(['constructor'])
@@ -174,10 +174,10 @@ it('lets referenced dependencies use their own registered lifecycle', function (
     }
     $di = (new ContainerBuilder())->addDefinition(ReferencingProduct::class, $definition)->build();
 
-    $entry = $di->make(ReferencingProduct::class);
+    $entry = $di->makeAs(ReferencingProduct::class, ReferencingProduct::class);
 
     expect($entry->dependency->initializations)->toBe(1)
-        ->and($entry->dependency)->toBe($di->get(ManagedDependency::class));
+        ->and($entry->dependency)->toBe($di->getAs(ManagedDependency::class, ManagedDependency::class));
 })->with(['explicit reference' => false, 'type fallback' => true]);
 
 final readonly class RequiredProduct
@@ -193,7 +193,7 @@ it('does not supply implicit null or autowire a required argument when fallback 
         ->build();
 
     expect(fn() => $di->get(RequiredProduct::class))->toThrow(\Componenta\DI\Exception\ResolutionException::class)
-        ->and($di->make(RequiredProduct::class, ['dependency' => null])->dependency)->toBeNull();
+        ->and($di->makeAs(RequiredProduct::class, RequiredProduct::class, ['dependency' => null])->dependency)->toBeNull();
     $di->set(RequiredProduct::class, ClassDefinition::create(RequiredProduct::class)->autowire());
-    expect($di->get(RequiredProduct::class)->dependency)->toBe($dependency);
+    expect($di->getAs(RequiredProduct::class, RequiredProduct::class)->dependency)->toBe($dependency);
 });

@@ -67,7 +67,7 @@ test('mapped request provenance stays internal when a DTO is created by a user f
     $request = (new ServerRequest('POST', '/'))
         ->withParsedBody(['value' => 'payload']);
 
-    $envelope = $container->make(AuditMappedFactoryEnvelope::class, [
+    $envelope = $container->makeAs(AuditMappedFactoryEnvelope::class, AuditMappedFactoryEnvelope::class, [
         ServerRequestInterface::class => $request,
     ]);
 

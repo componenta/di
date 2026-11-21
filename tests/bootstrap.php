@@ -21,6 +21,9 @@ $loader = require $autoload;
 
 $loader->setPsr4('Componenta\\DI\\', $packageDirectory . '/src');
 $loader->setPsr4('Componenta\\DI\\Tests\\', __DIR__);
+if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
+    \Componenta\DI\Tests\Support\MutationWorkerCheck::acknowledgeStartup();
+}
 require __DIR__ . '/Support/functions.php';
 
 if (!$usingLocalAutoload) {
@@ -44,6 +47,18 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
     /** @var \Pest\Mutate\Tester\MutationTestRunner $mutationRunner */
     $mutationRunner = $pestContainer->get(\Pest\Mutate\Contracts\MutationTestRunner::class);
     if ($mutationRunner->isEnabled()) {
+        $cache = $pestContainer->get(\Psr\SimpleCache\CacheInterface::class);
+        if (!$cache instanceof \Pest\Mutate\Cache\FileStore) {
+            throw new RuntimeException('Cannot locate the Pest mutation workspace.');
+        }
+        (new \Symfony\Component\Filesystem\Filesystem())->mkdir(dirname($cache->directory()) . '/mutations');
+        $pestContainer->add(\Psr\SimpleCache\CacheInterface::class, new \Componenta\DI\Tests\Support\MutationArtifactCache($cache->directory()));
+        $workers = new \Componenta\DI\Tests\Support\MutationWorkerCheck($packageDirectory . '/.phpunit.cache/mutation-ready-' . bin2hex(random_bytes(8)));
+        $workers->start();
+        $controlSource = realpath($packageDirectory . '/src/Internal/functions.php');
+        if ($controlSource === false) {
+            throw new RuntimeException('Cannot locate the unmodified mutation control source.');
+        }
         /** @var \Pest\Mutate\Repositories\ConfigurationRepository $mutationConfiguration */
         $mutationConfiguration = $pestContainer->get(\Pest\Mutate\Repositories\ConfigurationRepository::class);
         /** @var list<string> $arguments */
@@ -63,7 +78,7 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
                 '--colors=never',
                 '--bail',
                 '--do-not-cache-result',
-            ], $packageDirectory, reportDirectory: $packageDirectory . '/.phpunit.cache/mutation-workers');
+            ], $packageDirectory, reportDirectory: $packageDirectory . '/.phpunit.cache/mutation-workers', controlSource: $controlSource);
         \Pest\Mutate\Event\Facade::instance()->registerSubscriber($fallback);
         $coverage = new \Componenta\DI\Tests\Support\MutationCoverage($fallback);
         \Pest\Mutate\Event\Facade::instance()->registerSubscriber($coverage);
@@ -80,6 +95,7 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
                 $packageDirectory,
                 $packageDirectory . '/.phpunit.cache/mutation-report.json',
                 $reportArguments,
+                $workers,
             ),
         );
     }

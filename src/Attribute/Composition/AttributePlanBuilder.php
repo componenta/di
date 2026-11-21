@@ -12,12 +12,14 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use LogicException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
+use WeakMap;
 
 use function Componenta\DI\Internal\is_closure_reflector;
 
@@ -28,6 +30,8 @@ final class AttributePlanBuilder
     private array $namedPlans = [];
     /** @var array<class-string,int> */
     private array $attributeTargetFlags = [];
+    /** @var WeakMap<AttributePlan, true>|null */
+    private ?WeakMap $incompletePlans = null;
     private int $registryRevision = -1;
 
     public function __construct(private readonly AttributeDefinitionRegistry $registry) {}
@@ -38,8 +42,51 @@ final class AttributePlanBuilder
     }
 
     /** @internal */
+    public int $loadedRevision {
+        get => $this->registry->refreshLoaded();
+    }
+
+    /** @internal */
     public bool $canCachePlans {
         get => $this->registry->canCachePlans;
+    }
+
+    /**
+     * @internal
+     * @param class-string $attribute
+     */
+    public function loadedDefinition(string $attribute): ?AttributeDefinition
+    {
+        if (!class_exists($attribute, false) && !interface_exists($attribute, false)) {
+            return null;
+        }
+        return $this->registry->definition($attribute);
+    }
+
+    /** @internal Compares declared semantics without polling availability or running composition rules. */
+    public function hasSameLoadedDeclarations(AttributePlan $plan): bool
+    {
+        if (!$plan->target instanceof ReflectionParameter) {
+            throw new LogicException('Expected a consumed parameter plan.');
+        }
+        $consumed = [];
+        foreach ($plan->usages as $usage) {
+            $consumed[$usage->declarationOrder] = [$usage->definition, $usage->attributeClass];
+        }
+        foreach ($this->discoverUsages($plan->target, $plan->target->getAttributes(), autoload: false) as $usage) {
+            $index = $usage->declarationOrder;
+            if (($consumed[$index] ?? null) !== [$usage->definition, $usage->attributeClass]) {
+                return false;
+            }
+            unset($consumed[$index]);
+        }
+        return $consumed === [];
+    }
+
+    /** @internal */
+    public function awaitsDiscovery(AttributePlan $plan): bool
+    {
+        return isset($this->incompletePlans[$plan]);
     }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
@@ -55,7 +102,10 @@ final class AttributePlanBuilder
                 return $this->namedPlans[$key];
             }
 
-            $usages = $this->discoverUsages($target);
+            $awaitsDiscovery = false;
+            $attributes = $target->getAttributes();
+            $usages = $attributes === [] ? [] : $this->discoverUsages($target, $attributes, awaitsDiscovery: $awaitsDiscovery);
+            unset($attributes);
             // Loading a later attribute may reveal one skipped earlier. Validate
             // a complete revision, before a missing dependency can fail creation.
             if ($revision !== $this->registry->revision) {
@@ -82,6 +132,11 @@ final class AttributePlanBuilder
         }
 
         $plan = new AttributePlan($target, $this->ordered($target, $usages));
+        if ($awaitsDiscovery) {
+            $pending = $this->incompletePlans ??= new WeakMap();
+            $pending[$plan] = true;
+            return $plan;
+        }
         if ($key === null) {
             // User rules require fresh validation. ReflectionObject retains its
             // source instance, and closure parameter reflectors retain captured
@@ -94,17 +149,24 @@ final class AttributePlanBuilder
 
     /**
      * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<ReflectionAttribute<object>> $attributes
      * @return list<AttributeUsage>
      */
     private function discoverUsages(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $attributes,
+        bool $autoload = true,
+        bool &$awaitsDiscovery = false,
     ): array {
         $usages = [];
-        foreach ($target->getAttributes() as $index => $reflectionAttribute) {
+        foreach ($attributes as $index => $reflectionAttribute) {
             /** @var class-string $attributeClass */
             $attributeClass = $reflectionAttribute->getName();
-            $definition = $this->registry->definition($attributeClass);
+            $definition = $autoload ? $this->registry->definition($attributeClass) : $this->loadedDefinition($attributeClass);
             if ($definition === null) {
+                if ($autoload && $this->registry->awaitsDiscovery($attributeClass)) {
+                    $awaitsDiscovery = true;
+                }
                 continue;
             }
 

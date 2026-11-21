@@ -63,7 +63,8 @@ test('a request value source composes with Cast on one parameter', function (): 
     $request = (new ServerRequest('GET', '/?count=41'))
         ->withQueryParams(['count' => '41']);
 
-    $entry = composedParameterContainer()->make(
+    $entry = composedParameterContainer()->makeAs(
+        QueryThenCastDto::class,
         QueryThenCastDto::class,
         [ServerRequestInterface::class => $request],
     );
@@ -75,7 +76,8 @@ test('composition ordering runs value providers before transformers regardless o
     $request = (new ServerRequest('GET', '/?count=42'))
         ->withQueryParams(['count' => '42']);
 
-    $entry = composedParameterContainer()->make(
+    $entry = composedParameterContainer()->makeAs(
+        CastDeclaredBeforeQueryDto::class,
         CastDeclaredBeforeQueryDto::class,
         [ServerRequestInterface::class => $request],
     );
@@ -95,7 +97,8 @@ test('incompatible parameter value sources fail composition before resolution', 
 });
 
 test('attribute composition transforms explicit caller input', function (): void {
-    $entry = composedParameterContainer()->make(
+    $entry = composedParameterContainer()->makeAs(
+        ExplicitCastCompositionDto::class,
         ExplicitCastCompositionDto::class,
         ['value' => '43'],
     );
@@ -111,7 +114,7 @@ test('property value providers compose with transformers in semantic order', fun
         ->addService(CasterProviderInterface::class, new TestCasterProvider())
         ->build();
 
-    expect($container->make(ConfigThenCastPropertyDto::class)->value)->toBe('composed');
+    expect($container->makeAs(ConfigThenCastPropertyDto::class, ConfigThenCastPropertyDto::class)->value)->toBe('composed');
 });
 
 test('composed parameter attributes execute identically for every container build', function (): void {
@@ -124,6 +127,6 @@ test('composed parameter attributes execute identically for every container buil
     $params = [ServerRequestInterface::class => $request];
 
     foreach ($containers as $container) {
-        expect($container->make(QueryThenCastDto::class, $params)->count)->toBe(44);
+        expect($container->makeAs(QueryThenCastDto::class, QueryThenCastDto::class, $params)->count)->toBe(44);
     }
 });

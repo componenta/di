@@ -86,6 +86,57 @@ test('replacing a definition strategy releases obsolete factory configuration wh
         ->and($payloadReference->get())->toBeNull();
 });
 
+test('aliasing a canonical id releases its unreachable factory and product after publishing the new route', function (): void {
+    $state = new class () {
+        public ?Container $container = null;
+        /** @var list<mixed> */
+        public array $events = [];
+    };
+    $replacement = new Product('replacement');
+    $factory = new RetiringFactory(new \stdClass(), static function () use ($state): void {
+        $container = $state->container ?? throw new LogicException('Expected the published container.');
+        $state->events[] = $container->get('other-alias');
+    });
+    $factoryReference = WeakReference::create($factory);
+    $container = (new ContainerBuilder())
+        ->addFactory('product', $factory)
+        ->addAlias('other-alias', 'product')
+        ->addService('replacement', $replacement)
+        ->build();
+    $state->container = $container;
+    $old = $container->get('product');
+    if (!is_object($old)) {
+        throw new LogicException('Expected a factory result.');
+    }
+    $productReference = WeakReference::create($old);
+    expect($container->get('other-alias'))->toBe($old);
+    unset($factory, $old);
+
+    $container->alias('product', 'replacement');
+
+    expect($state->events)->toBe([$replacement])
+        ->and($container->get('product'))->toBe($replacement)
+        ->and($factoryReference->get())->toBeNull()
+        ->and($productReference->get())->toBeNull();
+});
+
+test('retiring a closure-backed factory releases its captured state', function (bool $methodPair): void {
+    $payload = new Product('captured');
+    $factory = static fn(): Product => new Product($payload->label);
+    $factoryReference = WeakReference::create($factory);
+    $payloadReference = WeakReference::create($payload);
+    $container = (new ContainerBuilder())
+        ->addFactory('product', $methodPair ? [$factory, '__INVOKE'] : $factory)
+        ->build();
+    unset($factory, $payload);
+
+    expect($container->get('product'))->toEqual(new Product('captured'));
+    $container->set('product', Definition::invokable(\stdClass::class));
+
+    expect($factoryReference->get())->toBeNull()
+        ->and($payloadReference->get())->toBeNull();
+})->with(['closure' => false, 'closure method pair' => true]);
+
 test('a retired factory failure reports a committed definition after shared and fresh paths agree', function (): void {
     $cause = new LogicException('Old factory released.');
     $container = (new ContainerBuilder())->addFactory('product', new RetiringFactory(

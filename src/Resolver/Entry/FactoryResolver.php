@@ -63,6 +63,9 @@ final class FactoryResolver implements DefinitionResolverInterface
             if (is_array($factory) && str_contains($factory[1], '::')) {
                 $factory = Closure::fromCallable($factory);
             }
+            if ($validated->validateResolvedCallable && !$factory instanceof LazyServiceFactoryInterface) {
+                FactorySpecificationValidator::assertResolvedCallable($id, $factory);
+            }
             $container = $this->container->get(ContainerValue::class);
             if (!$container instanceof ContainerValue) {
                 throw new InvalidConfigurationException('ContainerValue bootstrap service is unavailable.');
@@ -253,12 +256,6 @@ final class FactoryResolver implements DefinitionResolverInterface
                 get_debug_type($factory),
             ));
         }
-        if ($definition->validateResolvedCallable
-            && !$factory instanceof LazyServiceFactoryInterface
-        ) {
-            FactorySpecificationValidator::assertResolvedCallable($id, $factory);
-        }
-
         return $factory;
     }
 

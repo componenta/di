@@ -32,7 +32,7 @@ test('internal optional arguments after a gap keep their native named binding', 
 
 test('internal methods and constructors keep native defaults', function (): void {
     $container = container();
-    $engine = $container->make(Mt19937::class);
+    $engine = $container->makeAs(Mt19937::class, Mt19937::class);
     expect($engine)->toBeInstanceOf(Mt19937::class)
         ->and($engine->generate())->toBeString()
         ->and($container->call([$engine, 'generate']))->toBeString();

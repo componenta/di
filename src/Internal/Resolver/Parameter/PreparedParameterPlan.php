@@ -12,15 +12,18 @@ final readonly class PreparedParameterPlan
     public bool $empty;
 
     /**
-     * @param list<PreparedParameter> $parameters
      * @param list<ParameterTarget> $targets
      */
     public function __construct(
-        public array $parameters,
         public array $targets,
         public int $resolverRevision,
-        public object $owner,
+        private object $owner,
     ) {
-        $this->empty = $parameters === [];
+        $this->empty = $targets === [];
+    }
+
+    public function belongsTo(object $owner): bool
+    {
+        return $this->owner === $owner;
     }
 }

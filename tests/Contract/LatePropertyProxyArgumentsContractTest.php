@@ -212,7 +212,7 @@ test('late property Proxy materializes valid native arguments once per phase bef
         if ($loadSuffix) {
             $before[] = 'suffix';
         }
-        $owner = $container->make($fixture['class']);
+        $owner = $container->makeAs($fixture['class'], Owner::class);
         $after = [...$before, 'constructor', 'argument'];
         expect(Trace::$events)->toBe($strategy === 'eager' ? $after : $before)
             ->and($owner->ready)->toBeTrue()
@@ -247,7 +247,7 @@ test('constructor policies revealed by a late property Proxy argument fail befor
         $container = builder($uncached)->build();
         expect($container->has($fixture['class']))->toBeTrue()->and(Trace::$events)->toBe([]);
         if (!$preloaded) {
-            expect(fn(): object => $container->get($fixture['class']))
+            expect(fn(): mixed => $container->get($fixture['class']))
                 ->toThrow(AttributeCompositionException::class, 'was already executed')
                 ->and(Trace::$events)->toBe(['loader', 'argument'])
                 ->and(Trace::$constructors)->toBe(0);

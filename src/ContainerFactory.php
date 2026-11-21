@@ -58,6 +58,7 @@ use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Internal\ContainerBootstrapState;
+use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Internal\Resolver\Entry\ConfiguredFactoryDefinition;
@@ -129,6 +130,7 @@ final class ContainerFactory
     private array $invokables = [];
     /** @var array<string,non-empty-string> */
     private array $aliases = self::DEFAULT_ALIASES;
+    private AliasResolver $aliasResolver;
     /** @var array<string,list<callable|string|array{object|string,string}>> */
     private array $delegators = [];
     /** @var array<string,mixed> */
@@ -149,11 +151,30 @@ final class ContainerFactory
         Config $config,
         DependencyDefinitions $dependencies,
     ): ContainerValue {
+        return self::createContainer($config, $dependencies, targetedDiscovery: false);
+    }
+
+    /** Limits autoload probes to the attributes declared by the current target. */
+    public function createWithTargetedAttributeDiscovery(
+        Config $config,
+        DependencyDefinitions $dependencies,
+    ): ContainerValue {
+        return self::createContainer($config, $dependencies, targetedDiscovery: true);
+    }
+
+    private static function createContainer(
+        Config $config,
+        DependencyDefinitions $dependencies,
+        bool $targetedDiscovery,
+    ): ContainerValue {
         try {
             $factory = self::configured($config, $dependencies);
-            $container = $factory->buildContainer();
+            [$container, $bootstrap] = $factory->buildContainer($targetedDiscovery);
+            $value = new ContainerValue($container, $config);
+            unset($factory);
+            $bootstrap->assertReleasedMetadataUnchanged();
 
-            return new ContainerValue($container, $config);
+            return $value;
         } catch (InvalidConfigurationException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -168,7 +189,7 @@ final class ContainerFactory
         Config $config,
         DependencyDefinitions $definitions,
     ): self {
-        $dependencies = DependencyConfiguration::normalize(
+        [$dependencies, $aliases] = DependencyConfiguration::normalizeWithAliases(
             $definitions->sections,
             self::DEFAULT_ALIASES,
         );
@@ -177,6 +198,7 @@ final class ContainerFactory
         $factory->factories = $dependencies[ConfigKey::FACTORIES] ?? [];
         $factory->invokables = $dependencies[ConfigKey::INVOKABLES] ?? [];
         $factory->aliases = $dependencies[ConfigKey::ALIASES] ?? self::DEFAULT_ALIASES;
+        $factory->aliasResolver = $aliases;
         $factory->delegators = $dependencies[ConfigKey::DELEGATORS] ?? [];
         $factory->services = $dependencies[ConfigKey::SERVICES] ?? [];
 
@@ -193,13 +215,16 @@ final class ContainerFactory
         return $factory;
     }
 
-    private function buildContainer(): Container
+    /** @return array{Container, BootstrapResolutionGuard} */
+    private function buildContainer(bool $targetedDiscovery): array
     {
         $aliases = $this->assertBindings();
 
         $config = $this->config;
         $environment = $config->environment;
-        $attributes = new AttributeDefinitionRegistry();
+        $attributes = $targetedDiscovery
+            ? AttributeDefinitionRegistry::withTargetedDiscovery()
+            : new AttributeDefinitionRegistry();
         $plans = new AttributePlanBuilder($attributes);
         $bootstrapGuard = new BootstrapResolutionGuard($plans);
         $parameters = new ParametersResolver($plans, bootstrap: $bootstrapGuard);
@@ -244,6 +269,7 @@ final class ContainerFactory
                     aliases: $aliases,
                     callableExecutor: $bootstrap->callableExecutor(),
                     cache: $cache,
+                    delegators: new DelegatorRegistry($container, $container),
                     proxyFactory: $proxyFactory,
                     bootstrapServices: [
                         Config::class => $config,
@@ -306,11 +332,10 @@ final class ContainerFactory
 
         $parameters->seal();
         $attributes->seal();
+        $container->get(Config::class);
         $bootstrapGuard->finish($parameters->resolverList);
 
-        $container->get(Config::class);
-
-        return $container;
+        return [$container, $bootstrapGuard];
     }
 
     private function createEntryResolver(
@@ -589,7 +614,7 @@ final class ContainerFactory
 
     private function assertBindings(): AliasResolver
     {
-        $aliases = new AliasResolver($this->aliases);
+        $aliases = $this->aliasResolver;
         /** @var array<string,array{kind:string,id:string}> $owners */
         $owners = [];
 

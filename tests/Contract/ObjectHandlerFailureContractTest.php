@@ -186,7 +186,7 @@ test('Init body failures preserve ownership without committing or publishing the
     expect($state->constructions)->toBe(1)->and($state->calls)->toBe(1)->and($state->writes)->toBe(0);
 
     $state->failure = null;
-    $product = $container->get(InitFailureProduct::class);
+    $product = $container->getAs(InitFailureProduct::class, InitFailureProduct::class);
     expect($product->value)->toBe('configured')
         ->and($container->get(InitFailureProduct::class))->toBe($product)
         ->and($state->constructions)->toBe(2)

@@ -43,13 +43,13 @@ it('does not activate an unregistered Proxy beside Make', function (bool $proper
         ->replaceAttributeDefinitions()
         ->addAttributeDefinition(static fn(Container $container): AttributeDefinition => new AttributeDefinition(
             Make::class,
-            $container->get(MakeHandler::class),
+            $container->getAs(MakeHandler::class, MakeHandler::class),
             [ValueProvider::class],
         ))
         ->build();
 
     $product = $property
-        ? $container->make(SelectedMakeProperty::class)->value
+        ? $container->makeAs(SelectedMakeProperty::class, SelectedMakeProperty::class)->value
         : $container->call(__NAMESPACE__ . '\selectedMakeParameter');
 
     if (!$product instanceof SelectedMakeProduct) {
@@ -79,8 +79,8 @@ test('Proxy infers its concrete class from Make when the injection point has no 
     $mixed = static fn(#[Make(SelectedMakeProduct::class), Proxy] mixed $value): mixed => $value;
     $untyped = static fn(#[Make(SelectedMakeProduct::class), Proxy] $value): mixed => $value;
     $resolve = match ($kind) {
-        'mixed property' => static fn(): mixed => $container->make(InferredMixedProxyProperty::class)->value,
-        'untyped property' => static fn(): mixed => $container->make(InferredUntypedProxyProperty::class)->value,
+        'mixed property' => static fn(): mixed => $container->makeAs(InferredMixedProxyProperty::class, InferredMixedProxyProperty::class)->value,
+        'untyped property' => static fn(): mixed => $container->makeAs(InferredUntypedProxyProperty::class, InferredUntypedProxyProperty::class)->value,
         'mixed parameter' => static fn(): mixed => $container->call($mixed),
         'untyped parameter' => static fn(): mixed => $container->call($untyped),
         default => throw new LogicException('Unknown proxy inference target.'),
@@ -133,12 +133,12 @@ it('does not read an unregistered Make or evaluate its arguments beside Proxy', 
         ->replaceAttributeDefinitions()
         ->addAttributeDefinition(static fn(Container $container): AttributeDefinition => new AttributeDefinition(
             Proxy::class,
-            $container->get(MakeHandler::class),
+            $container->getAs(MakeHandler::class, MakeHandler::class),
         ))
         ->build();
 
     $product = $property
-        ? $container->make(SelectedProxyProperty::class)->value
+        ? $container->makeAs(SelectedProxyProperty::class, SelectedProxyProperty::class)->value
         : $container->call(__NAMESPACE__ . '\selectedProxyParameter');
 
     if (!$product instanceof SelectedMakeProduct) {

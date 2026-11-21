@@ -125,7 +125,7 @@ test('SetUp uses an Env descriptor default when the environment variable is abse
         throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $entry = $container->make(SetUpEnvironmentFallbackTarget::class);
+    $entry = $container->makeAs(SetUpEnvironmentFallbackTarget::class, SetUpEnvironmentFallbackTarget::class);
 
     expect($entry->port)->toBe(8123)
         ->and($entry->calls)->toBe(1);
@@ -145,7 +145,7 @@ test('SetUp uses explicit Config descriptor paths and their defaults instead of 
         throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $entry = $container->make(SetUpConfigurationPathTarget::class);
+    $entry = $container->makeAs(SetUpConfigurationPathTarget::class, SetUpConfigurationPathTarget::class);
 
     expect($entry->name)->toBe('configured path')
         ->and($entry->fallback)->toBe('descriptor default')

@@ -13,6 +13,8 @@ final class ObjectResolutionParameterStore
 {
     /** @var WeakMap<ObjectCreationContext, array<string|int, mixed>|Closure():array<string|int,mixed>> */
     private WeakMap $parameters;
+    /** @var WeakMap<ObjectCreationContext,list<Closure():void>>|null */
+    private ?WeakMap $setupSourceChecks = null;
 
     public function __construct()
     {
@@ -41,6 +43,21 @@ final class ObjectResolutionParameterStore
     {
         if (isset($this->parameters[$from])) {
             $this->parameters[$to] = $this->parameters[$from];
+        }
+    }
+
+    /** @param Closure():void $check */
+    public function retainSetupSourceCheck(ObjectCreationContext $context, Closure $check): void
+    {
+        $checks = $this->setupSourceChecks ??= new WeakMap();
+        $checks[$context] ??= [];
+        $checks[$context][] = $check;
+    }
+
+    public function assertSetupSourcesUnchanged(ObjectCreationContext $context): void
+    {
+        foreach ($this->setupSourceChecks[$context] ?? [] as $check) {
+            $check();
         }
     }
 }

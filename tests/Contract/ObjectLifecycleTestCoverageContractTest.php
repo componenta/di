@@ -100,7 +100,7 @@ test('setup rejects static methods before resolving their dependencies or invoki
         ->build();
 
     foreach ([1, 2] as $_attempt) {
-        expect(fn(): object => $container->get(StaticSetupOwner::class))
+        expect(fn(): object => $container->getAs(StaticSetupOwner::class, StaticSetupOwner::class))
             ->toThrow(ResolutionException::class, 'must be public, concrete and non-static.')
             ->and($dependencyCreations)->toBe(0)
             ->and(StaticSetupOwner::$calls)->toBe(0);

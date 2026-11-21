@@ -17,7 +17,7 @@ use function Componenta\DI\Tests\Support\container;
 
 test('resolves config attributes independently for closure method parameters', function (bool $explicitTargets): void {
     $container = container(config: new Config(['a' => 'config:A', 'b' => 'config:B'], new Environment([])));
-    $resolver = $container->get(ParametersResolver::class);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $first = static fn(#[ConfigValue('a')] string $value): string => $value;
     $second = static fn(#[ConfigValue('b')] string $value): string => $value;
     $resolve = static function (Closure $closure) use ($resolver, $explicitTargets): array {
@@ -34,7 +34,7 @@ test('resolves config attributes independently for closure method parameters', f
 
 test('releases captures after resolving closure method parameters', function (bool $explicitTargets): void {
     $container = container(config: new Config(['a' => 'resolved'], new Environment([])));
-    $resolver = $container->get(ParametersResolver::class);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $capture = new \stdClass();
     $reference = \WeakReference::create($capture);
     $closure = static fn(#[ConfigValue('a')] string $value): array => [$capture, $value];

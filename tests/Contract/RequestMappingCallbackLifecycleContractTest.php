@@ -139,7 +139,11 @@ function mappedContainer(string $class, bool $uncached): Container
             if (!$value->container instanceof FactoryInterface) {
                 throw new LogicException('Expected the current container factory.');
             }
-            return $value->container->make($class, $params);
+            $product = $value->container->make($class, $params);
+            if (!$product instanceof Product) {
+                throw new LogicException('Expected a lifecycle product.');
+            }
+            return $product;
         },
     )->build();
 }
@@ -311,7 +315,7 @@ final class ProxyPayloadProduct extends PayloadProduct {}
 function transientContainer(bool $uncached): Container
 {
     return builder($uncached)->addAttributeDefinition(static function (Container $container): AttributeDefinition {
-        $handler = $container->get(AttributeDefinitionRegistry::class)->definition(MapRequest::class)?->handler;
+        $handler = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition(MapRequest::class)?->handler;
         if (!$handler instanceof RequestAttributeHandler) {
             throw new LogicException('Expected the shared request attribute handler.');
         }

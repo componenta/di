@@ -9,6 +9,7 @@ use Componenta\Config\ContainerValue;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use ErrorException;
 
 class FactoryScopeParent {}
 
@@ -25,6 +26,18 @@ final class ScopedAuditFactory extends FactoryScopeParent
         return static fn(parent|ContainerValue $container, array $parameters): object => (object) ['parameters' => $parameters];
     }
 }
+
+class QualifiedAbiFactory
+{
+    public static function incompatible(string $context): object
+    {
+        return (object) ['context' => $context];
+    }
+}
+
+final class QualifiedAbiReceiver extends QualifiedAbiFactory {}
+
+class_alias(QualifiedAbiFactory::class, QualifiedAbiReceiver::class . '::Alias');
 
 final class ConfiguredMethodTarget
 {
@@ -89,3 +102,31 @@ test('native factory callables reject the extra arguments of the factory contrac
             'Factory "native" internal callable accepts at most 1 arguments, but the factory runtime supplies 2.',
         );
 });
+
+test('factory ABI validation checks the native declaration of qualified callable routes', function (string $route): void {
+    $method = QualifiedAbiFactory::class . '::incompatible';
+    $builder = new ContainerBuilder();
+    $attempt = match ($route) {
+        'qualified class pair' => fn() => $builder->addFactory('product', [QualifiedAbiReceiver::class, $method])->build(),
+        'qualified object pair' => fn() => $builder->addFactory('product', [new QualifiedAbiReceiver(), $method])->build(),
+        'deferred pair' => fn() => $builder->addService('factory.owner', new QualifiedAbiReceiver())
+            ->addFactory('product', ['factory.owner', $method])->build()->make('product'),
+        default => fn() => $builder->addFactory('product', QualifiedAbiReceiver::class . '::Alias::incompatible')
+            ->build()->make('product'),
+    };
+
+    set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+        if ($severity === E_DEPRECATED && str_starts_with($message, 'Callables of the form ')) {
+            return true;
+        }
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
+    try {
+        expect($attempt)->toThrow(
+            InvalidConfigurationException::class,
+            'parameter #1 ($context) type "string" is incompatible',
+        );
+    } finally {
+        restore_error_handler();
+    }
+})->with(['qualified class pair', 'qualified object pair', 'deferred pair', 'separator class alias']);

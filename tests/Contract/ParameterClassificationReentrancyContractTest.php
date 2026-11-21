@@ -116,7 +116,7 @@ test('immutable classification tolerates metadata refreshed by nested or interle
 
     try {
         $callable = __NAMESPACE__ . '\\' . $function;
-        $resolver = $container->get(ParametersResolver::class);
+        $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
         $target = $resolver->target(new ReflectionFunction($callable)->getParameters()[0]);
         $operation = $path === 'call'
             ? static fn(): mixed => $container->call($callable)
@@ -143,6 +143,38 @@ test('immutable classification tolerates metadata refreshed by nested or interle
 })->with(['call', 'single'])
     ->with(['cached' => false, 'non-memoized' => true])
     ->with(['nested autoloader call' => false, 'interleaved fiber' => true]);
+
+test('a selected parameter target stays in use if an autoloader rebinds the caller slot', function (): void {
+    $container = (new ContainerBuilder())->addParameterResolver(new TypeClassifier(), -1000)->build();
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $suffix = bin2hex(random_bytes(5));
+    $type = 'UnavailableTargetType_' . $suffix;
+    $function = 'target_' . $suffix;
+    eval(sprintf(
+        'namespace %s; function %s(%s|string $value = "primary"): mixed { return $value; }',
+        __NAMESPACE__,
+        $function,
+        $type,
+    ));
+    $primary = new ReflectionFunction(__NAMESPACE__ . '\\' . $function);
+    $alternate = new ReflectionFunction(static fn(string $value = 'alternate'): string => $value);
+    $selected = $resolver->target($primary->getParameters()[0]);
+    $replacement = $resolver->target($alternate->getParameters()[0]);
+    $targets = [&$selected];
+    $loader = static function (string $class) use (&$selected, $replacement, $type): void {
+        if ($class === __NAMESPACE__ . '\\' . $type) {
+            $selected = $replacement;
+        }
+    };
+    spl_autoload_register($loader);
+
+    try {
+        expect($resolver->resolveTargets($targets))->toBe(['primary'])
+            ->and($resolver->resolveTargets($targets))->toBe(['alternate']);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+});
 
 final class MutatingClassifier implements ParameterResolverInterface
 {

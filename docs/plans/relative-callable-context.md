@@ -325,6 +325,8 @@ Acceptance requires preserving the existing qualified route unless a documented 
 
 ## 9. Separate policy boundary: delegators registered before their owner loads
 
+**DI 6 status.** The dependency index is now refined when a late native-static route publishes its shared result. The result keeps its exact callable ID dependency, and an unused instance owner no longer invalidates it. The historical analysis below records the earlier behavior. [Implementation](../../src/Internal/DelegatorRegistry.php) · [Contract tests](../../tests/Contract/StaticDelegatorInvalidationContractTest.php)
+
 **Added in pass 25, 2026-11-20: existing conservative behavior; a stronger guarantee is proposed, not selected or implemented.** This is a timing question for the dependency index, independent of section 8's choice between two instance-string owners. A confirmed loaded-native case was fixed separately in [`f4869bc`](https://github.com/componenta/di/commit/f4869bc01534018917d2e6f43783196f0ac690d0): when the complete native callable already exists at registration, its unused first prefix is neither autoloaded nor recorded as an instance owner. The complete string remains a dependency because an exact service ID can take precedence. [`StaticDelegatorInvalidationContractTest`](../../tests/Contract/StaticDelegatorInvalidationContractTest.php) protects that boundary, identity, callback count and actual instance-owner replacement.
 
 ### Observed behavior and cost

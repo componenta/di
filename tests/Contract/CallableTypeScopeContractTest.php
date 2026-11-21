@@ -175,7 +175,7 @@ test('constructor callable parameters retain native private visibility', functio
 
     expect((new ConstructorScope($value))->result)->toBe('constructor');
     foreach ([1, 2] as $_attempt) {
-        expect($container->make(ConstructorScope::class, ['value' => $value])->result)->toBe('constructor');
+        expect($container->makeAs(ConstructorScope::class, ConstructorScope::class, ['value' => $value])->result)->toBe('constructor');
     }
 })->with(['cached' => false, 'non-memoized' => true]);
 

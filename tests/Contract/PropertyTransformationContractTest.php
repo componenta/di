@@ -39,7 +39,7 @@ test('property sources are transformed before PHP assigns the final property typ
         ->addService(CasterProviderInterface::class, $provider)
         ->build();
 
-    expect($container->make(BooleanPropertySource::class)->flag)->toBeFalse();
+    expect($container->makeAs(BooleanPropertySource::class, BooleanPropertySource::class)->flag)->toBeFalse();
 });
 
 final class TransformedWriteOnlyProperty
@@ -60,5 +60,5 @@ test('a write-only property hook receives only the final transformed value once'
         ->addService(CasterProviderInterface::class, new \Componenta\DI\Tests\Support\TestCasterProvider())
         ->build();
 
-    expect($container->make(TransformedWriteOnlyProperty::class)->assigned)->toBe(['ready']);
+    expect($container->makeAs(TransformedWriteOnlyProperty::class, TransformedWriteOnlyProperty::class)->assigned)->toBe(['ready']);
 });

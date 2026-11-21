@@ -82,6 +82,6 @@ it('uses one definition for different spellings of the same attribute', function
         throw new LogicException('Expected the attribute identity fixture.');
     }
 
-    expect($container->make(CanonicalAttributeTarget::class)->value)->toBe('handled')
+    expect($container->makeAs(CanonicalAttributeTarget::class, CanonicalAttributeTarget::class)->value)->toBe('handled')
         ->and($lowercase->value)->toBe('handled');
 });

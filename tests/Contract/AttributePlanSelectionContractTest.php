@@ -62,7 +62,7 @@ test('capability selection preserves explicit attribute ordering constraints', f
         ],
     ]);
     $target = (new ReflectionMethod(SelectionTarget::class, 'ordered'))->getParameters()[0];
-    $plans = $container->get(AttributePlanBuilder::class);
+    $plans = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class);
     $plan = $plans->build($target);
 
     expect(array_map(
@@ -83,7 +83,7 @@ test('attribute family selection preserves interleaved declaration order', funct
         ],
     ]);
     $target = (new ReflectionMethod(SelectionTarget::class, 'repeated'))->getParameters()[0];
-    $plan = $container->get(AttributePlanBuilder::class)->build($target);
+    $plan = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build($target);
 
     expect(array_map(
         static fn(AttributeUsage $usage): string => $usage->attributeClass,

@@ -93,7 +93,7 @@ test('Proxy supplies its value before Cast transforms it', function (): void {
         ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
         ->build();
 
-    $target = $container->make(ProxyCastParameterTarget::class);
+    $target = $container->makeAs(ProxyCastParameterTarget::class, ProxyCastParameterTarget::class);
 
     expect($target->value->label)->toBe('source:cast');
 });

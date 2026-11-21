@@ -53,14 +53,14 @@ test('has does not execute custom parameter classification', function (): void {
 
     expect($container->has(AuditPreparedTarget::class))->toBeTrue()
         ->and($resolver->supportsCalls)->toBe(0)
-        ->and($container->make(AuditPreparedTarget::class)->value)->toBe('prepared');
+        ->and($container->makeAs(AuditPreparedTarget::class, AuditPreparedTarget::class)->value)->toBe('prepared');
 });
 
 test('repeated resolutions do not reuse object default values', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    $first = $container->make(AuditPreparedDefaultObjectTarget::class);
-    $second = $container->make(AuditPreparedDefaultObjectTarget::class);
+    $first = $container->makeAs(AuditPreparedDefaultObjectTarget::class, AuditPreparedDefaultObjectTarget::class);
+    $second = $container->makeAs(AuditPreparedDefaultObjectTarget::class, AuditPreparedDefaultObjectTarget::class);
 
     expect($first->value)->toBeInstanceOf(AuditPreparedDefaultObject::class)
         ->and($second->value)->toBeInstanceOf(AuditPreparedDefaultObject::class)

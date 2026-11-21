@@ -55,7 +55,7 @@ test('setup accepts Env descriptors without a matching declared parameter', func
     $class = $callback ? CallbackTarget::class : MethodTarget::class;
 
     foreach ([1, 2] as $attempt) {
-        $entry = $container->make($class);
+        $entry = $container->makeAs($class, $class);
 
         expect($entry)->toBeInstanceOf($class)
             ->and($entry->arguments)->toBe($callback ? 1 : 0)

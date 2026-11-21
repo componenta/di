@@ -92,7 +92,7 @@ test('proxy injection defers an application factory that owns a nonpublic constr
         ->build();
 
     $proxy = $property
-        ? $container->make($consumer)->product
+        ? $container->makeAs($consumer, $consumer)->product
         : $container->call($callable);
     if (!$proxy instanceof Product) {
         throw new LogicException('Expected the declared product type.');
@@ -145,13 +145,13 @@ function skippedPrivateParameter(#[Proxy] SkippedPrivateProduct $product): Skipp
 test('proxy injection preserves the NoConstructor policy accepted by ordinary reflection creation', function (bool $property): void {
     Events::$values = [];
     $container = (new ContainerBuilder())->build();
-    $eager = $container->make(SkippedPrivateProduct::class);
+    $eager = $container->makeAs(SkippedPrivateProduct::class, SkippedPrivateProduct::class);
     expect($eager->value)->toBe('initialized')
         ->and(Events::$values)->toBe(['setup']);
     Events::$values = [];
 
     $proxy = $property
-        ? $container->make(SkippedPrivateConsumer::class)->product
+        ? $container->makeAs(SkippedPrivateConsumer::class, SkippedPrivateConsumer::class)->product
         : $container->call(__NAMESPACE__ . '\\skippedPrivateParameter');
     if (!$proxy instanceof SkippedPrivateProduct) {
         throw new LogicException('Expected the constructor-policy target.');

@@ -21,6 +21,9 @@ final readonly class MutationFallbackPreparation implements StartMutationSuiteSu
         $uncovered = [];
         foreach ($event->mutationSuite->repository->all() as $collection) {
             foreach ($collection->tests() as $test) {
+                if (!MutationArtifactCache::isAvailable($test->mutation)) {
+                    throw new \RuntimeException('Mutation replacement is missing or corrupt: ' . $test->mutation->modifiedSourcePath);
+                }
                 if (!$this->coverage->covers($test->mutation)) {
                     $uncovered[] = $test;
                 }

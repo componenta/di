@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\AliasGraphBuilder;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
@@ -43,6 +44,17 @@ final class DependencyConfiguration
      */
     public static function normalize(array $dependencies, array $defaultAliases = []): array
     {
+        return self::normalizeWithAliases($dependencies, $defaultAliases)[0];
+    }
+
+    /**
+     * @internal
+     * @param array<array-key,mixed> $dependencies
+     * @param array<string,non-empty-string> $defaultAliases
+     * @return array{DependencyShape, AliasResolver}
+     */
+    public static function normalizeWithAliases(array $dependencies, array $defaultAliases): array
+    {
         // Own the section slots before in-place normalization. A by-value array
         // can still carry references to the caller's configuration sections.
         $snapshot = [];
@@ -50,20 +62,16 @@ final class DependencyConfiguration
             $snapshot[$key] = $value;
         }
         $dependencies = $snapshot;
-        self::assertShape($dependencies);
-
-        /** @var array<string,non-empty-string> $configuredAliases */
-        $configuredAliases = self::section($dependencies, ConfigKey::ALIASES);
-        $aliases = self::assertAliasesAcyclic(array_merge($defaultAliases, $configuredAliases));
+        $graph = self::validateShape($dependencies);
+        $aliases = $graph->aliases;
+        if ($defaultAliases !== []) {
+            $aliases = array_merge($defaultAliases, $aliases);
+            $graph = new AliasGraphBuilder($aliases);
+        }
 
         /** @var list<class-string> $configuredInvokables */
         $configuredInvokables = self::section($dependencies, ConfigKey::INVOKABLES);
-        $invokables = [];
-        foreach ($configuredInvokables as $value) {
-            if (!in_array($value, $invokables, true)) {
-                $invokables[] = $value;
-            }
-        }
+        $invokables = array_values(array_unique($configuredInvokables, SORT_STRING));
 
         /** @var array<string,list<callable|string|array{object|string,string}>> $configuredDelegators */
         $configuredDelegators = self::section($dependencies, ConfigKey::DELEGATORS);
@@ -103,7 +111,7 @@ final class DependencyConfiguration
             ConfigKey::ATTRIBUTE_CAPABILITIES => $attributeCapabilities,
         ], static fn(mixed $value): bool => $value !== [] && $value !== false);
 
-        return $normalized;
+        return [$normalized, AliasResolver::fromGraph($graph)];
     }
 
     /**
@@ -113,6 +121,12 @@ final class DependencyConfiguration
      * @param array<array-key,mixed> $dependencies
      */
     public static function assertShape(array &$dependencies): void
+    {
+        self::validateShape($dependencies);
+    }
+
+    /** @param array<array-key,mixed> $dependencies */
+    private static function validateShape(array &$dependencies): AliasGraphBuilder
     {
         $allowed = array_fill_keys(ConfigKey::dependencyKeys(), true);
         foreach ($dependencies as $key => $_value) {
@@ -153,17 +167,18 @@ final class DependencyConfiguration
             }
         }
 
-        self::normalizeInvokablesAndAliases($dependencies);
+        $graph = self::normalizeInvokablesAndAliases($dependencies);
         self::validateFactoryIds($dependencies);
         self::validateDelegators($dependencies);
         self::validateServices($dependencies);
         self::validateParameterResolvers($dependencies);
         self::validateAttributeDefinitions($dependencies);
         self::validateCapabilities($dependencies);
+        return $graph;
     }
 
     /** @param array<array-key,mixed> $dependencies */
-    private static function normalizeInvokablesAndAliases(array &$dependencies): void
+    private static function normalizeInvokablesAndAliases(array &$dependencies): AliasGraphBuilder
     {
         $invokableInput = self::section($dependencies, ConfigKey::INVOKABLES);
         $invokables = [];
@@ -192,14 +207,18 @@ final class DependencyConfiguration
             }
             $aliases[$alias] = $target;
         }
+        $graph = new AliasGraphBuilder($aliases);
         foreach ($invokableAliases as $alias => $target) {
-            self::assertInvokableAliasCompatible($aliases, $alias, $target);
-            $aliases[$alias] ??= $target;
+            if (isset($aliases[$alias])) {
+                self::assertAliasTarget($alias, $graph->resolve($alias), $graph->resolve($target));
+            } else {
+                $graph->append($alias, $target);
+            }
         }
-        if ($aliases !== []) {
-            self::assertAliasesAcyclic($aliases);
-            $dependencies[ConfigKey::ALIASES] = $aliases;
+        if ($graph->aliases !== []) {
+            $dependencies[ConfigKey::ALIASES] = $graph->aliases;
         }
+        return $graph;
     }
 
     /** @param array<array-key,mixed> $dependencies */
@@ -354,9 +373,12 @@ final class DependencyConfiguration
             return;
         }
 
-        $resolver = new AliasResolver($aliases);
-        $existing = $resolver->resolve($alias);
-        $requested = $resolver->resolve($target);
+        $graph = new AliasGraphBuilder($aliases);
+        self::assertAliasTarget($alias, $graph->resolve($alias), $graph->resolve($target));
+    }
+
+    private static function assertAliasTarget(string $alias, string $existing, string $requested): void
+    {
         if ($existing !== $requested) {
             throw new InvalidConfigurationException(sprintf(
                 'Invokable alias "%s" conflicts with existing target "%s"; requested "%s".',
@@ -373,10 +395,7 @@ final class DependencyConfiguration
      */
     public static function assertAliasesAcyclic(array $aliases): array
     {
-        $resolver = new AliasResolver($aliases);
-        foreach (array_keys($aliases) as $alias) {
-            $resolver->resolve($alias);
-        }
+        new AliasGraphBuilder($aliases);
         return $aliases;
     }
 

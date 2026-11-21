@@ -31,6 +31,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use LogicException;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use ReflectionClass;
@@ -90,7 +91,7 @@ final class LazyHookTarget extends HookTarget {}
 
 test('callback setup runs after committed properties in declaration order and ignores returned objects', function (bool $uncached): void {
     $container = setupBuilder($uncached)->build();
-    $entry = $container->get(HookTarget::class);
+    $entry = $container->getAs(HookTarget::class, HookTarget::class);
 
     expect($entry)->toBeInstanceOf(HookTarget::class)
         ->and($entry->steps)->toBe(['first:dependency:dependency', 'middle:dependency', 'last:dependency:dependency'])
@@ -100,7 +101,7 @@ test('callback setup runs after committed properties in declaration order and ig
 
 test('callback setup respects lazy object initialization', function (): void {
     $container = (new ContainerBuilder())->build();
-    $entry = $container->make(LazyHookTarget::class);
+    $entry = $container->makeAs(LazyHookTarget::class, LazyHookTarget::class);
 
     expect(new ReflectionClass($entry)->isUninitializedLazyObject($entry))->toBeTrue()
         ->and($entry->steps)->toBe(['lazy:dependency:dependency']);
@@ -149,7 +150,7 @@ function directRunner(array $parameters = []): array
     $entry = new DirectTarget();
     $context = setupContext($entry, $parameters);
     $store->attach($context, $parameters);
-    $runner = new SetUpRunner($container, $store, new AttributeCallbackInvoker($container->get(ParametersResolver::class), $container), $unwrapper);
+    $runner = new SetUpRunner($container, $store, new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container), $unwrapper);
     return [$runner, $context, $unwrapper, $entry];
 }
 
@@ -244,6 +245,8 @@ final readonly class ClasslessHook extends SetUp
 final class RequestLog
 {
     public static int $calls = 0;
+    /** @var list<string> */
+    public static array $values = [];
 }
 
 function setupEntry(object $instance, #[EntryId('trusted.dependency')] Dependency $dependency): void
@@ -399,6 +402,63 @@ test('mapped DTO provenance guards classless setup callback sources by name and 
     ['environment', 'label'],
 ]);
 
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class UnrelatedSetUpMetadata
+{
+    public function __construct(public string $value) {}
+}
+
+test('request DTO publication checks a source revealed during or after a setup invocation', function (
+    bool $useCallback,
+    bool $laterSetup,
+    bool $conflict,
+): void {
+    $suffix = bin2hex(random_bytes(5));
+    $class = 'ObservedRequestDto_' . $suffix;
+    $source = 'PublishedSetUpSource_' . $suffix;
+    $function = 'recordSetup_' . $suffix;
+    $declareSource = sprintf('class_alias(%s, %s);', var_export($conflict ? EntryId::class : UnrelatedSetUpMetadata::class, true), var_export(__NAMESPACE__ . '\\' . $source, true));
+    $body = 'RequestLog::$values[] = $role;' . ($laterSetup ? '' : $declareSource);
+    $parameter = sprintf('#[%s("trusted.role")] string $role', $source);
+    $callback = $useCallback ? sprintf('function %s(object $entry, %s): void { %s }', $function, $parameter, $body) : '';
+    $first = $useCallback
+        ? 'FunctionHook(' . var_export(__NAMESPACE__ . '\\' . $function, true) . ')'
+        : '\\' . SetUp::class . '("record")';
+    $methods = $useCallback ? '' : sprintf('public function record(%s): void { %s }', $parameter, $body);
+    if ($laterSetup) {
+        $first .= ', \\' . SetUp::class . '("declareSource")';
+        $methods .= 'public function declareSource(): void { ' . $declareSource . ' }';
+    }
+    eval(sprintf('namespace %s; %s #[%s] final class %s { %s }', __NAMESPACE__, $callback, $first, $class, $methods));
+    $target = eval(sprintf(
+        'namespace %s; return static function (#[\\%s] %s $dto): object { ++RequestLog::$calls; return $dto; };',
+        __NAMESPACE__,
+        MapRequestPayload::class,
+        $class,
+    ));
+    $dtoClass = __NAMESPACE__ . '\\' . $class;
+    if (!class_exists($dtoClass, false)) {
+        throw new LogicException('Expected a declared DTO class.');
+    }
+    $request = new ServerRequest('POST', '/callbacks')->withParsedBody(['role' => 'provided']);
+    $container = (new ContainerBuilder())->addService('trusted.role', 'trusted')->build();
+    RequestLog::$calls = 0;
+    RequestLog::$values = [];
+
+    if ($conflict) {
+        expect(fn() => $container->call($target, [ServerRequestInterface::class => $request]))
+            ->toThrow(RequestParameterSourceConflictException::class, 'role')
+            ->and(RequestLog::$calls)->toBe(0);
+    } else {
+        expect($container->call($target, [ServerRequestInterface::class => $request]))
+            ->toBeInstanceOf($dtoClass)
+            ->and(RequestLog::$calls)->toBe(1);
+    }
+    expect(RequestLog::$values)->toBe(['provided']);
+})->with(['method' => false, 'callback' => true])
+    ->with(['during invocation' => false, 'during later setup' => true])
+    ->with(['source' => true, 'unrelated metadata' => false]);
+
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class FailingHook extends SetUp
 {
@@ -464,5 +524,5 @@ final class ForwardedTarget
 test('constructor only setup subclasses preserve named method and params arguments', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    expect($container->make(ForwardedTarget::class)->label)->toBe('forwarded');
+    expect($container->makeAs(ForwardedTarget::class, ForwardedTarget::class)->label)->toBe('forwarded');
 });

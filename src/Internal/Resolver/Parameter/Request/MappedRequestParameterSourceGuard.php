@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
+use Closure;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
 use ReflectionClass;
+use ReflectionFunctionAbstract;
 use ReflectionParameter;
 
 /** Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources. @internal */
@@ -162,6 +164,57 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
+     * Retains only unresolved declarations whose parameter keys were mapped.
+     *
+     * @param class-string $owner
+     * @return (Closure():void)|null
+     */
+    public static function watchInvocation(
+        ReflectionFunctionAbstract $callable,
+        MappedRequestContext $provenance,
+        string $owner,
+        bool $skipFirst = false,
+    ): ?Closure {
+        $checks = [];
+        foreach ($callable->getParameters() as $parameter) {
+            if (($skipFirst && $parameter->getPosition() === 0) || ($attributes = $parameter->getAttributes()) === []) {
+                continue;
+            }
+            $name = $parameter->getName();
+            $keys = self::bindingKeys($name, TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass()));
+            $key = array_find($keys, $provenance->contains(...));
+            if ($key === null) {
+                continue;
+            }
+
+            $pending = [];
+            foreach ($attributes as $attribute) {
+                $attributeClass = $attribute->getName();
+                if (!self::isAvailable($attributeClass)) {
+                    $pending[] = $attributeClass;
+                }
+            }
+            if ($pending !== []) {
+                $checks[] = [$name, $key, $pending];
+            }
+        }
+        if ($checks === []) {
+            return null;
+        }
+
+        // The completion check must let callback captures and reflectors retire.
+        return static function () use ($checks, $owner): void {
+            foreach ($checks as [$name, $key, $pending]) {
+                foreach ($pending as $attribute) {
+                    if (self::isAvailable($attribute) && is_a($attribute, ParameterSourceAttributeInterface::class, true)) {
+                        throw new RequestParameterSourceConflictException($owner, $key, $attribute, $name);
+                    }
+                }
+            }
+        };
+    }
+
+    /**
      * @param class-string $class
      * @return list<array{parameter:string,source:class-string,keys:list<string>}>
      */
@@ -219,6 +272,19 @@ final class MappedRequestParameterSourceGuard
      */
     private static function binding(string $parameter, string $source, array $typeNames): array
     {
+        return [
+            'parameter' => $parameter,
+            'source' => $source,
+            'keys' => self::bindingKeys($parameter, $typeNames),
+        ];
+    }
+
+    /**
+     * @param list<class-string> $typeNames
+     * @return list<string>
+     */
+    private static function bindingKeys(string $parameter, array $typeNames): array
+    {
         /** @var list<string> $keys */
         $keys = [$parameter];
         foreach ($typeNames as $typeName) {
@@ -227,11 +293,7 @@ final class MappedRequestParameterSourceGuard
             }
         }
 
-        return [
-            'parameter' => $parameter,
-            'source' => $source,
-            'keys' => $keys,
-        ];
+        return $keys;
     }
 
     /** @return class-string|null */

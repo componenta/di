@@ -7,7 +7,9 @@ namespace Componenta\DI\Tests\Contract\EntryCachePublication;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Definition\Definition;
 use Fiber;
+use LogicException;
 use stdClass;
+use WeakReference;
 
 use function Componenta\DI\Tests\Support\container;
 
@@ -42,6 +44,34 @@ test('a suspended source cannot republish its base after a new definition is ins
         ->and($di->get('source'))->toBe($current)
         ->and($di->make('source'))->toEqual(new Value('new'));
 })->with(['definition only' => false, 'definition then shared override' => true]);
+
+test('a suspended factory can return its result after aliasing without retaining it in an unreachable base', function (): void {
+    $replacement = new Value('replacement');
+    $di = container([
+        ConfigKey::FACTORIES => [
+            'source' => static function (): Value {
+                Fiber::suspend('source selected');
+                return new Value('original');
+            },
+        ],
+        ConfigKey::SERVICES => ['replacement' => $replacement],
+    ]);
+    $fiber = new Fiber(static fn(): mixed => $di->get('source'));
+    expect($fiber->start())->toBe('source selected');
+
+    $di->alias('source', 'replacement');
+    $fiber->resume();
+    $old = $fiber->getReturn();
+    if (!$old instanceof Value) {
+        throw new LogicException('Expected the original in-flight value.');
+    }
+    $reference = WeakReference::create($old);
+    expect($old->label)->toBe('original');
+    unset($fiber, $old);
+
+    expect($di->get('source'))->toBe($replacement)
+        ->and($reference->get())->toBeNull();
+});
 
 test('a null decorated value is shared until its source is replaced', function (): void {
     $calls = 0;

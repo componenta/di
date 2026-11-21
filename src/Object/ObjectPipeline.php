@@ -119,13 +119,17 @@ final class ObjectPipeline
             $completed = $this->attributes->skippedBeforePhase($metadata->class);
             $this->attributes->recordBootstrapUse($metadata->class, AttributePhase::BeforeInstantiation);
             $parameters = $resolveParameters === null ? $params : $resolveParameters();
-            $entry = $this->instances->createPrepared(
+            $entry = $this->instances->createTracked(
                 $metadata->class,
                 $metadata->constructor,
                 $this->constructorPlan($metadata),
                 $parameters,
                 $completed->assertUnchanged(...),
+                $constructorProof,
             );
+            if ($constructorProof !== null) {
+                $completed = $completed->with($constructorProof);
+            }
             $completed->assertUnchanged();
             if ($this->attributes->hasHandlers($metadata->class)) {
                 $creation = new ObjectCreationContext(
@@ -144,6 +148,10 @@ final class ObjectPipeline
             $completed->assertUnchanged();
             $configure?->__invoke($entry);
             $completed->assertUnchanged();
+            $constructorProof?->assertParameterSourcesUnchanged();
+            if (isset($creation)) {
+                $this->resolutionParameters->assertSetupSourcesUnchanged($creation);
+            }
             return $entry;
         }
 
@@ -209,16 +217,18 @@ final class ObjectPipeline
                 : new ReflectionClass($class);
             $name = $reflection->getName();
             $classPlan = $this->plans->build($reflection);
+            $awaitsDiscovery = $this->plans->awaitsDiscovery($classPlan);
             $constructor = $reflection->getConstructor();
             $constructorTargets = $constructor === null
                 ? []
                 : $this->instances->targets($constructor);
 
             foreach ($constructorTargets as $target) {
-                $this->plans->build($target->reflection);
+                $plan = $this->plans->build($target->reflection);
+                $awaitsDiscovery = $awaitsDiscovery || $this->plans->awaitsDiscovery($plan);
             }
 
-            $hasAttributeHandlers = $this->attributes->hasHandlers($reflection);
+            $attributePlan = $this->attributes->executionPlan($reflection);
             if ($this->registry->revision !== $revision) {
                 // Member discovery can load attributes used by an earlier target.
                 // Only publish metadata assembled from one registry revision.
@@ -230,9 +240,9 @@ final class ObjectPipeline
                 $classPlan,
                 $constructor,
                 $constructorTargets,
-                $hasAttributeHandlers,
+                $attributePlan['hasHandlers'],
             );
-            if ($cacheable && $this->plans->canCachePlans) {
+            if ($cacheable && !$awaitsDiscovery && !$attributePlan['awaitsDiscovery'] && $this->plans->canCachePlans) {
                 $this->metadata[$name] = $metadata;
             }
             return $metadata;
@@ -270,16 +280,21 @@ final class ObjectPipeline
         ?Closure $configure,
     ): object {
         $completed->assertUnchanged();
+        $constructorProof = null;
         $entry = $creation->constructorEnabled
-            ? $this->instances->createPrepared(
+            ? $this->instances->createTracked(
                 $metadata->class,
                 $metadata->constructor,
                 $constructorPlan,
                 $this->resolutionParameters->get($creation),
                 $completed->assertUnchanged(...),
+                $constructorProof,
             )
             : $metadata->class->newInstanceWithoutConstructor();
 
+        if ($constructorProof !== null) {
+            $completed = $completed->with($constructorProof);
+        }
         $completed->assertUnchanged();
         $creation->initialize($entry);
         $after = $this->attributes->processTracked(
@@ -291,6 +306,8 @@ final class ObjectPipeline
         $completed->assertUnchanged();
         $configure?->__invoke($entry);
         $completed->assertUnchanged();
+        $constructorProof?->assertParameterSourcesUnchanged();
+        $this->resolutionParameters->assertSetupSourcesUnchanged($creation);
 
         return $entry;
     }
@@ -314,27 +331,32 @@ final class ObjectPipeline
                 $succeeded = false;
                 try {
                     $completed->assertUnchanged();
+                    $constructorProof = null;
                     if ($attempt->constructorEnabled) {
-                        $this->instances->initializePrepared(
+                        $this->instances->initializeTracked(
                             $entry,
                             $metadata->constructor,
                             $constructorPlan,
                             $this->resolutionParameters->get($attempt),
                             $completed->assertUnchanged(...),
+                            $constructorProof,
                         );
                     }
 
-                    $completed->assertUnchanged();
+                    $attemptCompleted = $constructorProof === null ? $completed : $completed->with($constructorProof);
+                    $attemptCompleted->assertUnchanged();
                     $attempt->initialize($entry);
                     $after = $this->attributes->processTracked(
                         $metadata->class,
                         AttributePhase::AfterInstantiation,
                         $attempt,
                     );
-                    $attemptCompleted = $completed->with($after);
+                    $attemptCompleted = $attemptCompleted->with($after);
                     $attemptCompleted->assertUnchanged();
                     $configure?->__invoke($entry);
                     $attemptCompleted->assertUnchanged();
+                    $constructorProof?->assertParameterSourcesUnchanged();
+                    $this->resolutionParameters->assertSetupSourcesUnchanged($attempt);
                     $succeeded = true;
                 } finally {
                     if (!$succeeded) {

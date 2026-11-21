@@ -82,7 +82,7 @@ test('object handler discovery returns a complete revision after member autoload
         $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
     }
     $container = $builder->build();
-    $processor = $container->get(AttributeProcessor::class);
+    $processor = $container->getAs(AttributeProcessor::class, AttributeProcessor::class);
     $reflection = new ReflectionClass($class);
     NativePayload::$constructions = 0;
     if ($warm) {

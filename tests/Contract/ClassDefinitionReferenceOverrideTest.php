@@ -62,7 +62,7 @@ test('only named and positional runtime arguments replace configured references'
     ]);
     $replacement = new OverrideDependency();
 
-    $target = $container->make(ReferenceOverrideTarget::class, [$runtimeKey => $replacement]);
+    $target = $container->makeAs(ReferenceOverrideTarget::class, ReferenceOverrideTarget::class, [$runtimeKey => $replacement]);
 
     expect($target->dependency)->toBe($runtimeKey === OverrideDependency::class ? $configured : $replacement)
         ->and($calls)->toBe($runtimeKey === OverrideDependency::class ? 1 : 0);
@@ -85,7 +85,7 @@ test('runtime name wins over position and type without resolving an unavailable 
     ]);
     $replacement = new OverrideDependency();
 
-    $target = $container->make(ReferenceOverrideTarget::class, [
+    $target = $container->makeAs(ReferenceOverrideTarget::class, ReferenceOverrideTarget::class, [
         'dependency' => $replacement,
         0 => new OverrideDependency(),
         OverrideDependency::class => new OverrideDependency(),
@@ -105,7 +105,7 @@ test('replacing a configured array skips nested references and keeps runtime val
     $literal = Definition::reference('runtime.literal');
     $options = ['nested' => [$literal]];
 
-    $target = $container->make(ReferenceOverrideTarget::class, ['options' => $options]);
+    $target = $container->makeAs(ReferenceOverrideTarget::class, ReferenceOverrideTarget::class, ['options' => $options]);
 
     expect($target->options)->toBe($options);
 });
@@ -123,7 +123,7 @@ test('constructor overrides preserve references used by other parameters and met
             ->call('configure', [Definition::reference('configured.dependency')]),
     ]);
 
-    $target = $container->make(ReferenceOverrideTarget::class, ['dependency' => $replacement]);
+    $target = $container->makeAs(ReferenceOverrideTarget::class, ReferenceOverrideTarget::class, ['dependency' => $replacement]);
 
     expect($target->dependency)->toBe($replacement)
         ->and($target->options)->toBe(['nested' => [$configured]])

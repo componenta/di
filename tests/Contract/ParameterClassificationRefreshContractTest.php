@@ -103,7 +103,7 @@ test('all parameter paths observe sources loaded incidentally while classifying 
             ))
             ->addParameterResolver(new TypeClassifier(), -1000)
             ->build();
-        $resolver = $container->get(ParametersResolver::class);
+        $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
         $callable = __NAMESPACE__ . '\\' . $function;
         if (!is_callable($callable)) {
             throw new \LogicException('The generated function must be callable.');

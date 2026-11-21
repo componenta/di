@@ -193,7 +193,7 @@ test('Cast provider and caster failures preserve diagnostics and allow a later s
     $caster->failure = null;
     if ($property) {
         $container->set('cast-recovery-input', '  recovered  ');
-        $product = $container->get(CastRecoveryProduct::class);
+        $product = $container->getAs(CastRecoveryProduct::class, CastRecoveryProduct::class);
         expect($product->value)->toBe('recovered')
             ->and($container->get(CastRecoveryProduct::class))->toBe($product)
             ->and($state->constructions)->toBe(2)

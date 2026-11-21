@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
@@ -23,6 +24,8 @@ final class CompletedAttributeGuard
 {
     /** @var list<array{target:ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,plan:AttributePlan,phase:?AttributePhase}> */
     private array $completed = [];
+    /** @var (Closure():void)|null */
+    private ?Closure $checkParameterSources = null;
 
     public function __construct(
         private readonly AttributePlanBuilder $plans,
@@ -70,15 +73,48 @@ final class CompletedAttributeGuard
             foreach ($this->completed as $completed) {
                 $current = $this->plans->build($completed['target']);
                 if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
-                    throw new AttributeCompositionException(sprintf(
-                        'Attribute composition for %s changed after %s completed. Load its attributes before execution.',
-                        self::targetName($completed['target']),
-                        $completed['phase']->name ?? 'parameter resolution',
-                    ));
+                    self::throwChanged($completed['target'], $completed['phase']);
                 }
             }
             $this->verifiedRevision = $revision;
         }
+    }
+
+    /** Checks consumed constructor declarations at the native invocation boundary. */
+    public function assertLoadedParametersUnchanged(): void
+    {
+        if ($this->plans->loadedRevision === $this->verifiedRevision) {
+            return;
+        }
+        foreach ($this->completed as $completed) {
+            if (!$this->plans->hasSameLoadedDeclarations($completed['plan'])) {
+                self::throwChanged($completed['target'], null);
+            }
+        }
+    }
+
+    /** @param (Closure():void)|null $checkSources Loaded-only provenance check for the consumed arguments. */
+    public function retainCompletedParameters(?Closure $checkSources): ?self
+    {
+        $this->checkParameterSources = $checkSources;
+        return $this->completed === [] && $checkSources === null ? null : $this;
+    }
+
+    public function assertParameterSourcesUnchanged(): void
+    {
+        $this->checkParameterSources?->__invoke();
+    }
+
+    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    private static function throwChanged(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        ?AttributePhase $phase,
+    ): never {
+        throw new AttributeCompositionException(sprintf(
+            'Attribute composition for %s changed after %s completed. Load its attributes before execution.',
+            self::targetName($target),
+            $phase->name ?? 'parameter resolution',
+        ));
     }
 
     /** @return list<array{AttributeDefinition,class-string,int}> */
@@ -100,21 +136,32 @@ final class CompletedAttributeGuard
         if ($phase === null) {
             return $plan->usages;
         }
-        return array_values(array_filter($plan->usages, static function (AttributeUsage $usage) use ($phase, $plan): bool {
-            // The built-in Proxy definition serves class strategy and property
-            // injection. Its property handler has no before-instantiation action.
-            if ($phase === AttributePhase::BeforeInstantiation
-                && $plan->target instanceof ReflectionProperty
-                && $usage->definition->handler instanceof MakeHandler
-                && $usage->is(Proxy::class)
-            ) {
-                return false;
-            }
-            if (!$usage->definition->handler instanceof AttributeHandlerInterface) {
-                return $phase === AttributePhase::AfterInstantiation;
-            }
-            return $usage->definition->phase === $phase || $usage->definition->phase === AttributePhase::Both;
-        }));
+        return array_values(array_filter($plan->usages, static fn(AttributeUsage $usage): bool => self::appliesToPhase(
+            $usage->definition,
+            $usage->attributeClass,
+            $phase,
+            $plan->target instanceof ReflectionProperty,
+        )));
+    }
+
+    /** @param class-string $attribute */
+    public static function appliesToPhase(AttributeDefinition $definition, string $attribute, ?AttributePhase $phase, bool $property): bool
+    {
+        if ($phase === null) {
+            return true;
+        }
+        // Proxy's property handler has no before-instantiation action.
+        if ($phase === AttributePhase::BeforeInstantiation
+            && $property
+            && $definition->handler instanceof MakeHandler
+            && is_a($attribute, Proxy::class, true)
+        ) {
+            return false;
+        }
+        if (!$definition->handler instanceof AttributeHandlerInterface) {
+            return $phase === AttributePhase::AfterInstantiation;
+        }
+        return $definition->phase === $phase || $definition->phase === AttributePhase::Both;
     }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */

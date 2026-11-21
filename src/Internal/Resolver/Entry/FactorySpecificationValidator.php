@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Entry;
 
+use Closure;
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
@@ -29,7 +30,7 @@ use function Componenta\DI\Internal\is_magic_closure_trampoline;
  */
 final class FactorySpecificationValidator
 {
-    /** @var WeakMap<ReflectionFunctionAbstract,true>|null */
+    /** @var WeakMap<Closure|ReflectionFunctionAbstract,true>|null */
     private static ?WeakMap $validatedCallables = null;
     private static ?ContainerValue $containerArgument = null;
 
@@ -71,19 +72,33 @@ final class FactorySpecificationValidator
             return;
         }
 
+        if (is_array($factory)) {
+            if ($factory[0] instanceof Closure && strcasecmp($factory[1], '__invoke') === 0) {
+                $factory = $factory[0];
+            } elseif (str_contains($factory[1], '::')) {
+                $factory = Closure::fromCallable($factory);
+            }
+        } elseif (is_string($factory) && substr_count($factory, '::') > 1) {
+            // PHP permits class aliases that contain the method separator.
+            $factory = Closure::fromCallable($factory);
+        }
+
         try {
-            $reflection = Reflection::callable($factory);
+            // A ReflectionFunction strongly owns its closure. A weak key with
+            // just a validation flag leaves the callable free to retire.
+            $key = $factory instanceof Closure ? $factory : Reflection::callable($factory);
         } catch (InvalidArgumentException) {
             return;
         }
 
         $validated = self::$validatedCallables ??= new WeakMap();
-        if (isset($validated[$reflection])) {
+        if (isset($validated[$key])) {
             return;
         }
+        $reflection = $key instanceof Closure ? new ReflectionFunction($key) : $key;
 
         if (is_magic_closure_trampoline($reflection)) {
-            $validated[$reflection] = true;
+            $validated[$key] = true;
             return;
         }
 
@@ -95,7 +110,7 @@ final class FactorySpecificationValidator
         self::assertArgument($id, $parameters, 0, self::containerArgument(), $scope);
         self::assertArgument($id, $parameters, 1, [], $scope);
 
-        $validated[$reflection] = true;
+        $validated[$key] = true;
     }
 
     private static function assertKnownCallable(string $id, callable $factory): void

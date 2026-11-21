@@ -42,7 +42,7 @@ final class ConfiguredTarget
     }
 }
 
-test('SetUp Config descriptors preserve owned failures and wrap foreign failures before a successful retry', function (
+test('SetUp Config descriptors retain failure causes before a successful retry', function (
     bool $foreign,
     bool $fresh,
 ): void {
@@ -93,12 +93,16 @@ test('SetUp Config descriptors preserve owned failures and wrap foreign failures
         expect($failure->getPrevious())->toBe($foreignFailure)
             ->and($failure->getMessage())->toContain('Cannot unwrap #[SetUp] param "ratio" (#[Config])');
     } else {
-        if (!$failure instanceof NotFoundException) {
-            throw new LogicException('The configuration callback must preserve the owned DI failure.', previous: $failure);
+        if (!$fresh) {
+            expect($failure)->toBeInstanceOf(ResolutionException::class);
         }
-        expect($failure)->toBe($state->failure)
-            ->and($failure->id)->toBe('setup.ratio')
-            ->and($failure->getPrevious())->toBeNull();
+        $cause = $fresh ? $failure : $failure?->getPrevious();
+        if (!$cause instanceof NotFoundException) {
+            throw new LogicException('Expected the original missing configuration dependency.', previous: $failure);
+        }
+        expect($cause)->toBe($state->failure)
+            ->and($cause->id)->toBe('setup.ratio')
+            ->and($cause->getPrevious())->toBeNull();
     }
 
     $container->set('setup.ratio', 1.25);

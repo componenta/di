@@ -38,7 +38,7 @@ function invocationOnlyBuilder(): ContainerBuilder
 
 test('custom invocation-only capabilities are valid on callable parameters', function (): void {
     $container = invocationOnlyBuilder()->build();
-    $plans = $container->get(AttributePlanBuilder::class);
+    $plans = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class);
     $parameter = (new ReflectionFunction(__NAMESPACE__ . '\\invocationOnlyFunctionFixture'))
         ->getParameters()[0];
 

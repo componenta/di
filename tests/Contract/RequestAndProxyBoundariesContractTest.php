@@ -33,7 +33,7 @@ test('an explicit concrete proxy class takes precedence over a concrete declared
         ->addFactory('proxy-product', static fn(): object => new ExplicitProxyChild())
         ->build();
     $product = $property
-        ? $container->make(ExplicitProxyOwner::class)->product
+        ? $container->makeAs(ExplicitProxyOwner::class, ExplicitProxyOwner::class)->product
         : $container->call(static fn(#[Make('proxy-product'), Proxy(ExplicitProxyChild::class)] ExplicitProxyBase $product): ExplicitProxyBase => $product);
 
     if (!$product instanceof ExplicitProxyBase) {

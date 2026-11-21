@@ -10,10 +10,8 @@ use Componenta\DI\Exception\ExceptionInterface;
 interface FactoryInterface
 {
     /**
-     * @template T of object
-     * @param class-string<T>|non-empty-string $entry
+     * @param non-empty-string $entry
      * @param array<string|int, mixed> $params
-     * @return ($entry is class-string<T> ? T : object)
      * @throws ExceptionInterface Any failure owned or normalized by DI resolution.
      */
     public function make(string $entry, array $params = []): object;

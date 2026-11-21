@@ -75,7 +75,7 @@ test('a late class Proxy cannot retroactively change a completed eager creation 
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new UncachedRule()]));
     }
-    $pipeline = $builder->build()->get(ObjectPipeline::class);
+    $pipeline = $builder->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
     $pipeline->prepare($class);
     $create = static fn(): object => $pipeline->create($class, configure: static function () use ($state): void {
         $state->events[] = 'configure';

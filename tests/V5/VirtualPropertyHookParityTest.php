@@ -57,8 +57,8 @@ test('virtual and write-only property set hooks behave identically for every con
     ];
 
     foreach ($containers as $container) {
-        $virtual = $container->make(VirtualHookTarget::class);
-        $writeOnly = $container->make(WriteOnlyHookTarget::class);
+        $virtual = $container->makeAs(VirtualHookTarget::class, VirtualHookTarget::class);
+        $writeOnly = $container->makeAs(WriteOnlyHookTarget::class, WriteOnlyHookTarget::class);
 
         expect($virtual->dependency)->toBe($dependency)
             ->and($virtual->writes)->toBe(1)

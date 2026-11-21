@@ -19,7 +19,7 @@ final class CallableDependency {}
 
 test('CallableExecutor exposes the DI-aware call API', function (): void {
     $container = (new ContainerBuilder())->build();
-    $executor = $container->get(CallableExecutorInterface::class);
+    $executor = $container->getAs(CallableExecutorInterface::class, CallableExecutorInterface::class);
 
     expect($executor)->toBeInstanceOf(CallableInvokerInterface::class)
         ->and($executor->call(
@@ -42,7 +42,7 @@ test('reflected zero-argument callables ignore unrelated provided parameters', f
 
 test('container CallableInvokerInterface remains DI-aware', function (): void {
     $container = (new ContainerBuilder())->build();
-    $invoker = $container->get(CallableInvokerInterface::class);
+    $invoker = $container->getAs(CallableInvokerInterface::class, CallableInvokerInterface::class);
 
     expect($invoker)->toBe($container)
         ->and($container)->toBeInstanceOf(Container::class)

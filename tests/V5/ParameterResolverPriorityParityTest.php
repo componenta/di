@@ -76,5 +76,5 @@ test('higher parameter resolver priorities win in the public resolution pipeline
 
     /** @var Container $container */
     $container = $value->container;
-    expect($container->make(PriorityResolvedTarget::class)->value)->toBe('priority-a');
+    expect($container->makeAs(PriorityResolvedTarget::class, PriorityResolvedTarget::class)->value)->toBe('priority-a');
 });

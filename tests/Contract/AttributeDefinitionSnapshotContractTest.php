@@ -99,13 +99,13 @@ it('preserves registered handler ordering after a selector reference changes', f
         ],
     ]);
     if ($warm) {
-        expect($container->make(SemanticSnapshotTarget::class)->events)
+        expect($container->makeAs(SemanticSnapshotTarget::class, SemanticSnapshotTarget::class)->events)
             ->toBe([SemanticSnapshotSecond::class, SemanticSnapshotFirst::class]);
     }
 
     $predecessor = SemanticSnapshotOther::class;
 
-    expect($container->make(SemanticSnapshotTarget::class)->events)
+    expect($container->makeAs(SemanticSnapshotTarget::class, SemanticSnapshotTarget::class)->events)
         ->toBe([SemanticSnapshotSecond::class, SemanticSnapshotFirst::class]);
 })->with(['cold' => false, 'warm' => true])->with(['cached' => false, 'uncached' => true]);
 

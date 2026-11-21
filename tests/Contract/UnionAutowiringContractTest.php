@@ -250,8 +250,8 @@ test('unavailable unions preserve reflection defaults and nullable fallback', fu
     $container = builder()->build();
 
     expect($container->call(__NAMESPACE__ . '\\optional'))->toBeFalse()
-        ->and($container->make(OptionalTarget::class)->value)->toBeFalse()
-        ->and($container->make(NullableTarget::class)->value)->toBeNull()
+        ->and($container->makeAs(OptionalTarget::class, OptionalTarget::class)->value)->toBeFalse()
+        ->and($container->makeAs(NullableTarget::class, NullableTarget::class)->value)->toBeNull()
         ->and(fn() => $container->call(__NAMESPACE__ . '\\select'))->toThrow(ResolutionException::class);
 });
 

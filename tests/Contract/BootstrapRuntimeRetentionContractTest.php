@@ -56,7 +56,7 @@ test('completed bootstrap does not retain transient targets from later uncached 
     ))->build();
 
     for ($index = 0; $index < 8; ++$index) {
-        expect($container->make(Target::class)->value)->toBe(42);
+        expect($container->makeAs(Target::class, Target::class)->value)->toBe(42);
     }
     gc_collect_cycles();
 

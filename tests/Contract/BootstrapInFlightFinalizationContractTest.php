@@ -13,6 +13,8 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Fiber;
 use LogicException;
+use stdClass;
+use WeakReference;
 
 use function Componenta\DI\Tests\Support\container;
 
@@ -115,7 +117,7 @@ test('bootstrap proof checks old resolver prefixes completed by a Fiber during f
         }
         $di = $state->container ?? throw new LogicException('Expected the bootstrap container.');
         $fiber = $state->fiber ?? throw new LogicException('Expected the suspended Fiber.');
-        $state->resumedAfterSeal = $di->get(ParametersResolver::class)->isSealed;
+        $state->resumedAfterSeal = $di->getAs(ParametersResolver::class, ParametersResolver::class)->isSealed;
         if (!$fiber->isSuspended()) {
             throw new LogicException('Expected a suspended parameter resolver.');
         }
@@ -176,4 +178,65 @@ test('bootstrap proof checks old resolver prefixes completed by a Fiber during f
     } finally {
         spl_autoload_unregister($loader);
     }
+})->with(['applicable later interceptor' => true, 'unrelated later resolver' => false]);
+
+test('a bootstrap fiber finishing after publication releases its closure captures', function (): void {
+    $state = new State();
+    $weak = null;
+    $di = container([
+        ConfigKey::PARAMETER_RESOLVERS => [
+            500 => new EarlyWinner($state),
+            100 => static function (Container $bootstrap) use ($state, &$weak): ParameterResolverInterface {
+                $capture = new stdClass();
+                $weak = WeakReference::create($capture);
+                $call = static fn(string $value): string => $value . $capture::class;
+                $state->fiber = new Fiber(static fn(): mixed => $bootstrap->call($call));
+                if ($state->fiber->start() !== 'suspended') {
+                    throw new LogicException('Expected the argument resolution to suspend.');
+                }
+                return new Passive();
+            },
+        ],
+    ]);
+    $fiber = $state->fiber ?? throw new LogicException('Expected an in-flight invocation.');
+    expect($weak?->get())->toBeInstanceOf(stdClass::class);
+    $fiber->resume();
+
+    expect($fiber->getReturn())->toBe('early' . stdClass::class)
+        ->and($weak?->get())->toBeNull()
+        ->and($di->has(Container::class))->toBeTrue();
+});
+
+test('a bootstrap fiber resumed after the factory returns checks its original resolver prefix before construction', function (bool $applicable): void {
+    InFlight::$constructions = 0;
+    $state = new State();
+    $di = container([
+        ConfigKey::PARAMETER_RESOLVERS => [
+            500 => new EarlyWinner($state),
+            1000 => static function (Container $bootstrap) use ($state, $applicable): ParameterResolverInterface {
+                $state->fiber = new Fiber(static fn(): mixed => $bootstrap->get(InFlight::class));
+                if ($state->fiber->start() !== 'suspended') {
+                    throw new LogicException('Expected the early resolver to suspend.');
+                }
+                return new LaterInterceptor(LoadedMarker::class, $applicable, $state);
+            },
+        ],
+    ]);
+    $fiber = $state->fiber ?? throw new LogicException('Expected an in-flight bootstrap resolution.');
+    expect($fiber->isSuspended())->toBeTrue()
+        ->and(InFlight::$constructions)->toBe(0);
+
+    if ($applicable) {
+        expect(fn() => $fiber->resume())->toThrow(InvalidConfigurationException::class, LaterInterceptor::class)
+            ->and(InFlight::$constructions)->toBe(0);
+        $value = $di->getAs(InFlight::class, InFlight::class);
+        expect($value->value)->toBe('late')
+            ->and(InFlight::$constructions)->toBe(1)
+            ->and($state->lateValues)->toBe(1);
+    } else {
+        $fiber->resume();
+        expect($di->get(InFlight::class))->toBe($fiber->getReturn())
+            ->and($state->lateValues)->toBe(0);
+    }
+    expect($state->earlyValues)->toBe(1);
 })->with(['applicable later interceptor' => true, 'unrelated later resolver' => false]);

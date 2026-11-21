@@ -55,7 +55,7 @@ test('SetUp resolves typed environment descriptors through the public runtime fa
         throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $entry = $container->make(SetUpEnvironmentTarget::class);
+    $entry = $container->makeAs(SetUpEnvironmentTarget::class, SetUpEnvironmentTarget::class);
 
     expect($entry->port)->toBe(9001)
         ->and($entry->runtimePort)->toBe(9001)

@@ -17,7 +17,9 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use Reflector;
+use RuntimeException;
 use stdClass;
+use Throwable;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class CreationContextExtension {}
@@ -26,6 +28,13 @@ final class CreationContextExtension {}
 final class CreationContextProduct
 {
     public function __construct(public int $value) {}
+}
+
+#[CreationContextExtension]
+final class CreationContextProperties
+{
+    public int $value = 1;
+    public int $other = 10;
 }
 
 final readonly class CreationContextObserver implements AttributeHandlerInterface
@@ -46,7 +55,7 @@ test('object handlers materialize public parameters once and share them with the
     });
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
-        ->build()->get(ObjectPipeline::class);
+        ->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
     $calls = 0;
     $source = static function () use (&$calls): array {
         ++$calls;
@@ -71,7 +80,7 @@ test('object handlers may select the same creation strategy repeatedly', functio
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
         ->build();
 
-    expect($container->make(CreationContextProduct::class, ['value' => 9])->value)->toBe(9);
+    expect($container->makeAs(CreationContextProduct::class, CreationContextProduct::class, ['value' => 9])->value)->toBe(9);
 })->with(CreationStrategy::cases());
 
 test('a creation strategy cannot change after a handler selects deferred construction', function (CreationStrategy $first, CreationStrategy $second): void {
@@ -114,4 +123,44 @@ test('a custom handler cannot initialize a creation context with an unrelated ob
         return;
     }
     throw new LogicException('An unrelated initialization should fail.');
+});
+
+test('same-property reentry preserves the original value and permits a new resolution', function (): void {
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context): void {
+        $entry = $context->entry;
+        if (!$entry instanceof CreationContextProperties) {
+            throw new LogicException('Expected an initialized creation context.');
+        }
+        $value = $context->class->getProperty('value');
+        $other = $context->class->getProperty('other');
+        expect($context->claimProperty($value))->toBeTrue()
+            ->and($context->claimProperty($other))->toBeTrue();
+
+        $failure = null;
+        try {
+            $context->resolveProperty($value, static function () use ($context, $value): void {
+                $context->writeProperty($value, 2);
+                $context->resolveProperty($value, static fn() => $context->writeProperty($value, 3));
+                throw new RuntimeException('The outer handler failed.');
+            });
+        } catch (Throwable $error) {
+            $failure = $error;
+        }
+
+        expect($entry->value)->toBe(1)
+            ->and($failure)->toBeInstanceOf(LogicException::class)
+            ->and($failure?->getMessage())->toContain('is already being resolved.');
+
+        $context->resolveProperty($value, static function () use ($context, $entry, $value, $other): void {
+            $context->writeProperty($value, 4);
+            $context->resolveProperty($other, static fn() => $context->writeProperty($other, 11));
+            expect($entry->value)->toBe(1)->and($entry->other)->toBe(11);
+        });
+    });
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::AfterInstantiation))
+        ->build();
+
+    $entry = $container->makeAs(CreationContextProperties::class, CreationContextProperties::class);
+    expect($entry->value)->toBe(4)->and($entry->other)->toBe(11);
 });

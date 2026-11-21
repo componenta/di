@@ -81,7 +81,7 @@ final class Observations
         if ($kind === 'closure' || $kind === 'closure-invoke') {
             $value = $di->call($kind === 'closure' ? $same : [$same, '__invoke']);
         } elseif ($kind === 'reflection-resolve' || $kind === 'reflection-targets') {
-            $parameters = $di->get(ParametersResolver::class);
+            $parameters = $di->getAs(ParametersResolver::class, ParametersResolver::class);
             $reflections = (new ReflectionMethod($same, '__invoke'))->getParameters();
             $arguments = $kind === 'reflection-resolve'
                 ? $parameters->resolve($reflections)
@@ -99,7 +99,7 @@ final class Observations
                 'method' => StableMethod::class,
                 default => throw new LogicException('Unexpected stable dependency fixture.'),
             };
-            $value = $di->make($class)->value;
+            $value = $di->makeAs($class, $class)->value;
         }
         if ($value !== 'stable') {
             throw new LogicException('Repeated resolution changed the stable dependency value.');

@@ -104,7 +104,7 @@ test('property injection and setup run only for attribute-driven creation', func
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make($class);
+    $target = $container->makeAs($class, $class);
 
     expect($events->steps)->toBe($useDefinition || $deferred ? [] : ['initialize', 'finish'])
         ->and($target->observed)->toBe($useDefinition ? 'raw' : 'dependency:configured:finished')
@@ -168,6 +168,6 @@ test('a lifecycle capability selector orders an extension before the built-in se
         ))
         ->build();
 
-    expect($container->make(SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup'])
-        ->and($container->make(SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup']);
+    expect($container->makeAs(SetUpCapabilityTarget::class, SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup'])
+        ->and($container->makeAs(SetUpCapabilityTarget::class, SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup']);
 });

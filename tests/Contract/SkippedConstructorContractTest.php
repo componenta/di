@@ -98,7 +98,7 @@ test('NoConstructor bypasses private signatures only during attribute-driven cre
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make($class);
+    $target = $container->makeAs($class, $class);
 
     expect($events->initializations)->toBe($deferred ? 0 : 1)
         ->and($target->state)->toBe('ready')

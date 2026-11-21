@@ -104,8 +104,8 @@ test('get is shared while make creates a fresh factory result with runtime param
         ],
     ]);
 
-    $shared = $container->get(RuntimeFactoryProduct::class);
-    $fresh = $container->make(RuntimeFactoryProduct::class, ['sequence' => 99]);
+    $shared = $container->getAs(RuntimeFactoryProduct::class, RuntimeFactoryProduct::class);
+    $fresh = $container->makeAs(RuntimeFactoryProduct::class, RuntimeFactoryProduct::class, ['sequence' => 99]);
 
     expect($container->get(RuntimeFactoryProduct::class))->toBe($shared)
         ->and($fresh)->not->toBe($shared)

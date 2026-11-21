@@ -12,7 +12,6 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterResolutionBoundary;
-use Componenta\DI\Internal\Resolver\Parameter\PreparedParameter;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
@@ -21,8 +20,6 @@ use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use ReflectionParameter;
 use Throwable;
 use WeakMap;
-
-use function Componenta\DI\Internal\is_closure_reflector;
 
 /** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
@@ -35,8 +32,10 @@ final class ParametersResolver
     private ?array $ordered = null;
     /** @var array<int,true> */
     private array $registered = [];
-    /** @var WeakMap<ParameterTarget,PreparedParameter>|null */
-    private ?WeakMap $preparedParameters = null;
+    /** @var WeakMap<ParameterTarget,list<int>>|null */
+    private ?WeakMap $preparedSlots = null;
+    /** @var WeakMap<ParameterTarget,list<string>>|null */
+    private ?WeakMap $pendingAttributeQueries = null;
 
     private int $revision = 0;
     private int $attributeRevision = -1;
@@ -88,14 +87,16 @@ final class ParametersResolver
         $this->registered[$objectId] = true;
         $this->orderedRegistrations = null;
         $this->ordered = null;
-        $this->preparedParameters = null;
+        $this->preparedSlots = null;
+        $this->pendingAttributeQueries = null;
         ++$this->revision;
     }
 
     public function seal(): void
     {
         $this->registered = [];
-        $this->preparedParameters = null;
+        $this->preparedSlots = null;
+        $this->pendingAttributeQueries = null;
         $this->sealed = true;
     }
 
@@ -146,9 +147,13 @@ final class ParametersResolver
      * @internal
      * @param list<ReflectionParameter> $parameters
      */
-    public function prepare(array $parameters): PreparedParameterPlan
+    public function prepare(array $parameters, ?Closure $closure = null): PreparedParameterPlan
     {
-        return $this->prepareTargets($this->targets($parameters));
+        $targets = $this->targets($parameters);
+        if ($closure !== null && $this->bootstrap?->isActive === true) {
+            $this->bootstrap->recordClosureOwner($targets, $closure);
+        }
+        return $this->prepareTargets($targets);
     }
 
     /**
@@ -159,14 +164,16 @@ final class ParametersResolver
     {
         $this->synchronizeAttributeRevision();
         $revision = $this->revision;
-        $prepared = [];
+        $selected = [];
         foreach ($targets as $target) {
-            $prepared[] = $this->prepareTarget($target);
+            // Classification can run application autoloaders. Keep the target
+            // selected for this slot even if the caller's reference is rebound.
+            $selected[] = $target;
+            $this->prepareTarget($target);
         }
 
         return new PreparedParameterPlan(
-            $prepared,
-            $targets,
+            $selected,
             $revision,
             $this->planOwner,
         );
@@ -197,6 +204,19 @@ final class ParametersResolver
         array $providedParameters = [],
     ): array {
         return $this->resolvePreparedInvocation($plan, $providedParameters);
+    }
+
+    /**
+     * @internal
+     * @param array<string|int,mixed> $providedParameters
+     * @return array<array-key,mixed>
+     */
+    public function resolveTracked(
+        PreparedParameterPlan $plan,
+        array $providedParameters,
+        ?CompletedAttributeGuard &$proof,
+    ): array {
+        return $this->resolvePreparedInvocation($plan, $providedParameters, proof: $proof, retainProof: true);
     }
 
     /**
@@ -242,7 +262,15 @@ final class ParametersResolver
         ?ParameterTarget $reservedTarget = null,
         ?string $diagnosticOwner = null,
         ?Closure $beforeInvocation = null,
+        ?CompletedAttributeGuard &$proof = null,
+        bool $retainProof = false,
     ): array {
+        if (!$plan->belongsTo($this->planOwner)) {
+            throw new InvalidConfigurationException(
+                'Prepared parameter plan belongs to another resolver pipeline.',
+            );
+        }
+
         $plan = $this->refreshPlan($plan);
         $state = new ParameterResolutionContext(
             ParameterResolutionBoundary::publicParameters($plan, $providedParameters, $diagnosticOwner),
@@ -277,9 +305,9 @@ final class ParametersResolver
         }
 
         $omitted = false;
-        foreach (array_keys($plan->parameters) as $index) {
+        foreach ($plan->targets as $target) {
             $result = $this->resolvePreparedParameter(
-                $plan->parameters[$index],
+                $target,
                 $state,
                 $completed,
                 allowOmission: true,
@@ -300,7 +328,6 @@ final class ParametersResolver
             }
 
             [$position, $value] = $result;
-            $target = $plan->parameters[$index]->target;
             $state->resolve($position, $value);
             // Resolver state retains one value per declaration; only the native
             // invocation vector expands a variadic collection.
@@ -323,6 +350,11 @@ final class ParametersResolver
         // Final metadata discovery can reveal a custom source without adding
         // a registered DI attribute to the completed composition.
         $beforeConsumption?->__invoke();
+        if ($retainProof) {
+            // Only constructor calls retain the proof. Their guard checks
+            // provenance without invoking the semantic callback hook.
+            $proof = $completed->retainCompletedParameters($beforeConsumption);
+        }
         return $arguments;
     }
 
@@ -332,7 +364,7 @@ final class ParametersResolver
         $this->synchronizeAttributeRevision();
 
         return $this->canCachePlans
-            && $plan->owner === $this->planOwner
+            && $plan->belongsTo($this->planOwner)
             && $plan->resolverRevision === $this->revision;
     }
 
@@ -342,7 +374,8 @@ final class ParametersResolver
         ParameterResolutionContext $context,
     ): array {
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->revision);
-        $result = $this->resolvePreparedParameter($this->prepareTarget($target), $context, $completed);
+        $this->prepareTarget($target);
+        $result = $this->resolvePreparedParameter($target, $context, $completed);
         $completed->assertUnchanged();
         return $result;
     }
@@ -350,7 +383,7 @@ final class ParametersResolver
     /** @return list<int> */
     public function resolverSlotsFor(ParameterTarget $target): array
     {
-        return $this->prepareTarget($target)->resolverSlots;
+        return $this->prepareTarget($target);
     }
 
     public function target(ReflectionParameter $parameter): ParameterTarget
@@ -363,28 +396,32 @@ final class ParametersResolver
      * @return ($allowOmission is true ? array{0:int,1:mixed}|null : array{0:int,1:mixed})
      */
     private function resolvePreparedParameter(
-        PreparedParameter $prepared,
+        ParameterTarget $target,
         ParameterResolutionContext $context,
         CompletedAttributeGuard $completed,
         bool $allowOmission = false,
         ?Closure $beforeConsumption = null,
     ): ?array {
-        $target = $prepared->target;
         $nativeOptional = $allowOmission
             && !$target->variadic
             && $target->reflection->isOptional()
             && $target->reflection->getDeclaringFunction()->isInternal();
+        $bootstrap = $this->bootstrap?->isActive === true ? $this->bootstrap : null;
         do {
             $revision = $this->revision;
             $attributePlan = $this->plans->build($target->reflection);
+            $pending = $bootstrap === null ? [] : BootstrapResolutionGuard::unavailableDeclarations($target);
             // Discovery can make a source available after the outer plan was
             // accepted. Classify and record one revision before executing work.
-            $prepared = $this->prepareTarget($target);
+            $slots = $this->prepareTarget($target);
         } while ($revision !== $this->revision);
+        if ($bootstrap !== null) {
+            $pending = [...$pending, ...($this->pendingAttributeQueries[$target] ?? [])];
+        }
 
         try {
             $resolvers = $this->resolverList;
-            foreach ($prepared->resolverSlots as $slot) {
+            foreach ($slots as $slot) {
                 $beforeConsumption?->__invoke();
                 $resolver = $resolvers[$slot];
                 if ($resolver instanceof AttributeParameterResolver) {
@@ -402,11 +439,9 @@ final class ParametersResolver
                         $context,
                     );
                     $completed->record($target->reflection, $attributePlan);
-                    if ($this->bootstrap?->isActive === true) {
-                        $this->bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
-                        $prefix = array_slice($resolvers, 0, $slot);
-                        $prefix[] = $resolver;
-                        $this->bootstrap->recordParameter($target, $prefix);
+                    if ($bootstrap !== null) {
+                        $bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
+                        $bootstrap->recordParameter($target, $resolvers, $slots, $slot, $pending);
                     }
                     // Native defaults may depend on omission (e.g. array_keys()).
                     // Keep explicit and extension-provided values, but let PHP
@@ -418,9 +453,9 @@ final class ParametersResolver
             }
             if ($nativeOptional) {
                 $completed->record($target->reflection, $attributePlan);
-                if ($this->bootstrap?->isActive === true) {
-                    $this->bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
-                    $this->bootstrap->recordParameter($target, $resolvers, resolved: false);
+                if ($bootstrap !== null) {
+                    $bootstrap->recordAttributes($target->reflection, plan: $attributePlan);
+                    $bootstrap->recordParameter($target, $resolvers, $slots, null, $pending);
                 }
                 return null;
             }
@@ -444,12 +479,6 @@ final class ParametersResolver
 
     private function refreshPlan(PreparedParameterPlan $plan): PreparedParameterPlan
     {
-        if ($plan->owner !== $this->planOwner) {
-            throw new InvalidConfigurationException(
-                'Prepared parameter plan belongs to another resolver pipeline.',
-            );
-        }
-
         $this->synchronizeAttributeRevision();
 
         if ($this->plans->canCachePlans && $plan->resolverRevision === $this->revision) {
@@ -459,15 +488,21 @@ final class ParametersResolver
         return $this->prepareTargets($plan->targets);
     }
 
-    private function prepareTarget(ParameterTarget $target): PreparedParameter
+    /** @return list<int> */
+    private function prepareTarget(ParameterTarget $target): array
     {
         $this->synchronizeAttributeRevision();
 
-        $cacheable = $this->canCachePlans && self::isStableTarget($target);
+        $cacheable = $this->canCachePlans && $target->canCacheClassification;
         if ($cacheable) {
-            $cache = $this->preparedParameters ??= new WeakMap();
+            $cache = $this->preparedSlots ??= new WeakMap();
             if (isset($cache[$target])) {
-                return $cache[$target];
+                if (!isset($this->pendingAttributeQueries[$target])
+                    || !array_any($this->pendingAttributeQueries[$target], ParameterTarget::isAttributeClassLoaded(...))
+                ) {
+                    return $cache[$target];
+                }
+                unset($cache[$target]);
             }
         }
 
@@ -486,24 +521,32 @@ final class ParametersResolver
         do {
             $revision = $this->revision;
             $this->plans->build($target->reflection);
-            $resolverSlots = $this->classifyResolverSlots($target);
+            if ($target->attributeClasses === []) {
+                $queries = [];
+                $resolverSlots = $this->classifyResolverSlots($target);
+            } else {
+                [$resolverSlots, $queries] = $target->observeAttributeQueries($this->classifyResolverSlots(...));
+            }
             // Immutable type classification can autoload a class file that
             // also declares attributes. Do not publish slots that skipped a
             // newly available handler, including for single-parameter calls.
             $this->synchronizeAttributeRevision();
-        } while ($revision !== $this->revision);
+        } while ($revision !== $this->revision || ($queries !== [] && array_any($queries, ParameterTarget::isAttributeClassLoaded(...))));
 
-        $prepared = new PreparedParameter(
-            $target,
-            $resolverSlots,
-        );
-
-        if (!$cacheable) {
-            return $prepared;
+        if ($queries !== []) {
+            $pending = $this->pendingAttributeQueries ??= new WeakMap();
+            $pending[$target] = $queries;
+        } elseif (isset($this->pendingAttributeQueries[$target])) {
+            unset($this->pendingAttributeQueries[$target]);
         }
 
-        $cache = $this->preparedParameters ??= new WeakMap();
-        return $cache[$target] = $prepared;
+        if (!$cacheable) {
+            return $resolverSlots;
+        }
+
+        // A cached selection is independent of the lifetime of its target.
+        $cache = $this->preparedSlots ??= new WeakMap();
+        return $cache[$target] = $resolverSlots;
     }
 
     private function synchronizeAttributeRevision(): void
@@ -514,17 +557,9 @@ final class ParametersResolver
         }
 
         $this->attributeRevision = $revision;
-        $this->preparedParameters = null;
+        $this->preparedSlots = null;
+        $this->pendingAttributeQueries = null;
         ++$this->revision;
-    }
-
-    private static function isStableTarget(ParameterTarget $target): bool
-    {
-        $function = $target->reflection->getDeclaringFunction();
-
-        // PreparedParameter retains its target; closure-owned targets must not
-        // be shared by name or kept alive through this cache.
-        return !is_closure_reflector($function);
     }
 
     /** @return list<int> */

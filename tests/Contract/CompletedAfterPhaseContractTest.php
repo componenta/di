@@ -78,7 +78,7 @@ test('configuration cannot silently change a completed after phase or retain fai
         $builder->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: [new NoOpRule()]));
     }
     $container = $builder->build();
-    $pipeline = $container->get(ObjectPipeline::class);
+    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
     $factories = 0;
     $configures = 0;
     State::$constructors = State::$knownCalls = State::$lateCalls = 0;
@@ -131,7 +131,7 @@ test('configuration may load unrelated metadata without rejecting a completed ob
     if (!is_a($class, State::class, true)) {
         throw new \LogicException('Expected the neutral metadata fixture.');
     }
-    $pipeline = (new ContainerBuilder())->build()->get(ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
     $configures = 0;
     State::$constructors = 0;
 
@@ -149,7 +149,7 @@ test('handlerless after phases retain validated metadata on every object target'
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->build()
-        ->get(ObjectPipeline::class);
+        ->getAs(ObjectPipeline::class, ObjectPipeline::class);
 
     for ($attempt = 0; $attempt < 2; ++$attempt) {
         $entry = $pipeline->create(RegisteredMetadataProduct::class, configure: static function (object $entry): void {

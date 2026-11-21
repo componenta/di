@@ -55,7 +55,7 @@ test('ClassDefinition fallback uses container services while request attributes 
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make($class, [ServerRequestInterface::class => $current]);
+    $target = $container->makeAs($class, $class, [ServerRequestInterface::class => $current]);
 
     expect($target->request)->toBe($selected)
         ->and($target->context)->toBe('explicit-context')
@@ -84,7 +84,7 @@ test('ClassDefinition still accepts explicit request arguments by name or positi
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make(ConfiguredRequestSourceTarget::class, [
+    $target = $container->makeAs(ConfiguredRequestSourceTarget::class, ConfiguredRequestSourceTarget::class, [
         ServerRequestInterface::class => $current,
         $key => $explicit,
     ]);

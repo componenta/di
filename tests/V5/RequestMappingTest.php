@@ -261,7 +261,8 @@ function requestContainer(): \Componenta\DI\Container
 
 test('request attributes resolve and cast through RequestResolver', function (): void {
     $request = (new ServerRequest('GET', '/'))->withHeader('X-Count', '41');
-    $dto = requestContainer()->make(
+    $dto = requestContainer()->makeAs(
+        HeaderCastDto::class,
         HeaderCastDto::class,
         [ServerRequestInterface::class => $request],
     );
@@ -291,7 +292,8 @@ test('all single-value request sources resolve through the public container boun
         ->withAttribute('actor', 'customer-42')
         ->withUploadedFiles(['files' => ['avatar' => $uploadedFile]]);
 
-    $target = requestContainer()->make(
+    $target = requestContainer()->makeAs(
+        RequestSourceAttributesTarget::class,
         RequestSourceAttributesTarget::class,
         [ServerRequestInterface::class => $request],
     );
@@ -318,7 +320,8 @@ test('specialized request maps select their documented PSR-7 source bags', funct
         ->withQueryParams(['query' => 'query-value'])
         ->withParsedBody(['payload' => 'payload-value']);
 
-    $target = requestContainer()->make(
+    $target = requestContainer()->makeAs(
+        SpecializedRequestMapsTarget::class,
         SpecializedRequestMapsTarget::class,
         [ServerRequestInterface::class => $request],
     );
@@ -332,7 +335,8 @@ test('specialized request maps select their documented PSR-7 source bags', funct
 
 test('MapRequest creates nested DTOs through request-only mapped provenance', function (): void {
     $request = (new ServerRequest('POST', '/'))->withParsedBody(['name' => 'Ada']);
-    $entry = requestContainer()->make(
+    $entry = requestContainer()->makeAs(
+        MappedPayloadEnvelope::class,
         MappedPayloadEnvelope::class,
         [ServerRequestInterface::class => $request],
     );
@@ -367,7 +371,7 @@ test('mapped source guard runs before a higher-priority custom resolver', functi
     ))->toThrow(RequestParameterSourceConflictException::class);
     expect($resolver->calls)->toBe(0);
 
-    expect($container->make(HeaderProtectedMappedDto::class)->token)
+    expect($container->makeAs(HeaderProtectedMappedDto::class, HeaderProtectedMappedDto::class)->token)
         ->toBe('custom-high-priority')
         ->and($resolver->calls)->toBe(1);
 });
@@ -389,7 +393,8 @@ test('PayloadParam infers names and traverses object payload paths with defaults
         'profile' => ['name' => 'Ada'],
     ]);
 
-    $target = requestContainer()->make(
+    $target = requestContainer()->makeAs(
+        PayloadExtractionTarget::class,
         PayloadExtractionTarget::class,
         [ServerRequestInterface::class => $request],
     );
@@ -426,7 +431,8 @@ test('MapRequest exposes every declared PSR-7 source through one public mapping'
         ->withAttribute('attribute', 'attribute-value')
         ->withUploadedFiles(['file' => $uploadedFile]);
 
-    $data = requestContainer()->make(
+    $data = requestContainer()->makeAs(
+        AllRequestSourcesTarget::class,
         AllRequestSourcesTarget::class,
         [ServerRequestInterface::class => $request],
     )->data;
@@ -448,7 +454,8 @@ test('MapRequest wildcard selection includes all explicit attribute and file val
         ->withAttribute('route', 17)
         ->withUploadedFiles(['avatar' => $uploadedFile]);
 
-    $data = requestContainer()->make(
+    $data = requestContainer()->makeAs(
+        SelectedSharedRequestSourcesTarget::class,
         SelectedSharedRequestSourcesTarget::class,
         [ServerRequestInterface::class => $request],
     )->data;
@@ -468,7 +475,8 @@ test(
             ->withAttribute('id', 'attribute')
             ->withAttribute('unselected', 'excluded');
 
-        $data = requestContainer()->make(
+        $data = requestContainer()->makeAs(
+            $target,
             $target,
             [ServerRequestInterface::class => $request],
         )->data;

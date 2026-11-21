@@ -129,7 +129,7 @@ test('bootstrap rejects an object phase consumed before the first replacement at
         ->replaceAttributeDefinitions()
         ->addAttributeDefinition(static function (Container $container): AttributeDefinition {
             $class = reflection(BootstrapTarget::class);
-            $container->get(AttributeProcessor::class)->process(
+            $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->process(
                 $class,
                 AttributePhase::BeforeInstantiation,
                 new ObjectCreationContext($class),

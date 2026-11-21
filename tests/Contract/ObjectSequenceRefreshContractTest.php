@@ -139,7 +139,7 @@ test('member rule discovery refreshes pending class policies without replaying c
 
     foreach ([1, 2] as $attempt) {
         Trace::$events = [];
-        $entry = $container->make($class);
+        $entry = $container->makeAs($class, $class);
         expect($entry->value)->toBe('declared')
             ->and(Product::$constructions)->toBe(0)
             ->and($state->opens)->toBe($attempt)

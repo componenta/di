@@ -51,6 +51,19 @@ jobs:
       - name: Run checks
         run: composer check
 
+  native-trait-callables:
+    if: startsWith(github.event.head_commit.message, 'Release v')
+    name: Native trait callables PHP 8.5.13
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build and check minimum verified native runtime
+        shell: bash
+        run: bash .github/scripts/check-native-trait-callables.sh
+
   consumer-lowest:
     if: startsWith(github.event.head_commit.message, 'Release v')
     name: Lowest production dependencies PHP ${{ matrix.php }}
@@ -138,6 +151,7 @@ jobs:
     if: startsWith(github.event.head_commit.message, 'Release v')
     needs:
       - verify
+      - native-trait-callables
       - consumer-lowest
       - coverage
     runs-on: ubuntu-latest

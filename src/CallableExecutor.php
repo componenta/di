@@ -116,7 +116,7 @@ final class CallableExecutor implements CallableExecutorInterface
             }
             /** @var list<ReflectionParameter> $parameters */
             $parameters = array_values($reflection->getParameters());
-            return $this->parameters->prepare($parameters);
+            return $this->parameters->prepare($parameters, $callable);
         }
 
         $key = self::cacheKey($callable);

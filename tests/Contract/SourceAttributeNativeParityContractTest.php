@@ -36,7 +36,7 @@ test('Env preserves the raw environment value for untyped and union targets', fu
 
     foreach ([1, 2] as $_attempt) {
         $value = $property
-            ? $container->make($union ? UnionEnvironmentProperty::class : UntypedEnvironmentProperty::class)->value
+            ? $container->makeAs($union ? UnionEnvironmentProperty::class : UntypedEnvironmentProperty::class, $union ? UnionEnvironmentProperty::class : UntypedEnvironmentProperty::class)->value
             : $container->call($callable);
 
         expect($value)->toBe('008')

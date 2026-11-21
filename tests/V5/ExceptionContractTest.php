@@ -237,7 +237,7 @@ test('constructor failures have the same Componenta contract for get and make', 
 
 test('built in lazy initialization keeps the strict exception boundary after get returns', function (): void {
     $container = (new ContainerBuilder())->build();
-    $entry = $container->get(LazyThrowingConstructorTarget::class);
+    $entry = $container->getAs(LazyThrowingConstructorTarget::class, LazyThrowingConstructorTarget::class);
 
     $error = exceptionFrom(static fn() => $entry->value);
 
@@ -246,7 +246,7 @@ test('built in lazy initialization keeps the strict exception boundary after get
         ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
 
-test('constructor bodies preserve owned exceptions and can recover without a completed failed instance', function (
+test('constructor failures keep their cause and recover without a completed failed instance', function (
     string $class,
     bool $lazy,
 ): void {
@@ -267,12 +267,13 @@ test('constructor bodies preserve owned exceptions and can recover without a com
         return $entry->value;
     });
 
-    if (!$error instanceof NotFoundException) {
-        throw new RuntimeException('The constructor must preserve the owned missing-service exception.', previous: $error);
+    $cause = $lazy ? $error : $error->getPrevious();
+    if (!$cause instanceof NotFoundException) {
+        throw new RuntimeException('Expected the missing dependency of the constructor.', previous: $error);
     }
-    expect($error)->toBe($state->failure)
-        ->and($error->id)->toBe('constructor-body.missing')
-        ->and($error->getPrevious())->toBeNull()
+    expect($cause)->toBe($state->failure)
+        ->and($cause->id)->toBe('constructor-body.missing')
+        ->and($cause->getPrevious())->toBeNull()
         ->and($state->attempts)->toBe(1)
         ->and($state->completed)->toBe(0);
 
@@ -283,7 +284,7 @@ test('constructor bodies preserve owned exceptions and can recover without a com
         expect(new \ReflectionClass($class)->isUninitializedLazyObject($entry))->toBeTrue()
             ->and($container->get($class))->toBe($entry);
     } else {
-        expect($entry)->toBeNull();
+        expect($entry)->toBeNull()->and($error)->toBeInstanceOf(ResolutionException::class);
     }
 
     $state->fail = false;
@@ -327,18 +328,17 @@ test('foreign external container failures are normalized to Componenta exception
         ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
 });
 
-test('foreign PSR not found errors retain PSR semantics through Componenta NotFoundException', function (): void {
+test('a selected external owner reports a retrieval failure if its get throws not found', function (): void {
     $container = (new ContainerBuilder())->build();
     $container->addContainer(new ForeignExternalContainer(notFound: true));
 
+    expect($container->has('foreign-missing'))->toBeTrue();
     $error = exceptionFrom(fn() => $container->get('foreign-missing'));
-    if (!$error instanceof NotFoundException) {
-        throw new RuntimeException('Expected a Componenta NotFoundException.');
+    if (!$error instanceof ResolutionException) {
+        throw new RuntimeException('Expected a retrieval failure.');
     }
 
-    expect($error)->toBeInstanceOf(NotFoundException::class)
-        ->and($error)->toBeInstanceOf(NotFoundExceptionInterface::class)
-        ->and($error->id)->toBe('foreign-missing')
+    expect($error->serviceId)->toBe('foreign-missing')
         ->and($error->getPrevious())->toBeInstanceOf(ForeignNotFoundFailure::class);
 });
 

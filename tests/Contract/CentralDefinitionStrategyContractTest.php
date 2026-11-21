@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\CentralDefinitionStrategy;
 
 use Closure;
+use Componenta\DI\Container;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\MutationRetirementException;
 use Componenta\DI\Exception\NotFoundException;
+use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\DefinitionResolverInterface;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
 use WeakReference;
 
@@ -190,6 +193,27 @@ test('validation reentry preserves nested writes when the outer definition is re
 
     expect($resolver->resolve('entry'))->toBe($reject ? 'nested' : 'outer');
 })->with(['commit' => false, 'reject' => true]);
+
+test('standalone registration cannot publish after validation attaches the composite', function (): void {
+    $strategy = new ValueStrategy();
+    $root = new CompositeResolver($strategy);
+    $root->setDefinition('entry', new ValueDefinition('original'));
+    $executor = (new ContainerBuilder())->build();
+    $state = new class () {
+        public ?Container $container = null;
+    };
+    $strategy->onValidate = static function (string $id, ValueDefinition $definition) use ($root, $executor, $state): void {
+        if ($definition->value === 'outer') {
+            $state->container = new Container($root, new AliasResolver(), $executor);
+            $state->container->set($id, new ValueDefinition('nested'));
+        }
+    };
+
+    expect(fn() => $root->setDefinition('entry', new ValueDefinition('outer')))
+        ->toThrow(InvalidConfigurationException::class, 'Definition publication requires its container mutation authority.')
+        ->and($state->container?->get('entry'))->toBe('nested')
+        ->and($root->resolve('entry'))->toBe('nested');
+});
 
 test('an in-flight definition retains its snapshot until suspended resolution completes', function (): void {
     $strategy = new ValueStrategy();

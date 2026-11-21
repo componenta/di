@@ -72,7 +72,7 @@ test('bootstrap exposes the original config environment and container facade tog
     $environment = new Environment(['APP_MODE' => 'test']);
     $config = new Config(['app' => ['name' => 'audit']], $environment);
     $container = (new ContainerBuilder($config))->build();
-    $facade = $container->get(ContainerValue::class);
+    $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
 
     expect($container->get(Config::class))->toBe($config)
         ->and($container->get(Environment::class))->toBe($environment)
@@ -82,7 +82,7 @@ test('bootstrap exposes the original config environment and container facade tog
 
 test('a completed container seals the attribute registry it exposes to extensions', function (): void {
     $container = (new ContainerBuilder())->build();
-    $registry = $container->get(AttributeDefinitionRegistry::class);
+    $registry = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class);
 
     expect(fn() => $registry->register(new AttributeDefinition(BootstrapServicesMarker::class)))
         ->toThrow(InvalidConfigurationException::class, 'Attribute definition registry is sealed.');
@@ -105,9 +105,9 @@ test('explicit factories retain their native arguments when the parameter resolv
         ->addParameterResolver(new BootstrapReplacementResolver(), -10)
         ->addFactory(BootstrapFactoryProduct::class, static fn(ContainerValue $facade, array $arguments): BootstrapFactoryProduct => new BootstrapFactoryProduct($facade, $arguments))
         ->build();
-    $product = $container->make(BootstrapFactoryProduct::class, ['value' => 'provided']);
+    $product = $container->makeAs(BootstrapFactoryProduct::class, BootstrapFactoryProduct::class, ['value' => 'provided']);
 
-    expect($product->facade)->toBe($container->get(ContainerValue::class))
+    expect($product->facade)->toBe($container->getAs(ContainerValue::class, ContainerValue::class))
         ->and($product->facade->container)->toBe($container)
         ->and($product->facade->config)->toBe($config)
         ->and($product->arguments)->toBe(['value' => 'provided'])

@@ -61,7 +61,7 @@ test('public resolution signatures keep their named-argument contract', function
         ->toBe(['attribute', 'target', 'context']);
 });
 
-test('container factory is the sole public construction API', function (): void {
+test('container factory exposes default and targeted construction', function (): void {
     $factory = new \ReflectionClass(ContainerFactory::class);
     $publicMethods = array_map(
         static fn(\ReflectionMethod $method): string => $method->getName(),
@@ -75,7 +75,7 @@ test('container factory is the sole public construction API', function (): void 
     sort($publicMethods, SORT_STRING);
 
     expect($factory->isFinal())->toBeTrue()
-        ->and($publicMethods)->toBe(['__construct', 'create'])
+        ->and($publicMethods)->toBe(['__construct', 'create', 'createWithTargetedAttributeDiscovery'])
         ->and(is_file(dirname(__DIR__, 2) . '/src/ContainerBuilder.php'))->toBeFalse()
         ->and(in_array('create', $containerMethods, true))->toBeFalse();
 });

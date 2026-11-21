@@ -94,7 +94,7 @@ test('promoted properties follow attribute injection or explicit ClassDefinition
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make($class);
+    $target = $container->makeAs($class, $class);
 
     expect($target->label)->toBe($useDefinition ? 'explicit' : 'configured')
         ->and($target->dependency)->toBe($dependency)
@@ -129,7 +129,7 @@ test('enabled constructors retain their explicit promoted values', function (boo
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->make($class, ['label' => 'caller', 'dependency' => $explicit]);
+    $target = $container->makeAs($class, $class, ['label' => 'caller', 'dependency' => $explicit]);
 
     expect($target->label)->toBe('caller')
         ->and($target->dependency)->toBe($explicit)

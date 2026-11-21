@@ -78,7 +78,7 @@ test('variadic validation owns all argument slots before an autoloader can chang
     }
     $container = $builder->build();
     $receiver = new Receiver();
-    $parameters = $container->get(ParametersResolver::class);
+    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $target = $parameters->target(new ReflectionParameter([Receiver::class, 'consume'], 0));
     $single = str_ends_with($route, 'single');
 
@@ -142,7 +142,7 @@ test('owning variadic slots preserves nested references object identity and sing
     $values['object'] = $object;
     $values['nested'] = ['value' => &$original];
     $container = (new ContainerBuilder())->build();
-    $parameters = $container->get(ParametersResolver::class);
+    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $callback = static fn(mixed ...$values): array => $values;
     $target = $parameters->target(new ReflectionParameter($callback, 0));
     $tuple = $parameters->resolveParameter($target, new ParameterResolutionContext(provided: ['values' => $values]));

@@ -54,7 +54,7 @@ test('lazy attribute arguments are created only during initialization and are no
     expect($container->has(LazyAttributeArgumentTarget::class))->toBeTrue()
         ->and(AttributeArgument::$constructions)->toBe(0);
 
-    $entry = $container->make(LazyAttributeArgumentTarget::class);
+    $entry = $container->makeAs(LazyAttributeArgumentTarget::class, LazyAttributeArgumentTarget::class);
 
     expect(AttributeArgument::$constructions)->toBe(0)
         ->and($entry->generation)->toBe(1)
@@ -208,7 +208,7 @@ test('Make with Proxy evaluates fresh arguments once per resolution in either de
     AttributeArgument::$references = [];
     $container = \Componenta\DI\Tests\Support\container();
     $resolve = $property
-        ? static fn(): int => $container->make($proxyFirst ? ProxyFirstArgumentProperty::class : MakeFirstProxyArgumentProperty::class)->value->argument->generation
+        ? static fn(): int => $container->makeAs($proxyFirst ? ProxyFirstArgumentProperty::class : MakeFirstProxyArgumentProperty::class, $proxyFirst ? ProxyFirstArgumentProperty::class : MakeFirstProxyArgumentProperty::class)->value->argument->generation
         : static fn(): mixed => $container->call(__NAMESPACE__ . ($proxyFirst ? '\\proxyFirstAttributeArgument' : '\\makeFirstProxyAttributeArgument'));
 
     expect($resolve())->toBe(1)

@@ -62,7 +62,7 @@ it('rejects bootstrap dependencies created before their attribute extension is r
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             static fn(Container $container): AttributeDefinition => new AttributeDefinition(
                 BootstrapConsumer::class,
-                $container->get(BootstrapConsumerHandler::class),
+                $container->getAs(BootstrapConsumerHandler::class, BootstrapConsumerHandler::class),
                 [LifecycleHook::class],
             ),
             new AttributeDefinition(BootstrapReady::class, new BootstrapReadyHandler(), [LifecycleHook::class]),
@@ -110,14 +110,14 @@ it('initializes bootstrap dependencies when their attribute extension is registe
             new AttributeDefinition(BootstrapReady::class, new BootstrapReadyHandler(), [LifecycleHook::class]),
             static fn(Container $container): AttributeDefinition => new AttributeDefinition(
                 BootstrapConsumer::class,
-                $container->get(BootstrapConsumerHandler::class),
+                $container->getAs(BootstrapConsumerHandler::class, BootstrapConsumerHandler::class),
                 [LifecycleHook::class],
             ),
         ],
     ]);
 
-    expect($container->make(BootstrapConsumerTarget::class)->ready)->toBeTrue()
-        ->and($container->get(BootstrapDependency::class)->ready)->toBeTrue();
+    expect($container->makeAs(BootstrapConsumerTarget::class, BootstrapConsumerTarget::class)->ready)->toBeTrue()
+        ->and($container->getAs(BootstrapDependency::class, BootstrapDependency::class)->ready)->toBeTrue();
 });
 
 it('permits a later resolver whose priority cannot intercept an already resolved parameter', function (): void {
@@ -133,8 +133,8 @@ it('permits a later resolver whose priority cannot intercept an already resolved
         ],
     ]);
 
-    expect($container->get(BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback')
-        ->and($container->make(BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback');
+    expect($container->getAs(BootstrapConventionDependency::class, BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback')
+        ->and($container->makeAs(BootstrapConventionDependency::class, BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback');
 });
 
 it('permits later extensions unrelated to bootstrap dependencies and metadata only inspection', function (): void {
@@ -152,7 +152,7 @@ it('permits later extensions unrelated to bootstrap dependencies and metadata on
     ]);
 
     expect($container->get(BootstrapConsumerHandler::class))->toBeInstanceOf(BootstrapConsumerHandler::class)
-        ->and($container->make(BootstrapConventionDependency::class)->bootstrapValue)->toBe('resolved');
+        ->and($container->makeAs(BootstrapConventionDependency::class, BootstrapConventionDependency::class)->bootstrapValue)->toBe('resolved');
 });
 
 #[Attribute(Attribute::TARGET_PARAMETER)]

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Closure;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -11,12 +12,23 @@ use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\DefinitionBinding;
+use Componenta\DI\Internal\Resolver\Entry\DefinitionWriter;
 use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
+use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
 use Throwable;
 
 /** Owns explicit bindings and ordered fallback resolution. */
 final class CompositeResolver implements EntryResolverInterface
 {
+    /**
+     * @var array{
+     *     prepare: Closure(self, string, DefinitionInterface):DefinitionBinding,
+     *     publish: Closure(self, DefinitionBinding, MutationRetirement):void,
+     *     retire: Closure(self, string, MutationRetirement):void
+     * }|null
+     */
+    private static ?array $writerOperations = null;
+
     /** @var list<EntryResolverInterface> */
     private array $fallbacks = [];
     /** @var list<DefinitionResolverInterface> */
@@ -24,7 +36,7 @@ final class CompositeResolver implements EntryResolverInterface
     /** @var array<string, DefinitionBinding> */
     private array $bindings = [];
     private readonly object $bindingOwner;
-    private ?object $authority = null;
+    private bool $attached = false;
 
     public function __construct(EntryResolverInterface|DefinitionResolverInterface ...$providers)
     {
@@ -42,7 +54,7 @@ final class CompositeResolver implements EntryResolverInterface
             $direct[$identity] = true;
 
             if ($provider instanceof self) {
-                if ($provider->authority !== null) {
+                if ($provider->attached) {
                     throw new InvalidConfigurationException('An attached composite cannot be imported as a snapshot.');
                 }
                 foreach ($provider->strategies as $strategy) {
@@ -94,29 +106,66 @@ final class CompositeResolver implements EntryResolverInterface
         return $fallback->resolve($id, EntryResolverContext::for($fallback, $params));
     }
 
+    /**
+     * Resolves a shared entry without caller parameters. False means no selected route.
+     *
+     * @internal
+     */
+    public function tryResolveShared(string $id, mixed &$entry): bool
+    {
+        $binding = $this->bindings[$id] ?? null;
+        if ($binding !== null) {
+            $entry = $binding->strategy->resolveDefinition($id, $binding->definition, []);
+            return true;
+        }
+
+        $fallback = $this->fallback($id);
+        if ($fallback === null) {
+            return false;
+        }
+        $entry = $fallback->resolve($id, []);
+        return true;
+    }
+
     /** Registers a definition in a standalone composition. Attached roots use Container::set(). */
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
-        if ($this->authority !== null) {
+        if ($this->attached) {
             throw new InvalidConfigurationException('An attached composite must be mutated through its container.');
         }
         $binding = $this->prepareDefinition($id, $definition);
         $retirement = new MutationRetirement($id);
-        $this->publishDefinition($binding, $retirement);
+        $this->publishDefinition($binding, $retirement, attached: false);
         $retirement->release();
     }
 
     /** @internal */
-    public function attach(object $authority): void
+    public function attach(?RuntimeCollaboratorOwnership $ownership = null): DefinitionWriter
     {
-        if ($this->authority !== null) {
+        $operations = self::$writerOperations ??= [
+            'prepare' => static fn(self $resolver, string $id, DefinitionInterface $definition): DefinitionBinding
+                => $resolver->prepareDefinition($id, $definition),
+            'publish' => static function (self $resolver, DefinitionBinding $binding, MutationRetirement $retirement): void {
+                $resolver->publishDefinition($binding, $retirement);
+            },
+            'retire' => static function (self $resolver, string $id, MutationRetirement $retirement): void {
+                $resolver->retireDefinition($id, $retirement);
+            },
+        ];
+
+        $writer = new DefinitionWriter($this, $operations['prepare'], $operations['publish'], $operations['retire']);
+        // Writer autoloading can reenter container construction before attachment.
+        if ($ownership !== null) {
+            $ownership->attach($this->attached);
+        } elseif ($this->attached) {
             throw new InvalidConfigurationException('A composite can be attached to only one container.');
+        } else {
+            $this->attached = true;
         }
-        $this->authority = $authority;
+        return $writer;
     }
 
-    /** @internal */
-    public function prepareDefinition(string $id, DefinitionInterface $definition): DefinitionBinding
+    private function prepareDefinition(string $id, DefinitionInterface $definition): DefinitionBinding
     {
         if ($id === '') {
             throw new InvalidConfigurationException('Definition ids must be non-empty strings.');
@@ -143,20 +192,26 @@ final class CompositeResolver implements EntryResolverInterface
         }
     }
 
-    /** @internal */
-    public function publishDefinition(
+    private function publishDefinition(
         DefinitionBinding $binding,
         MutationRetirement $retirement,
-        ?object $authority = null,
+        bool $attached = true,
     ): void {
         if (!$binding->belongsTo($this->bindingOwner)) {
             throw new InvalidConfigurationException('A prepared definition belongs to another composite.');
         }
-        if ($authority !== $this->authority) {
+        // Validation and collaborator autoloading can attach a standalone composite.
+        if ($this->attached !== $attached) {
             throw new InvalidConfigurationException('Definition publication requires its container mutation authority.');
         }
         $retirement->retain($this->bindings[$binding->id] ?? null);
         $this->bindings[$binding->id] = $binding;
+    }
+
+    private function retireDefinition(string $id, MutationRetirement $retirement): void
+    {
+        $retirement->retain($this->bindings[$id] ?? null);
+        unset($this->bindings[$id]);
     }
 
     private function fallback(string $id): ?EntryResolverInterface

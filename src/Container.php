@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
-use Componenta\Config\Config;
-use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -18,7 +16,9 @@ use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Internal\ProtectedServiceIds;
+use Componenta\DI\Internal\Resolver\Entry\DefinitionWriter;
 use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
+use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Psr\Container\ContainerInterface;
@@ -40,7 +40,8 @@ final class Container implements
     private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
     private readonly CompositeResolver $resolver;
-    private readonly object $definitionAuthority;
+    private readonly DefinitionWriter $definitionWriter;
+    private readonly object $runtimeAuthority;
 
     /** @param array<array-key, mixed> $bootstrapServices */
     public function __construct(
@@ -54,12 +55,7 @@ final class Container implements
         ?ProxyFactoryInterface $proxyFactory = null,
         array $bootstrapServices = [],
     ) {
-        foreach (ProtectedServiceIds::ids() as $id) {
-            $target = $aliases->target($id);
-            if ($target !== null && !($id === ConfigAttribute::KEY && $target === Config::class)) {
-                throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $id));
-            }
-        }
+        $validatedAliasRevision = $aliases->validateProtectedRoutes();
 
         $core = [
             ContainerInterface::class => $this,
@@ -90,7 +86,6 @@ final class Container implements
         }
 
         $this->resolver = $resolver instanceof CompositeResolver ? $resolver : new CompositeResolver($resolver);
-        $this->definitionAuthority = new \stdClass();
 
         $this->cache = $cache ?? new EntryCache();
         $this->delegators = $delegators ?? new DelegatorRegistry($this);
@@ -99,9 +94,17 @@ final class Container implements
         $this->resolvedEntryGuard = new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
 
-        // Failed collaborator loading must not consume a standalone resolver.
-        // Attach only after initialization succeeds, before publishing core values.
-        $this->resolver->attach($this->definitionAuthority);
+        $ownership = new RuntimeCollaboratorOwnership(
+            $aliases,
+            $this->cache,
+            $this->delegators,
+            $this->cycleGuard,
+            $externalContainers,
+            $validatedAliasRevision,
+        );
+        // Attach the root and its collaborators after loading helpers, before publishing core values.
+        $this->definitionWriter = $this->resolver->attach($ownership);
+        $this->runtimeAuthority = $ownership->authority;
 
         // Supplied core seeds can reenter from destructors. Publish the complete
         // core only after every collaborator is ready, then release old values.
@@ -115,11 +118,6 @@ final class Container implements
         unset($previous, $replacedCore);
     }
 
-    /**
-     * @template T of object
-     * @param class-string<T>|string $id
-     * @return ($id is class-string<T> ? T : mixed)
-     */
     public function get(string $id): mixed
     {
         try {
@@ -153,20 +151,34 @@ final class Container implements
             $entryId ??= $this->aliases->resolve($id);
             $this->resolvedEntryGuard->enterShared($id);
             try {
-                return $this->resolveAndStore($id, $entryId);
+                if ($this->tryResolveAndStore($id, $entryId, $entry)) {
+                    return $entry;
+                }
             } finally {
                 $this->resolvedEntryGuard->leaveShared($id);
             }
+        } catch (NotFoundExceptionInterface $e) {
+            throw ResolutionException::forService($id, $e);
         } catch (ExceptionInterface $e) {
             throw $e;
-        } catch (NotFoundExceptionInterface $e) {
-            throw NotFoundException::forService($id, $e);
         } catch (Throwable $e) {
             throw ResolutionException::forService($id, $e);
         }
+
+        throw NotFoundException::forService($id);
     }
 
-    private function resolveAndStore(string $requestedId, string $entryId): mixed
+    /**
+     * @template T of object
+     * @param class-string<T> $type
+     * @return T
+     */
+    public function getAs(string $id, string $type): object
+    {
+        return self::requireEntryType($id, $this->get($id), $type);
+    }
+
+    private function tryResolveAndStore(string $requestedId, string $entryId, mixed &$entry): bool
     {
         $requestedRevision = $this->cache->resolvedRevision($requestedId);
         $baseRevision = $this->cache->baseRevision($entryId);
@@ -175,7 +187,9 @@ final class Container implements
             // delegator pipeline and may read another id once the source exists.
             $this->cycleGuard->enterShared($entryId);
             try {
-                $entry = $this->resolver->resolve($entryId);
+                if (!$this->resolver->tryResolveShared($entryId, $entry)) {
+                    return false;
+                }
                 if ($this->cache->baseRevision($entryId) === $baseRevision) {
                     $this->cache->putBase($entryId, $entry);
                     $baseRevision = $this->cache->baseRevision($entryId);
@@ -194,7 +208,7 @@ final class Container implements
             $this->cache->putResolved($requestedId, $entryId, $entry);
         }
 
-        return $entry;
+        return true;
     }
 
     public function has(string $id): bool
@@ -251,7 +265,7 @@ final class Container implements
         $binding = null;
         if ($entry instanceof DefinitionInterface) {
             try {
-                $binding = $this->resolver->prepareDefinition($canonical, $entry);
+                $binding = $this->definitionWriter->prepare($canonical, $entry);
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -265,11 +279,14 @@ final class Container implements
         $retirement = new MutationRetirement($canonical);
         // Registration and helper autoloading may retarget deferred dependencies.
         $affected = $this->deferredDependenciesResolvingTo($canonical);
-        if ($binding !== null) {
-            $this->resolver->publishDefinition($binding, $retirement, $this->definitionAuthority);
-            $this->cache->removeBase($canonical, $retirement);
-        } else {
-            $this->cache->replaceBase($canonical, $entry, $retirement);
+        // During admission a nested alias may hide the originally selected owner.
+        if (!$this->aliases->has($canonical)) {
+            if ($binding !== null) {
+                $this->definitionWriter->publish($binding, $retirement);
+                $this->cache->removeBase($canonical, $retirement);
+            } else {
+                $this->cache->replaceBase($canonical, $entry, $retirement);
+            }
         }
         $this->invalidate($id, $retirement, $canonical);
         $this->invalidateDeferredDelegators($affected, $retirement);
@@ -277,10 +294,8 @@ final class Container implements
     }
 
     /**
-     * @template T of object
-     * @param class-string<T>|non-empty-string $entry
+     * @param non-empty-string $entry
      * @param array<string|int, mixed> $params
-     * @return ($entry is class-string<T> ? T : object)
      */
     public function make(string $entry, array $params = []): object
     {
@@ -309,6 +324,36 @@ final class Container implements
         } catch (Throwable $e) {
             throw ResolutionException::forService($entry, $e);
         }
+    }
+
+    /**
+     * @template T of object
+     * @param non-empty-string $entry
+     * @param class-string<T> $type
+     * @param array<string|int, mixed> $params
+     * @return T
+     */
+    public function makeAs(string $entry, string $type, array $params = []): object
+    {
+        return self::requireEntryType($entry, $this->make($entry, $params), $type);
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $type
+     * @return T
+     */
+    private static function requireEntryType(string $id, mixed $value, string $type): object
+    {
+        if (!$value instanceof $type) {
+            $actual = get_debug_type($value);
+            throw new ResolutionException(
+                sprintf('Service "%s" resolved to %s, expected %s.', $id, $actual, $type),
+                serviceId: $id,
+                actualType: $actual,
+            );
+        }
+        return $value;
     }
 
     /** @param array<string|int, mixed> $params */
@@ -364,6 +409,33 @@ final class Container implements
         $retirement->release();
     }
 
+    /**
+     * Refreshes delegators that can read externally changed entries.
+     * The provider publishes its changes before reporting the affected IDs.
+     */
+    public function notifyExternalEntriesChanged(ContainerInterface $provider, string ...$ids): void
+    {
+        $external = $this->externalContainers;
+        if ($external === null || !$external->contains($provider)) {
+            throw new InvalidConfigurationException('External entry changes require a registered provider.');
+        }
+        $affected = [];
+        foreach ($ids as $id) {
+            self::assertMutableId($id, 'external entry');
+            if ($this->delegators->dependsOn($id) && !$this->isProtectedDependency($id)) {
+                $affected[] = $id;
+            }
+        }
+        if ($affected === []) {
+            return;
+        }
+
+        $retirement = new MutationRetirement(null);
+        $external->noteOwnershipChanges($affected);
+        $this->invalidateDeferredDelegators($affected, $retirement);
+        $retirement->release();
+    }
+
     public function alias(string $alias, string $target): void
     {
         if (ProtectedServiceIds::contains($alias)) {
@@ -372,24 +444,31 @@ final class Container implements
 
         $retirement = new MutationRetirement($alias);
         // Validate the complete candidate graph before mutating the live alias
-        // resolver. Runtime alias changes must preserve the same protected-core
-        // Declarative bindings are validated by ContainerFactory before construction.
-        $candidate = clone $this->aliases;
-        $candidate->set($alias, $target);
-        foreach ($this->delegators->entryIds() as $delegatorId) {
-            $canonical = $candidate->resolve($delegatorId);
-            if (ProtectedServiceIds::contains($canonical)) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Cannot retarget delegator for id "%s" to protected DI id "%s".',
-                    $delegatorId,
-                    $canonical,
-                ));
+        // resolver. Runtime alias changes must preserve protected core routing.
+        do {
+            $revision = $this->aliases->revision;
+            $candidate = clone $this->aliases;
+            $candidate->set($alias, $target);
+            foreach ($this->delegators->entryIds() as $delegatorId) {
+                $canonical = $candidate->resolve($delegatorId);
+                if (ProtectedServiceIds::contains($canonical)) {
+                    throw new InvalidConfigurationException(sprintf(
+                        'Cannot retarget delegator for id "%s" to protected DI id "%s".',
+                        $delegatorId,
+                        $canonical,
+                    ));
+                }
             }
-        }
 
-        $changedTargets = $this->aliases->changedTargets($candidate);
-        $before = $this->deferredDependencyTargets();
-        $this->aliases->set($alias, $target);
+            $changedTargets = $this->aliases->changedTargets($candidate);
+            $before = $this->deferredDependencyTargets();
+            $hidesCanonical = !$this->aliases->has($alias);
+        } while (!$this->aliases->publishValidated($alias, $target, $revision, $this->runtimeAuthority));
+
+        if ($hidesCanonical) {
+            $this->definitionWriter->retire($alias, $retirement);
+            $this->cache->removeBase($alias, $retirement);
+        }
         foreach ($changedTargets as $changedId => $previousTarget) {
             $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
         }
@@ -492,11 +571,17 @@ final class Container implements
         $pending = [];
         $mayInspect = fn(string $id): bool => !$this->isProtectedDependency($id);
         do {
+            $ownershipRevision = $this->externalContainers->ownershipRevision ?? 0;
             foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-                if (isset($inspected[$dependencyId]) && !isset($pending[$dependencyId])) {
+                $dependencyRevision = $this->externalContainers?->ownershipRevisionFor($dependencyId) ?? 0;
+                $previousRevision = $inspected[$dependencyId] ?? null;
+                if ($previousRevision === $dependencyRevision && !isset($pending[$dependencyId])) {
                     continue;
                 }
-                $inspected[$dependencyId] = true;
+                if ($previousRevision !== null && $previousRevision !== $dependencyRevision) {
+                    unset($candidates[$dependencyId]);
+                }
+                $inspected[$dependencyId] = $dependencyRevision;
                 if ($this->isProtectedDependency($dependencyId)) {
                     $pending[$dependencyId] = true;
                     continue;
@@ -515,7 +600,7 @@ final class Container implements
                     continue;
                 }
                 if ($owner === null && $container->has($dependencyId)) {
-                    $candidates[] = $dependencyId;
+                    $candidates[$dependencyId] = true;
                 }
                 if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
                     return [];
@@ -527,7 +612,11 @@ final class Container implements
             $dependencies = [];
             $protectedCandidates = [];
             $revision = $this->externalContainers->revision ?? 0;
-            foreach ($candidates as $dependencyId) {
+            foreach ($candidates as $id => $_) {
+                $dependencyId = (string) $id;
+                if (!$this->delegators->dependsOn($dependencyId)) {
+                    continue;
+                }
                 if ($this->isProtectedDependency($dependencyId)) {
                     $protectedCandidates[$dependencyId] = true;
                     continue;
@@ -556,7 +645,8 @@ final class Container implements
             // Either phase can also introduce new deferred dependency IDs.
         } while ($retryProtected
             || $revision !== ($this->externalContainers->revision ?? 0)
-            || count($inspected) !== count($this->delegators->deferredDependencies()));
+            || $ownershipRevision !== ($this->externalContainers->ownershipRevision ?? 0)
+            || array_diff($this->delegators->deferredDependencies(), array_keys($inspected)) !== []);
 
         // A later proof may also protect a dependency already selected above.
         return array_values(array_filter(

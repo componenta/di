@@ -56,13 +56,13 @@ test('failed creation retries dependencies at the selected construction boundary
         expect(fn() => $container->get($class))->toThrow(ResolutionException::class, 'Dependency must be replaced.');
         $replacement = new RetryDefinitionDependency('good');
         $container->set(RetryDefinitionDependency::class, $replacement);
-        $entry = $container->get($class);
+        $entry = $container->getAs($class, $class);
         expect($entry->value)->toBe('good')
             ->and($container->get($class))->toBe($entry)
             ->and($container->get(RetryDefinitionDependency::class))->toBe($replacement);
         return;
     }
-    $entry = $container->get($class);
+    $entry = $container->getAs($class, $class);
 
     expect(fn() => $entry->value)->toThrow(ResolutionException::class, 'Dependency must be replaced.');
 
@@ -177,14 +177,14 @@ test('ClassDefinition resolves fresh references without executing deferred strat
         ->build();
     $container->addContainer($external);
 
-    $entry = $container->make($class);
+    $entry = $container->makeAs($class, $class);
 
     expect($observer->before)->toBe([])
         ->and($observer->after)->toBe([])
         ->and($external->calls)->toBe(1)
         ->and($entry->dependency->generation)->toBe(1);
 
-    $fresh = $container->make($class);
+    $fresh = $container->makeAs($class, $class);
     expect($fresh->dependency->generation)->toBe(2)
         ->and($entry->dependency->generation)->toBe(1)
         ->and($external->calls)->toBe(2)

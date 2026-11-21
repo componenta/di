@@ -18,7 +18,7 @@ use ReflectionParameter;
 
 test('single native parameter resolution returns the declared default while batch resolution preserves omission', function (): void {
     $container = (new ContainerBuilder())->build();
-    $resolver = $container->get(ParametersResolver::class);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $length = $resolver->target(new ReflectionParameter('array_slice', 'length'));
     $values = ['first', 'second'];
 
@@ -30,7 +30,7 @@ test('single native parameter resolution returns the declared default while batc
 });
 
 test('single native parameter resolution reports unavailable defaults and accepts an explicit value afterwards', function (): void {
-    $resolver = (new ContainerBuilder())->build()->get(ParametersResolver::class);
+    $resolver = (new ContainerBuilder())->build()->getAs(ParametersResolver::class, ParametersResolver::class);
     $minimum = $resolver->target(new ReflectionParameter('rand', 'min'));
 
     expect(fn() => $resolver->resolveParameter($minimum, new ParameterResolutionContext()))
@@ -72,7 +72,7 @@ test('single parameter resolution rejects attributes discovered during callable 
         throw new \LogicException('Expected the attributed callback fixture.');
     }
     $caster = new ObservingCaster();
-    $resolver = (new ContainerBuilder())->addService(CasterProviderInterface::class, $caster)->build()->get(ParametersResolver::class);
+    $resolver = (new ContainerBuilder())->addService(CasterProviderInterface::class, $caster)->build()->getAs(ParametersResolver::class, ParametersResolver::class);
     $target = $resolver->target(new ReflectionFunction($callback)->getParameters()[0]);
     $native = [$owner, 'value'];
     $context = new ParameterResolutionContext(['value' => $native]);

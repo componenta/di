@@ -72,7 +72,7 @@ test('SetUp resolves current config v3 and DI value descriptors with target type
         $environment,
     ))->build();
 
-    $entry = $container->make(SetUpContractTarget::class);
+    $entry = $container->makeAs(SetUpContractTarget::class, SetUpContractTarget::class);
 
     expect($entry->name)->toBe('configured')
         ->and($entry->dependency)->toBeInstanceOf(SetUpDependency::class)

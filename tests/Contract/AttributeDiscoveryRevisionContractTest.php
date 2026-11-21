@@ -123,7 +123,7 @@ test('attribute discovery validates one revision when a later autoload reveals a
     spl_autoload_register($loader);
     try {
         if ($directPlan) {
-            $plan = $container->get(AttributePlanBuilder::class)->build(new ReflectionClass($class));
+            $plan = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build(new ReflectionClass($class));
             expect($plan->attributes(DiscoveryRequired::class))->toHaveCount(1)
                 ->and($plan->attributes(DiscoveryDependent::class))->toHaveCount(1)
                 ->and(DiscoveryTarget::$constructions)->toBe(0)

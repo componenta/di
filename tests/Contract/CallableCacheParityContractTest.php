@@ -229,7 +229,7 @@ test('cache parity control reclassifies every parameter without changing the pro
     $chains = [];
     foreach ([false, true] as $uncached) {
         [$container, $probe] = auditContainer($uncached);
-        $chains[] = array_map(static fn(ParameterResolverInterface $resolver): string => $resolver::class, $container->get(ParametersResolver::class)->resolverList);
+        $chains[] = array_map(static fn(ParameterResolverInterface $resolver): string => $resolver::class, $container->getAs(ParametersResolver::class, ParametersResolver::class)->resolverList);
         $container->call($function, ['explicit' => 1]);
         $first = $probe->calls[$function];
         $container->call($function, ['explicit' => 2]);
@@ -248,7 +248,7 @@ test('full prepared parameter plans match fresh resolution through mutation defa
     foreach ([false, true] as $uncached) {
         DefaultToken::$created = 0;
         [$container] = auditContainer($uncached);
-        $resolver = $container->get(ParametersResolver::class);
+        $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
         $reflection = new ReflectionFunction(__NAMESPACE__ . '\\signature');
         $parameters = $reflection->getParameters();
         $plan = $resolver->prepare($parameters);
@@ -488,7 +488,7 @@ test('warm callable metadata does not retain supplied owners closures or prepare
 
 test('repeated named reflectors reuse stable targets while caller-owned targets remain collectable', function (bool $uncached): void {
     [$container] = auditContainer($uncached);
-    $resolver = $container->get(ParametersResolver::class);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $references = [];
     for ($iteration = 0; $iteration < 40; ++$iteration) {
         $parameter = new ReflectionFunction(__NAMESPACE__ . '\\customValue')->getParameters()[0];

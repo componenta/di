@@ -83,7 +83,7 @@ test('class Proxy defers a custom value provider without treating it as an injec
     Product::$constructions = 0;
 
     expect($container->has($class))->toBeTrue();
-    $first = $container->get($class);
+    $first = $container->getAs($class, $class);
     expect($reflection->isUninitializedLazyObject($first))->toBeTrue()
         ->and(Product::$constructions)->toBe(0)
         ->and($handler->calls)->toBe(0)
@@ -92,7 +92,7 @@ test('class Proxy defers a custom value provider without treating it as an injec
         ->and($handler->calls)->toBe(1)
         ->and($container->get($class))->toBe($first);
 
-    $fresh = $container->make($class);
+    $fresh = $container->makeAs($class, $class);
     expect($fresh)->not->toBe($first)
         ->and($reflection->isUninitializedLazyObject($fresh))->toBeTrue()
         ->and($fresh->label)->toBe('provided')

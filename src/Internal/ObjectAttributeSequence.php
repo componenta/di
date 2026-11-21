@@ -30,7 +30,7 @@ final class ObjectAttributeSequence
     private array $executed = [];
     /** @var array<int,int> Usage identity to stable target index within this phase. */
     private array $owners = [];
-    /** @var array<int,array<int,object>> */
+    /** @var array<int,array<int,array{AttributeUsage,object}>> */
     private array $pending = [];
 
     /** @param list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod> $targets */
@@ -58,7 +58,23 @@ final class ObjectAttributeSequence
 
     public function instance(AttributeUsage $usage): object
     {
-        return $this->pending[$this->owners[spl_object_id($usage)]][$usage->declarationOrder] ??= $usage->newInstance();
+        return $this->materialize($usage, $this->owners[spl_object_id($usage)]);
+    }
+
+    public function retainInstance(AttributeUsage $usage, object $attribute): void
+    {
+        $this->pending[$this->owners[spl_object_id($usage)]][$usage->declarationOrder] = [$usage, $attribute];
+    }
+
+    private function materialize(AttributeUsage $usage, int $owner): object
+    {
+        $pending = $this->pending[$owner][$usage->declarationOrder] ?? null;
+        if ($pending === null) {
+            return $usage->newInstance();
+        }
+
+        AttributeExecutionOrder::assertMaterializedUsage($usage, $pending[0]);
+        return $pending[1];
     }
 
     public function isCurrent(): bool
@@ -169,7 +185,7 @@ final class ObjectAttributeSequence
         try {
             // The new owners snapshot is not published yet. Keep this instance
             // across discovery retries without replaying its native arguments.
-            $this->pending[$owner][$usage->declarationOrder] ??= $usage->newInstance();
+            $this->pending[$owner][$usage->declarationOrder] = [$usage, $this->materialize($usage, $owner)];
             return $revision === $this->builder->revision;
         } catch (ExceptionInterface $exception) {
             throw $exception;

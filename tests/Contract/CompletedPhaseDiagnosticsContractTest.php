@@ -42,7 +42,7 @@ test('a late member policy identifies its target and completed phase after a con
     $handler = new CompletedPhaseObserver();
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(CompletedPhaseMarker::class, $handler, phase: AttributePhase::BeforeInstantiation))
-        ->build()->get(ObjectPipeline::class);
+        ->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
 
     expect(fn() => $pipeline->create($class, configure: static function (object $entry) use ($fullAlias): void {
         class_alias(CompletedPhaseMarker::class, $fullAlias);

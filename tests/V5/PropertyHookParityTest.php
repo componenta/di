@@ -47,8 +47,8 @@ test('Inject and Init execute PHP property set hooks identically for every conta
     ];
 
     foreach ($containers as $container) {
-        $injected = $container->make(HookInjectedTarget::class);
-        $initialized = $container->make(HookInitTarget::class);
+        $injected = $container->makeAs(HookInjectedTarget::class, HookInjectedTarget::class);
+        $initialized = $container->makeAs(HookInitTarget::class, HookInitTarget::class);
 
         expect($injected->dependency)->toBe($dependency)
             ->and($injected->writes)->toBe(1)

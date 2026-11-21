@@ -31,7 +31,7 @@ final class Product
 test('direct instance creation and initialization resolve explicit arguments alongside attributed dependencies and defaults', function (bool $initialize): void {
     $dependency = new Dependency();
     $container = (new ContainerBuilder())->addService('direct.dependency', $dependency)->build();
-    $creator = new InstanceCreator($container->get(ParametersResolver::class));
+    $creator = new InstanceCreator($container->getAs(ParametersResolver::class, ParametersResolver::class));
     $class = new ReflectionClass(Product::class);
 
     if ($initialize) {
@@ -54,7 +54,7 @@ final class ConstructorlessProduct
 
 test('direct constructorless creation uses declared defaults and initialization preserves an existing instance', function (bool $initialize): void {
     $container = (new ContainerBuilder())->build();
-    $creator = new InstanceCreator($container->get(ParametersResolver::class));
+    $creator = new InstanceCreator($container->getAs(ParametersResolver::class, ParametersResolver::class));
     $class = new ReflectionClass(ConstructorlessProduct::class);
 
     if ($initialize) {
@@ -72,7 +72,7 @@ abstract class AbstractProduct {}
 
 test('direct creation normalizes native allocation failures for classes without constructors', function (): void {
     $container = (new ContainerBuilder())->build();
-    $creator = new InstanceCreator($container->get(ParametersResolver::class));
+    $creator = new InstanceCreator($container->getAs(ParametersResolver::class, ParametersResolver::class));
 
     try {
         $creator->create(new ReflectionClass(AbstractProduct::class));

@@ -41,7 +41,7 @@ test('Config attribute failures preserve owned exceptions and diagnose foreign f
     $container = (new ContainerBuilder(new Config(['lazy.value' => $value], new Environment([]))))->build();
     $callable = static fn(#[ConfigAttribute('lazy.value')] string $value): string => $value;
     $resolve = $property
-        ? static fn(): string => $container->get(PropertyTarget::class)->value
+        ? static fn(): string => $container->getAs(PropertyTarget::class, PropertyTarget::class)->value
         : static fn(): mixed => $container->call($callable);
     $failure = null;
 

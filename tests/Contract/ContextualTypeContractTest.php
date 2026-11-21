@@ -113,7 +113,7 @@ test('inherited property injection resolves self and parent in their declaration
         ->addService(Ancestor::class, $ancestor)
         ->build();
 
-    $result = $container->make(InheritedInjection::class);
+    $result = $container->makeAs(InheritedInjection::class, InheritedInjection::class);
 
     expect($result)->toBeInstanceOf(InheritedInjection::class)
         ->and($result->same)->toBe($same)

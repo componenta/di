@@ -141,7 +141,7 @@ function creator(bool $uncached): InstanceCreator
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
-    return new InstanceCreator($builder->build()->get(ParametersResolver::class));
+    return new InstanceCreator($builder->build()->getAs(ParametersResolver::class, ParametersResolver::class));
 }
 
 function container(PreparingFactory $factory): Container

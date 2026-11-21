@@ -110,7 +110,7 @@ test('completed before-phase changes stop later object effects and allow a fresh
         ->addAttributeDefinition(new AttributeDefinition(BeforeMarker::class, $handler, phase: AttributePhase::BeforeInstantiation))
         ->addAttributeDefinition(new AttributeDefinition(AfterMarker::class, $handler))
         ->build();
-    $pipeline = $container->get(ObjectPipeline::class);
+    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
     $create = static function () use ($pipeline, $class, $trace): bool {
         $entry = $pipeline->create($class, configure: static function () use ($trace): void {
             $trace->events[] = 'configure';

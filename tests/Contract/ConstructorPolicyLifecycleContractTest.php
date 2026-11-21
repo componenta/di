@@ -84,14 +84,14 @@ test('a constructor policy active in both phases creates and initializes classes
     expect($container->has($class))->toBeTrue()
         ->and($handler->events)->toBe([]);
 
-    $shared = $container->get($class);
+    $shared = $container->getAs($class, $class);
     expect($shared)->toBeInstanceOf($class)
         ->and($shared->state)->toBe('initialized')
         ->and($handler->events)->toBe(['before', 'after'])
         ->and($container->get($class))->toBe($shared)
         ->and($handler->events)->toBe(['before', 'after']);
 
-    $fresh = $container->make($class);
+    $fresh = $container->makeAs($class, $class);
     expect($fresh)->toBeInstanceOf($class)
         ->and($fresh)->not->toBe($shared)
         ->and($fresh->state)->toBe('initialized')

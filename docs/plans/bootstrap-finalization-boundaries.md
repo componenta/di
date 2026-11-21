@@ -6,9 +6,7 @@
 
 The subsequent [evidence recheck](audit-architecture-recheck-2026-11-20.md) records fresh executions on PHP 8.4.28 and 8.5.13 after report preservation, with [machine-readable output](audit-architecture-recheck-2026-11-20.json). Historical revision labels and statements about what was not executed during the initial preservation step remain historical; the recheck supplies the later evidence. No architecture option is implemented by that verification.
 
-**Status: proposed; not implemented.** This report records two confirmed boundaries of the DI 6 refactoring branch and proposes separate contract decisions. It does not introduce an availability notification API, a new cleanup phase, or a promise to detect private autoloader readiness. The local convergence and discovery fixes remain in place.
-
-**Recommendation:** require influencing attribute declarations to be available before bootstrap dependencies consume them. Design an optional, explicit availability signal only if a real integration requires dynamic readiness. Separately, introduce a terminal reference-release phase with conservative failure when observable metadata changes before successful container publication. The latter changes failure behavior and needs a deliberate architecture decision.
+The application ordering rule is to make influencing declarations available before the first affected resolution. The current implementation already checks relevant metadata after releasing bootstrap records. Section 5 records the remaining limitation for discarded closure targets and the DI 6 release decision. Sections 1–4 preserve the original investigation. [DI 6 decision](#5-di-6-decision-for-released-closure-targets)
 
 ## 1. Scope, evidence and current guarantees
 
@@ -139,6 +137,8 @@ The architecture question is which event makes availability authoritative and wh
 
 ## 3. Boundary B: metadata changes while releasing bootstrap proof records
 
+This section records the original defect and options. The current implementation checks relevant metadata at the release boundary. Its remaining limitation and the decision on failure behavior are covered in section 5. [DI 6 decision](#5-di-6-decision-for-released-closure-targets)
+
 ### Problem and standalone reproduction
 
 Bootstrap creates and caches an `Owner` while `LateInject` is unavailable, so its dependency remains `null`. A subsequent call takes a closure that captures a `Token`. A proof record retains the parameter's runtime reflection context and, through it, the closure and token. After the final semantic check, releasing records releases the token; its destructor declares `LateInject` as an alias of `Inject`. Build succeeds. The cached owner keeps its old dependency, while a fresh owner receives `stdClass`.
@@ -251,7 +251,7 @@ The intended guarantee must be scoped to synchronous cleanup owned by container 
 | Explicit terminal cleanup followed by a check without user callbacks | Detects observable changes caused by synchronous release before success; preserves shared identity and avoids replay. | Conservative rejection can include unrelated changes. Requires a lifecycle/publication boundary and a defined failure policy. |
 | Detached semantic descriptors and precise revalidation after release | Could accept unrelated changes and report exactly which completed semantics changed. | Larger redesign of proof representation and custom classifier contracts; must preserve closure context semantics without retaining closure objects. |
 
-**Recommended minimum strict behavior:** select the terminal cleanup phase with conservative failure. Accepting unrelated changes during this phase is a separate extension requiring evidence that detached descriptors can prove their irrelevance. The existing allowance for unrelated declarations during normal execution need not be silently reinterpreted as an allowance during this new terminal phase; document the distinction.
+**Original strict proposal.** Select the terminal cleanup phase with conservative failure. The later controls show where this would reject successful builds during release. [DI 6 decision](#5-di-6-decision-for-released-closure-targets)
 
 ### Conditional implementation plan
 
@@ -286,3 +286,57 @@ Failure does not roll back arbitrary application effects or invalidate a contain
 Boundary A needs a supported application ordering rule and, only if justified, a cooperative availability contract. Boundary B needs a failure policy and an explicit owner for cleanup/publication. They should remain separate decisions: a signal can make readiness observable without fixing reference-release timing, and a terminal check can detect declarations without seeing private loader state.
 
 Implement neither a whole-container reset nor speculative retries as a substitute. Preserve the completed local regression fixes, the current public-path tests, and the performance evidence. Once the chosen contracts are recorded, implementation can proceed in coherent slices that each include the affected owner, consumers, diagnostics, and their acceptance tests.
+
+## 5. DI 6 decision for released closure targets
+
+### Decision
+
+Keep `ParameterResolverInterface` as the extension contract for DI 6 and use the existing registration and priority rules. Document that declarations and aliases affecting custom parameter classification should be available before the first affected resolution. An extension factory can defer resolving a service until the required metadata is ready. In particular, deferring a `get()` until after `create()` still leaves an ordering problem if that very service factory is what declares the alias on release. [Resolver contract](../../src/Resolver/Parameter/ParameterResolverInterface.php) · [Extension points](../../README.md#extension-points)
+
+DI 6 includes the opt-in class for integrations whose entire applicability can be expressed as one `hasAttribute()` predicate. Use early declaration when the application controls the order. The bootstrap check recognizes the class after synchronous target release without adding a method to the resolver interface. [Opt-in resolver](../../src/Resolver/Parameter/AttributeMatchingParameterResolver.php)
+
+### Verified behavior
+
+`ContainerFactory` runs the final check after releasing the factory scope and before returning the container. Bootstrap records preserve the resolver order and the names still missing. When the only closure owner is gone, its weak reference can no longer provide a target for an arbitrary `supports()` method. An attribute query is insufficient evidence of that method's decision. A resolver can query the same name and ignore the answer, or combine the answer with application state. Keeping the original reflector alive changes the timing of capture destruction and any declarations it triggers. [Factory boundary](../../src/ContainerFactory.php) · [Bootstrap guard](../../src/Internal/BootstrapResolutionGuard.php) · [Lookup observation](../../src/Resolver/Target/ParameterTarget.php)
+
+An extension factory calls `get()` for a shared service. The service factory invokes a temporary closure whose parameter has a marker attribute. A captured object's destructor publishes an alias during proof release, after the factory has already resolved the parameter. Severity is medium for affected configurations because the caller can receive a shared service with a different parameter source from a fresh resolution. Application incidence is unknown. Each result was reproduced from the working tree based on `9fb0750` on PHP 8.4.28, 8.5.13 and 8.6.0 using both discovery modes. [Recorded audit finding](di6-release-recheck-2026-11-21.ru.md#средняя-серьёзность--проверка-теряет-классификацию-уничтоженного-замыкания)
+
+| Case | Current result | Opt-in prototype |
+|---|---|---|
+| Released capture declares a matching alias | Build succeeds. Shared `get()` has the fallback, fresh `make()` uses the custom resolver. | Build fails before return. The factory ran once and the capture was released. |
+| Released capture aliases an unrelated attribute | Build succeeds. Both values use the fallback. | Same result. |
+| An existing resolver queries the matching alias and ignores the answer | Build succeeds. Both values use the fallback. | Same result. |
+| An explicit argument wins ahead of the custom resolver | Build succeeds. Both values are supplied by the caller. | Same result. |
+| Matching alias is declared before the first resolution | Build succeeds. Both values use the custom resolver. | Same result. |
+| A subsequent live-target check observes the release and declares the matching alias | Build succeeds. Shared `get()` has the fallback, fresh `make()` uses the custom resolver. | A subsequent pass detects the changed applicability on the released target. |
+
+`ArrayResolver` always accepts a target for the explicit input attempt. `ArrayTypedResolver`, `DefaultValueResolver`, `NullableResolver` and `AutowireByTypeResolver` classify using type metadata or parameter flags. `AttributeParameterResolver` uses a composed plan with definition and capability semantics. Bootstrap verifies that plan separately. [Built-in parameter pipeline](../../src/Resolver/Parameter/ParametersResolver.php) · [Attribute parameter resolver](../../src/Resolver/Parameter/AttributeParameterResolver.php) · [Release tests](../../tests/Contract/BootstrapProofRetirementContractTest.php)
+
+### Opt-in design
+
+`Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver` is a final readonly implementation of the current interface. Its constructor takes an attribute class, interface or alias name and a `Closure(ParameterTarget, ParameterResolutionContext): (array{0: int, 1: mixed}|null)` for value resolution. An empty name raises `InvalidConfigurationException`. The name can become available after registration. Discovery takes place at classification. Register the instance with the existing priority mechanism. [Registration and execution](../../src/Resolver/Parameter/ParametersResolver.php)
+
+Define `supports()` entirely through `ParameterTarget::hasAttribute($attribute)`. The value callback receives the original target and context when the pipeline selects the resolver. Its result follows the existing tuple validation and null continues the chain. Keeping the predicate in this final class prevents a descriptor and a separately implemented `supports()` from disagreeing. A public metadata interface or an additional required method on the base interface would commit every consumer to semantics for which this case supplies no evidence. [Target matching](../../src/Resolver/Target/ParameterTarget.php) · [Resolver contract](../../src/Resolver/Parameter/ParameterResolverInterface.php)
+
+Extend only the bootstrap guard's evidence for weak targets with pending names. Before discarding a target, record its raw declared attribute names and a diagnostic label. Include the opt-in predicates ahead of the recorded winner that were previously false or absent from the original chain, or all such predicates when no resolver won. Retain scalar data for the detached check. For available targets, use the existing check. When a weak target has expired and a pending name becomes available, compare the stored names by exact declaration name and loaded alias or type relationship, with autoload disabled. Preserve still-pending names while other live checks can reveal them in the same finalization sweep. [Bootstrap guard](../../src/Internal/BootstrapResolutionGuard.php)
+
+If a formerly inapplicable resolver ahead of the winner now matches, throw `InvalidConfigurationException` before factory return and identify the parameter and attribute. Use the established failure policy for newly applicable resolvers. The value callback's return remains a decision of actual resolution, so the final check compares applicability alone. Preserve shared identity, one-time execution of completed factories and handlers, and existing exception propagation. The guarantee covers declarations observable during synchronous bootstrap release. [Bootstrap guard](../../src/Internal/BootstrapResolutionGuard.php) · [Factory boundary](../../src/ContainerFactory.php)
+
+### Validation
+
+- Public-path tests cover alias and declaration discovery during release, a second-pass declaration, explicit input precedence and irrelevant observations. They check shared identity, the number of factory and value calls, release of the capture, and zero autoload calls in detached checks.
+- Runtime tests cover exact declaration, base class and interface matching, null continuation, invocation context, invalid value and empty-name rejection. The release gate uses the established resolver priority and exception policy.
+- Source-attested signature comparison confirms the new class as the only documented public addition. The final runtime review records startup with observed missing names, including elapsed time and peak allocation. [Final review](di6-release-recheck-2026-11-21.ru.md#проверка-после-внедрения-резолвера)
+
+### Historical prototype validation
+
+The source at the decision point and the isolated prototype passed the full suite with 2,700 tests on PHP 8.4.28 and 2,719 each on PHP 8.5.13 and 8.6.0. PHPStan passed on the prototype. Both suites have the existing skips and the Pest deprecation on PHP 8.6. [Resolver tests](../../tests/Contract/AttributeMatchingParameterResolverContractTest.php) · [Bootstrap tests](../../tests/Contract/BootstrapProofRetirementContractTest.php)
+
+The prototype was also compared with the current source in six alternating pairs per PHP version. Observed changes are the medians of paired latency differences expressed as a percentage. The direction of change varied between pairs for default build, shared reads and closure calls. These workloads exercise ordinary container use. A rollout of the optional class would still need to measure startup with pending aliases and the new class registered. [Runtime benchmark](../../benchmarks/RuntimeBench.php)
+
+| Workload | PHP 8.4.28 | PHP 8.5.13 |
+|---|---:|---:|
+| Default build | +1.6% | +2.7% |
+| Shared `get()` | +4.7% | −4.1% |
+| Autowired `make()` | +0.9% | −1.9% |
+| `call()` with a reused closure | +1.0% | −1.4% |

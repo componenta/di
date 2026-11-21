@@ -34,7 +34,7 @@ test('a misregistered built-in parameter handler rejects an unrelated attribute 
         throw new LogicException('Expected a built-in attribute.');
     }
     $source = (new ContainerBuilder())->build();
-    $handler = $source->get(AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
+    $handler = $source->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
     if ($handler === null) {
         throw new LogicException('Expected a built-in handler.');
     }
@@ -58,7 +58,7 @@ test('a misregistered built-in object handler reports an unsupported attribute t
         throw new LogicException('Expected a built-in attribute.');
     }
     $source = (new ContainerBuilder())->build();
-    $handler = $source->get(AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
+    $handler = $source->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
     if ($handler === null) {
         throw new LogicException('Expected a built-in handler.');
     }

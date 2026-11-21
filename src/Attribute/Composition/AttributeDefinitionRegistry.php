@@ -27,6 +27,9 @@ final class AttributeDefinitionRegistry
 
     private bool $sealed = false;
     private int $generation = 0;
+    private int $discoveryMisses = 0;
+    /** @internal */
+    public private(set) bool $targetedDiscovery = false;
     /** User rules may evaluate native arguments or read mutable state. @internal */
     public private(set) bool $canCachePlans = true;
 
@@ -37,17 +40,28 @@ final class AttributeDefinitionRegistry
         }
     }
 
+    /** @internal */
+    public static function withTargetedDiscovery(): self
+    {
+        $registry = new self();
+        $registry->targetedDiscovery = true;
+        return $registry;
+    }
+
     /** Also changes when a previously unavailable attribute class becomes loadable. */
     public int $revision {
         get {
             if ($this->unavailableAttributes === []) {
                 return $this->generation;
             }
+            if ($this->targetedDiscovery) {
+                return $this->refreshLoaded();
+            }
             $checked = [];
             $pending = $this->unavailableAttributes;
             while ($pending !== []) {
+                $misses = $this->discoveryMisses;
                 foreach ($pending as $attribute => $_) {
-                    $checked[$attribute] = true;
                     if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
                         // The fallback interface probe can autoload a class.
                         unset($this->unavailableAttributes[$attribute]);
@@ -56,18 +70,41 @@ final class AttributeDefinitionRegistry
                 }
                 // Reentrant discovery can append names after the foreach snapshot.
                 // Probe each newly tracked name once, without retrying old misses.
+                if ($misses === $this->discoveryMisses) {
+                    break;
+                }
+                $checked += $pending;
                 $pending = array_diff_key($this->unavailableAttributes, $checked);
             }
-            foreach ($this->unavailableAttributes as $attribute => $_) {
-                // A later loader can declare a name already checked in this poll.
-                // Observe every completed declaration without invoking loaders again.
-                if (class_exists($attribute, false) || interface_exists($attribute, false)) {
-                    unset($this->unavailableAttributes[$attribute]);
-                    ++$this->generation;
-                }
-            }
+            return $this->refreshLoaded();
+        }
+    }
 
-            return $this->generation;
+    /** @internal Observes completed declarations without running autoloaders. */
+    public function refreshLoaded(): int
+    {
+        foreach ($this->unavailableAttributes as $attribute => $_) {
+            // A later loader can declare a name already checked in a poll.
+            if (class_exists($attribute, false) || interface_exists($attribute, false)) {
+                unset($this->unavailableAttributes[$attribute]);
+                ++$this->generation;
+            }
+        }
+        return $this->generation;
+    }
+
+    /** @internal */
+    public function awaitsDiscovery(string $attribute): bool
+    {
+        return $this->targetedDiscovery && isset($this->unavailableAttributes[$attribute]);
+    }
+
+    /** @param class-string $attribute */
+    private function markUnavailable(string $attribute): void
+    {
+        if (!isset($this->unavailableAttributes[$attribute])) {
+            $this->unavailableAttributes[$attribute] = true;
+            ++$this->discoveryMisses;
         }
     }
 
@@ -133,6 +170,17 @@ final class AttributeDefinitionRegistry
         }
 
         $available = class_exists($attributeClass, false) || interface_exists($attributeClass, false);
+        if ($this->targetedDiscovery && !$available) {
+            if (!class_exists($attributeClass) && !interface_exists($attributeClass) && !class_exists($attributeClass, false)) {
+                $this->markUnavailable($attributeClass);
+                return null;
+            }
+            $available = true;
+            if (isset($this->unavailableAttributes[$attributeClass])) {
+                unset($this->unavailableAttributes[$attributeClass]);
+                ++$this->generation;
+            }
+        }
         /** @var array<class-string, AttributeDefinition> $matches */
         $matches = [];
         foreach ($this->definitions as $registered => $definition) {
@@ -150,7 +198,7 @@ final class AttributeDefinitionRegistry
 
         if ($matches === []) {
             if (!class_exists($attributeClass, false) && !interface_exists($attributeClass, false)) {
-                $this->unavailableAttributes[$attributeClass] = true;
+                $this->markUnavailable($attributeClass);
             }
 
             return null;

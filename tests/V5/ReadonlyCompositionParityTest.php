@@ -103,7 +103,7 @@ test('promoted readonly values compose identically for every container build', f
     ];
 
     foreach ($containers as $container) {
-        expect($container->make(PromotedReadonlyConfigCastTarget::class)->value)
+        expect($container->makeAs(PromotedReadonlyConfigCastTarget::class, PromotedReadonlyConfigCastTarget::class)->value)
             ->toBe('composed');
     }
 });

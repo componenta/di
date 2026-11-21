@@ -84,7 +84,7 @@ test('ClassDefinition calls run eagerly after the constructor without attribute 
         ->addDefinition($class, $definition)
         ->build();
 
-    $target = $container->make($class);
+    $target = $container->makeAs($class, $class);
 
     expect($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second'])
         ->and($target->state)->toBe('constructed');
@@ -116,7 +116,7 @@ test('failed ClassDefinition calls stop creation and a later get creates a fresh
             ->and($events->steps)->toBe(['constructor', 'configure']);
     }
 
-    $target = $container->get($class);
+    $target = $container->getAs($class, $class);
     expect($target->state)->toBe('constructed')
         ->and($events->steps)->toBe(['constructor', 'configure', 'constructor', 'configure', 'finished']);
 })->with([

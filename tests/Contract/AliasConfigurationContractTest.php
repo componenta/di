@@ -27,3 +27,14 @@ test('standalone alias configuration rejects a cycle before any resolution is re
         'third' => 'first',
     ]))->toThrow(CircularDependencyException::class, 'Circular alias reference:');
 });
+
+test('bulk alias validation reports the first closing edge and its original path', function (): void {
+    $constructor = new ReflectionClass(AliasResolver::class);
+
+    expect(fn() => $constructor->newInstance([
+        'first' => 'second',
+        'second' => 'third',
+        'third' => 'first',
+        'bad' => 7,
+    ]))->toThrow(CircularDependencyException::class, 'third -> first -> second -> third');
+});

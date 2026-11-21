@@ -132,7 +132,7 @@ test('native attribute flags preserve load failures and can be prepared after th
     $handler = new PlanFlagsHandler();
     $definition = new AttributeDefinition($attribute, $handler);
     $container = (new ContainerBuilder())->addAttributeDefinition($definition)->build();
-    $plans = $container->get(AttributePlanBuilder::class);
+    $plans = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class);
     $reflection = new ReflectionClass($target);
     $failure = $compositionFailure
         ? new AttributeCompositionException('flags loader failed')

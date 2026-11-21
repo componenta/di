@@ -11,6 +11,8 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use ReflectionClass;
@@ -47,22 +49,22 @@ final class SetUpRunner implements AttributeHandlerInterface
         );
 
         if ($method === null) {
-            $this->callback($attribute, $target, $context, $entry);
-
-            return;
+            $check = $this->callback($attribute, $target, $context, $entry);
+        } else {
+            // Keep provenance in the internal parameter bag passed to the executor.
+            $parameters = $this->providedParameters($attribute, $this->resolutionParameters->get($context), $method);
+            $provenance = MappedRequestContext::get($parameters);
+            $name = $method->getName();
+            $check = $provenance !== null && method_exists($entry, $name)
+                ? MappedRequestParameterSourceGuard::watchInvocation(new ReflectionMethod($entry, $name), $provenance, $target->getName())
+                : null;
+            $this->callableInvoker->call([$entry, $name], $parameters);
         }
 
-        // Raw provenance stays in the private resolution store so mapped-request
-        // security checks reach SetUp parameters without exposing metadata to
-        // custom object handlers through ObjectCreationContext.
-        $this->callableInvoker->call(
-            [$entry, $method->getName()],
-            $this->providedParameters(
-                $attribute,
-                $this->resolutionParameters->get($context),
-                $method,
-            ),
-        );
+        if ($check !== null) {
+            $this->resolutionParameters->retainSetupSourceCheck($context, $check);
+        }
+        $this->resolutionParameters->assertSetupSourcesUnchanged($context);
     }
 
     /**
@@ -106,13 +108,16 @@ final class SetUpRunner implements AttributeHandlerInterface
         return $method;
     }
 
-    /** @param ReflectionClass<object> $class */
+    /**
+     * @param ReflectionClass<object> $class
+     * @return (Closure():void)|null
+     */
     private function callback(
         SetUp $attribute,
         ReflectionClass $class,
         ObjectCreationContext $context,
         object $entry,
-    ): void {
+    ): ?Closure {
         if (!$attribute->method instanceof Closure) {
             throw new \LogicException('A setup callback must be a Closure.');
         }
@@ -127,12 +132,17 @@ final class SetUpRunner implements AttributeHandlerInterface
             unset($parameters[$first->getName()]);
         }
 
+        $provided = $this->providedParameters($attribute, $parameters, $method);
+        $owner = $class->getName();
+        $provenance = MappedRequestContext::get($provided);
+        $check = $provenance === null ? null : MappedRequestParameterSourceGuard::watchInvocation($method, $provenance, $owner, skipFirst: true);
         $this->callbackInvoker->invoke(
             $attribute->method,
             $entry,
-            $this->providedParameters($attribute, $parameters, $method),
-            $class->getName(),
+            $provided,
+            $owner,
         );
+        return $check;
     }
 
     /** @param array<string|int,mixed> $parameters */

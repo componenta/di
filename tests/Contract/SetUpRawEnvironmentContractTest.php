@@ -39,7 +39,7 @@ test('SetUp Env descriptors preserve raw values for untyped and union method par
     $class = $union ? UnionSetUpTarget::class : UntypedSetUpTarget::class;
 
     foreach ([1, 2] as $_attempt) {
-        $target = $container->make($class);
+        $target = $container->makeAs($class, $class);
 
         expect($target->value)->toBe('008')
             ->and($target->value)->toBe($environment->get('RAW_VALUE'));

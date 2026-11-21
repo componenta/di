@@ -51,7 +51,8 @@ test('ClassDefinition bound to an interface consumes mapped fields without activ
             'token' => 'payload-token',
         ]);
 
-    $envelope = mappedClassDefinitionBuilder()->build()->make(
+    $envelope = mappedClassDefinitionBuilder()->build()->makeAs(
+        MappedClassDefinitionEnvelope::class,
         MappedClassDefinitionEnvelope::class,
         [ServerRequestInterface::class => $request],
     );

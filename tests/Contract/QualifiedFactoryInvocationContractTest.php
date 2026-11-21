@@ -123,7 +123,7 @@ test('qualified factory arrays invoke their selected ancestor with reference par
             default => throw new LogicException('Unexpected factory route.'),
         };
         $container = $builder->build();
-        $facade = $container->get(ContainerValue::class);
+        $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
         $nativeParameters = ['value' => 'native'];
         $native = call_user_func_array($callable, [$facade, &$nativeParameters]);
 
@@ -147,7 +147,7 @@ test('qualified static factory arrays preserve the native called class', functio
     allowingQualifiedCallable(static function () use ($object): void {
         $callable = nativeCallable([$object ? new Child() : Child::class, Ancestor::class . '::createStatic']);
         $container = (new ContainerBuilder())->addFactory('product', $callable)->build();
-        $facade = $container->get(ContainerValue::class);
+        $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
         $calledClass = $object ? Child::class : Ancestor::class;
         $expected = new Product($facade, ['value' => 'native'], $calledClass);
 
@@ -200,7 +200,7 @@ test('qualified static factories retain a temporary object receiver until invoca
         };
         $container = (new ContainerBuilder())->addFactory('product', 'factory.lifetime')->build();
         $container->addContainer($external);
-        $facade = $container->get(ContainerValue::class);
+        $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
 
         try {
             $native = nativeCallable($external->get('factory.lifetime'));

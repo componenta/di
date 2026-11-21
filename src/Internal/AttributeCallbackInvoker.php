@@ -54,7 +54,7 @@ final readonly class AttributeCallbackInvoker
         }
 
         $arguments = $this->parameters->resolvePreparedSuffix(
-            $this->parameters->prepare(array_slice($declarations, 1)),
+            $this->parameters->prepare(array_slice($declarations, 1), $callback),
             $first,
             $argument,
             $providedParameters,

@@ -40,8 +40,8 @@ final class VariadicEnvironmentEntrySetUp
 test('environment variadic sources resolve the argument collection', function (): void {
     $container = container(config: new Config([], new Environment(['IDS' => [1, 2]])));
     expect($container->call(static fn(#[Env('IDS')] int ...$ids): array => $ids))->toBe([1, 2])
-        ->and($container->make(VariadicEnvSetUp::class)->ids)->toBe([1, 2])
-        ->and($container->make(VariadicEnvironmentEntrySetUp::class)->ids)->toBe([1, 2]);
+        ->and($container->makeAs(VariadicEnvSetUp::class, VariadicEnvSetUp::class)->ids)->toBe([1, 2])
+        ->and($container->makeAs(VariadicEnvironmentEntrySetUp::class, VariadicEnvironmentEntrySetUp::class)->ids)->toBe([1, 2]);
 });
 
 test('environment variadic sources keep empty arrays and validate individual elements', function (): void {

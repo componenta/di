@@ -20,7 +20,7 @@ Applications using `ContainerFactory`, public definitions and `Container::set()`
 
 The mutable leaf interface is removed. There is no compatibility adapter that preserves a hidden leaf registration map. Ordinary fallback resolvers continue implementing [`EntryResolverInterface`](../../src/Resolver/Entry/EntryResolverInterface.php); reflection fallback keeps that role.
 
-`setDefinition()` and `Container::set()` perform real registration, including publication on successful admission; do not use them as dry runs. `can($id)` reports entry availability, not whether an arbitrary descriptor would be accepted. A strategy you own can classify its input kinds through `DefinitionResolverInterface::supportsDefinition()`, but that answer does not predict admission by another composite's ordered provider chain. The internal `prepareDefinition()` method is not a replacement public preflight API. Handle actual registration failures using the publication and retirement boundaries described below.
+`setDefinition()` and `Container::set()` perform real registration, including publication on successful admission; do not use them as dry runs. `can($id)` reports entry availability, not whether an arbitrary descriptor would be accepted. A strategy you own can classify its input kinds through `DefinitionResolverInterface::supportsDefinition()`, but that answer does not predict admission by another composite's ordered provider chain. Handle actual registration failures using the publication and retirement boundaries described below.
 
 ## Registration ownership and application behavior
 
@@ -210,15 +210,17 @@ Snapshot rules are identity-based:
 
 When a composite is attached to a `Container`, that container becomes the sole public mutation authority for the root. Direct `setDefinition()`, attachment to a second container, and importing that attached root as a child all throw `InvalidConfigurationException`. Attachment lasts for the composite's lifetime. Build a separate composition for another container and use `$container->set($id, $definition)` for runtime changes.
 
-The internal `prepareDefinition()`, `publishDefinition()` and `attach()` methods are not the extension mutation API. Prepared records are bound to their producing composite. An attached root requires its container's private identity capability for publication; no public accessor exposes that capability. Applications do not create capabilities, publish records, release retirement holders or call cache-invalidation helpers.
+During construction, the internal `attach()` call gives `Container` a writer bound to the composite's private preparation, publication and retirement methods. The composite issues that writer once and `Container` keeps it private. Publication still checks that the same composite prepared the binding.
 
 ### Direct container construction
 
-Direct `new Container(...)` supports an independent entry resolver and initial base values. Give each container its own mutable runtime collaborators: `AliasResolver`, `EntryCache`, delegator/external-container registries and cycle guards. An `EntryCache` may be seeded with base values, but sharing a cache already serving another container is unsupported. After construction, change registrations through the container's public mutation methods; changing retained internal objects directly bypasses its invalidation. These `@internal` collaborators do not have a common ownership guard: sharing them is not automatically rejected, and a warmed shared cache can return a value from the other container. This limitation does not prohibit sharing application service instances or providers whose own contracts allow it.
+Direct `new Container(...)` supports an independent entry resolver and a cache seeded with initial base values. Give each container its own `AliasResolver`, `EntryCache`, delegator and external-container registries, and cycle guards. Each mutable collaborator can attach to one container for its lifetime. Construction raises `InvalidConfigurationException` before publishing core values if any of these objects is already attached. Share application services and providers according to their own contracts.
 
-The constructor rejects aliases whose source is a protected DI ID before attaching the resolver or writing core cache entries. The sole built-in exception is the direct `config → Config::class` route used by `ContainerFactory`; an indirect route through a mutable application alias is rejected. Application aliases pointing to protected services remain valid. A rejected alias configuration leaves the supplied resolver available for a corrected construction.
+After attachment, change routes through `Container::alias()` so the container can invalidate affected entries and retire old values in order. A direct write to the attached `AliasResolver` raises `InvalidConfigurationException`.
 
-Loading runtime collaborators also finishes before this constructor attaches the resolver or publishes core values. If that loading fails, the original exception propagates and a previously standalone resolver remains available for a retry after the loading failure is resolved. A separate container successfully attached by reentrant application code keeps its ownership; a failed outer construction does not detach it.
+The constructor rejects aliases whose source is a protected DI ID before attaching the resolver or writing core cache entries. The direct `config → Config::class` route used by `ContainerFactory` is the built-in exception. Application aliases pointing to protected services remain valid. If an autoloader changes the graph during construction, attachment validates the updated routes. A rejected alias configuration leaves the supplied resolver available for a corrected construction.
+
+Loading runtime collaborators and the definition writer finishes before attachment. A failed load propagates the original exception. A failed ownership check leaves the standalone resolver and the available collaborators eligible for retry. A container that completes attachment during an autoload callback or a cyclic destructor keeps its ownership.
 
 Core and bootstrap values are published after all runtime collaborators are initialized. Replaced seed values remain retained until the complete batch is published, so their destructors can resolve services through the supplied cache's published container. The constructor makes no further state writes after releasing those values; nested public mutations remain in effect. Destructor failures retain native PHP exception behavior and are not converted by the constructor into `MutationRetirementException`.
 
@@ -262,6 +264,31 @@ The committed outcome belongs to the operation whose retirement produced the exc
 Retirement attempts every directly held root in insertion order, continues after delivered errors, and drops ownership through native reference release. It does not call `__destruct()` directly or force garbage collection. It does not promise destruction order within nested user graphs. Application references, active invocations, cycles, resurrection or exception traces may keep an object alive. Later GC, another destructor Fiber and shutdown failures are outside the synchronous exception aggregation boundary.
 
 A destructor that reenters lookup observes completed publication and invalidation. If it makes another successful mutation, that newer mutation remains current even if the outer retirement later throws. A suspended destructor likewise cannot cause later outer writes over a newer mutation. This is a committed-outcome contract; it does not promise rollback of application callbacks or external side effects.
+
+## Entry resolution and metadata updates
+
+`get()` throws the PSR-11 `NotFoundExceptionInterface` when no route exists for the requested ID. A missing dependency inside a selected factory, constructor or delegator is a `ResolutionException` with the original failure in `getPrevious()`. The same classification applies when a selected external container throws `NotFoundExceptionInterface`. Update catch blocks that treated a missing dependency as a missing requested entry. `make()` and exceptions raised after a lazy object has been returned retain their own error boundaries.
+
+Service IDs accept arbitrary bindings, including class names bound to factories returning a different class. The general `get()` now has a static result of `mixed`, and `FactoryInterface::make()` returns `object`. The concrete `Container` provides checked access with an independent expected class. A mismatch raises `ResolutionException`.
+
+```php
+$shared = $container->getAs('reports.client', Client::class);
+$fresh = $container->makeAs(Client::class, Client::class, ['timeout' => 5]);
+```
+
+When `alias()` turns a canonical ID into an alias, it releases the former definition and base value after publishing the route and invalidating the caches. Synchronous destructor failures are reported through `MutationRetirementException`. An active resolution can return its previously selected result and checks the binding revision before writing to the cache.
+
+An external provider may report changed ownership or a replaced return value after publishing the change. The notification refreshes cached delegator chains that depend on those IDs, including transitive dependents. Provider order determines the first owner, and warmed entries outside the affected dependencies keep their identity. Register `$provider` through `addContainer()` before sending notifications.
+
+```php
+$container->notifyExternalEntriesChanged($provider, 'reports.decorator');
+```
+
+`ContainerFactory::create()` supports the existing global attribute discovery. Use `createWithTargetedAttributeDiscovery($config, $dependencies)` to limit active autoloading to attributes declared on the current target. This mode retries missing declarations on the next related lookup and observes declarations loaded between resolution steps. If loading an unrelated name declares a required attribute, load that module explicitly before consuming the dependent declaration.
+
+Bootstrap records both the selected parameter resolver and the classification of the preceding resolvers. It checks newly loaded declarations on named parameters and live callbacks after releasing its temporary references. For a callback whose reflector is gone, the semantic attribute check uses the recorded declaration names. A suspended attempt verifies its original resolver selection even if it resumes after the factory returns.
+
+Constructor argument policies and the provenance of mapped request values are checked through final configuration. Lazy objects and proxies run those checks at initialization. An incompatible change fails the attempt before caching the result or completing initialization.
 
 ## Migration checks
 

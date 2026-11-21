@@ -36,6 +36,7 @@ final class AttributeProcessor
      * @var array<class-string,array{
      *     revision:int,
      *     hasHandlers:bool,
+     *     awaitsDiscovery:bool,
      *     before:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>,
      *     after:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>
      * }>
@@ -195,6 +196,7 @@ final class AttributeProcessor
                 if (!$sequence->isCurrent()) {
                     // The next usage can now belong to an earlier target. Return
                     // there before dispatching this handler, retaining its instance.
+                    $sequence->retainInstance($usage, $attribute);
                     continue;
                 }
 
@@ -213,15 +215,17 @@ final class AttributeProcessor
     }
 
     /**
+     * @internal
      * @param ReflectionClass<object> $class
      * @return array{
      *     revision:int,
      *     hasHandlers:bool,
+     *     awaitsDiscovery:bool,
      *     before:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>,
      *     after:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>
      * }
      */
-    private function executionPlan(ReflectionClass $class): array
+    public function executionPlan(ReflectionClass $class): array
     {
         $name = $class->getName();
         $cacheable = $class::class === ReflectionClass::class;
@@ -238,8 +242,11 @@ final class AttributeProcessor
             $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
             $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
             $hasHandlers = false;
+            $awaitsDiscovery = false;
             foreach ($before as $target) {
-                foreach ($this->plans->build($target)->usages as $usage) {
+                $plan = $this->plans->build($target);
+                $awaitsDiscovery = $awaitsDiscovery || $this->plans->awaitsDiscovery($plan);
+                foreach ($plan->usages as $usage) {
                     if ($usage->definition->handler instanceof AttributeHandlerInterface) {
                         $hasHandlers = true;
                     }
@@ -252,10 +259,11 @@ final class AttributeProcessor
         $plan = [
             'revision' => $revision,
             'hasHandlers' => $hasHandlers,
+            'awaitsDiscovery' => $awaitsDiscovery,
             'before' => $before,
             'after' => $after,
         ];
-        if ($cacheable && $this->plans->canCachePlans) {
+        if ($cacheable && !$awaitsDiscovery && $this->plans->canCachePlans) {
             $this->cache[$name] = $plan;
         }
         return $plan;

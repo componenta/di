@@ -84,8 +84,8 @@ test('promotion keeps valid attributes following a copy for the other target', f
         ->addAttributeDefinition(new AttributeDefinition(PromotedParameterMetadata::class))
         ->build();
     $entry = $property
-        ? $container->make(PromotedFollowingPropertyAttribute::class)
-        : $container->make(PromotedFollowingParameterAttribute::class);
+        ? $container->makeAs(PromotedFollowingPropertyAttribute::class, PromotedFollowingPropertyAttribute::class)
+        : $container->makeAs(PromotedFollowingParameterAttribute::class, PromotedFollowingParameterAttribute::class);
 
     expect($entry->value)->toBe($property ? 'property' : 'parameter');
 })->with(['parameter target' => false, 'property target' => true]);

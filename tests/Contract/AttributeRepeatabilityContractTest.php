@@ -83,5 +83,5 @@ it('does not treat promotion copies as repeated declarations on one target', fun
         ->addAttributeDefinition(new AttributeDefinition(SingleMetadataMarker::class))
         ->build();
 
-    expect($container->make(ValidPromotedMetadata::class)->value)->toBe('default');
+    expect($container->makeAs(ValidPromotedMetadata::class, ValidPromotedMetadata::class)->value)->toBe('default');
 });

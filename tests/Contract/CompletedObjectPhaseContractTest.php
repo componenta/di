@@ -58,8 +58,8 @@ it('rejects a constructor policy loaded by its dependency before invoking the co
     if (!$preloaded) {
         expect(fn() => $container->get($class))->toThrow(AttributeCompositionException::class, $class);
     }
-    $fresh = $container->make($class);
-    $shared = $container->get($class);
+    $fresh = $container->makeAs($class, $class);
+    $shared = $container->getAs($class, $class);
     expect($fresh->state)->toBe('default')
         ->and($shared->state)->toBe('default')
         ->and($container->get($class))->toBe($shared)
@@ -103,12 +103,12 @@ it('rejects a late constructor policy when a lazy object initializes and allows 
         return new \stdClass();
     })->build();
     ConstructionState::$constructors = 0;
-    $pending = $container->make($class);
+    $pending = $container->makeAs($class, $class);
     expect($loads)->toBe(0)->and(ConstructionState::$constructors)->toBe(0);
 
     expect(fn() => $pending->state)->toThrow(AttributeCompositionException::class, $class)
         ->and($loads)->toBe(1)->and(ConstructionState::$constructors)->toBe(0);
-    $fresh = $container->make($class);
+    $fresh = $container->makeAs($class, $class);
     expect($fresh->state)->toBe('default')
         ->and(fn() => $pending->state)->toThrow(AttributeCompositionException::class, $class)
         ->and(ConstructionState::$constructors)->toBe(0)->and($loads)->toBe(1);
@@ -153,8 +153,8 @@ it('does not share an object when a constructor or lifecycle hook loads a policy
 
     expect(fn() => $container->get($class))->toThrow(AttributeCompositionException::class, $class)
         ->and(ConstructionState::$constructors)->toBe(1);
-    expect($container->get($class)->state)->toBe('default')
-        ->and($container->make($class)->state)->toBe('default')
+    expect($container->getAs($class, $class)->state)->toBe('default')
+        ->and($container->makeAs($class, $class)->state)->toBe('default')
         ->and(ConstructionState::$constructors)->toBe(1);
 })->with(['constructor' => false, 'lifecycle hook' => true]);
 
@@ -190,7 +190,7 @@ it('rejects a policy loaded before lazy initialization without resolving constru
         })
         ->build();
     ConstructionState::$constructors = 0;
-    $pending = $container->make($class);
+    $pending = $container->makeAs($class, $class);
     expect($dependencies)->toBe(0)->and(ConstructionState::$constructors)->toBe(0);
 
     class_alias(NoConstructor::class, $fullAlias);
@@ -199,7 +199,7 @@ it('rejects a policy loaded before lazy initialization without resolving constru
         ->and($dependencies)->toBe(0)
         ->and(ConstructionState::$constructors)->toBe(0);
 
-    $fresh = $container->make($class);
+    $fresh = $container->makeAs($class, $class);
     expect($fresh->state)->toBe('default')
         ->and(fn() => $pending->state)->toThrow(AttributeCompositionException::class, 'BeforeInstantiation completed')
         ->and($dependencies)->toBe(0)

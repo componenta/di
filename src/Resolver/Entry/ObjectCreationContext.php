@@ -171,10 +171,19 @@ final class ObjectCreationContext
      * Keeps intermediate values outside the typed property until its handlers succeed.
      *
      * @param Closure():void $resolve
+     * @throws LogicException If the same property is already being resolved.
      */
     public function resolveProperty(ReflectionProperty $property, Closure $resolve): void
     {
         $key = self::propertyKey($property);
+        if (isset($this->pendingPropertyWrites[$key])) {
+            throw new LogicException(sprintf(
+                'Property "%s::$%s" is already being resolved.',
+                $property->getDeclaringClass()->getName(),
+                $property->getName(),
+            ));
+        }
+
         $this->pendingPropertyWrites[$key] = [];
 
         try {

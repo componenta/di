@@ -44,7 +44,7 @@ test('ClassDefinition resolves constructor references eagerly even with deferred
         ]))
         ->build();
 
-    $target = $container->get($class);
+    $target = $container->getAs($class, $class);
 
     expect($created)->toBe(1)
         ->and($target->dependency)->toBe($dependency)
@@ -122,7 +122,7 @@ test('failed ClassDefinition constructor references can resolve on the next get'
             ->and($attempts)->toBe(1);
     }
 
-    $target = $container->get($class);
+    $target = $container->getAs($class, $class);
     expect($target->dependency)->toBe($dependency)
         ->and($attempts)->toBe(2)
         ->and($container->get($class))->toBe($target);
@@ -174,7 +174,7 @@ test('ClassDefinition resolves references and preserves literal overrides withou
         ]))
         ->build();
 
-    $target = $container->make(InspectedDefinitionTarget::class, ['options' => ['nested' => $literal]]);
+    $target = $container->makeAs(InspectedDefinitionTarget::class, InspectedDefinitionTarget::class, ['options' => ['nested' => $literal]]);
 
     expect($observer->parameters)->toBe([])
         ->and($target->dependency)->toBe($dependency)

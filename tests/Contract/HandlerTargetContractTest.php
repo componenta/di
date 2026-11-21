@@ -29,7 +29,7 @@ final class HandlerTargetFixture
 
 test('object handler interfaces reject method targets unsupported by their attribute', function (object $attribute): void {
     $container = (new ContainerBuilder())->build();
-    $handler = $container->get(AttributeDefinitionRegistry::class)->definition($attribute::class)?->handler;
+    $handler = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute::class)?->handler;
     if (!$handler instanceof AttributeHandlerInterface) {
         throw new LogicException('Expected an object handler.');
     }
@@ -50,7 +50,7 @@ test('class creation handlers reject an unrelated attribute even on a class targ
         throw new LogicException('Expected a class attribute.');
     }
     $container = (new ContainerBuilder())->build();
-    $handler = $container->get(AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
+    $handler = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
     if (!$handler instanceof AttributeHandlerInterface) {
         throw new LogicException('Expected an object handler.');
     }

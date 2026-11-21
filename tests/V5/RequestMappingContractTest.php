@@ -247,7 +247,8 @@ test('MapRequest applies optional renames and atomic key swaps', function (): vo
     ]);
     $container = (new ContainerBuilder())->build();
 
-    $data = $container->make(
+    $data = $container->makeAs(
+        OptionalSwapMappingTarget::class,
         OptionalSwapMappingTarget::class,
         [ServerRequestInterface::class => $request],
     )->data;
@@ -292,7 +293,8 @@ test('MapRequest emits a null order when sort aliases are configured but absent'
     $request = (new ServerRequest('GET', '/items'))->withQueryParams(['value' => 'kept']);
     $container = (new ContainerBuilder())->build();
 
-    $data = $container->make(
+    $data = $container->makeAs(
+        MissingSortMappingTarget::class,
         MissingSortMappingTarget::class,
         [ServerRequestInterface::class => $request],
     )->data;

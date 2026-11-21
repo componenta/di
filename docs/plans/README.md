@@ -8,14 +8,17 @@ The November 20 architecture-report inventory is now preserved here. [The source
 
 The subsequent [fresh recheck](audit-architecture-recheck-2026-11-20.md) records executed architecture witnesses, added behavior tests, verification results and evidence limits. Its [JSON observations](audit-architecture-recheck-2026-11-20.json) are stored alongside the reports.
 
-## Open decisions and conditional proposals
+The [November 21 DI 6 audit](di6-audit-2026-11-21.md#architecture-fixes) includes the architecture fixes, migration and performance comparison.
 
-Eight reports cover twelve open/conditional topics: bootstrap finalization and standalone API each contain two distinct decisions; relative callables contain three. Pass 23 added the static return-type policy; pass 24 added instance-shorthand owner precedence; pass 25 adds dependency-index timing for delegators registered before their owner loads. Earlier rechecks retain their own source, executions and historical counts.
+## Architecture proposals before the follow-up
+
+The table records the status of the proposals when published. The implemented bootstrap finalization, external notifications, alias retirement, return typing, delegator indexing, graph construction and targeted attribute discovery are described in the [architecture fixes](di6-audit-2026-11-21.md#architecture-fixes).
 
 | Area | Report | Decision and expected benefit |
 |---|---|---|
 | Bootstrap finalization | [English](bootstrap-finalization-boundaries.md) / [Русский](bootstrap-finalization-boundaries.ru.md) | Two separate boundaries: private loader readiness and metadata changes during proof-reference release. Choose preload/optional notification and a terminal cleanup failure policy before implementation; preserve identity and avoid replay. |
 | Dynamic external-provider ownership | [English](external-provider-ownership.md) / [Русский](external-provider-ownership.ru.md) | Choose an explicit stable-provider contract or an opt-in ownership signal. Addressed invalidation needs observable changes; repeated opaque `has()` calls were withdrawn as an incomplete fix. |
+| Binding lifetime under runtime aliases | [English](di6-audit-2026-11-21.md#lifetime-of-a-binding-hidden-by-an-alias) / [Русский](di6-audit-2026-11-21.ru.md#срок-жизни-привязки-скрытой-алиасом) | Define ownership and destructor timing for previously canonical data hidden by `alias()`. Preserve successful retargeting, in-flight results and unaffected shared identities. |
 | Legacy relative callable context | [English](relative-callable-context.md) / [Русский](relative-callable-context.ru.md) | Document the compatibility boundary; carry invocation-local lexical/called/receiver context only if a consumer requires the deprecated forms. This is separate from native PHP 8.5 closure expressions. |
 | Instance-callable shorthand owner precedence | [English](relative-callable-context.md) / [Русский](relative-callable-context.ru.md) | Pass 24: class aliases containing `::` can conflict with accepted qualified ancestor methods. Define one owner/discovery/dependency-invalidation contract before changing string shorthand; the explicit method array is available. The distinct native-valid string parameter-plan bug is fixed in `45eb1ab`. |
 | Late-loaded delegator dependencies | [English](relative-callable-context.md#9-separate-policy-boundary-delegators-registered-before-their-owner-loads) / [Русский](relative-callable-context.ru.md#9-отдельная-граница-политики-регистрация-delegator-до-загрузки-владельца) | Pass 25: an initially conservative owner dependency can remain after native-static resolution and cause unnecessary replay. Keep the current policy unless a consumer needs exact dependencies; stronger identity guarantees need route evidence and atomic cache/index publication. The already-loaded native-alias defect is fixed in `f4869bc`. |

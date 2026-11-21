@@ -71,7 +71,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
             $requiresAuthoritative = $plan->has(AuthoritativeValueProvider::class);
             if ($processed === []) {
                 $authoritative = $requiresAuthoritative;
-                $value = $this->initialValue($target, $context, $plan);
+                $value = $authoritative ? ParameterAttributeValue::unresolved() : $this->initialValue($target, $context);
             } elseif ($authoritative !== $requiresAuthoritative) {
                 throw new AttributeCompositionException(sprintf(
                     'Parameter $%s input policy changed after an attribute handler was already executed. Load its value sources before execution.',
@@ -87,10 +87,18 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
                     continue;
                 }
 
-                $attribute = $pendingAttributes[$usage->declarationOrder] ??= $usage->newInstance();
+                $pending = $pendingAttributes[$usage->declarationOrder] ?? null;
+                if ($pending === null) {
+                    $attribute = $usage->newInstance();
+                } else {
+                    AttributeExecutionOrder::assertMaterializedUsage($usage, $pending[0]);
+                    $attribute = $pending[1];
+                    unset($pending);
+                }
                 if ($this->plans->revision !== $revision) {
                     // A constructor can reveal a predecessor or a different input
                     // policy. Recompose before dispatch without reconstructing it.
+                    $pendingAttributes[$usage->declarationOrder] = [$usage, $attribute];
                     continue 2;
                 }
                 $beforeConsumption?->__invoke();
@@ -136,12 +144,7 @@ final readonly class AttributeParameterResolver implements ParameterResolverInte
     private function initialValue(
         ParameterTarget $target,
         ParameterResolutionContext $context,
-        AttributePlan $plan,
     ): ParameterAttributeValue {
-        if ($plan->has(AuthoritativeValueProvider::class)) {
-            return ParameterAttributeValue::unresolved();
-        }
-
         if ($target->variadic) {
             $provided = VariadicArguments::provided($target, $context);
             return $provided === null

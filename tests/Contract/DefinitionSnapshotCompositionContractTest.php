@@ -217,28 +217,29 @@ test('prepared bindings cannot be published into another composite', function ()
     $strategy = new SnapshotStrategy();
     $first = new CompositeResolver($strategy);
     $second = new CompositeResolver($strategy);
-    $binding = $first->prepareDefinition('entry', new SnapshotDefinition('foreign'));
+    $firstWriter = $first->attach();
+    $secondWriter = $second->attach();
+    $binding = $firstWriter->prepare('entry', new SnapshotDefinition('foreign'));
     $retirement = new MutationRetirement('entry');
 
-    expect(fn() => $second->publishDefinition($binding, $retirement))->toThrow(InvalidConfigurationException::class)
+    expect(fn() => $secondWriter->publish($binding, $retirement))->toThrow(InvalidConfigurationException::class)
         ->and($second->can('entry'))->toBeFalse();
 
-    $first->publishDefinition($binding, $retirement);
+    $firstWriter->publish($binding, $retirement);
     $retirement->release();
 
     expect($first->resolve('entry'))->toBe('foreign');
 });
 
-test('attached publication rejects missing or forged capabilities before changing a binding', function (): void {
+test('an attached resolver keeps write operations private and issues its writer once', function (): void {
     $root = new CompositeResolver(new SnapshotStrategy());
     $root->setDefinition('entry', new SnapshotDefinition('original'));
     $container = new Container($root, new AliasResolver(), (new ContainerBuilder())->build());
-    $binding = $root->prepareDefinition('entry', new SnapshotDefinition('forged'));
 
-    expect(fn() => $root->publishDefinition($binding, new MutationRetirement('entry')))
-        ->toThrow(InvalidConfigurationException::class)
-        ->and(fn() => $root->publishDefinition($binding, new MutationRetirement('entry'), new \stdClass()))
-        ->toThrow(InvalidConfigurationException::class)
+    expect(is_callable([$root, 'prepareDefinition']))->toBeFalse()
+        ->and(is_callable([$root, 'publishDefinition']))->toBeFalse()
+        ->and(is_callable([$root, 'retireDefinition']))->toBeFalse()
+        ->and(fn() => $root->attach())->toThrow(InvalidConfigurationException::class, 'only one container')
         ->and($container->get('entry'))->toBe('original')
         ->and($root->resolve('entry'))->toBe('original');
 });

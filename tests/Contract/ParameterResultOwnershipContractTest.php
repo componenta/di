@@ -85,7 +85,7 @@ test('parameter result validation owns the tuple it accepted across autoloading 
     }
     $container = $builder->build();
     $receiver = new Receiver();
-    $parameters = $container->get(ParametersResolver::class);
+    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $target = $parameters->target(new ReflectionParameter([Receiver::class, 'consume'], 0));
     $contexts = [];
 
@@ -146,7 +146,7 @@ test('parameter result ownership still rejects invalid extension values and posi
     $extension->value = $invalidPosition ? CallableOwner::value(...) : 23;
     $container = (new ContainerBuilder())->addParameterResolver($extension, 2000)->build();
     $receiver = new Receiver();
-    $parameters = $container->get(ParametersResolver::class);
+    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
     $target = $parameters->target(new ReflectionParameter([Receiver::class, 'consume'], 0));
     $operation = $single
         ? static fn(): array => $parameters->resolveParameter($target, new ParameterResolutionContext())
@@ -205,7 +205,7 @@ test('variadic result validation retains its accepted collection across tuple re
 
     try {
         if ($single) {
-            $parameters = $container->get(ParametersResolver::class);
+            $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
             $target = $parameters->target(new ReflectionParameter($callback, 0));
             expect($parameters->resolveParameter($target, new ParameterResolutionContext()))->toBe([0, [$original]]);
         } else {

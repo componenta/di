@@ -52,6 +52,19 @@ test('normalization preserves definitions without collapsing compatible alias ch
     ]);
 });
 
+test('invokable alias compatibility uses the graph at the current position in registration order', function (): void {
+    expect(DependencyConfiguration::normalize([
+        'aliases' => ['entry' => 'middle'],
+        'invokables' => ['middle' => \stdClass::class, 'entry' => \stdClass::class],
+    ]))->toBe([
+        'invokables' => [\stdClass::class],
+        'aliases' => ['entry' => 'middle', 'middle' => \stdClass::class],
+    ])->and(fn() => DependencyConfiguration::normalize([
+        'aliases' => ['entry' => 'middle'],
+        'invokables' => ['entry' => \stdClass::class, 'middle' => \stdClass::class],
+    ]))->toThrow(InvalidConfigurationException::class, 'Invokable alias "entry" conflicts with existing target "middle"');
+});
+
 test('normalization rejects malformed extension pairs before resolving services', function (mixed $specification): void {
     expect(fn() => DependencyConfiguration::normalize([
         'parameter_resolvers' => [100 => $specification],

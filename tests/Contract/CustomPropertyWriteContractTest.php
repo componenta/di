@@ -138,7 +138,7 @@ function pipeline(): ObjectPipeline
     return (new ContainerBuilder())
         ->addService('custom-property.value', 'injected')
         ->addService('custom-property.hidden', 'configured')
-        ->build()->get(ObjectPipeline::class);
+        ->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
 }
 
 beforeEach(function (): void {
