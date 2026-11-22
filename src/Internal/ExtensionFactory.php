@@ -69,8 +69,8 @@ final class ExtensionFactory
         if ($spec instanceof Closure) {
             $extension = $spec($container);
         } elseif (is_string($spec)) {
-            $extension = $container->has($spec)
-                ? $container->get($spec)
+            $extension = AvailableEntryLookup::has($container, $spec)
+                ? AvailableEntryLookup::get($container, $spec)
                 : (is_callable($spec) ? $spec($container) : $container->get($spec));
         } elseif (is_array($spec)
             && !self::isNativeExtensionCallable($spec)
@@ -79,9 +79,9 @@ final class ExtensionFactory
             && $spec[0] !== ''
             && is_string($spec[1])
             && $spec[1] !== ''
-            && $container->has($spec[0])
+            && AvailableEntryLookup::has($container, $spec[0])
         ) {
-            $factory = [$container->get($spec[0]), $spec[1]];
+            $factory = [AvailableEntryLookup::get($container, $spec[0]), $spec[1]];
             if (!is_callable($factory)) {
                 throw new InvalidConfigurationException(sprintf(
                     'Extension service method "%s::%s" is not callable.',

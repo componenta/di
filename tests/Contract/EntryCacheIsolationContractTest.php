@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\Contract\EntryCacheIsolation;
 
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Error;
 use LogicException;
 use Psr\Container\ContainerInterface;
 use stdClass;
@@ -63,6 +64,15 @@ final class MutableExternalEntries implements ContainerInterface
         return $this->entries[$id];
     }
 }
+
+test('a live container cannot be shallow-cloned', function (): void {
+    $container = (new ContainerBuilder())->addService('entry', 'original')->build();
+    $copy = static fn(object $source): object => clone $source;
+
+    expect($container->get('entry'))->toBe('original')
+        ->and(fn(): object => $copy($container))->toThrow(Error::class, '__clone')
+        ->and($container->get(ContainerInterface::class))->toBe($container);
+});
 
 test('shared callable metadata preserves factory and delegator instances in each container', function (bool $deferred): void {
     $containers = [];

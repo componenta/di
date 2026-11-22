@@ -21,6 +21,8 @@ namespace Componenta\DI\Benchmarks\ParameterPlan {
     use Componenta\Config\DependencyDefinitions;
     use Componenta\Config\Environment;
     use Componenta\DI\Internal\ContainerAssembly;
+    use Componenta\DI\Internal\ResolutionRuntime;
+    use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
     use Componenta\DI\Resolver\Parameter\ParametersResolver;
     use ReflectionMethod;
 
@@ -42,9 +44,11 @@ namespace Componenta\DI\Benchmarks\ParameterPlan {
 
     function createParameters(): ParametersResolver
     {
-        [, $runtime] = ContainerAssembly::assemble(
+        $runtime = new ResolutionRuntime();
+        ContainerAssembly::assembleWithRuntime(
             new Config([], new Environment([])),
             new DependencyDefinitions([]),
+            $runtime,
         );
 
         return $runtime->parameters;
@@ -92,12 +96,12 @@ namespace Componenta\DI\Benchmarks\ParameterPlan {
     foreach ($providedByMethod as $method => $provided) {
         $reflection = new ReflectionMethod(ParameterShapes::class, $method);
         $targets = $parameters->targets(array_values($reflection->getParameters()));
-        $plan = $parameters->prepareTargets($targets);
+        $plan = ParameterExecutionAccess::for($parameters)->prepareTargets($targets);
 
         $cases = [
-            $method . '/prepare' => static fn() => $parameters->prepareTargets($targets),
+            $method . '/prepare' => static fn() => ParameterExecutionAccess::for($parameters)->prepareTargets($targets),
             $method . '/resolve-targets' => static fn() => $parameters->resolveTargets($targets, $provided),
-            $method . '/resolve-prepared' => static fn() => $parameters->resolvePrepared($plan, $provided),
+            $method . '/resolve-prepared' => static fn() => ParameterExecutionAccess::for($parameters)->resolvePrepared($plan, $provided),
         ];
 
         foreach ($cases as $name => $operation) {

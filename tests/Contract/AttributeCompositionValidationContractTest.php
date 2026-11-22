@@ -143,7 +143,7 @@ test('direct object preparation validates class and member compositions before d
     $registry = new AttributeDefinitionRegistry();
     $registry->register(new AttributeDefinition(CompositionFirst::class, $handler, requires: [CompositionMissing::class]));
     $registry->register(new AttributeDefinition(CompositionSecond::class, $handler));
-    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
 
     expect(fn() => $processor->prepare(new ReflectionClass($class)))
         ->toThrow(AttributeCompositionException::class, $targetName . ' requires ' . CompositionMissing::class . ' because of #[' . CompositionFirst::class . '].')

@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
+use Closure;
 use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
-use Componenta\DI\Internal\AttributeCallbackInvoker;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Entry\ConstructionParameters;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
@@ -38,11 +41,12 @@ use ReflectionUnionType;
 /** Handles all request-source attributes on parameters. */
 final readonly class RequestAttributeHandler implements ParameterAttributeHandlerInterface
 {
+    /** @param (Closure(Closure,array<string|int,mixed>):mixed)|null $callbacks */
     public function __construct(
         private FactoryInterface $factory,
         private CasterProviderInterface $casterProvider,
         private ?ValidationProviderInterface $validationProvider = null,
-        private ?AttributeCallbackInvoker $callbacks = null,
+        private ?Closure $callbacks = null,
     ) {}
 
     public function resolveParameter(
@@ -56,7 +60,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
             return $value;
         }
 
-        $request = RequestParameter::get($context->provided);
+        $request = RequestParameter::get(ParameterContextAccess::provided($context));
         if ($request === null) {
             throw ResolutionException::forParameter(
                 $target->reflection,
@@ -147,7 +151,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
                 $argument[$key] = $item;
             }
             // Retain the mapped array's next append key when installing the detached slots.
-            $data = $callbacks->invoke($afterMap, array_replace($data, $argument));
+            $data = $callbacks($afterMap, array_replace($data, $argument));
             if (!is_array($data)) {
                 throw ResolutionException::forParameter(
                     $parameter,
@@ -162,9 +166,10 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         }
 
         MappedRequestParameterSourceGuard::assertNoConflicts($typeName, $data);
-        $params = RequestParameter::with($data, $request);
-        $params = MappedRequestContext::with($params, $data);
-        return $this->factory->make($typeName, $params);
+        $provenance = new MappedRequestContext($data);
+        $parameters = RequestParameter::with(ResolutionMetadata::publicParameters($data), $request);
+
+        return ConstructionParameters::capture($parameters, $provenance)->forwardTo($this->factory, $typeName);
     }
 
     /** @return class-string|null */

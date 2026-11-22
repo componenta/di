@@ -12,6 +12,8 @@ Applications using `ContainerFactory`, public definitions and `Container::set()`
 | `new FactoryResolver($factories, $container, $proxyFactory)` | `new FactoryResolver($container, $proxyFactory)`; register public definitions on a composite or use the direct validation/execution protocol |
 | `new InvokableResolver($invokables)` | `new InvokableResolver()`; register `InvokableDefinition` objects on a composite or validate/execute one directly |
 | Leaf `setDefinition()`, `can()` and `resolve()` on those two resolvers | Composite `setDefinition()`, `can()` and `resolve()`, or strategy `validateDefinition()` and `resolveDefinition()` |
+| `EntryResolverInterface::resolve()` with an array of runtime parameters | Receive `EntryParameters` and read the array through `$params->values` |
+| Direct `Container` construction with internal cache and alias objects | Pass alias and initial service arrays. The container builds and owns its runtime state. |
 | `CompositeResolver::supportsDefinition()` | Removed; no aggregate descriptor-admission predicate is exposed. Register through standalone `setDefinition()` or the attached root's `Container::set()`. |
 | Nested composites that observe later child registrations | Independent snapshots of the child's current bindings and ordered providers |
 | Direct mutation or reuse of a composite already attached to a container | `Container::set()` for that root; a separate composition for another container |
@@ -24,7 +26,7 @@ The mutable leaf interface is removed. There is no compatibility adapter that pr
 
 ## Registration ownership and application behavior
 
-[`CompositeResolver`](../../src/Resolver/Entry/CompositeResolver.php) owns the explicit binding table. Each binding captures its ID, chosen strategy and validated descriptor. Bootstrap definitions and later registrations enter this same table. Factory and invokable strategies hold no per-ID configuration map.
+[`CompositeResolver`](../../src/Resolver/Entry/CompositeResolver.php) exposes registration and resolution through a single binding table owned by its internal `EntryBindings`. Each binding captures its ID, chosen strategy and validated descriptor. Bootstrap definitions and later registrations enter this same table. Factory and invokable strategies hold no per-ID configuration map.
 
 This corrects the former retention of a factory after switching definition strategies. It also gives the container a single publication point before retiring old configuration and cached values. Shared and fresh resolution therefore agree on the committed definition even if releasing an old value throws.
 
@@ -95,6 +97,8 @@ assert($normalized['factories']['message'] === $definition);
 
 Consumers of the normalized array must accept the preserved descriptor instead of assuming every factory value is a callable. A successful `normalize()` call alone does not prove that factories or target classes are valid. `ContainerFactory::create()` admits the normalized definitions to the root before attachment; `CompositeResolver::setDefinition()` and `Container::set()` use the same strategy protocol. Unsupported definition kinds reject at admission.
 
+`DependencyConfiguration::assertShape()` publishes the canonicalized array only after every section passes validation. On validation failure the caller retains the original sections.
+
 Existing raw factory specifications in `DependencyDefinitions` remain supported. Bootstrap converts them to an internal admission descriptor. That internal type is not an application registration API. Known direct non-string callables are checked against the `(ContainerValue, array)` factory ABI at admission. Strings and unresolved service-method specifications retain deferred owner lookup and runtime validation. Admission does not instantiate deferred factory owners or execute their factories. Later extension bootstrap may request services through its existing normal behavior.
 
 If an integration previously called `normalize()` as its complete semantic validation step, move that check to container construction or to the selected strategy's `validateDefinition()` method. Do not resolve a deferred owner merely to validate the normalized array.
@@ -136,7 +140,7 @@ Implement the three methods of [`DefinitionResolverInterface`](../../src/Resolve
 2. `validateDefinition()` returns stable configuration for later execution. It does not publish a registration or retain an ID-to-definition map. A separate immutable normalized descriptor is often useful.
 3. `resolveDefinition()` executes the exact validated descriptor supplied for that invocation. Store reusable metadata separately from invocation values; do not keep old descriptors or resolved service instances in a metadata cache.
 
-The first supporting strategy wins. If it rejects validation, a later supporting strategy is not tried. Explicit bindings take precedence over fallback resolvers. A provider may implement both strategy and fallback contracts, but each role keeps its own responsibility. Composite calls strip DI-private parameter metadata before custom strategy or custom fallback execution.
+The first supporting strategy wins. If it rejects validation, a later supporting strategy is not tried. Explicit bindings take precedence over fallback resolvers. A provider may implement both strategy and fallback contracts, but each role keeps its own responsibility. Custom definition strategies receive the caller's arguments with reserved DI metadata keys removed.
 
 ```php
 use Componenta\DI\Definition\DefinitionInterface;
@@ -212,19 +216,36 @@ Snapshot rules are identity-based:
 
 When a composite is attached to a `Container`, that container becomes the sole public mutation authority for the root. Direct `setDefinition()`, attachment to a second container, and importing that attached root as a child all throw `InvalidConfigurationException`. Attachment lasts for the composite's lifetime. Build a separate composition for another container and use `$container->set($id, $definition)` for runtime changes.
 
-During construction, the internal `attach()` call gives `Container` a writer bound to the composite's private preparation, publication and retirement methods. The composite issues that writer once and `Container` keeps it private. Publication still checks that the same composite prepared the binding.
+During construction, `EntryBindings` issues one private writer to `Container`. The writer uses the table's preparation, publication and retirement operations. The binding must come from that same table to be published.
 
 ### Direct container construction
 
-Direct `new Container(...)` supports an independent entry resolver and a cache seeded with initial base values. Give each container its own `AliasResolver`, `EntryCache`, delegator and external-container registries, and cycle guards. Each mutable collaborator can attach to one container for its lifetime. Construction raises `InvalidConfigurationException` before publishing core values if any of these objects is already attached. Share application services and providers according to their own contracts.
+Direct construction takes an entry resolver, a callable executor, and optional alias and service arrays. Each container creates its own cache, registries and cycle guards. Use `set()`, `alias()`, `delegator()`, and `addContainer()` for later changes.
 
-After attachment, change routes through `Container::alias()` so the container can invalidate affected entries and retire old values in order. A direct write to the attached `AliasResolver` raises `InvalidConfigurationException`.
+```php
+$container = new Container(
+    $resolver,
+    $executor,
+    aliases: ['preferred' => 'service'],
+    services: ['service' => $service],
+);
+```
 
-The constructor rejects aliases whose source is a protected DI ID before attaching the resolver or writing core cache entries. The direct `config → Config::class` route used by `ContainerFactory` is the built-in exception. Application aliases pointing to protected services remain valid. If an autoloader changes the graph during construction, attachment validates the updated routes. A rejected alias configuration leaves the supplied resolver available for a corrected construction.
+When composing an `ObjectPipeline`, pass the same `AttributePlanBuilder` to `AttributeProcessor` and `ParametersResolver`, then pass those two components and a proxy factory to the pipeline. The pipeline owns its parameter store. Only the execution running the phase can materialize deferred arguments or change its state. A completed phase cannot dispatch its handlers again. A detached reflector received by an object handler preserves the creation class of inherited static methods.
 
-Loading runtime collaborators and the definition writer finishes before attachment. A failed load propagates the original exception. A failed ownership check leaves the standalone resolver and the available collaborators eligible for retry. A container that completes attachment during an autoload callback or a cyclic destructor keeps its ownership.
+Use `ObjectPipeline::create()` to run both object attribute phases and obtain the initialized object. `AttributeProcessor` provides `prepare()` and `hasHandlers()`. The pipeline supplies the `ObjectCreationContext` to handlers for each attempt.
 
-Core and bootstrap values are published after all runtime collaborators are initialized. Replaced seed values remain retained until the complete batch is published, so their destructors can resolve services through the supplied cache's published container. The constructor makes no further state writes after releasing those values; nested public mutations remain in effect. Destructor failures retain native PHP exception behavior and are not converted by the constructor into `MutationRetirementException`.
+Pass immediate parameters through `$params`, or pass a `resolveParameters` callback and leave `$params` empty. The callback can return an `EntryParameters` instance to preserve the source of forwarded arguments. Supplying both sources raises `InvalidConfigurationException` before creation starts. A native `ReflectionObject` supplies the selected class at entry. Class handlers can inspect the instance's members while its reflector still describes that class.
+
+The constructor rejects aliases whose source is a protected DI ID before attaching the resolver. Application aliases may point to protected services. A rejected alias configuration leaves the resolver available for a corrected construction.
+
+## Custom fallback resolvers
+
+Implement `resolve(string $id, EntryParameters $params): mixed` using `Componenta\DI\Resolver\Entry\EntryParameters`. Read application arguments through `$params->values`.
+
+The argument arrays exposed by `EntryParameters` and the creation and parameter contexts are snapshots. Editing a local copy of an array leaves the invocation inputs intact, including nested arrays that contain PHP references. Application objects retain their identity. Explicit nested references still reach native invocations.
+
+To forward the same construction, pass `$params` to the next entry resolver or `ObjectPipeline::create()`. A deferred parameter supplier can return the same object. Use `$params->forwardTo($factory, $id)` with a native container or an adapter implementing `EntryParametersFactoryInterface` to preserve HTTP field provenance. An adapter continues construction in `makeEntry()` and can use `without($key)` to remove an argument. Other factories receive application arguments through `make()`. Passing an ordinary array to `make()` starts an independent construction.
 
 ## Committed retirement failures
 
@@ -270,6 +291,8 @@ A destructor that reenters lookup observes completed publication and invalidatio
 ## Entry resolution and metadata updates
 
 `get()` throws the PSR-11 `NotFoundExceptionInterface` when no route exists for the requested ID. A missing dependency inside a selected factory, constructor or delegator is a `ResolutionException` with the original failure in `getPrevious()`. The same classification applies when a selected external container throws `NotFoundExceptionInterface`. Update catch blocks that treated a missing dependency as a missing requested entry. `make()` and exceptions raised after a lazy object has been returned retain their own error boundaries.
+
+A reentrant `has()` for the ID currently checked by an external provider evaluates local availability while that provider's lookup is active.
 
 Service IDs accept arbitrary bindings, including class names bound to factories returning a different class. The static result of `get()` is `mixed`, and `FactoryInterface::make()` returns `object`.
 

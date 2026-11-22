@@ -15,9 +15,12 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
-use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\Resolver\Entry\ConstructionParameters;
 use Componenta\DI\Internal\Resolver\Entry\ConstructorInvocation;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
+use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Entry\EntryParametersFactoryInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
@@ -74,7 +77,7 @@ final class ReportingParameter extends ReflectionParameter
     }
 }
 
-final readonly class PreparingFactory implements FactoryInterface
+final readonly class PreparingFactory implements EntryParametersFactoryInterface
 {
     /**
      * @param Closure():void $beforeConstructor
@@ -92,6 +95,12 @@ final readonly class PreparingFactory implements FactoryInterface
 
     public function make(string $entry, array $params = []): object
     {
+        return $this->makeEntry($entry, ConstructionParameters::capture($params));
+    }
+
+    public function makeEntry(string $entry, EntryParameters $parameters): object
+    {
+        $provenance = ConstructionParameters::provenance($parameters);
         if (!class_exists($entry)) {
             throw new LogicException('Expected the declared request DTO.');
         }
@@ -102,12 +111,13 @@ final readonly class PreparingFactory implements FactoryInterface
         }
         $reflections = $constructor->getParameters();
         $reflections[$this->position] = new ReportingParameter($entry, $this->position, $this->onRead, $this->diagnosticOwner);
-        $plan = $this->parameters->prepare(array_values($reflections));
+        $arguments = ParameterExecutionAccess::for($this->parameters);
+        $plan = $arguments->prepare(array_values($reflections));
         if ($this->initialize) {
             $product = $class->newInstanceWithoutConstructor();
-            ConstructorInvocation::initialize($this->parameters, $product, $constructor, $plan, $params, $this->beforeConstructor, $proof);
+            ConstructorInvocation::initialize($arguments, $product, $constructor, $plan, $parameters->values, $this->beforeConstructor, $proof, $provenance);
         } else {
-            $product = ConstructorInvocation::create($this->parameters, $class, $constructor, $plan, $params, $this->beforeConstructor, $proof);
+            $product = ConstructorInvocation::create($arguments, $class, $constructor, $plan, $parameters->values, $this->beforeConstructor, $proof, $provenance);
         }
         $proof?->assertLoadedParametersUnchanged();
         $proof?->assertParameterSourcesUnchanged();

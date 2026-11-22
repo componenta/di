@@ -9,10 +9,16 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\ObjectAttributeAccess;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Object\ObjectPipeline;
+use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use LogicException;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -38,6 +44,11 @@ final class Product
 
     #[Marker]
     public function hook(): void {}
+}
+
+final class UnrelatedProduct
+{
+    public string $value = 'unchanged';
 }
 
 final class Handler implements AttributeHandlerInterface
@@ -103,25 +114,34 @@ function reflection(string $class): ReflectionClass
     return new ReflectionClass($class);
 }
 
-test('standalone processors execute both object phases without an optional bootstrap service', function (): void {
+test('a warmed processor sees later registrations in the registry that builds its plans', function (): void {
+    $registry = new AttributeDefinitionRegistry();
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
+    $reflection = reflection(Product::class);
+    expect($processor->hasHandlers($reflection))->toBeFalse();
+
+    $registry->register(new AttributeDefinition(Marker::class, new Handler()));
+
+    expect($processor->hasHandlers($reflection))->toBeTrue();
+});
+
+test('standalone pipelines execute both object phases without an optional bootstrap service', function (): void {
     $handler = new Handler();
     $registry = new AttributeDefinitionRegistry();
     $registry->register(new AttributeDefinition(Marker::class, $handler, phase: AttributePhase::Both));
-    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+    $plans = new AttributePlanBuilder($registry);
+    $processor = new AttributeProcessor($plans);
+    $pipeline = new ObjectPipeline($processor, new ParametersResolver($plans), new ProxyFactory());
     $reflection = reflection(Product::class);
     $processor->prepare($reflection);
     expect($processor->hasHandlers($reflection))->toBeTrue()->and($handler->events)->toBe([]);
 
     foreach ([1, 2] as $_attempt) {
         $handler->events = [];
-        $attempt = ObjectCreationContext::begin($reflection);
-        $context = $attempt->context;
-        $processor->process($reflection, AttributePhase::BeforeInstantiation, $context);
-        expect($handler->events)->toBe(['before:class', 'before:property', 'before:method']);
-
-        $entry = new Product();
-        $attempt->initialize($entry);
-        $processor->process($reflection, AttributePhase::AfterInstantiation, $context);
+        $entry = $pipeline->create($reflection);
+        if (!$entry instanceof Product) {
+            throw new LogicException('Expected the reflected product.');
+        }
 
         expect($entry->value)->toBe('configured')
             ->and($entry->writes)->toBe(1)
@@ -132,19 +152,59 @@ test('standalone processors execute both object phases without an optional boots
     }
 });
 
-test('standalone processing validates changes discovered while completing its phase', function (AttributePhase $latePhase): void {
+test('object attributes and property writes belong to the class in the creation context', function (): void {
+    $handler = new Handler();
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(Marker::class, $handler, phase: AttributePhase::AfterInstantiation));
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
+    $entry = new UnrelatedProduct();
+    $attempt = ObjectCreationAccess::begin(new ReflectionClass($entry));
+    $attempt->initialize($entry);
+    $reflection = reflection(Product::class);
+
+    expect(fn() => ObjectAttributeAccess::executor($processor)->process($reflection, AttributePhase::AfterInstantiation, $attempt->context))
+        ->toThrow(InvalidConfigurationException::class, 'creation context')
+        ->and(fn() => $attempt->context->claimProperty($reflection->getProperty('value')))
+        ->toThrow(LogicException::class, 'does not belong')
+        ->and($handler->events)->toBe([])
+        ->and($entry->value)->toBe('unchanged');
+});
+
+test('the after phase requires an initialized entry before it can dispatch any handler', function (): void {
+    $handler = new Handler();
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(Marker::class, $handler));
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
+    $execution = ObjectAttributeAccess::executor($processor);
+    $reflection = reflection(Product::class);
+    $attempt = ObjectCreationAccess::begin($reflection);
+
+    expect(fn() => $execution->process($reflection, AttributePhase::AfterInstantiation, $attempt->context))
+        ->toThrow(LogicException::class, 'requires an initialized entry')
+        ->and($handler->events)->toBe([]);
+
+    $entry = new Product();
+    $attempt->initialize($entry);
+    $execution->process($reflection, AttributePhase::AfterInstantiation, $attempt->context);
+
+    expect($entry->writes)->toBe(1)
+        ->and($handler->events)->toBe(['after:property', 'after:class', 'after:method']);
+});
+
+test('object attribute execution validates changes discovered while completing its phase', function (AttributePhase $latePhase): void {
     $handler = new Handler();
     $registry = new AttributeDefinitionRegistry();
     $registry->register(new AttributeDefinition(Marker::class, $handler, phase: AttributePhase::BeforeInstantiation));
-    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
     $reflection = new CompletionReflection($registry, $handler, $latePhase);
-    $context = new ObjectCreationContext($reflection);
+    $context = ObjectCreationAccess::begin($reflection)->context;
+    $execution = ObjectAttributeAccess::executor($processor);
 
     if ($latePhase === AttributePhase::BeforeInstantiation) {
-        expect(fn() => $processor->process($reflection, AttributePhase::BeforeInstantiation, $context))
+        expect(fn() => $execution->process($reflection, AttributePhase::BeforeInstantiation, $context))
             ->toThrow(AttributeCompositionException::class);
     } else {
-        $processor->process($reflection, AttributePhase::BeforeInstantiation, $context);
+        $execution->process($reflection, AttributePhase::BeforeInstantiation, $context);
     }
 
     expect($reflection->published)->toBeTrue()

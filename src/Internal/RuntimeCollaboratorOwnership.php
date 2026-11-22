@@ -15,7 +15,7 @@ use WeakMap;
  */
 final class RuntimeCollaboratorOwnership
 {
-    /** @var WeakMap<object, true>|null */
+    /** @var WeakMap<object, object>|null */
     private static ?WeakMap $owners = null;
 
     public readonly object $authority;
@@ -28,13 +28,23 @@ final class RuntimeCollaboratorOwnership
         private readonly ?ExternalContainerRegistry $externalContainers,
         private readonly int $validatedAliasRevision,
     ) {
-        // The alias authority contains no reference to the container.
+        // The authority contains no reference to the container.
         $this->authority = new stdClass();
     }
 
     public function attach(bool &$rootAttached): void
     {
         $this->aliases->attach($this, $rootAttached);
+    }
+
+    public static function assertWritable(object $collaborator, ?object $authority): void
+    {
+        if ((self::$owners[$collaborator] ?? $authority) !== $authority) {
+            throw new InvalidConfigurationException(sprintf(
+                'An attached %s must be changed through its container.',
+                $collaborator::class,
+            ));
+        }
     }
 
     /** @param WeakMap<AliasResolver, object> $aliasOwners */
@@ -76,11 +86,21 @@ final class RuntimeCollaboratorOwnership
             ));
         }
 
-        $owners[$cache] = true;
-        $owners[$delegators] = true;
-        $owners[$cycleGuard] = true;
+        if ($cache->hasResolvedEntries) {
+            throw new InvalidConfigurationException('A container cache can only be seeded with base entries.');
+        }
+        if ($delegators->hasRegistrations) {
+            throw new InvalidConfigurationException('Register delegators through the container after construction.');
+        }
+        if ($cycleGuard->isActive) {
+            throw new InvalidConfigurationException('An active cycle guard cannot be attached to a container.');
+        }
+
+        $owners[$cache] = $authority;
+        $owners[$delegators] = $authority;
+        $owners[$cycleGuard] = $authority;
         if ($externalContainers !== null) {
-            $owners[$externalContainers] = true;
+            $owners[$externalContainers] = $authority;
         }
         $aliasOwners[$aliases] = $authority;
         $rootAttached = true;

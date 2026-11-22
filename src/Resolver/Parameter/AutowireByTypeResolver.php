@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\AvailableEntryLookup;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\DI\Resolver\TypeHints;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Throwable;
@@ -18,7 +18,7 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
 
     public function supports(ParameterTarget $target): bool
     {
-        return !$target->variadic && ($target->className !== null || self::unionCandidates($target) !== []);
+        return !$target->variadic && ($target->className !== null || $target->unionCandidates() !== []);
     }
 
     public function resolveParameter(
@@ -34,13 +34,13 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
         try {
             if ($target->className !== null) {
                 $typeName = $target->className;
-                if (!$this->container->has($typeName)) {
+                if (!AvailableEntryLookup::has($this->container, $typeName)) {
                     return null;
                 }
             } else {
                 $available = [];
-                foreach (self::unionCandidates($target) as $candidate) {
-                    if ($this->container->has($candidate)) {
+                foreach ($target->unionCandidates() as $candidate) {
+                    if (AvailableEntryLookup::has($this->container, $candidate)) {
                         $available[] = $candidate;
                     }
                 }
@@ -58,7 +58,7 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
                 $typeName = $available[0];
             }
 
-            $value = $this->container->get($typeName);
+            $value = AvailableEntryLookup::get($this->container, $typeName);
             if ($union && (!$value instanceof $typeName || !$target->accepts($value))) {
                 throw ResolutionException::forParameter(
                     $target->reflection,
@@ -87,9 +87,4 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
         }
     }
 
-    /** @return list<class-string> */
-    private static function unionCandidates(ParameterTarget $target): array
-    {
-        return TypeHints::simpleUnionClassNames($target->type, $target->reflection->getDeclaringClass());
-    }
 }

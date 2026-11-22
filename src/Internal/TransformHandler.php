@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Componenta\DI\Resolver\Attribute\Handler;
+namespace Componenta\DI\Internal;
 
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Internal\AttributeCallbackInvoker;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -43,7 +43,7 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
             if ($target->variadic) {
                 $value = ParameterAttributeValue::resolved([]);
             } elseif ($target->hasDefault) {
-                $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());
+                $value = ParameterAttributeValue::resolved($target->defaultValue);
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
@@ -98,7 +98,7 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
                 }
                 $value = $context->parameters[$name];
                 // Validate the supplied value again after callback dependencies.
-                $beforeInvocation = $context->assertParametersReadable(...);
+                $beforeInvocation = static fn() => ObjectCreationAccess::recheckParameters($context);
             }
 
             $context->writeProperty($target, $this->callbacks->invoke(

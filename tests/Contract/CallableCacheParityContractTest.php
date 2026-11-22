@@ -16,6 +16,7 @@ use Componenta\DI\Attribute\Config as ConfigValue;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\ResolutionRuntime;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
@@ -225,13 +226,13 @@ function failure(Closure $operation): array
     throw new \LogicException('The invalid call must fail.');
 }
 
-test('cache parity control reclassifies every parameter without changing the production resolver chain', function (): void {
+test('cache parity control reclassifies every parameter and preserves the resolved arguments', function (): void {
     $function = __NAMESPACE__ . '\\signature';
-    $chains = [];
+    $results = [];
+    $fixedDefault = new \stdClass();
     foreach ([false, true] as $uncached) {
-        [$container, $probe, $runtime] = auditContainer($uncached);
-        $chains[] = array_map(static fn(ParameterResolverInterface $resolver): string => $resolver::class, $runtime->parameters->resolverList);
-        $container->call($function, ['explicit' => 1]);
+        [$container, $probe] = auditContainer($uncached);
+        $results[] = $container->call($function, ['explicit' => 1, 'default' => $fixedDefault]);
         $first = $probe->calls[$function];
         $container->call($function, ['explicit' => 2]);
         $second = $probe->calls[$function];
@@ -241,7 +242,7 @@ test('cache parity control reclassifies every parameter without changing the pro
             expect($uncached ? $second[$position] > $count : $second[$position] === $count)->toBeTrue();
         }
     }
-    expect($chains[0])->toBe($chains[1])->toHaveCount(7);
+    expect($results[0])->toBe($results[1]);
 });
 
 test('full prepared parameter plans match fresh resolution through mutation defaults null and variadics', function (bool $prepared): void {
@@ -252,9 +253,9 @@ test('full prepared parameter plans match fresh resolution through mutation defa
         $resolver = $runtime->parameters;
         $reflection = new ReflectionFunction(__NAMESPACE__ . '\\signature');
         $parameters = $reflection->getParameters();
-        $plan = $resolver->prepare($parameters);
+        $plan = ParameterExecutionAccess::for($resolver)->prepare($parameters);
         $call = static function (array $provided) use ($container, $resolver, $parameters, $plan, $prepared): array {
-            $arguments = $prepared ? $resolver->resolvePrepared($plan, $provided) : $resolver->resolve($parameters, $provided);
+            $arguments = $prepared ? ParameterExecutionAccess::for($resolver)->resolvePrepared($plan, $provided) : $resolver->resolve($parameters, $provided);
             $result = $container->call(new PreparedCallable(__NAMESPACE__ . '\\signature'), $arguments);
             if (!is_array($result)) {
                 throw new \LogicException('The complete signature must return its argument snapshot.');

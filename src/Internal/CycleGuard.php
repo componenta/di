@@ -25,7 +25,7 @@ final class CycleGuard
     private array $resolving = [];
 
     /** @var WeakMap<object, array<string, true>> Fiber-keyed execution stacks. */
-    private WeakMap $fiberStacks;
+    private readonly WeakMap $fiberStacks;
 
     /** @var array<string, object> Shared-entry owner token by id. */
     private array $sharedOwners = [];
@@ -33,10 +33,22 @@ final class CycleGuard
     /** Main execution-context owner token. */
     private readonly object $mainOwner;
 
+    public bool $isActive {
+        get => $this->resolving !== [] || count($this->fiberStacks) !== 0;
+    }
+
     public function __construct()
     {
         $this->fiberStacks = new WeakMap();
         $this->mainOwner = new \stdClass();
+    }
+
+    public function contains(string $id): bool
+    {
+        $execution = Fiber::getCurrent();
+        return $execution === null
+            ? isset($this->resolving[$id])
+            : isset($this->fiberStacks[$execution][$id]);
     }
 
     /**
@@ -44,8 +56,9 @@ final class CycleGuard
      *
      * @throws CircularDependencyException If `$id` is already on the stack.
      */
-    public function enter(string $id): void
+    public function enter(string $id, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $execution = Fiber::getCurrent();
 
         if ($execution === null) {
@@ -73,13 +86,15 @@ final class CycleGuard
         $this->fiberStacks[$execution] = $stack;
     }
 
-    public function leave(string $id): void
+    public function leave(string $id, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $this->leaveContext($id, Fiber::getCurrent());
     }
 
-    public function enterShared(string $id): void
+    public function enterShared(string $id, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $execution = Fiber::getCurrent();
         if ($execution === null) {
             if (isset($this->resolving[$id])) {
@@ -119,8 +134,9 @@ final class CycleGuard
             : WeakReference::create($execution);
     }
 
-    public function leaveShared(string $id): void
+    public function leaveShared(string $id, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $execution = Fiber::getCurrent();
         $owner = $this->sharedOwners[$id] ?? null;
 
@@ -159,4 +175,6 @@ final class CycleGuard
 
         $this->fiberStacks[$execution] = $stack;
     }
+
+    private function __clone() {}
 }

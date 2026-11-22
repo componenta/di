@@ -344,11 +344,16 @@ test('a selected external owner reports a retrieval failure if its get throws no
         ->and($error->getPrevious())->toBeInstanceOf(ForeignNotFoundFailure::class);
 });
 
-test('has remains a boolean capability check for ordinary foreign exceptions', function (): void {
+test('has and get preserve failures while checking external ownership', function (): void {
     $container = (new ContainerBuilder())->build();
     $container->addContainer(new ForeignExternalContainer(throwFromHas: true));
 
-    expect($container->has('unstable'))->toBeFalse();
+    foreach ([$container->has(...), $container->get(...)] as $lookup) {
+        $error = exceptionFrom(fn() => $lookup('unstable'));
+        expect($error)->toBeInstanceOf(ResolutionException::class)
+            ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class)
+            ->and($error->getPrevious()?->getMessage())->toBe('foreign has failure');
+    }
 });
 
 test('request validation failures are preserved as the cause of a parameter ResolutionException', function (): void {

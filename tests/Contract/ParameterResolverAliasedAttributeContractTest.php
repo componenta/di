@@ -12,11 +12,11 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterTargets;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use DomainException;
 use Fiber;
 use LogicException;
@@ -211,9 +211,7 @@ test('an alias loaded by a later classifier is reflected in the same parameter s
     };
     spl_autoload_register($loader);
     try {
-        $slots = $parameters->resolverSlotsFor($target);
-        $classifiers = array_map(fn(int $slot): string => $parameters->resolverList[$slot]::class, $slots);
-        expect($classifiers)->toContain(LabelResolver::class);
+        expect($parameters->resolveTargets([$target]))->toBe(['attribute']);
     } finally {
         spl_autoload_unregister($loader);
     }
@@ -325,22 +323,20 @@ test('nested classification in one execution keeps the original attribute lookup
     $target = $outer->target(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $loader = static function (string $class) use ($query, $type, $inner, $target): void {
         if ($class === $type && !class_exists($query, false)) {
-            $inner->resolverSlotsFor($target);
+            $inner->resolveTargets([$target]);
             class_alias(Label::class, $query);
         }
     };
     spl_autoload_register($loader);
     try {
-        $slots = $outer->resolverSlotsFor($target);
-        $classifiers = array_map(fn(int $slot): string => $outer->resolverList[$slot]::class, $slots);
-        expect($classifiers)->toContain(LabelResolver::class);
+        expect($outer->resolveTargets([$target]))->toBe(['attribute']);
     } finally {
         spl_autoload_unregister($loader);
     }
 })->with(['presence lookup' => 'presence', 'native reflection' => 'native']);
 
 test('an explicit availability observation records only unavailable names in the current annotated target scope', function (): void {
-    $targets = new ParameterTargetFactory();
+    $targets = new ParameterTargets();
     $target = $targets->create(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $plain = $targets->create(new ReflectionParameter(static fn(string $value): string => $value, 0));
     $missing = nextAlias();
@@ -359,7 +355,7 @@ test('an explicit availability observation records only unavailable names in the
 });
 
 test('attribute observation closes its own scope when a nested classifier throws', function (): void {
-    $targets = new ParameterTargetFactory();
+    $targets = new ParameterTargets();
     $target = $targets->create(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $methods = get_class_methods($target);
     expect($methods)->not->toContain('beginAttributeQueries')
@@ -391,8 +387,8 @@ test('attribute observation closes its own scope when a nested classifier throws
 });
 
 test('a second target factory observes its own view of an existing target', function (): void {
-    $owner = new ParameterTargetFactory();
-    $other = new ParameterTargetFactory();
+    $owner = new ParameterTargets();
+    $other = new ParameterTargets();
     $target = $owner->create(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $outer = nextAlias();
     $inner = nextAlias();
@@ -421,14 +417,7 @@ test('observations of the same parameter remain independent across suspended Fib
     $first = $build(new LabelResolver($query, $lookup, pauseOnMiss: true));
     $second = $build(new LabelResolver(nextAlias(), $lookup, pauseOnMiss: true));
     $target = $first->target(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
-    $chosen = static function (ParametersResolver $parameters) use ($target): bool {
-        foreach ($parameters->resolverSlotsFor($target) as $slot) {
-            if ($parameters->resolverList[$slot] instanceof LabelResolver) {
-                return true;
-            }
-        }
-        return false;
-    };
+    $chosen = static fn(ParametersResolver $parameters): bool => $parameters->resolveTargets([$target]) === ['attribute'];
     $one = new Fiber(static fn(): bool => $chosen($first));
     $two = new Fiber(static fn(): bool => $chosen($second));
     expect($one->start())->toBe('classification paused')

@@ -4,223 +4,47 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
-use Closure;
 use Componenta\DI\Definition\DefinitionInterface;
-use Componenta\DI\Exception\ExceptionInterface;
-use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\Internal\MutationRetirement;
-use Componenta\DI\Internal\ResolutionMetadata;
-use Componenta\DI\Internal\Resolver\Entry\DefinitionBinding;
-use Componenta\DI\Internal\Resolver\Entry\DefinitionWriter;
-use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
+use Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings;
+use Componenta\DI\Internal\Resolver\Entry\CompositeScope;
+use Componenta\DI\Internal\Resolver\Entry\EntryBindings;
 use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
-use Throwable;
 
-/** Owns explicit bindings and ordered fallback resolution. */
-final class CompositeResolver implements EntryResolverInterface
+/** Composes explicit definitions and ordered fallback resolvers. */
+final class CompositeResolver extends CompositeScope implements EntryResolverInterface
 {
-    /**
-     * @var array{
-     *     prepare: Closure(self, string, DefinitionInterface):DefinitionBinding,
-     *     publish: Closure(self, DefinitionBinding, MutationRetirement):void,
-     *     retire: Closure(self, string, MutationRetirement):void
-     * }|null
-     */
-    private static ?array $writerOperations = null;
-
-    /** @var list<EntryResolverInterface> */
-    private array $fallbacks = [];
-    /** @var list<DefinitionResolverInterface> */
-    private array $strategies = [];
-    /** @var array<string, DefinitionBinding> */
-    private array $bindings = [];
-    private readonly object $bindingOwner;
-    private bool $attached = false;
+    private readonly EntryBindings $bindings;
 
     public function __construct(EntryResolverInterface|DefinitionResolverInterface ...$providers)
     {
-        $this->bindingOwner = new \stdClass();
-        $direct = [];
-        $strategies = [];
-        foreach ($providers as $provider) {
-            $identity = spl_object_id($provider);
-            if (isset($direct[$identity])) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Entry resolver %s is registered more than once.',
-                    $provider::class,
-                ));
-            }
-            $direct[$identity] = true;
-
-            if ($provider instanceof self) {
-                if ($provider->attached) {
-                    throw new InvalidConfigurationException('An attached composite cannot be imported as a snapshot.');
-                }
-                foreach ($provider->strategies as $strategy) {
-                    $strategies[spl_object_id($strategy)] ??= $strategy;
-                }
-                foreach ($provider->fallbacks as $fallback) {
-                    $this->fallbacks[] = $fallback;
-                }
-                foreach ($provider->bindings as $id => $binding) {
-                    if (isset($this->bindings[$id]) && $this->bindings[$id] !== $binding) {
-                        throw new InvalidConfigurationException(sprintf(
-                            'Composite snapshots contain different definitions for DI id "%s".',
-                            $id,
-                        ));
-                    }
-                    $this->bindings[$id] = $binding;
-                }
-                continue;
-            }
-
-            if ($provider instanceof DefinitionResolverInterface) {
-                $strategies[$identity] ??= $provider;
-            }
-            if ($provider instanceof EntryResolverInterface) {
-                $this->fallbacks[] = $provider;
-            }
-        }
-        $this->strategies = array_values($strategies);
+        $this->bindings = new EntryBindings(...array_map(
+            static fn(EntryResolverInterface|DefinitionResolverInterface $provider): EntryBindings|EntryResolverInterface|DefinitionResolverInterface
+                => $provider instanceof self ? $provider->bindings : $provider,
+            $providers,
+        ));
     }
 
     public function can(string $id): bool
     {
-        return isset($this->bindings[$id]) || $this->fallback($id) !== null;
+        return $this->bindings->can($id);
     }
 
-    /** @param array<string|int, mixed> $params */
-    public function resolve(string $id, array $params = []): mixed
+    /** @param array<string|int,mixed>|EntryParameters $params */
+    public function resolve(string $id, array|EntryParameters $params = []): mixed
     {
-        $binding = $this->bindings[$id] ?? null;
-        if ($binding !== null) {
-            return $binding->strategy->resolveDefinition(
-                $id,
-                $binding->definition,
-                ResolutionMetadata::publicParameters($params),
-            );
-        }
-
-        $fallback = $this->fallback($id) ?? throw NotFoundException::forService($id);
-        return $fallback->resolve($id, EntryResolverContext::for($fallback, $params));
-    }
-
-    /**
-     * Resolves a shared entry without caller parameters. False means no selected route.
-     *
-     * @internal
-     */
-    public function tryResolveShared(string $id, mixed &$entry): bool
-    {
-        $binding = $this->bindings[$id] ?? null;
-        if ($binding !== null) {
-            $entry = $binding->strategy->resolveDefinition($id, $binding->definition, []);
-            return true;
-        }
-
-        $fallback = $this->fallback($id);
-        if ($fallback === null) {
-            return false;
-        }
-        $entry = $fallback->resolve($id, []);
-        return true;
+        return $this->bindings->resolve($id, $params);
     }
 
     /** Registers a definition in a standalone composition. Attached roots use Container::set(). */
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
-        if ($this->attached) {
-            throw new InvalidConfigurationException('An attached composite must be mutated through its container.');
-        }
-        $binding = $this->prepareDefinition($id, $definition);
-        $retirement = new MutationRetirement($id);
-        $this->publishDefinition($binding, $retirement, attached: false);
-        $retirement->release();
+        $this->bindings->setDefinition($id, $definition);
     }
 
-    /** @internal */
-    public function attach(?RuntimeCollaboratorOwnership $ownership = null): DefinitionWriter
+    protected function attach(RuntimeCollaboratorOwnership $ownership): AttachedEntryBindings
     {
-        $operations = self::$writerOperations ??= [
-            'prepare' => static fn(self $resolver, string $id, DefinitionInterface $definition): DefinitionBinding
-                => $resolver->prepareDefinition($id, $definition),
-            'publish' => static function (self $resolver, DefinitionBinding $binding, MutationRetirement $retirement): void {
-                $resolver->publishDefinition($binding, $retirement);
-            },
-            'retire' => static function (self $resolver, string $id, MutationRetirement $retirement): void {
-                $resolver->retireDefinition($id, $retirement);
-            },
-        ];
-
-        $writer = new DefinitionWriter($this, $operations['prepare'], $operations['publish'], $operations['retire']);
-        // Writer autoloading can reenter container construction before attachment.
-        if ($ownership !== null) {
-            $ownership->attach($this->attached);
-        } elseif ($this->attached) {
-            throw new InvalidConfigurationException('A composite can be attached to only one container.');
-        } else {
-            $this->attached = true;
-        }
-        return $writer;
+        return $this->bindings->attach($ownership);
     }
 
-    private function prepareDefinition(string $id, DefinitionInterface $definition): DefinitionBinding
-    {
-        if ($id === '') {
-            throw new InvalidConfigurationException('Definition ids must be non-empty strings.');
-        }
-        try {
-            foreach ($this->strategies as $strategy) {
-                if ($strategy->supportsDefinition($definition)) {
-                    return new DefinitionBinding(
-                        $id,
-                        $strategy,
-                        $strategy->validateDefinition($id, $definition),
-                        $this->bindingOwner,
-                    );
-                }
-            }
-            throw InvalidConfigurationException::forInvalidDefinition($definition);
-        } catch (ExceptionInterface $exception) {
-            throw $exception;
-        } catch (Throwable $exception) {
-            throw new InvalidConfigurationException(
-                sprintf('Failed to register a definition for DI id "%s".', $id),
-                previous: $exception,
-            );
-        }
-    }
-
-    private function publishDefinition(
-        DefinitionBinding $binding,
-        MutationRetirement $retirement,
-        bool $attached = true,
-    ): void {
-        if (!$binding->belongsTo($this->bindingOwner)) {
-            throw new InvalidConfigurationException('A prepared definition belongs to another composite.');
-        }
-        // Validation and collaborator autoloading can attach a standalone composite.
-        if ($this->attached !== $attached) {
-            throw new InvalidConfigurationException('Definition publication requires its container mutation authority.');
-        }
-        $retirement->retain($this->bindings[$binding->id] ?? null);
-        $this->bindings[$binding->id] = $binding;
-    }
-
-    private function retireDefinition(string $id, MutationRetirement $retirement): void
-    {
-        $retirement->retain($this->bindings[$id] ?? null);
-        unset($this->bindings[$id]);
-    }
-
-    private function fallback(string $id): ?EntryResolverInterface
-    {
-        foreach ($this->fallbacks as $fallback) {
-            if ($fallback->can($id)) {
-                return $fallback;
-            }
-        }
-        return null;
-    }
+    private function __clone() {}
 }

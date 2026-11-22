@@ -11,7 +11,7 @@ This guide describes the implementation on the DI 6 development branch, followin
 | Area | DI 6 behavior | Migration action |
 | --- | --- | --- |
 | `Transform` | New repeatable parameter/property attribute accepting one `Closure`. | Choose an explicit value source and review the callback's first parameter and DI suffix. |
-| `SetUp::$method` | Widened from `string` to `string\|Closure`; constructor names/order remain `method`, `params`. | Remove or widen a subclass's redeclared `string $method` property. Review direct `SetUpRunner` construction. |
+| `SetUp::$method` | Widened from `string` to `string\|Closure`; constructor names/order remain `method`, `params`. | Remove or widen a subclass's redeclared `string $method` property. Use `ContainerFactory` to wire the built-in handler. |
 | Method-based setup | A string still names a public, concrete, non-static instance method. | Existing `#[SetUp('initialize')]` and named arguments retain their meaning. |
 | `Init` | Existing `Init(mixed $callable, array $params = [])` API remains. | Existing string, array and invokable values remain valid. New syntax is optional. |
 | `MapRequest::$afterMap` | New last optional `?Closure` constructor argument, defaulting to `null`; runs after mapping and before DTO creation. | No migration is required. Opt in for a computed array/DTO field set; existing mappers remain supported without deprecation. See §10. |
@@ -172,19 +172,7 @@ readonly class ProjectSetUp extends SetUp
 }
 ```
 
-Direct infrastructure consumers must also update `SetUpRunner` construction. Its mandatory third argument is the shared helper, before the existing variadic unwrappers:
-
-```php
-$callbacks = new Componenta\DI\Internal\AttributeCallbackInvoker($parameters, $invoker);
-$runner = new Componenta\DI\Resolver\Entry\SetUpRunner(
-    $invoker,
-    $resolutionParameters,
-    $callbacks,
-    ...$valueUnwrappers,
-);
-```
-
-Here `$parameters` is a `ParametersResolver`, `$invoker` is a `CallableInvokerInterface`, and `$resolutionParameters` is an `ObjectResolutionParameterStore`. The default factory creates one helper for setup, transformation and request `afterMap`; applications using the normal factory need no manual wiring. The helper remains internal and has no new public service registration. `SetUpRunner::providedParameters()` now accepts `?ReflectionFunctionAbstract` under its existing `method` argument name, so both method and function suffix metadata reach unwrappers.
+The container assembly creates the `SetUp` handler and keeps its parameter store private. Value unwrappers receive parameter metadata for methods and for a callback’s DI-resolved parameters.
 
 ## 6. Union autowiring changes selection
 
@@ -326,6 +314,6 @@ function createProfileNative(
 
 An independent custom mapper may implement `Componenta\DI\Resolver\Parameter\Request\CallbackMapperInterface` alongside `RequestDataExtractorInterface`. The optional interface extends `MapperInterface` and requires a readable `?Closure $afterMap` property. A stored readonly property satisfies that contract, so readonly custom attributes need not inherit mutable `RequestMapper`. The handler reads the callback configuration once per mapping attempt. Implementing the interface does **not** register the attribute: register an `AttributeDefinition` with `ValueProvider` explicitly, reusing the configured built-in `RequestAttributeHandler` through `AttributeDefinitionRegistry`. The [custom-source example](../plans/request-mapping-examples.md#5-optional-callback-for-a-custom-source-and-readonly-attribute) includes the complete registration.
 
-Direct `new RequestAttributeHandler($factory, $casterProvider, $validationProvider)` construction remains valid for mappers without a callback, including `MapRequest(afterMap: null)`. Enabling a callback requires the new last optional constructor argument `callbacks:`, containing the shared internal `AttributeCallbackInvoker`; `ContainerFactory` supplies it automatically. A missing binder fails before extraction, validation or transformation. An already-resolved parameter bypasses mapping entirely, including the callback getter and binder check.
+Direct `new RequestAttributeHandler($factory, $casterProvider, $validationProvider)` construction remains valid for mappers without a callback, including `MapRequest(afterMap: null)`. For a standalone mapper with `afterMap`, supply `callbacks:` as a closure that receives the configured `Closure` and the mapped array. It returns the callback result. `ContainerFactory` supplies this operation automatically. A missing binder fails before extraction, validation or transformation. An already-resolved parameter bypasses mapping entirely, including the callback getter and binder check.
 
 The callback runs once per mapping attempt, before any DTO lazy/proxy initialization. Deferred initialization retries do not replay it. Callback metadata caches retain no request, runtime closure or result; callers, exceptions and live deferred initializers can still own runtime values. With `afterMap: null`, the handler performs no callback argument copy or callback reflection. With a callback, top-level array slots are copied before invocation; nested references and objects are not deeply cloned.

@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
@@ -19,6 +20,7 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Error;
 use ReflectionFunction;
 use ReflectionParameter;
 use stdClass;
@@ -63,19 +65,12 @@ test('equal resolver priorities preserve registration order', function (): void 
     $pipeline->add($first);
     $pipeline->add($second, 0);
 
-    expect($pipeline->resolverList)->toBe([$first, $second, $lower])
-        ->and($pipeline->semanticRegistrations())->toBe([
-            ['resolver' => $first, 'priority' => 0],
-            ['resolver' => $second, 'priority' => 0],
-            ['resolver' => $lower, 'priority' => -1],
-        ])
-        ->and($pipeline->resolve((new ReflectionFunction(__NAMESPACE__ . '\pipelineAuditCallable'))->getParameters()))
-        ->toBe(['first']);
+    $declarations = (new ReflectionFunction(__NAMESPACE__ . '\pipelineAuditCallable'))->getParameters();
+    expect($pipeline->resolve($declarations))->toBe(['first']);
 
     $pipeline->seal();
     expect($pipeline->isSealed)->toBeTrue()
-        ->and($pipeline->resolve((new ReflectionFunction(__NAMESPACE__ . '\pipelineAuditCallable'))->getParameters()))
-        ->toBe(['first']);
+        ->and($pipeline->resolve($declarations))->toBe(['first']);
 });
 
 test('registration invalidates the previously observed resolver order', function (): void {
@@ -84,15 +79,18 @@ test('registration invalidates the previously observed resolver order', function
     $higher = new FixedPipelineValue('higher');
     $pipeline->add($first);
 
-    expect($pipeline->resolverList)->toBe([$first])
-        ->and($pipeline->semanticRegistrations())->toBe([['resolver' => $first, 'priority' => 0]]);
+    $declarations = (new ReflectionFunction(__NAMESPACE__ . '\pipelineAuditCallable'))->getParameters();
+    $plan = ParameterExecutionAccess::for($pipeline)->prepare($declarations);
+    expect(ParameterExecutionAccess::for($pipeline)->resolvePrepared($plan))->toBe(['first']);
     $pipeline->add($higher, 10);
 
-    expect($pipeline->resolverList)->toBe([$higher, $first])
-        ->and($pipeline->semanticRegistrations())->toBe([
-            ['resolver' => $higher, 'priority' => 10],
-            ['resolver' => $first, 'priority' => 0],
-        ]);
+    expect(ParameterExecutionAccess::for($pipeline)->resolvePrepared($plan))->toBe(['higher']);
+});
+
+test('a parameter resolver pipeline cannot be cloned with its plan owner and caches', function (): void {
+    $pipeline = new ParametersResolver(new AttributePlanBuilder(new AttributeDefinitionRegistry()));
+
+    expect(static fn(): ParametersResolver => clone $pipeline)->toThrow(Error::class, '__clone');
 });
 
 test('a resolver instance can only be registered once and sealing prevents further changes', function (): void {
@@ -136,16 +134,16 @@ test('prepared parameter plans keep their owner private and are accepted only by
         $resolver->seal();
     }
     $reflection = new ReflectionParameter(__NAMESPACE__ . '\\pipelineAuditCallable', 0);
-    $issued = $pipeline->prepare([$reflection]);
-    $foreign = $other->prepare([$reflection]);
+    $issued = ParameterExecutionAccess::for($pipeline)->prepare([$reflection]);
+    $foreign = ParameterExecutionAccess::for($other)->prepare([$reflection]);
     $unissued = new PreparedParameterPlan($issued->targets, $issued->resolverRevision, new stdClass(), false);
 
     expect(get_object_vars($issued))->not->toHaveKey('owner')
-        ->and($pipeline->isCurrentPlan($issued))->toBeTrue()
-        ->and($pipeline->resolvePrepared($issued, ['value' => 'provided']))->toBe(['provided']);
+        ->and(ParameterExecutionAccess::for($pipeline)->isCurrentPlan($issued))->toBeTrue()
+        ->and(ParameterExecutionAccess::for($pipeline)->resolvePrepared($issued, ['value' => 'provided']))->toBe(['provided']);
     foreach ([$foreign, $unissued] as $plan) {
-        expect($pipeline->isCurrentPlan($plan))->toBeFalse()
-            ->and(fn() => $pipeline->resolvePrepared($plan, ['value' => 'provided']))
+        expect(ParameterExecutionAccess::for($pipeline)->isCurrentPlan($plan))->toBeFalse()
+            ->and(fn() => ParameterExecutionAccess::for($pipeline)->resolvePrepared($plan, ['value' => 'provided']))
             ->toThrow(InvalidConfigurationException::class, 'Prepared parameter plan belongs to another resolver pipeline.');
     }
 });

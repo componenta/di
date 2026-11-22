@@ -10,6 +10,7 @@ use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\DependencyNormalizer;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class NormalizationDelegator
@@ -128,14 +129,14 @@ test('normalization rejects an empty default alias before merging it into the de
 
 test('delegator normalization preserves deferred service methods and callable object methods', function (): void {
     $object = new NormalizationDelegator();
-    expect(DependencyConfiguration::normalizeDelegatorSpecification(['future-service', 'decorate'], 'entry'))
+    expect(DependencyNormalizer::normalizeDelegatorSpecification(['future-service', 'decorate'], 'entry'))
         ->toBe(['future-service', 'decorate'])
-        ->and(DependencyConfiguration::normalizeDelegatorSpecification([$object, 'decorate'], 'entry'))
+        ->and(DependencyNormalizer::normalizeDelegatorSpecification([$object, 'decorate'], 'entry'))
         ->toBe([$object, 'decorate']);
 });
 
 test('delegator normalization rejects malformed and noncallable method pairs', function (mixed $pair): void {
-    expect(fn() => DependencyConfiguration::normalizeDelegatorSpecification($pair, 'entry'))
+    expect(fn() => DependencyNormalizer::normalizeDelegatorSpecification($pair, 'entry'))
         ->toThrow(InvalidConfigurationException::class, 'Invalid delegator for "entry": array.');
 })->with([
     'missing method' => [[new NormalizationDelegator(), 'missing']],

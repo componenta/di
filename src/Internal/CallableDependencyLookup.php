@@ -20,12 +20,12 @@ final class CallableDependencyLookup implements ContainerInterface
 
     public function has(string $id): bool
     {
-        return $this->container->has($id);
+        return AvailableEntryLookup::has($this->container, $id);
     }
 
     public function get(string $id): mixed
     {
         $this->dependencies[$id] = true;
-        return $this->container->get($id);
+        return AvailableEntryLookup::get($this->container, $id);
     }
 }

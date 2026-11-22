@@ -12,6 +12,8 @@ use Componenta\DI\Attribute\Init;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ObjectAttributeAccess;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
@@ -99,23 +101,23 @@ test('bootstrap rejects object members used before their attribute handler is re
 test('standalone attribute processors distinguish declarative metadata from executable handlers', function (): void {
     $registry = new AttributeDefinitionRegistry();
     $registry->register(new AttributeDefinition(HandlerFailureMarker::class));
-    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
     $target = handlerFailureReflection(HandlerFailureClass::class);
 
     expect($processor->hasHandlers($target))->toBeFalse();
     $executableRegistry = new AttributeDefinitionRegistry();
     $executableRegistry->register(new AttributeDefinition(HandlerFailureMarker::class, new FailingObjectHandler(new RuntimeException('registered'))));
-    $executable = new AttributeProcessor($executableRegistry, new AttributePlanBuilder($executableRegistry));
+    $executable = new AttributeProcessor(new AttributePlanBuilder($executableRegistry));
     expect($executable->hasHandlers($target))->toBeTrue();
 });
 
-test('attribute processors reject an ambiguous runtime phase', function (): void {
+test('object attribute execution rejects an ambiguous runtime phase', function (): void {
     $registry = new AttributeDefinitionRegistry();
-    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
     $class = handlerFailureReflection(HandlerFailureClass::class);
 
-    expect(fn() => $processor->process($class, AttributePhase::Both, new ObjectCreationContext($class)))
-        ->toThrow(InvalidConfigurationException::class, 'AttributeProcessor::process() requires a concrete runtime phase.');
+    expect(fn() => ObjectAttributeAccess::executor($processor)->process($class, AttributePhase::Both, ObjectCreationAccess::begin($class)->context))
+        ->toThrow(InvalidConfigurationException::class, 'Attribute execution requires a concrete runtime phase.');
 });
 
 /**

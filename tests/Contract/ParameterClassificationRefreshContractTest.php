@@ -11,6 +11,7 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -119,7 +120,7 @@ test('all parameter paths observe sources loaded incidentally while classifying 
             $arguments = match ($path) {
                 'single' => [$resolver->resolveParameter(new ParameterTarget($parameters[0]), new ParameterResolutionContext())[1]],
                 'resolve' => $resolver->resolve($parameters),
-                'prepared' => $resolver->resolvePrepared($resolver->prepare($parameters)),
+                'prepared' => ParameterExecutionAccess::for($resolver)->resolvePrepared(ParameterExecutionAccess::for($resolver)->prepare($parameters)),
                 default => throw new \LogicException('Unknown resolution path.'),
             };
             $result = $container->call(new PreparedCallable($callable), $arguments);

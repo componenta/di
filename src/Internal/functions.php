@@ -12,7 +12,6 @@ use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\Reflection\Reflection;
 use Error;
 use InvalidArgumentException;
 use ReflectionClass;
@@ -85,18 +84,12 @@ function is_magic_closure_trampoline(ReflectionFunctionAbstract $reflection): bo
         return false;
     }
 
-    try {
-        Reflection::callable($candidate);
-    } catch (InvalidArgumentException) {
-        return true;
-    }
-
-    return false;
+    return CallableReflector::reflect($candidate) === null;
 }
 
 /**
  * @internal
- * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+ * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
  */
 function describe_attribute_target(
     ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,

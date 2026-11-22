@@ -22,14 +22,17 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
+use Componenta\DI\Internal\Resolver\Entry\SetUpRunner;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
-use Componenta\DI\Resolver\Entry\SetUpRunner;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Fiber;
 use LogicException;
 use Nyholm\Psr7\ServerRequest;
 use PHPUnit\Framework\Assert;
@@ -161,11 +164,24 @@ function directRunner(array $parameters = []): array
 /** @param array<string|int,mixed> $parameters */
 function setupContext(object $entry, array $parameters): ObjectCreationContext
 {
-    $attempt = ObjectCreationContext::begin(new ReflectionClass($entry), $parameters);
+    $attempt = ObjectCreationAccess::begin(new ReflectionClass($entry), $parameters);
     $context = $attempt->context;
     $attempt->initialize($entry);
     return $context;
 }
+
+test('a setup handler uses the unfinished property phase of the owning execution', function (): void {
+    [$runner, $context, , $entry] = directRunner();
+    $attribute = new SetUp(static function (DirectTarget $instance): void {
+        $instance->seen[] = 'setup';
+    });
+    $handle = static fn() => $runner->handle($attribute, $context->class, $context);
+
+    expect(fn() => new Fiber($handle)->start())->toThrow(LogicException::class, 'another execution');
+    ObjectCreationAccess::dispatch($context, AttributePhase::AfterInstantiation, $handle);
+    expect($handle)->toThrow(LogicException::class, 'phase has completed')
+        ->and($entry->seen)->toBe(['setup']);
+});
 
 test('callback setup protects its object and preserves ambient suffix positions and typed descriptors', function (): void {
     [$runner, $context, $unwrapper, $entry] = directRunner([0 => 'wrong object', 'semantic' => 'wrong object', 1 => 'ambient position']);

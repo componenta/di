@@ -8,14 +8,19 @@ use Attribute;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\ObjectAttributeAccess;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Fiber;
 use LogicException;
 use PHPUnit\Framework\Assert;
+use ReflectionClass;
+use ReflectionProperty;
 use Reflector;
 use RuntimeException;
 use Throwable;
@@ -49,6 +54,54 @@ final readonly class CreationContextObserver implements AttributeHandlerInterfac
     }
 }
 
+final class SuspendedContext
+{
+    public ?ObjectCreationContext $observed = null;
+}
+
+test('a suspended attribute handler keeps its constructor policy in its own execution', function (): void {
+    $retained = new SuspendedContext();
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use ($retained): void {
+        $retained->observed = $context;
+        Fiber::suspend('before');
+    });
+    $container = new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->build();
+    $fiber = new Fiber(static fn(): object => $container->make(CreationContextProduct::class, ['value' => 7]));
+    expect($fiber->start())->toBe('before');
+    $context = $retained->observed ?? throw new LogicException('Expected an active context.');
+
+    expect(static fn() => $context->disableConstructor())->toThrow(LogicException::class, 'execution');
+    $fiber->resume();
+
+    expect($fiber->getReturn())->toEqual(new CreationContextProduct(7));
+});
+
+test('another fiber cannot change a staged property while its handler is suspended', function (): void {
+    $retained = new SuspendedContext();
+    $property = new ReflectionProperty(CreationContextProperties::class, 'value');
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use ($retained, $property): void {
+        $retained->observed = $context;
+        $context->claimProperty($property);
+        ObjectCreationAccess::withinProperty($context, $property, static function () use ($context, $property): void {
+            $context->writeProperty($property, 2);
+            Fiber::suspend('after');
+        });
+    });
+    $container = new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::AfterInstantiation))
+        ->build();
+    $fiber = new Fiber(static fn(): object => $container->make(CreationContextProperties::class));
+    expect($fiber->start())->toBe('after');
+    $context = $retained->observed ?? throw new LogicException('Expected an active context.');
+
+    expect(static fn() => $context->writeProperty($property, 9))->toThrow(LogicException::class, 'execution');
+    $fiber->resume();
+
+    expect(fixtureInstance($fiber->getReturn(), CreationContextProperties::class)->value)->toBe(2);
+});
+
 test('object handlers materialize public parameters once and share them with the constructor', function (bool $deferred): void {
     $observed = [];
     $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use (&$observed): void {
@@ -72,6 +125,64 @@ test('object handlers materialize public parameters once and share them with the
         ->and($observed)->toBe([true, ['value' => 7], ['value' => 7]])
         ->and($calls)->toBe($deferred ? 1 : 0);
 })->with([true, false]);
+
+test('only the creation fiber can materialize deferred parameters while its handler is suspended', function (): void {
+    $retained = new SuspendedContext();
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use ($retained): void {
+        $retained->observed = $context;
+        Fiber::suspend('before');
+    });
+    [, $runtime] = new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->assemble();
+    $fiber = new Fiber(static fn(): object => $runtime->objects->create(
+        CreationContextProduct::class,
+        resolveParameters: static fn(): array => ['value' => Fiber::getCurrent() === null ? 3 : 7],
+    ));
+    expect($fiber->start())->toBe('before');
+    $context = $retained->observed ?? throw new LogicException('Expected an active context.');
+
+    try {
+        expect(static fn(): array => $context->parameters)->toThrow(LogicException::class, 'execution');
+    } finally {
+        $fiber->resume();
+    }
+
+    expect($fiber->getReturn())->toEqual(new CreationContextProduct(7));
+});
+
+test('a retained context cannot redispatch lifecycle handlers for a completed phase', function (): void {
+    $retained = new SuspendedContext();
+    $calls = 0;
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use ($retained, &$calls): void {
+        $retained->observed = $context;
+        ++$calls;
+    });
+    [$container, $runtime] = new ContainerBuilder()->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler))->assemble();
+    $container->make(CreationContextProduct::class, ['value' => 7]);
+    $context = $retained->observed ?? throw new LogicException('Expected a completed context.');
+
+    expect(static fn() => ObjectAttributeAccess::executor($runtime->attributeProcessor)->process(
+        new ReflectionClass(CreationContextProduct::class),
+        AttributePhase::AfterInstantiation,
+        $context,
+    ))->toThrow(LogicException::class, 'phase');
+    expect($calls)->toBe(1);
+});
+
+test('editing a copy of handler parameters with reference-valued slots cannot change the constructor arguments', function (): void {
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context): void {
+        $copy = $context->parameters;
+        $copy['value'] = 11;
+    });
+    $container = new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->build();
+    $value = 7;
+
+    expect($container->make(CreationContextProduct::class, ['value' => &$value]))->toEqual(new CreationContextProduct(7))
+        ->and($value)->toBe(7);
+});
 
 test('object handlers may select the same creation strategy repeatedly', function (CreationStrategy $strategy): void {
     $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use ($strategy): void {
@@ -135,9 +246,9 @@ test('same-property reentry preserves the original value and permits a new resol
 
         $failure = null;
         try {
-            $context->resolveProperty($value, static function () use ($context, $value): void {
+            ObjectCreationAccess::withinProperty($context, $value, static function () use ($context, $value): void {
                 $context->writeProperty($value, 2);
-                $context->resolveProperty($value, static fn() => $context->writeProperty($value, 3));
+                ObjectCreationAccess::withinProperty($context, $value, static fn() => $context->writeProperty($value, 3));
                 throw new RuntimeException('The outer handler failed.');
             });
         } catch (Throwable $error) {
@@ -148,9 +259,9 @@ test('same-property reentry preserves the original value and permits a new resol
             ->and($failure)->toBeInstanceOf(LogicException::class)
             ->and($failure?->getMessage())->toContain('is already being resolved.');
 
-        $context->resolveProperty($value, static function () use ($context, $entry, $value, $other): void {
+        ObjectCreationAccess::withinProperty($context, $value, static function () use ($context, $entry, $value, $other): void {
             $context->writeProperty($value, 4);
-            $context->resolveProperty($other, static fn() => $context->writeProperty($other, 11));
+            ObjectCreationAccess::withinProperty($context, $other, static fn() => $context->writeProperty($other, 11));
             expect($entry->value)->toBe(1)->and($entry->other)->toBe(11);
         });
     });

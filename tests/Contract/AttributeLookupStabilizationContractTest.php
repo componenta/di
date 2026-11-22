@@ -146,7 +146,7 @@ test('attribute lookup retains ambiguity when a later probe reveals two equally 
 
     try {
         if ($warm) {
-            expect($container->has($target['class']))->toBeFalse();
+            expect($container->has($target['class']))->toBeTrue();
         }
         expect(fn(): object => $container->make($target['class']))
             ->toThrow(InvalidConfigurationException::class, 'matches multiple equally specific semantic definitions')

@@ -10,25 +10,33 @@ use Componenta\Config\Environment;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolverInterface;
+use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
+use Componenta\DI\Internal\MutationRetirement;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\LazyObjectFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\VirtualProxyFactoryInterface;
+use Error;
 use LogicException;
 use Psr\Container\ContainerInterface;
 use Throwable;
 use WeakReference;
+
+use function Componenta\DI\Tests\Support\assembledContainer;
 
 final class Product
 {
@@ -42,7 +50,7 @@ final class EntryResolver implements EntryResolverInterface
         return $id === 'product';
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
         if (!$this->can($id)) {
             throw new NotFoundException($id);
@@ -69,6 +77,36 @@ function publishedContainer(?EntryCache $cache): Container
     }
     return $container;
 }
+
+test('an assembled runtime cannot be used to publish another container', function (): void {
+    $firstConfig = new Config([], new Environment(['MODE' => 'first']));
+    $secondConfig = new Config([], new Environment(['MODE' => 'second']));
+    $resolveConfig = static fn(Config $config): Config => $config;
+    [$first, $runtime] = assembledContainer(config: $firstConfig);
+
+    expect($first->call($resolveConfig))->toBe($firstConfig)
+        ->and(fn(): array => assembledContainer([
+            ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE => true,
+            ConfigKey::PARAMETER_RESOLVERS_REPLACE => true,
+        ], $secondConfig, runtime: $runtime))->toThrow(InvalidConfigurationException::class, 'already belongs to an assembly');
+
+    [$second] = assembledContainer(config: $secondConfig);
+    expect($second->call($resolveConfig))->toBe($secondConfig)
+        ->and($first->call($resolveConfig))->toBe($firstConfig);
+});
+
+test('a resolution runtime cannot be shallow-cloned before assembly', function (): void {
+    $runtime = new ResolutionRuntime();
+    $copy = static fn(object $source): object => clone $source;
+
+    expect(fn(): object => $copy($runtime))->toThrow(Error::class, '__clone');
+});
+
+test('a cycle guard cannot share the resolution stack with a shallow copy', function (): void {
+    $copy = static fn(object $source): object => clone $source;
+
+    expect(fn(): object => $copy(new CycleGuard()))->toThrow(Error::class, '__clone');
+});
 
 test('cold collaborator autoloading never exposes an unusable published container', function (): void {
     $root = dirname(__DIR__, 2);
@@ -182,7 +220,7 @@ test('an attached runtime collaborator cannot be reused and rejection leaves oth
     $firstDelegators = new DelegatorRegistry($executor);
     $firstExternal = new ExternalContainerRegistry();
     $firstGuard = new CycleGuard();
-    $first = new Container(
+    $first = ContainerConstruction::create(
         new EntryResolver(),
         $firstAliases,
         $executor,
@@ -200,7 +238,7 @@ test('an attached runtime collaborator cannot be reused and rejection leaves oth
     $delegators = new DelegatorRegistry($executor);
     $external = new ExternalContainerRegistry();
     $guard = new CycleGuard();
-    $build = static fn(bool $reuse): Container => new Container(
+    $build = static fn(bool $reuse): Container => ContainerConstruction::create(
         $root,
         $reuse && $collaborator === 'aliases' ? $firstAliases : $aliases,
         $executor,
@@ -225,13 +263,64 @@ test('an attached runtime collaborator cannot be reused and rejection leaves oth
     'cycle guard' => ['guard', CycleGuard::class],
 ]);
 
+test('retained runtime collaborators cannot mutate the published container', function (): void {
+    $executor = (new ContainerBuilder())->build();
+    $cache = new EntryCache();
+    $delegators = new DelegatorRegistry($executor);
+    $external = new ExternalContainerRegistry();
+    $guard = new CycleGuard();
+    $container = ContainerConstruction::create(new EntryResolver(), new AliasResolver(), $executor, $cache, $delegators, $external, $guard);
+    $id = ContainerInterface::class;
+    $replacement = new Product();
+    $prepared = $delegators->prepare($id, static fn(): Product => $replacement);
+    $provider = (new ContainerBuilder())->addService('external', $replacement)->build();
+
+    expect(fn() => $cache->putBase($id, $replacement))->toThrow(InvalidConfigurationException::class)
+        ->and(fn() => $cache->putResolved($id, $id, $replacement))->toThrow(InvalidConfigurationException::class)
+        ->and(fn() => $cache->__construct([$id => $replacement]))->toThrow(InvalidConfigurationException::class)
+        ->and(fn() => $delegators->register($id, $prepared, new MutationRetirement($id)))->toThrow(InvalidConfigurationException::class)
+        ->and(fn() => $external->register($provider))->toThrow(InvalidConfigurationException::class)
+        ->and(fn() => $guard->enter('product'))->toThrow(InvalidConfigurationException::class)
+        ->and(fn() => $guard->leave('product'))->toThrow(InvalidConfigurationException::class)
+        ->and($container->get($id))->toBe($container)
+        ->and($container->has('external'))->toBeFalse();
+
+    $container->set('value', 'before');
+    $container->delegator('value', static fn(string $value): string => $value . ':after');
+    $container->addContainer($provider);
+
+    expect($container->make('product'))->toBeInstanceOf(Product::class)
+        ->and($container->get('value'))->toBe('before:after')
+        ->and($container->get('external'))->toBe($replacement);
+});
+
+test('direct construction rejects a cache containing previously resolved entries', function (): void {
+    $cache = new EntryCache();
+    $id = ContainerInterface::class;
+    $cache->putResolved($id, $id, new Product());
+    $executor = (new ContainerBuilder())->build();
+
+    expect(fn() => ContainerConstruction::create(new EntryResolver(), new AliasResolver(), $executor, $cache))
+        ->toThrow(InvalidConfigurationException::class);
+});
+
+test('direct construction requires delegators to be registered through the container', function (): void {
+    $executor = (new ContainerBuilder())->build();
+    $delegators = new DelegatorRegistry($executor);
+    $id = ContainerInterface::class;
+    $delegators->register($id, $delegators->prepare($id, static fn(): Product => new Product()), new MutationRetirement($id));
+
+    expect(fn() => ContainerConstruction::create(new EntryResolver(), new AliasResolver(), $executor, delegators: $delegators))
+        ->toThrow(InvalidConfigurationException::class);
+});
+
 test('editing an attached alias requires a container mutation and keeps an independent snapshot writable', function (): void {
     $aliases = new AliasResolver();
     $aliases->set('requested', 'first');
     $first = new Product();
     $second = new Product();
     $unrelated = new Product();
-    $container = new Container(
+    $container = ContainerConstruction::create(
         new EntryResolver(),
         $aliases,
         (new ContainerBuilder())->build(),
@@ -261,7 +350,7 @@ test('editing an attached alias requires a container mutation and keeps an indep
 test('collaborator ownership does not keep a container or cache alive', function (): void {
     $aliases = new AliasResolver();
     $cache = new EntryCache();
-    $container = new Container(new EntryResolver(), $aliases, (new ContainerBuilder())->build(), cache: $cache);
+    $container = ContainerConstruction::create(new EntryResolver(), $aliases, (new ContainerBuilder())->build(), cache: $cache);
     $containerRef = WeakReference::create($container);
     $cacheRef = WeakReference::create($cache);
     unset($container, $cache);
@@ -289,7 +378,7 @@ test('retiring a core seed can resolve create and initialize lazy objects throug
     $cache = new EntryCache([ContainerInterface::class => $seed]);
     unset($seed);
 
-    $container = new Container(new EntryResolver(), new AliasResolver(), (new ContainerBuilder())->build(), cache: $cache);
+    $container = ContainerConstruction::create(new EntryResolver(), new AliasResolver(), (new ContainerBuilder())->build(), cache: $cache);
 
     expect($shared)->toBeInstanceOf(Product::class)
         ->and($container->get('product'))->toBe($shared)
@@ -332,7 +421,7 @@ test('seed retirement observes the complete core publication and preserves neste
         'application' => 'original',
     ]);
 
-    $container = new Container(
+    $container = ContainerConstruction::create(
         new EntryResolver(),
         new AliasResolver(),
         (new ContainerBuilder())->build(),
@@ -364,7 +453,7 @@ test('a throwing bootstrap seed preserves its native exception after publishing 
     $caught = null;
 
     try {
-        new Container(new EntryResolver(), new AliasResolver(), (new ContainerBuilder())->build(), cache: $cache);
+        ContainerConstruction::create(new EntryResolver(), new AliasResolver(), (new ContainerBuilder())->build(), cache: $cache);
     } catch (Throwable $error) {
         $caught = $error;
     }

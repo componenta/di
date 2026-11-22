@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -23,16 +24,17 @@ final class ArrayTypedResolver implements ParameterResolverInterface
             return null;
         }
 
+        $provided = ParameterContextAccess::provided($context);
         foreach ($target->typeNames as $typeName) {
             if (RequestParameter::isTransportType($typeName)) {
                 continue;
             }
 
-            if (!isset($context->provided[$typeName]) || !array_key_exists($typeName, $context->provided)) {
+            if (!isset($provided[$typeName]) || !array_key_exists($typeName, $provided)) {
                 continue;
             }
 
-            $value = $context->provided[$typeName];
+            $value = $provided[$typeName];
 
             if (is_object($value)
                 && $value instanceof $typeName

@@ -13,6 +13,7 @@ use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\NoConstructor;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -32,7 +33,7 @@ test('object handler interfaces reject method targets unsupported by their attri
     if (!$handler instanceof AttributeHandlerInterface) {
         throw new LogicException('Expected an object handler.');
     }
-    $attempt = ObjectCreationContext::begin(new ReflectionClass(HandlerTargetFixture::class));
+    $attempt = ObjectCreationAccess::begin(new ReflectionClass(HandlerTargetFixture::class));
     $attempt->initialize(new HandlerTargetFixture());
     $context = $attempt->context;
     $target = new ReflectionMethod(HandlerTargetFixture::class, 'run');
@@ -64,5 +65,5 @@ test('class creation handlers reject an unrelated attribute even on a class targ
 /** @param class-string $class */
 function handlerTargetContext(string $class): ObjectCreationContext
 {
-    return new ObjectCreationContext(new ReflectionClass($class));
+    return ObjectCreationAccess::begin(new ReflectionClass($class))->context;
 }

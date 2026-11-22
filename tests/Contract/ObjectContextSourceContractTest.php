@@ -14,11 +14,13 @@ use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
-use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\Resolver\Entry\ConstructionParameters;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
+use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Entry\EntryParametersFactoryInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
@@ -91,21 +93,25 @@ abstract class Product
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class DeferredMapper extends MapQueryString {}
 
-final class DeferredFactory implements FactoryInterface
+final class DeferredFactory implements EntryParametersFactoryInterface
 {
-    /** @var array<string|int,mixed> */
-    private array $current = [];
+    private EntryParameters $current;
     public int $suppliers = 0;
 
     public function __construct(private readonly ObjectPipeline $pipeline) {}
 
     public function make(string $entry, array $params = []): object
     {
+        return $this->makeEntry($entry, ConstructionParameters::capture($params));
+    }
+
+    public function makeEntry(string $entry, EntryParameters $parameters): object
+    {
         if (!class_exists($entry)) {
             throw new LogicException('Expected a declared deferred DTO.');
         }
-        $this->current = $params;
-        return $this->pipeline->create($entry, resolveParameters: function (): array {
+        $this->current = $parameters;
+        return $this->pipeline->create($entry, resolveParameters: function (): EntryParameters {
             ++$this->suppliers;
             return $this->current;
         });
@@ -339,7 +345,7 @@ test('deferred supplier source discovery rejects mapped context before handler s
         };
         $pipeline = builder($uncached)->assemble()[1]->objects;
         Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
-        $factory = new class ($pipeline, $enableSource) implements FactoryInterface {
+        $factory = new class ($pipeline, $enableSource) implements EntryParametersFactoryInterface {
             public int $suppliers = 0;
 
             public function __construct(
@@ -349,13 +355,18 @@ test('deferred supplier source discovery rejects mapped context before handler s
 
             public function make(string $entry, array $params = []): object
             {
+                return $this->makeEntry($entry, ConstructionParameters::capture($params));
+            }
+
+            public function makeEntry(string $entry, EntryParameters $parameters): object
+            {
                 if (!class_exists($entry)) {
                     throw new LogicException('Expected a declared supplier discovery DTO.');
                 }
-                return $this->pipeline->create($entry, resolveParameters: function () use ($params): array {
+                return $this->pipeline->create($entry, resolveParameters: function () use ($parameters): EntryParameters {
                     ++$this->suppliers;
                     ($this->beforeSupply)();
-                    return $params;
+                    return $parameters;
                 });
             }
         };

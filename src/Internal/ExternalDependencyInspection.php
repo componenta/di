@@ -50,7 +50,7 @@ final readonly class ExternalDependencyInspection
                 unset($pending[$dependencyId]);
                 do {
                     $revision = $this->currentRegistry()->revision ?? 0;
-                    $owner = $this->currentRegistry()?->findOwning($dependencyId, $mayInspect);
+                    $owner = $this->currentRegistry()?->findOwning($dependencyId, $mayInspect, requireResolvable: true);
                     if ($this->currentRegistry()?->contains($container) === true) {
                         return [];
                     }
@@ -60,7 +60,7 @@ final readonly class ExternalDependencyInspection
                     $pending[$dependencyId] = true;
                     continue;
                 }
-                if ($owner === null && $container->has($dependencyId)) {
+                if ($owner === null && AvailableEntryLookup::has($container, $dependencyId)) {
                     $candidates[$dependencyId] = true;
                 }
                 if ($this->currentRegistry()?->contains($container) === true) {
@@ -82,7 +82,7 @@ final readonly class ExternalDependencyInspection
                     $protectedCandidates[$dependencyId] = true;
                     continue;
                 }
-                $owner = $this->currentRegistry()?->findOwning($dependencyId, $mayInspect);
+                $owner = $this->currentRegistry()?->findOwning($dependencyId, $mayInspect, requireResolvable: true);
                 if ($this->currentRegistry()?->contains($container) === true) {
                     return [];
                 }

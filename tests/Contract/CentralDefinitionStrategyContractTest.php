@@ -11,8 +11,10 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\MutationRetirementException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\DefinitionResolverInterface;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
@@ -74,9 +76,9 @@ final class ValueFallback implements EntryResolverInterface
         return $id === 'entry';
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
-        return ['fallback', $params];
+        return ['fallback', $params->values];
     }
 }
 
@@ -204,7 +206,7 @@ test('standalone registration cannot publish after validation attaches the compo
     };
     $strategy->onValidate = static function (string $id, ValueDefinition $definition) use ($root, $executor, $state): void {
         if ($definition->value === 'outer') {
-            $state->container = new Container($root, new AliasResolver(), $executor);
+            $state->container = ContainerConstruction::create($root, new AliasResolver(), $executor);
             $state->container->set($id, new ValueDefinition('nested'));
         }
     };

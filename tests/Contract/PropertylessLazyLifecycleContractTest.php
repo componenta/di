@@ -10,12 +10,13 @@ use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\SetUp;
-use Componenta\DI\Container;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\ProxyFactoryInterface;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
@@ -275,12 +276,12 @@ test('container delegates propertyless targets and callbacks to its supplied pro
             return false;
         }
 
-        public function resolve(string $id, array $params = []): never
+        public function resolve(string $id, EntryParameters $params): never
         {
             throw new NotFoundException('This test only requests the supplied proxy factory.');
         }
     };
-    $container = new Container($resolver, new AliasResolver(), (new ContainerBuilder())->build(), proxyFactory: $factory);
+    $container = ContainerConstruction::create($resolver, new AliasResolver(), (new ContainerBuilder())->build(), proxyFactory: $factory);
     $calls = [];
 
     $ghost = $container->makeLazy(PropertylessCustomFactoryTarget::class, static function (PropertylessCustomFactoryTarget $target) use (&$calls, $returned): void {

@@ -6,7 +6,7 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\ExceptionInterface;
 
-/** Creates fresh object instances through the DI resolution pipeline. */
+/** Resolves objects through the DI construction pipeline. Factories can reuse instances. */
 interface FactoryInterface
 {
     /**

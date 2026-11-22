@@ -7,6 +7,8 @@ namespace Componenta\DI\Tests\Contract\DependencyNormalizationOwnership;
 use Componenta\Config\Config;
 use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -87,3 +89,18 @@ test('each factory build owns alias routing before extension callbacks mutate re
         ->and($initial->get('config'))->toBe($config)
         ->and($next->get('config'))->toBe($config);
 });
+
+test('validated capability lists retain their values when caller reference slots are rebound', function (bool $inPlace): void {
+    $policy = new CapabilityPolicy(ValueProvider::class, 1);
+    $slot = $policy;
+    $sections = ['attribute_capabilities' => [&$slot]];
+
+    if ($inPlace) {
+        DependencyConfiguration::assertShape($sections);
+    } else {
+        $sections = DependencyConfiguration::normalize($sections);
+    }
+    $slot = null;
+
+    expect($sections)->toBe(['attribute_capabilities' => [$policy]]);
+})->with(['assert shape' => true, 'normalize' => false]);

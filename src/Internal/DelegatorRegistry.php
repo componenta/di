@@ -7,7 +7,6 @@ namespace Componenta\DI\Internal;
 use Closure;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\CallableResolverInterface;
-use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\DelegatorException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Error;
@@ -45,6 +44,10 @@ final class DelegatorRegistry
     /** @var array<string, true> */
     private array $refinableDependencies = [];
 
+    public bool $hasRegistrations {
+        get => $this->raw !== [];
+    }
+
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
         private readonly ?ContainerInterface $lookup = null,
@@ -53,14 +56,15 @@ final class DelegatorRegistry
     /** @return PreparedDelegator */
     public function prepare(string $id, mixed $delegator): array
     {
-        $delegator = DependencyConfiguration::normalizeDelegatorSpecification($delegator, $id);
+        $delegator = DependencyNormalizer::normalizeDelegatorSpecification($delegator, $id);
         return ['delegator' => $delegator, 'dependencies' => self::dependencyIds($delegator)];
     }
 
     /** @param PreparedDelegator $prepared */
-    public function register(string $id, array $prepared, MutationRetirement $retirement): void
+    public function register(string $id, array $prepared, MutationRetirement $retirement, ?object $authority = null): void
     {
-        $this->invalidate($id, $retirement);
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $this->invalidateChain($id, $retirement);
         $delegator = $prepared['delegator'];
         $this->raw[$id][] = $delegator;
         $dependencies = $prepared['dependencies'];
@@ -77,7 +81,13 @@ final class DelegatorRegistry
         }
     }
 
-    public function invalidate(string $id, MutationRetirement $retirement): void
+    public function invalidate(string $id, MutationRetirement $retirement, ?object $authority = null): void
+    {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $this->invalidateChain($id, $retirement);
+    }
+
+    private function invalidateChain(string $id, MutationRetirement $retirement): void
     {
         if (isset($this->callables[$id])) {
             $retirement->retain($this->callables[$id]);
@@ -147,8 +157,9 @@ final class DelegatorRegistry
      * @param iterable<string> $dependencyIds
      * @return list<string>
      */
-    public function invalidateDependencies(iterable $dependencyIds, MutationRetirement $retirement): array
+    public function invalidateDependencies(iterable $dependencyIds, MutationRetirement $retirement, ?object $authority = null): array
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         /** @var list<string> $queue */
         $queue = [];
         /** @var array<string, true> $queued */
@@ -171,7 +182,7 @@ final class DelegatorRegistry
                 $entry = (string) $entry;
                 if (!isset($entries[$entry])) {
                     $entries[$entry] = true;
-                    $this->invalidate($entry, $retirement);
+                    $this->invalidateChain($entry, $retirement);
                 }
 
                 if (!isset($queued[$entry])) {
@@ -185,11 +196,12 @@ final class DelegatorRegistry
     }
 
     /** @throws DelegatorException */
-    public function apply(string $id, mixed $entry, ContainerInterface $container): mixed
+    public function apply(string $id, mixed $entry, ContainerInterface $container, ?object $authority = null): mixed
     {
         if (!isset($this->raw[$id])) {
             return $entry;
         }
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
 
         $callables = $this->callables[$id] ?? null;
         if ($callables === null) {

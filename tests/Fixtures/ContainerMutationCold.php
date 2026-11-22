@@ -10,9 +10,11 @@ use Componenta\DI\CallableResolverInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\MutationRetirement;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\SubprocessAutoload;
 use LogicException;
@@ -85,13 +87,13 @@ $resolver = new class () implements EntryResolverInterface {
         return false;
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
         throw new LogicException('The cached service must not reach the resolver.');
     }
 };
 $executor = new Executor();
-$container = new Container(
+$container = ContainerConstruction::create(
     $resolver,
     new AliasResolver(['public' => 'ordinary', 'selected' => 'owner']),
     $executor,

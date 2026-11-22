@@ -8,9 +8,13 @@ use Closure;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionFunction;
+use ReflectionMethod;
 
 /**
  * Binds one semantic argument while resolving only the callback's DI suffix.
@@ -19,10 +23,14 @@ use ReflectionFunction;
  */
 final readonly class AttributeCallbackInvoker
 {
+    private ParameterExecution $parameters;
+
     public function __construct(
-        private ParametersResolver $parameters,
+        ParametersResolver $parameters,
         private CallableInvokerInterface $invoker,
-    ) {}
+    ) {
+        $this->parameters = ParameterExecutionAccess::for($parameters);
+    }
 
     /**
      * @param array<string|int,mixed> $providedParameters
@@ -35,6 +43,7 @@ final readonly class AttributeCallbackInvoker
         array $providedParameters = [],
         ?string $diagnosticOwner = null,
         ?Closure $beforeInvocation = null,
+        ?MappedRequestContext $provenance = null,
     ): mixed {
         $declarations = new ReflectionFunction($callback)->getParameters();
         if ($declarations === []) {
@@ -64,9 +73,22 @@ final readonly class AttributeCallbackInvoker
             $providedParameters,
             $diagnosticOwner,
             $beforeInvocation,
+            $provenance,
         );
 
         $beforeInvocation?->__invoke();
         return $this->invoker->call(new PreparedCallable($callback), $arguments);
+    }
+
+    /** @param array<string|int,mixed> $providedParameters */
+    public function invokeMappedMethod(
+        object $entry,
+        ReflectionMethod $method,
+        array $providedParameters,
+        MappedRequestContext $provenance,
+    ): void {
+        $plan = $this->parameters->prepare($method->getParameters());
+        $arguments = $this->parameters->resolvePrepared($plan, $providedParameters, $provenance);
+        $this->invoker->call(new PreparedCallable($method->getClosure($entry)), $arguments);
     }
 }

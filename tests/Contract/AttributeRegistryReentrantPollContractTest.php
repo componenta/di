@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\AttributeRegistryReentrantPoll;
 
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Internal\AttributeRegistryAccess;
 
 test('one registry poll notices an earlier name declared by a later loader', function (bool $interface): void {
     $suffix = bin2hex(random_bytes(6));
@@ -18,7 +19,7 @@ test('one registry poll notices an earlier name declared by a later loader', fun
     $registry->definition($earlier);
     $registry->definition($later);
     $registry->definition($missing);
-    $before = $registry->revision;
+    $before = AttributeRegistryAccess::refreshAvailability($registry);
     $loads = [$earlier => 0, $later => 0, $missing => 0];
     $loader = static function (string $requested) use ($earlier, $later, $interface, &$loads): void {
         if (array_key_exists($requested, $loads)) {
@@ -36,11 +37,11 @@ test('one registry poll notices an earlier name declared by a later loader', fun
     };
     spl_autoload_register($loader);
     try {
-        expect($registry->revision)->toBe($before + 2)
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before + 2)
             ->and(class_exists($earlier, false) || interface_exists($earlier, false))->toBeTrue()
             ->and($loads)->toBe([$earlier => 2, $later => 1, $missing => 2]);
 
-        expect($registry->revision)->toBe($before + 2)
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before + 2)
             ->and($loads)->toBe([$earlier => 2, $later => 1, $missing => 4]);
     } finally {
         spl_autoload_unregister($loader);
@@ -58,7 +59,7 @@ test('one registry poll checks a name added reentrantly after its loader becomes
     $registry = new AttributeDefinitionRegistry();
     $registry->definition($missing);
     $registry->definition($trigger);
-    $before = $registry->revision;
+    $before = AttributeRegistryAccess::refreshAvailability($registry);
     $ready = false;
     $trackedBeforeReady = false;
     $loads = [$missing => 0, $trigger => 0, $appended => 0];
@@ -76,12 +77,12 @@ test('one registry poll checks a name added reentrantly after its loader becomes
     };
     spl_autoload_register($loader);
     try {
-        expect($registry->revision)->toBe($before + 2)
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before + 2)
             ->and($trackedBeforeReady)->toBeTrue()
             ->and(class_exists($appended, false) || interface_exists($appended, false))->toBeTrue()
             ->and($loads)->toBe([$missing => 2, $trigger => 1, $appended => 1]);
 
-        expect($registry->revision)->toBe($before + 2)
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before + 2)
             ->and($loads)->toBe([$missing => 4, $trigger => 1, $appended => 1]);
     } finally {
         spl_autoload_unregister($loader);

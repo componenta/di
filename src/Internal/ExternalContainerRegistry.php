@@ -21,8 +21,9 @@ final class ExternalContainerRegistry
     /** @var array<string, int> */
     private array $ownershipChanges = [];
 
-    public function register(ContainerInterface $container): void
+    public function register(ContainerInterface $container, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $id = spl_object_id($container);
         if (!isset($this->containers[$id])) {
             $this->containers[$id] = $container;
@@ -40,8 +41,9 @@ final class ExternalContainerRegistry
     }
 
     /** @param non-empty-list<string> $ids */
-    public function noteOwnershipChanges(array $ids): void
+    public function noteOwnershipChanges(array $ids, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         ++$this->ownershipRevision;
         foreach ($ids as $id) {
             $this->ownershipChanges[$id] = $this->ownershipRevision;
@@ -54,7 +56,7 @@ final class ExternalContainerRegistry
     }
 
     /** @param Closure(string):bool|null $mayInspect */
-    public function findOwning(string $id, ?Closure $mayInspect = null): ?ContainerInterface
+    public function findOwning(string $id, ?Closure $mayInspect = null, bool $requireResolvable = false): ?ContainerInterface
     {
         $containers = $this->containers;
         $inspected = count($containers);
@@ -63,7 +65,7 @@ final class ExternalContainerRegistry
                 if ($mayInspect !== null && !$mayInspect($id)) {
                     return null;
                 }
-                if ($container->has($id)) {
+                if ($requireResolvable ? AvailableEntryLookup::has($container, $id) : $container->has($id)) {
                     return $container;
                 }
             }

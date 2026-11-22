@@ -19,12 +19,14 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
+use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use PHPUnit\Framework\Assert;
+use ReflectionMethod;
 use stdClass;
 use WeakReference;
 
@@ -205,6 +207,53 @@ function callLabel(Container $di, ParametersResolver $parameters, Closure $call,
     $binder = new AttributeCallbackInvoker($parameters, $di);
     return $binder->invoke($call, null);
 }
+
+test('bootstrap rechecks the original live native closure-method declaration after releasing its proof', function (string $witness): void {
+    $alias = __NAMESPACE__ . '\\LiveClosureAlias_' . bin2hex(random_bytes(5));
+    $callback = static fn(#[LabelPolicy] string $label = 'fallback'): string => $label;
+    $parameter = new ReflectionMethod($callback, '__invoke')->getParameters()[0];
+    $runtime = new ResolutionRuntime();
+    $runtime->parameters->add(new LabelResolver($alias), 100);
+    $runtime->parameters->add(new DefaultValueResolver());
+    $target = $witness === 'target' ? $runtime->parameters->target($parameter) : null;
+
+    expect($target === null ? $runtime->parameters->resolve([$parameter]) : $runtime->parameters->resolveTargets([$target]))->toBe([]);
+    if ($target !== null) {
+        $parameter = null;
+    }
+    $runtime->parameters->seal();
+
+    expect(fn() => $runtime->bootstrapGuard->finish(static function () use ($alias, $parameter, $witness): void {
+        if ($witness === 'retargeted') {
+            $parameter?->__construct(__NAMESPACE__ . '\\liveAnchor', 0);
+        }
+        class_alias(LabelPolicy::class, $alias);
+    }))->toThrow(InvalidConfigurationException::class, LabelResolver::class);
+    expect($target->name ?? $parameter?->getName())->toBe($witness === 'retargeted' ? 'anchor' : 'label');
+})->with(['live target' => 'target', 'live reflection parameter' => 'parameter', 'retargeted reflection parameter' => 'retargeted']);
+
+test('bootstrap releases temporary native closure-method captures before accepting a live classification', function (): void {
+    $alias = __NAMESPACE__ . '\\ReleasedClosureAlias_' . bin2hex(random_bytes(5));
+    $runtime = new ResolutionRuntime();
+    $runtime->parameters->add(new LabelResolver($alias), 100);
+    $runtime->parameters->add(new DefaultValueResolver());
+
+    $live = static fn(#[LabelPolicy] string $label = 'live'): string => $label;
+    $parameter = new ReflectionMethod($live, '__invoke')->getParameters()[0];
+    expect($runtime->parameters->resolve([$parameter]))->toBe([]);
+
+    $capture = new ProofCapture(static fn() => class_alias(LabelPolicy::class, $alias));
+    $weak = WeakReference::create($capture);
+    $temporary = static fn(#[LabelPolicy] string $label = 'temporary'): string => $label . $capture::class;
+    expect($runtime->parameters->resolve(new ReflectionMethod($temporary, '__invoke')->getParameters()))->toBe([]);
+    unset($temporary, $capture);
+    $runtime->parameters->seal();
+
+    expect(fn() => $runtime->bootstrapGuard->finish(static function (): void {}))
+        ->toThrow(InvalidConfigurationException::class, LabelResolver::class)
+        ->and($weak->get())->toBeNull()
+        ->and($parameter->getName())->toBe('label');
+});
 
 final readonly class ReleasedLabel
 {

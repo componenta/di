@@ -22,7 +22,7 @@ use SplMinHeap;
 final class AttributeOrdering
 {
     /**
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param list<AttributeUsage> $usages
      * @return list<AttributeUsage>
      */
@@ -98,7 +98,7 @@ final class AttributeOrdering
     }
 
     /**
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param list<AttributeUsage> $usages
      * @param array<int, array<int, true>> $edges
      */

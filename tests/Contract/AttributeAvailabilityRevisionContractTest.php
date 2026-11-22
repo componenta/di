@@ -11,6 +11,7 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\NoConstructor;
+use Componenta\DI\Internal\AttributeRegistryAccess;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
 use LogicException;
@@ -117,7 +118,7 @@ test('availability revision reflects every declaration discovered by the current
     $attribute = __NAMESPACE__ . '\\' . $shortName;
     $registry = new AttributeDefinitionRegistry();
     $registry->definition($attribute);
-    $before = $registry->revision;
+    $before = AttributeRegistryAccess::refreshAvailability($registry);
     $loads = 0;
     $loader = static function (string $requested) use ($attribute, $shortName, $form, &$loads): void {
         if ($requested === $attribute && ++$loads === 2) {
@@ -127,8 +128,8 @@ test('availability revision reflects every declaration discovered by the current
 
     spl_autoload_register($loader);
     try {
-        expect($registry->revision)->toBe($before + 1)
-            ->and($registry->revision)->toBe($before + 1)
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before + 1)
+            ->and(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before + 1)
             ->and($loads)->toBe(2);
     } finally {
         spl_autoload_unregister($loader);
@@ -140,7 +141,7 @@ test('an unavailable attribute keeps the existing two autoload attempts per poll
     $attribute = __NAMESPACE__ . '\\Missing_' . bin2hex(random_bytes(6));
     $registry = new AttributeDefinitionRegistry();
     $registry->definition($attribute);
-    $before = $registry->revision;
+    $before = AttributeRegistryAccess::refreshAvailability($registry);
     $loads = 0;
     $loader = static function (string $requested) use ($attribute, &$loads): void {
         if ($requested === $attribute) {
@@ -150,7 +151,7 @@ test('an unavailable attribute keeps the existing two autoload attempts per poll
 
     spl_autoload_register($loader);
     try {
-        expect($registry->revision)->toBe($before)->and($loads)->toBe(2);
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe($before)->and($loads)->toBe(2);
     } finally {
         spl_autoload_unregister($loader);
     }
@@ -173,7 +174,7 @@ test('availability polling preserves an exception from the fallback autoload att
     try {
         $caught = null;
         try {
-            $revision = $registry->revision;
+            $revision = AttributeRegistryAccess::refreshAvailability($registry);
             throw new LogicException('Expected an autoload failure, got revision ' . $revision . '.');
         } catch (RuntimeException $exception) {
             $caught = $exception;
@@ -189,7 +190,7 @@ test('availability polling preserves an exception from the fallback autoload att
 });
 
 test('loaded-only availability detects late declarations across Fibers with many unresolved names', function (string $form): void {
-    $registry = AttributeDefinitionRegistry::withTargetedDiscovery();
+    $registry = new AttributeDefinitionRegistry(targetedDiscovery: true);
     addUnavailableAttributes($registry);
     $shortName = 'FiberDeclaration_' . bin2hex(random_bytes(6));
     /** @var class-string $attribute */
@@ -199,10 +200,10 @@ test('loaded-only availability detects late declarations across Fibers with many
     $registry->definition($attribute);
     $registry->definition($lower);
 
-    expect($registry->revision)->toBe(0);
+    expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe(0);
     $fiber = new Fiber(static function () use ($registry): int {
-        Fiber::suspend($registry->revision);
-        return $registry->revision;
+        Fiber::suspend(AttributeRegistryAccess::refreshAvailability($registry));
+        return AttributeRegistryAccess::refreshAvailability($registry);
     });
     expect($fiber->start())->toBe(0);
 
@@ -217,7 +218,7 @@ test('loaded-only availability detects late declarations across Fibers with many
         declareLateAttribute($shortName, $form);
         $fiber->resume();
         expect($fiber->getReturn())->toBe(2)
-            ->and($registry->revision)->toBe(2)
+            ->and(AttributeRegistryAccess::refreshAvailability($registry))->toBe(2)
             ->and($loads)->toBe(0);
     } finally {
         spl_autoload_unregister($loader);
@@ -225,26 +226,30 @@ test('loaded-only availability detects late declarations across Fibers with many
 })->with(['class', 'interface', 'alias']);
 
 test('loaded-only availability tracks aliases that PHP omits from its declaration lists', function (): void {
-    $registry = AttributeDefinitionRegistry::withTargetedDiscovery();
+    $registry = new AttributeDefinitionRegistry(targetedDiscovery: true);
     addUnavailableAttributes($registry);
-    expect($registry->revision)->toBe(0);
+    expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe(0);
 
     /** @var class-string $attribute */
     $attribute = "\0Optional_" . bin2hex(random_bytes(6));
     $registry->definition($attribute);
-    expect($registry->revision)->toBe(0);
+    expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe(0);
 
     $aliased = class_alias(UnusedMarker::class, $attribute, autoload: false);
-    $revisions = [$registry->revision, $registry->revision];
+    $revisions = [AttributeRegistryAccess::refreshAvailability($registry), AttributeRegistryAccess::refreshAvailability($registry)];
 
     expect($aliased)->toBeTrue()->and($revisions)->toBe([1, 1]);
 });
 
 test('targeted definition lookup releases the declaration snapshot with the last pending name', function (): void {
-    $registry = AttributeDefinitionRegistry::withTargetedDiscovery();
+    $registry = new AttributeDefinitionRegistry(targetedDiscovery: true);
     $attributes = addUnavailableAttributes($registry);
-    $snapshot = new ReflectionProperty(AttributeDefinitionRegistry::class, 'checkedDeclarations');
-    expect($registry->revision)->toBe(0)->and($snapshot->getValue($registry))->toBeArray();
+    $definitions = new ReflectionProperty($registry, 'definitions')->getValue($registry);
+    if (!is_object($definitions)) {
+        throw new \LogicException('Expected the registry definition state.');
+    }
+    $snapshot = new ReflectionProperty($definitions, 'checkedDeclarations');
+    expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe(0)->and($snapshot->getValue($definitions))->toBeArray();
 
     $loader = static function (string $name) use ($attributes): void {
         if (isset($attributes[$name])) {
@@ -260,7 +265,7 @@ test('targeted definition lookup releases the declaration snapshot with the last
         spl_autoload_unregister($loader);
     }
 
-    expect($snapshot->getValue($registry))->toBeNull()->and($registry->revision)->toBe(count($attributes));
+    expect($snapshot->getValue($definitions))->toBeNull()->and(AttributeRegistryAccess::refreshAvailability($registry))->toBe(count($attributes));
 });
 
 test('loaded-only availability preserves legacy fallback probes and same-poll reentrant discovery', function (): void {
@@ -275,7 +280,7 @@ test('loaded-only availability preserves legacy fallback probes and same-poll re
     $registry->definition($first);
     addUnavailableAttributes($registry);
     $registry->definition($last);
-    expect($registry->refreshLoaded())->toBe(0);
+    expect(AttributeRegistryAccess::refreshLoaded($registry))->toBe(0);
 
     $loads = [$first => 0, $last => 0, $nested => 0];
     $loader = static function (string $name) use ($registry, $first, $last, $nested, &$loads): void {
@@ -292,8 +297,8 @@ test('loaded-only availability preserves legacy fallback probes and same-poll re
     };
     spl_autoload_register($loader, prepend: true);
     try {
-        expect($registry->revision)->toBe(2)
-            ->and($registry->refreshLoaded())->toBe(2)
+        expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe(2)
+            ->and(AttributeRegistryAccess::refreshLoaded($registry))->toBe(2)
             ->and($loads)->toBe([$first => 2, $last => 2, $nested => 1]);
     } finally {
         spl_autoload_unregister($loader);

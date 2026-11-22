@@ -11,6 +11,7 @@ use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -48,7 +49,7 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             } elseif ($target->variadic) {
                 $value = ParameterAttributeValue::resolved([]);
             } elseif ($target->hasDefault) {
-                $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());
+                $value = ParameterAttributeValue::resolved($target->defaultValue);
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
@@ -113,7 +114,7 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             $caster = $this->caster($attribute->name);
             if ($hasValue) {
                 // Preparing the caster may reveal a source after the value was read.
-                $context->assertParametersReadable();
+                ObjectCreationAccess::recheckParameters($context);
             }
             $context->writeProperty($target, $caster->cast($propertyValue));
         } catch (ContainerExceptionInterface $e) {

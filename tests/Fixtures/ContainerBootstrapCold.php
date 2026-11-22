@@ -7,9 +7,11 @@ namespace Componenta\DI\Tests\Fixtures\ContainerBootstrapCold;
 use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\ProxyFactory;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\SubprocessAutoload;
 use LogicException;
@@ -71,7 +73,7 @@ $resolver = new class () implements EntryResolverInterface {
         return false;
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
         throw new LogicException('The cached service must not reach the resolver.');
     }
@@ -92,7 +94,7 @@ $executor = new class () implements CallableExecutorInterface {
 };
 
 try {
-    $container = new Container($resolver, new AliasResolver(), $executor, cache: $cache);
+    $container = ContainerConstruction::create($resolver, new AliasResolver(), $executor, cache: $cache);
 } finally {
     spl_autoload_unregister($observer);
 }

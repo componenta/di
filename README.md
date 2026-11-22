@@ -29,7 +29,7 @@ Environment + ordered providers
     -> ContainerValue { container, the same Config }
 ```
 
-`ContainerFactory` is the standard construction API for applications. It preserves the exact `Config` and `Environment` instances supplied by the application. Direct `new Container(...)` is also supported under the [runtime collaborator ownership limits](docs/migrations/di6-definitions.md#direct-container-construction).
+`ContainerFactory` is the standard construction API for applications. It preserves the exact `Config` and `Environment` instances supplied by the application. Direct `new Container(...)` is also supported under the [standalone construction contract](docs/migrations/di6-definitions.md#direct-container-construction).
 
 ## Quick start
 
@@ -215,8 +215,8 @@ A deferred service-method pair such as `['tracing.decorator', 'decorate']` must 
 
 ```php
 $shared = $container->get(Service::class);                 // shared result
-$exists = $container->has(Service::class);                 // never throws
-$fresh = $container->make(Service::class, ['id' => 42]);   // fresh object
+$exists = $container->has(Service::class);                 // known entry
+$fresh = $container->make(Service::class, ['id' => 42]);   // object from the construction pipeline
 $result = $container->call([$controller, 'show'], ['id' => 42]);
 ```
 
@@ -225,6 +225,8 @@ When a pipeline has already resolved arguments, pass a PreparedCallable adapter 
 The prepared adapter forwards arguments by value and does not support by-reference parameters. For a native callable that requires references, pass the original callable directly to `CallableInvoker` with an argument array containing those references.
 
 Reflection autowiring is used for a concrete class when no explicit binding exists. An explicit factory takes precedence.
+
+`has()` returns `true` for a known entry whose configuration would fail during resolution. `get()` reports that failure. If a provider fails while checking whether it owns an identifier, both methods report the failure as a PSR-11 container exception. Autowiring can still use an optional parameter's default when the container cannot resolve its type.
 
 Reflection-based constructor injection, `call()`, and `SetUp` support variadic parameters without a separate context argument:
 
@@ -324,6 +326,8 @@ If construction makes another declared attribute available, the execution order 
 Lazy objects and virtual proxies retain the policies selected during their initial before-instantiation phase. If those policies later become incompatible, initialization fails without replaying that phase. A fresh `make()` uses the now-available attributes; an existing deferred object is not reconfigured.
 
 External PSR-11 containers may be registered with `Container::addContainer()`. External entries participate in cycle protection and cannot shadow protected core services.
+
+Custom fallback resolvers receive runtime arguments through `EntryParameters`. Use it to forward the same construction across resolvers and deferred initialization. See the [fallback resolver migration guide](docs/migrations/di6-definitions.md#custom-fallback-resolvers).
 
 ## Runtime behavior
 

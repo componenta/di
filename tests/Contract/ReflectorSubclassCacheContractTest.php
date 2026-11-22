@@ -8,6 +8,8 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\EntryId;
+use Componenta\DI\Internal\ObjectAttributeAccess;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
@@ -153,10 +155,10 @@ test('custom class metadata does not disable or inherit native object handlers a
             $product = $runtime->objects->create($reflector);
         } else {
             $product = new Product();
-            $attempt = ObjectCreationContext::begin($reflector);
+            $attempt = ObjectCreationAccess::begin($reflector);
             $context = $attempt->context;
             $attempt->initialize($product);
-            $runtime->attributeProcessor->process($reflector, AttributePhase::AfterInstantiation, $context);
+            ObjectAttributeAccess::executor($runtime->attributeProcessor)->process($reflector, AttributePhase::AfterInstantiation, $context);
         }
         if (!$product instanceof Product) {
             throw new LogicException('Expected the reflected product.');

@@ -64,3 +64,40 @@ test('recursive external availability stops without blocking independent ids or 
     expect($di->has('recursive'))->toBeTrue()
         ->and($di->get('recursive'))->toBe('recovered value');
 });
+
+test('an external availability probe can see a local entry while its own lookup is active', function (): void {
+    $di = container();
+    $di->set('local', 'local value');
+    $external = new class ($di) implements ContainerInterface {
+        private bool $probing = false;
+        public ?bool $nestedAvailability = null;
+        public mixed $nestedValue = null;
+
+        public function __construct(private readonly Container $parent) {}
+
+        public function has(string $id): bool
+        {
+            if ($id !== 'local' || $this->probing) {
+                return false;
+            }
+            $this->probing = true;
+            try {
+                $this->nestedAvailability = $this->parent->has($id);
+                $this->nestedValue = $this->parent->get($id);
+            } finally {
+                $this->probing = false;
+            }
+            return false;
+        }
+
+        public function get(string $id): never
+        {
+            throw NotFoundException::forService($id);
+        }
+    };
+    $di->addContainer($external);
+
+    expect($di->has('local'))->toBeTrue()
+        ->and($external->nestedAvailability)->toBeTrue()
+        ->and($external->nestedValue)->toBe('local value');
+});

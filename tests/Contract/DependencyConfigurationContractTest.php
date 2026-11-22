@@ -165,6 +165,19 @@ test('shape validation canonicalizes the caller dependency array by reference', 
     ]);
 });
 
+test('shape validation publishes canonical values only after all sections pass', function (): void {
+    $input = [
+        ConfigKey::INVOKABLES => ['alias' => \stdClass::class],
+        ConfigKey::SERVICES => ['' => new \stdClass()],
+    ];
+    $dependencies = $input;
+
+    expect(static function () use (&$dependencies): void {
+        \Componenta\DI\Configuration\DependencyConfiguration::assertShape($dependencies);
+    })->toThrow(InvalidConfigurationException::class)
+        ->and($dependencies)->toBe($input);
+});
+
 /** @param array<array-key,mixed> $dependencies */
 test('direct shape validation rejects malformed alias graphs and empty delegator specifications', function (array $dependencies, string $exception = InvalidConfigurationException::class): void {
     /** @var class-string<\Throwable> $exception */

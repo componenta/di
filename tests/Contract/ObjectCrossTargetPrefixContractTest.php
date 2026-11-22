@@ -13,11 +13,11 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -172,7 +172,7 @@ final class RecordConcreteAttribute implements AttributeHandlerInterface
 test('a refreshed slot cannot replace its concrete attribute after native instantiation or dispatch', function (bool $beforeDispatch): void {
     $registry = new AttributeDefinitionRegistry();
     $plans = new AttributePlanBuilder($registry);
-    $objects = new ObjectPipeline($plans, new ParametersResolver($plans), new ProxyFactory(), $registry, new ObjectResolutionParameterStore());
+    $objects = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), new ProxyFactory());
     $reflection = new SwitchingReflection(ReflectedProduct::class);
     $refresh = static function () use ($reflection, $registry): void {
         if (!$reflection->switched) {

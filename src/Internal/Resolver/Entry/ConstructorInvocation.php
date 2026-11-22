@@ -8,9 +8,10 @@ use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\CompletedAttributeGuard;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionClass;
 use ReflectionMethod;
 use Throwable;
@@ -24,19 +25,20 @@ final class ConstructorInvocation
 {
     /**
      * @template T of object
-     * @param ReflectionClass<T> $class
+     * @param ReflectionClass<covariant T> $class
      * @param array<string|int, mixed> $params
      * @param Closure():void|null $beforeConstructor
      * @return T
      */
     public static function create(
-        ParametersResolver $parameters,
+        ParameterExecution $parameters,
         ReflectionClass $class,
         ?ReflectionMethod $constructor,
         PreparedParameterPlan $plan,
         array $params,
         ?Closure $beforeConstructor,
         ?CompletedAttributeGuard &$proof,
+        ?MappedRequestContext $provenance = null,
     ): object {
         if ($constructor === null) {
             $proof = null;
@@ -50,7 +52,7 @@ final class ConstructorInvocation
             }
         }
 
-        $arguments = self::arguments($parameters, $plan, $params, $beforeConstructor, $proof);
+        $arguments = self::arguments($parameters, $plan, $params, $beforeConstructor, $proof, $provenance);
 
         try {
             return $class->newInstanceArgs($arguments);
@@ -66,20 +68,21 @@ final class ConstructorInvocation
      * @param Closure():void|null $beforeConstructor
      */
     public static function initialize(
-        ParametersResolver $parameters,
+        ParameterExecution $parameters,
         object $entry,
         ?ReflectionMethod $constructor,
         PreparedParameterPlan $plan,
         array $params,
         ?Closure $beforeConstructor,
         ?CompletedAttributeGuard &$proof,
+        ?MappedRequestContext $provenance = null,
     ): void {
         if ($constructor === null) {
             $proof = null;
             return;
         }
 
-        $arguments = self::arguments($parameters, $plan, $params, $beforeConstructor, $proof);
+        $arguments = self::arguments($parameters, $plan, $params, $beforeConstructor, $proof, $provenance);
 
         try {
             $constructor->invokeArgs($entry, $arguments);
@@ -96,16 +99,17 @@ final class ConstructorInvocation
      * @return array<array-key, mixed>
      */
     private static function arguments(
-        ParametersResolver $parameters,
+        ParameterExecution $parameters,
         PreparedParameterPlan $plan,
         array $params,
         ?Closure $beforeConstructor,
         ?CompletedAttributeGuard &$proof,
+        ?MappedRequestContext $provenance,
     ): array {
-        $arguments = $parameters->resolveTracked($plan, $params, $proof);
+        $arguments = $parameters->resolveTracked($plan, $params, $proof, $provenance);
         $beforeConstructor?->__invoke();
         // Argument resolution and the callback can reveal a new parameter source.
-        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts($plan->targets, $params, autoload: false);
+        MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, autoload: false);
         $proof?->assertLoadedParametersUnchanged();
 
         return $arguments;

@@ -7,14 +7,12 @@ namespace Componenta\DI\Internal;
 use Componenta\Config\Config;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\DependencyDefinitions;
-use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\CallableExecutor;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\ConfigKey;
-use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Container;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\InvokableDefinition;
@@ -36,7 +34,6 @@ use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Psr\Container\ContainerInterface;
-use ReflectionClass;
 use Throwable;
 
 /**
@@ -79,21 +76,39 @@ final class ContainerAssembly
 
     private function __construct() {}
 
-    /** @return array{ContainerValue, ResolutionRuntime} */
     public static function assemble(
         Config $config,
         DependencyDefinitions $dependencies,
         bool $targetedDiscovery = false,
-        ?ResolutionRuntime $runtime = null,
-    ): array {
-        try {
-            $factory = self::configured($config, $dependencies);
-            [$container, $runtime] = $factory->buildContainer($targetedDiscovery, $runtime);
-            $value = new ContainerValue($container, $config);
-            unset($factory);
-            $runtime->bootstrapGuard->assertReleasedMetadataUnchanged();
+    ): ContainerValue {
+        return self::build($config, $dependencies, $targetedDiscovery, null);
+    }
 
-            return [$value, $runtime];
+    public static function assembleWithRuntime(
+        Config $config,
+        DependencyDefinitions $dependencies,
+        ResolutionRuntime $runtime,
+    ): ContainerValue {
+        return self::build($config, $dependencies, false, $runtime);
+    }
+
+    private static function build(
+        Config $config,
+        DependencyDefinitions $dependencies,
+        bool $targetedDiscovery,
+        ?ResolutionRuntime $runtime,
+    ): ContainerValue {
+        try {
+            $assembly = self::configured($config, $dependencies);
+            $aliases = $assembly->assertBindings();
+            $runtime ??= new ResolutionRuntime($targetedDiscovery);
+            $runtime->claim();
+            $container = $assembly->buildContainer($aliases, $runtime);
+            $runtime->bootstrapGuard->finish(static function () use (&$assembly): void {
+                $assembly = null;
+            });
+
+            return new ContainerValue($container, $config);
         } catch (InvalidConfigurationException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -108,7 +123,7 @@ final class ContainerAssembly
         Config $config,
         DependencyDefinitions $definitions,
     ): self {
-        [$dependencies, $aliases] = DependencyConfiguration::normalizeWithAliases(
+        [$dependencies, $aliasGraph] = DependencyNormalizer::normalizeWithAliasGraph(
             $definitions->sections,
             self::DEFAULT_ALIASES,
         );
@@ -117,7 +132,7 @@ final class ContainerAssembly
         $factory->factories = $dependencies[ConfigKey::FACTORIES] ?? [];
         $factory->invokables = $dependencies[ConfigKey::INVOKABLES] ?? [];
         $factory->aliases = $dependencies[ConfigKey::ALIASES] ?? self::DEFAULT_ALIASES;
-        $factory->aliasResolver = $aliases;
+        $factory->aliasResolver = AliasResolver::fromGraph($aliasGraph);
         $factory->delegators = $dependencies[ConfigKey::DELEGATORS] ?? [];
         $factory->services = $dependencies[ConfigKey::SERVICES] ?? [];
 
@@ -134,19 +149,13 @@ final class ContainerAssembly
         return $factory;
     }
 
-    /** @return array{Container, ResolutionRuntime} */
-    private function buildContainer(bool $targetedDiscovery, ?ResolutionRuntime $runtime): array
+    private function buildContainer(AliasResolver $aliases, ResolutionRuntime $runtime): Container
     {
-        $aliases = $this->assertBindings();
-
         $config = $this->config;
-        $environment = $config->environment;
-        $runtime ??= new ResolutionRuntime($targetedDiscovery);
         $attributes = $runtime->attributes;
         $plans = $runtime->plans;
         $parameters = $runtime->parameters;
         $proxyFactory = $runtime->proxies;
-        $resolutionParameters = $runtime->resolutionParameters;
         $objects = $runtime->objects;
 
         $aliases->set(ConfigAttribute::KEY, Config::class);
@@ -156,33 +165,7 @@ final class ContainerAssembly
         }
 
         $bootstrap = new ContainerBootstrapState();
-        /** @var ReflectionClass<Container> $containerClass */
-        $containerClass = new ReflectionClass(Container::class);
-        /** @var Container $container */
-        $container = $containerClass->newLazyGhost(
-            static function (Container $container) use (
-                $bootstrap,
-                $aliases,
-                $cache,
-                $proxyFactory,
-                $config,
-                $environment,
-            ): void {
-                $container->__construct(
-                    resolver: $bootstrap->entryResolver,
-                    aliases: $aliases,
-                    callableExecutor: $bootstrap->callableExecutor,
-                    cache: $cache,
-                    delegators: new DelegatorRegistry($container, $container),
-                    proxyFactory: $proxyFactory,
-                    bootstrapServices: [
-                        Config::class => $config,
-                        Environment::class => $environment,
-                        ContainerValue::class => new ContainerValue($container, $config),
-                    ],
-                );
-            },
-        );
+        $container = ContainerConstruction::defer($bootstrap, $aliases, $cache, $proxyFactory, $config);
 
         $executor = new CallableExecutor(new CallableResolver($container), $parameters);
         $entryResolver = $this->createEntryResolver(
@@ -202,7 +185,7 @@ final class ContainerAssembly
                 $container,
                 $config,
                 $handlers,
-                $resolutionParameters,
+                $objects,
                 $attributeCallbacks,
             );
         }
@@ -234,9 +217,8 @@ final class ContainerAssembly
         $parameters->seal();
         $attributes->seal();
         $container->get(Config::class);
-        $runtime->bootstrapGuard->finish($parameters->resolverList);
 
-        return [$container, $runtime];
+        return $container;
     }
 
     private function createEntryResolver(

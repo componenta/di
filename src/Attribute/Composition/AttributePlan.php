@@ -5,18 +5,33 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
-use Reflector;
+use Componenta\DI\Internal\ReflectionSnapshot;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionProperty;
 
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
-final readonly class AttributePlan
+final class AttributePlan
 {
-    /** @param list<AttributeUsage> $usages */
+    /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    private readonly ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
+
+    /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target {
+        get => ReflectionSnapshot::target($this->declaration);
+    }
+
+    /**
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
     public function __construct(
-        public Reflector $target,
-        public array $usages,
-        /** @internal Some declarations or user rules must be inspected again. */
-        public bool $requiresFreshValidation = false,
-    ) {}
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        public readonly array $usages,
+    ) {
+        $this->declaration = ReflectionSnapshot::target($target);
+    }
 
     /**
      * @param class-string<AttributeCapabilityInterface> $capability

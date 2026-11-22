@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\DelegatorCallableBoundary;
 
 use Componenta\DI\CallableResolverInterface;
-use Componenta\DI\Container;
 use Componenta\DI\Exception\DelegatorException;
 use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\DelegatorRegistry;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
@@ -149,7 +150,7 @@ test('a supplied delegator resolver handles deferred ids while native callables 
             return false;
         }
 
-        public function resolve(string $id, array $params = []): mixed
+        public function resolve(string $id, EntryParameters $params): mixed
         {
             throw new NotFoundException($id);
         }
@@ -163,7 +164,7 @@ test('a supplied delegator resolver handles deferred ids while native callables 
             return static fn(Product $entry): Product => new Product($entry->value . ':deferred');
         }
     };
-    $container = new Container(
+    $container = ContainerConstruction::create(
         $entries,
         new AliasResolver(),
         (new ContainerBuilder())->build(),

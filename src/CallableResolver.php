@@ -6,6 +6,7 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Internal\AvailableEntryLookup;
 use Error;
 use Psr\Container\ContainerInterface;
 use Throwable;
@@ -56,8 +57,8 @@ class CallableResolver implements CallableResolverInterface
 
     protected function resolveString(string $callable): callable
     {
-        if ($this->container->has($callable)) {
-            $entry = $this->container->get($callable);
+        if (AvailableEntryLookup::has($this->container, $callable)) {
+            $entry = AvailableEntryLookup::get($this->container, $callable);
             if (is_array($entry)) {
                 $entry = self::snapshotCallable($entry);
             }
@@ -102,8 +103,8 @@ class CallableResolver implements CallableResolverInterface
                 return $callable;
             }
         }
-        if ($this->container->has($class)) {
-            $entry = $this->container->get($class);
+        if (AvailableEntryLookup::has($this->container, $class)) {
+            $entry = AvailableEntryLookup::get($this->container, $class);
             if (is_object($entry) && is_callable([$entry, $method])) {
                 return [$entry, $method];
             }
@@ -144,12 +145,12 @@ class CallableResolver implements CallableResolverInterface
 
         $unqualifiedMethod = !str_contains($method, '::');
         $canDiscoverNative = $unqualifiedMethod && !class_exists($objectOrClass, false);
-        if ($this->container->has($objectOrClass)) {
+        if (AvailableEntryLookup::has($this->container, $objectOrClass)) {
             // Availability checks may load the native owner before instantiation.
             if ($canDiscoverNative && class_exists($objectOrClass, false) && $this->isNativeCallable($callable)) {
                 return $callable;
             }
-            $entry = $this->container->get($objectOrClass);
+            $entry = AvailableEntryLookup::get($this->container, $objectOrClass);
             if (is_object($entry) && is_callable([$entry, $method])) {
                 return [$entry, $method];
             }

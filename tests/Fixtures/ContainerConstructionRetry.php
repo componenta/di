@@ -8,13 +8,15 @@ use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
-use Componenta\DI\Internal\Resolver\Entry\DefinitionWriter;
+use Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings;
 use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\SubprocessAutoload;
 use LogicException;
@@ -38,7 +40,7 @@ $target = match ($argv[3]) {
     'delegators' => DelegatorRegistry::class,
     'cycles' => CycleGuard::class,
     'proxy' => ProxyFactory::class,
-    'writer', 'writer-reentry', 'cache-reentry', 'writer-core-alias', 'writer-application-alias' => DefinitionWriter::class,
+    'writer', 'writer-reentry', 'cache-reentry', 'writer-core-alias', 'writer-application-alias' => AttachedEntryBindings::class,
     'ownership' => RuntimeCollaboratorOwnership::class,
     default => throw new LogicException('Unknown bootstrap collaborator.'),
 };
@@ -52,7 +54,7 @@ $fallback = new class () implements EntryResolverInterface {
         return $id === 'application';
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
         if (!$this->can($id)) {
             throw new LogicException('Unexpected fallback lookup.');
@@ -116,14 +118,14 @@ $loader = static function (string $class) use (
     }
     $autoload->loadClass($class);
     $nested->container = $sharedCache === null
-        ? new Container($resolver, $aliases, $executor)
-        : new Container(new CompositeResolver($fallback), clone $aliases, $executor, cache: $sharedCache);
+        ? ContainerConstruction::create($resolver, $aliases, $executor)
+        : ContainerConstruction::create(new CompositeResolver($fallback), clone $aliases, $executor, cache: $sharedCache);
 };
 spl_autoload_register($loader, true, true);
 $caught = null;
 $container = null;
 try {
-    $container = new Container($resolver, $aliases, $executor, cache: $sharedCache);
+    $container = ContainerConstruction::create($resolver, $aliases, $executor, cache: $sharedCache);
 } catch (Throwable $error) {
     $caught = $error;
 } finally {
@@ -140,7 +142,7 @@ $retryError = null;
 $result = null;
 try {
     $container ??= ($sharedCache === null ? $nested->container : null)
-        ?? new Container($resolver, $retryAliases, $executor, cache: $retryCache);
+        ?? ContainerConstruction::create($resolver, $retryAliases, $executor, cache: $retryCache);
     $result = [
         'value' => $container->get($lateAlias === 'late.application' ? $lateAlias : 'application.alias'),
         'self' => $container->get(ContainerInterface::class) === $container,

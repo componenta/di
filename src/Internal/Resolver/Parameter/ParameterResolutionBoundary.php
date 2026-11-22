@@ -4,33 +4,42 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
-use Componenta\DI\Internal\ResolutionMetadata;
+use Closure;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 
 /**
- * Applies internal resolution metadata policy before public parameter execution.
+ * Checks mapped sources again before extensions consume invocation values.
  *
  * @internal
  */
 final class ParameterResolutionBoundary
 {
     /**
-     * @param array<string|int,mixed> $provided
      * @param class-string|null $diagnosticOwner
-     * @return array<string|int,mixed>
+     * @param (Closure():void)|null $beforeInvocation
+     * @return (Closure():void)|null
      */
-    public static function publicParameters(
+    public static function beforeConsumption(
         PreparedParameterPlan $plan,
-        array $provided,
-        ?string $diagnosticOwner = null,
-    ): array {
-        MappedRequestParameterSourceGuard::assertTargetsContextNoConflicts(
-            $plan->targets,
-            $provided,
-            $diagnosticOwner,
-        );
+        MappedRequestContext $provenance,
+        ?string $diagnosticOwner,
+        ?Closure $beforeInvocation,
+    ): ?Closure {
+        $targets = MappedRequestParameterSourceGuard::potentialSourceTargets($plan->targets, $provenance);
+        if ($targets === []) {
+            return $beforeInvocation;
+        }
 
-        return ResolutionMetadata::publicParameters($provided);
+        return static function () use ($targets, $provenance, $diagnosticOwner, $beforeInvocation): void {
+            $beforeInvocation?->__invoke();
+            MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts(
+                $targets,
+                $provenance,
+                $diagnosticOwner,
+                autoload: false,
+            );
+        };
     }
 
     private function __construct() {}

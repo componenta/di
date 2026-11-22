@@ -26,9 +26,16 @@ final class EntryCache
     /** @var array<string, int> */
     private array $resolvedRevisions = [];
 
+    public bool $hasResolvedEntries {
+        get => $this->resolved !== [];
+    }
+
     /** @param array<string, mixed> $base */
     public function __construct(array $base = [])
     {
+        if (class_exists(RuntimeCollaboratorOwnership::class, false)) {
+            RuntimeCollaboratorOwnership::assertWritable($this, null);
+        }
         // Own the entry slots; caller references must not bypass invalidation.
         foreach ($base as $id => $value) {
             $this->base[$id] = $value;
@@ -50,18 +57,25 @@ final class EntryCache
         return true;
     }
 
-    public function putBase(string $id, mixed $value): void
+    public function putBase(string $id, mixed $value, ?object $authority = null): void
     {
-        $this->base[$id] = $value;
-        $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $this->storeBase($id, $value);
     }
 
-    public function replaceBase(string $id, mixed $value, MutationRetirement $retirement): void
+    public function replaceBase(string $id, mixed $value, MutationRetirement $retirement, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         if (array_key_exists($id, $this->base)) {
             $retirement->retain($this->base[$id]);
         }
-        $this->putBase($id, $value);
+        $this->storeBase($id, $value);
+    }
+
+    private function storeBase(string $id, mixed $value): void
+    {
+        $this->base[$id] = $value;
+        $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
     }
 
     public function baseRevision(string $id): int
@@ -74,8 +88,9 @@ final class EntryCache
         return $this->resolvedRevisions[$id] ?? 0;
     }
 
-    public function removeBase(string $id, MutationRetirement $retirement): void
+    public function removeBase(string $id, MutationRetirement $retirement, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         if (array_key_exists($id, $this->base)) {
             $retirement->retain($this->base[$id]);
         }
@@ -98,8 +113,9 @@ final class EntryCache
         return true;
     }
 
-    public function putResolved(string $requestedId, string $canonicalId, mixed $value): void
+    public function putResolved(string $requestedId, string $canonicalId, mixed $value, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $this->resolved[$requestedId] = $value;
 
         if ($canonicalId !== $requestedId) {
@@ -107,8 +123,9 @@ final class EntryCache
         }
     }
 
-    public function invalidate(string $requestedId, ?string $canonicalId, MutationRetirement $retirement): void
+    public function invalidate(string $requestedId, ?string $canonicalId, MutationRetirement $retirement, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $this->invalidateResolved($requestedId, $retirement);
 
         $canonical = $canonicalId ?? $requestedId;
@@ -126,8 +143,9 @@ final class EntryCache
     }
 
     /** Invalidates one requested pipeline without changing its shared source. */
-    public function invalidateRequested(string $requestedId, string $canonicalId, MutationRetirement $retirement): void
+    public function invalidateRequested(string $requestedId, string $canonicalId, MutationRetirement $retirement, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $this->invalidateResolved($requestedId, $retirement);
         unset($this->reverseIndex[$canonicalId][$requestedId]);
         if (($this->reverseIndex[$canonicalId] ?? []) === []) {

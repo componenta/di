@@ -39,10 +39,10 @@ function assembledContainer(
     bool $targetedDiscovery = false,
     ?ResolutionRuntime $runtime = null,
 ): array {
-    [$value, $runtime] = ContainerAssembly::assemble(
+    $runtime ??= new ResolutionRuntime($targetedDiscovery);
+    $value = ContainerAssembly::assembleWithRuntime(
         $config ?? new Config([], new Environment([])),
         new DependencyDefinitions($sections),
-        $targetedDiscovery,
         $runtime,
     );
 

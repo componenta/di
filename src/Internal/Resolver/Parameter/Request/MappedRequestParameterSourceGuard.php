@@ -45,11 +45,9 @@ final class MappedRequestParameterSourceGuard
 
     /**
      * @param class-string $class
-     * @param array<string|int,mixed> $context
      */
-    public static function assertClassContextNoConflicts(string $class, array $context): void
+    public static function assertClassNoConflicts(string $class, ?MappedRequestContext $provenance): void
     {
-        $provenance = MappedRequestContext::get($context);
         if ($provenance === null) {
             return;
         }
@@ -60,34 +58,6 @@ final class MappedRequestParameterSourceGuard
                 }
             }
         }
-    }
-
-    /**
-     * @param iterable<ParameterTarget> $targets
-     * @param array<string|int,mixed> $context
-     * @param class-string|null $diagnosticOwner
-     */
-    public static function assertTargetsContextNoConflicts(
-        iterable $targets,
-        array $context,
-        ?string $diagnosticOwner = null,
-        bool $autoload = true,
-    ): void {
-        $provenance = MappedRequestContext::get($context);
-        if ($provenance === null) {
-            return;
-        }
-        self::assertTargetsProvenanceNoConflicts($targets, $provenance, $diagnosticOwner, $autoload);
-    }
-
-    /** @param class-string|null $diagnosticOwner */
-    public static function assertTargetProvenanceNoConflicts(
-        ParameterTarget $target,
-        MappedRequestContext $provenance,
-        ?string $diagnosticOwner = null,
-        bool $autoload = true,
-    ): void {
-        self::assertTargetsProvenanceNoConflicts([$target], $provenance, $diagnosticOwner, $autoload);
     }
 
     /**
@@ -129,10 +99,13 @@ final class MappedRequestParameterSourceGuard
      */
     public static function assertTargetsProvenanceNoConflicts(
         iterable $targets,
-        MappedRequestContext $provenance,
-        ?string $diagnosticOwner,
+        ?MappedRequestContext $provenance,
+        ?string $diagnosticOwner = null,
         bool $autoload = true,
     ): void {
+        if ($provenance === null) {
+            return;
+        }
         foreach ($autoload ? [true, false] : [false] as $discover) {
             $pending = [];
             foreach ($targets as $target) {

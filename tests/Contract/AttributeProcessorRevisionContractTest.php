@@ -10,7 +10,6 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
-use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -106,10 +105,7 @@ test('object handler discovery returns a complete revision after member autoload
             ->and(NativePayload::$constructions)->toBe(0)
             ->and($handler->calls)->toBe(0);
 
-        $attempt = ObjectCreationContext::begin($reflection);
-        $context = $attempt->context;
-        $attempt->initialize(new $class());
-        $processor->process($reflection, AttributePhase::AfterInstantiation, $context);
+        $runtime->objects->create($reflection);
         expect($handler->calls)->toBe(1)
             ->and(NativePayload::$constructions)->toBe(1)
             ->and($processor->hasHandlers($reflection))->toBeTrue()

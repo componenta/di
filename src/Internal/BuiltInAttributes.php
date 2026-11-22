@@ -47,10 +47,11 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\Container;
-use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
+use Componenta\DI\Internal\Resolver\Entry\ObjectPipelineAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\LazyCasterProvider;
 use Componenta\DI\Internal\Resolver\Parameter\Request\LazyFactory;
 use Componenta\DI\Internal\Resolver\Parameter\Request\LazyValidationProvider;
+use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
@@ -63,12 +64,10 @@ use Componenta\DI\Resolver\Attribute\Handler\LazyHandler;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
-use Componenta\DI\Resolver\Attribute\Handler\TransformHandler;
 use Componenta\DI\Resolver\Entry\SetUp\ConfigUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\ContainerValueUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\EntryIdUnwrapper;
 use Componenta\DI\Resolver\Entry\SetUp\EnvUnwrapper;
-use Componenta\DI\Resolver\Entry\SetUpRunner;
 
 /**
  * Registers the built-in attribute policies with their shared handlers.
@@ -91,7 +90,7 @@ final class BuiltInAttributes
         Container $container,
         Config $containerConfig,
         array $handlers,
-        ObjectResolutionParameterStore $resolutionParameters,
+        ObjectPipeline $objects,
         AttributeCallbackInvoker $attributeCallbacks,
     ): void {
         $cast = $handlers['cast'];
@@ -183,9 +182,9 @@ final class BuiltInAttributes
         ));
         $registry->register(new AttributeDefinition(
             SetUp::class,
-            new SetUpRunner(
+            ObjectPipelineAccess::setupHandler(
+                $objects,
                 $container,
-                $resolutionParameters,
                 $attributeCallbacks,
                 new ContainerValueUnwrapper(new ContainerValue($container, $containerConfig)),
                 new EntryIdUnwrapper($container),
@@ -214,7 +213,7 @@ final class BuiltInAttributes
                 new LazyFactory($container),
                 new LazyCasterProvider($container),
                 new LazyValidationProvider($container),
-                $attributeCallbacks,
+                $attributeCallbacks->invoke(...),
             ),
         ];
     }

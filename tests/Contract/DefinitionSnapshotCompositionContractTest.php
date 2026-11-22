@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract\DefinitionSnapshotComposition;
 
-use Componenta\DI\Container;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\DefinitionResolverInterface;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use WeakReference;
@@ -62,7 +63,7 @@ final readonly class TracedFallback implements EntryResolverInterface
         return false;
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
         throw new \LogicException('Unavailable fallbacks must not execute.');
     }
@@ -98,7 +99,7 @@ final class HybridProvider implements DefinitionResolverInterface, EntryResolver
         return false;
     }
 
-    public function resolve(string $id, array $params = []): mixed
+    public function resolve(string $id, EntryParameters $params): mixed
     {
         throw new \LogicException('The unavailable hybrid fallback must not execute.');
     }
@@ -196,13 +197,13 @@ test('an attached composite has one container mutation authority and cannot be i
     $root = new CompositeResolver($strategy);
     $root->setDefinition('entry', new SnapshotDefinition('original'));
     $executor = (new ContainerBuilder())->build();
-    $container = new Container($root, new AliasResolver(), $executor);
+    $container = ContainerConstruction::create($root, new AliasResolver(), $executor);
 
     expect($container->get('entry'))->toBe('original')
         ->and(fn() => $root->setDefinition('entry', new SnapshotDefinition('bypass')))
         ->toThrow(InvalidConfigurationException::class)
         ->and($strategy->validationCalls)->toBe(1)
-        ->and(fn() => new Container($root, new AliasResolver(), $executor))
+        ->and(fn() => ContainerConstruction::create($root, new AliasResolver(), $executor))
         ->toThrow(InvalidConfigurationException::class)
         ->and(fn() => new CompositeResolver($root))->toThrow(InvalidConfigurationException::class)
         ->and($container->get('entry'))->toBe('original');
@@ -217,8 +218,17 @@ test('prepared bindings cannot be published into another composite', function ()
     $strategy = new SnapshotStrategy();
     $first = new CompositeResolver($strategy);
     $second = new CompositeResolver($strategy);
-    $firstWriter = $first->attach();
-    $secondWriter = $second->attach();
+    $executor = (new ContainerBuilder())->build();
+    $firstContainer = ContainerConstruction::create($first, new AliasResolver(), $executor);
+    $secondContainer = ContainerConstruction::create($second, new AliasResolver(), $executor);
+    $port = new \ReflectionProperty($firstContainer, 'resolver');
+    $firstWriter = $port->getValue($firstContainer);
+    $secondWriter = $port->getValue($secondContainer);
+    if (!$firstWriter instanceof \Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings
+        || !$secondWriter instanceof \Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings
+    ) {
+        throw new \LogicException('Expected attached entry bindings for both containers.');
+    }
     $binding = $firstWriter->prepare('entry', new SnapshotDefinition('foreign'));
     $retirement = new MutationRetirement('entry');
 
@@ -234,12 +244,14 @@ test('prepared bindings cannot be published into another composite', function ()
 test('an attached resolver keeps write operations private and issues its writer once', function (): void {
     $root = new CompositeResolver(new SnapshotStrategy());
     $root->setDefinition('entry', new SnapshotDefinition('original'));
-    $container = new Container($root, new AliasResolver(), (new ContainerBuilder())->build());
+    $container = ContainerConstruction::create($root, new AliasResolver(), (new ContainerBuilder())->build());
 
-    expect(is_callable([$root, 'prepareDefinition']))->toBeFalse()
-        ->and(is_callable([$root, 'publishDefinition']))->toBeFalse()
-        ->and(is_callable([$root, 'retireDefinition']))->toBeFalse()
-        ->and(fn() => $root->attach())->toThrow(InvalidConfigurationException::class, 'only one container')
+    expect(in_array('prepareDefinition', get_class_methods($root), true))->toBeFalse()
+        ->and(in_array('publishDefinition', get_class_methods($root), true))->toBeFalse()
+        ->and(in_array('retireDefinition', get_class_methods($root), true))->toBeFalse()
+        ->and(in_array('attach', get_class_methods($root), true))->toBeFalse()
+        ->and(fn() => ContainerConstruction::create($root, new AliasResolver(), $container))
+        ->toThrow(InvalidConfigurationException::class, 'only one container')
         ->and($container->get('entry'))->toBe('original')
         ->and($root->resolve('entry'))->toBe('original');
 });
@@ -248,10 +260,10 @@ test('invalid container bootstrap does not claim the standalone composite mutati
     $root = new CompositeResolver(new SnapshotStrategy());
     $executor = (new ContainerBuilder())->build();
 
-    expect(fn() => new Container($root, new AliasResolver(), $executor, bootstrapServices: ['invalid' => new \stdClass()]))
+    expect(fn() => ContainerConstruction::create($root, new AliasResolver(), $executor, bootstrapServices: ['invalid' => new \stdClass()]))
         ->toThrow(InvalidConfigurationException::class);
     $root->setDefinition('entry', new SnapshotDefinition('after-rejection'));
-    $container = new Container($root, new AliasResolver(), $executor);
+    $container = ContainerConstruction::create($root, new AliasResolver(), $executor);
 
     expect($container->get('entry'))->toBe('after-rejection');
 });

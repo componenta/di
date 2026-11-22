@@ -16,12 +16,12 @@ final class ContainerFactory
 
     public function create(Config $config, DependencyDefinitions $dependencies): ContainerValue
     {
-        return ContainerAssembly::assemble($config, $dependencies)[0];
+        return ContainerAssembly::assemble($config, $dependencies);
     }
 
     /** Limits autoload probes to the attributes declared by the current target. */
     public function createWithTargetedAttributeDiscovery(Config $config, DependencyDefinitions $dependencies): ContainerValue
     {
-        return ContainerAssembly::assemble($config, $dependencies, targetedDiscovery: true)[0];
+        return ContainerAssembly::assemble($config, $dependencies, targetedDiscovery: true);
     }
 }

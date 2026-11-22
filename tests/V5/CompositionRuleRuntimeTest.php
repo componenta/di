@@ -195,7 +195,8 @@ test('an earlier availability check does not change optional dependency resoluti
 
         CurrentRuleLimit::$current = -1;
         expect($executor->call($callable))->toBeNull()
-            ->and($container->has(ClassWithLimit::class))->toBeFalse();
+            ->and($container->has(ClassWithLimit::class))->toBeTrue()
+            ->and(fn() => $container->get(ClassWithLimit::class))->toThrow(AttributeCompositionException::class);
 
         CurrentRuleLimit::$current = 2;
         expect($executor->call($callable))->toBeInstanceOf(ClassWithLimit::class);

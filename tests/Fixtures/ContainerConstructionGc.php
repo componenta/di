@@ -10,6 +10,7 @@ use Componenta\DI\Container;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
@@ -87,7 +88,7 @@ function tryWithGcPressure(CallableExecutorInterface $executor, string $shared, 
         if ($state->running) {
             $state->reentered = true;
             try {
-                $state->nested = new Container($nestedRoot, $nestedAliases, $executor, $nestedCache, proxyFactory: $proxy);
+                $state->nested = ContainerConstruction::create($nestedRoot, $nestedAliases, $executor, $nestedCache, proxyFactory: $proxy);
             } catch (InvalidConfigurationException) {
                 // The outer operation already owns the shared object or changed its routes.
             }
@@ -102,7 +103,7 @@ function tryWithGcPressure(CallableExecutorInterface $executor, string $shared, 
             $aliases->set(ContainerInterface::class, 'application');
             $aliasWritten = true;
         } else {
-            $outer = new Container($root, $aliases, $executor, $cache, $delegators, $external, $guard, $proxy);
+            $outer = ContainerConstruction::create($root, $aliases, $executor, $cache, $delegators, $external, $guard, $proxy);
         }
     } catch (InvalidConfigurationException) {
         // The nested construction took ownership first.
@@ -122,7 +123,7 @@ function tryWithGcPressure(CallableExecutorInterface $executor, string $shared, 
 
 function tryAliasMutationWithGcPressure(CallableExecutorInterface $executor, int $slack): ?bool
 {
-    $container = new Container(
+    $container = ContainerConstruction::create(
         new CompositeResolver(),
         new AliasResolver(),
         $executor,
@@ -197,7 +198,7 @@ $executor = new class () implements CallableExecutorInterface {
     }
 };
 // Preload the normal collaborators so the reentry is caused by GC.
-new Container(new CompositeResolver(), new AliasResolver(), $executor, new EntryCache(), new DelegatorRegistry($executor));
+ContainerConstruction::create(new CompositeResolver(), new AliasResolver(), $executor, new EntryCache(), new DelegatorRegistry($executor));
 class_exists(InvalidConfigurationException::class);
 class_exists(CircularDependencyException::class);
 

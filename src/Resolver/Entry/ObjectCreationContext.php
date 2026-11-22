@@ -8,23 +8,44 @@ use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ReflectionSnapshot;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAttempt;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationScope;
 use Componenta\DI\Object\CreationStrategy;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Fiber;
 use LogicException;
 use PropertyHookType;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
 use Throwable;
+use WeakReference;
 
 /** Mutable state owned by exactly one object-creation attempt. */
-final class ObjectCreationContext
+final class ObjectCreationContext extends ObjectCreationScope
 {
     /** @var (Closure(self,object):void)|null */
     private static ?Closure $initializeAttempt = null;
 
     /** @var (Closure(self,array<string|int,mixed>|(Closure():array<string|int,mixed>)|null):ObjectCreationAttempt)|null */
     private static ?Closure $retryAttempt = null;
+
+    private bool $constructorPolicyLocked = false;
+    private bool $propertyWritesLocked = false;
+    private bool $processingPhase = false;
+    /** @var WeakReference<object>|null */
+    private readonly ?WeakReference $constructorOwner;
+    /** @var WeakReference<object>|null */
+    private ?WeakReference $propertyOwner = null;
+    /** @var ReflectionClass<covariant object> */
+    private readonly ReflectionClass $declaration;
+
+    /** @var ReflectionClass<covariant object> */
+    public ReflectionClass $class {
+        get => ReflectionSnapshot::class($this->declaration);
+    }
 
     public private(set) bool $constructorEnabled = true;
     public private(set) CreationStrategy $strategy = CreationStrategy::Eager;
@@ -36,16 +57,18 @@ final class ObjectCreationContext
             $this->assertParametersReadable();
             $parameters = $this->parameterValues;
             if ($parameters instanceof Closure) {
-                $parameters = $parameters();
+                $parameters = ResolutionMetadata::invocationSlots($parameters());
                 $this->parameterValues = $parameters;
             }
 
-            return $parameters;
+            return ResolutionMetadata::snapshot($parameters);
         }
     }
 
     /** @var array<string|int,mixed>|Closure():array<string|int,mixed> */
     private array|Closure $parameterValues;
+    /** @var (Closure(self):void)|null */
+    private ?Closure $beforeParameterRead = null;
 
     /** @var array<string,true> */
     private array $claimedProperties = [];
@@ -54,30 +77,35 @@ final class ObjectCreationContext
     private array $pendingPropertyWrites = [];
 
     /**
-     * @param ReflectionClass<covariant object> $class
+     * @template T of object
+     * @param ReflectionClass<T> $class
      * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters Caller-visible parameters only.
-     * @param (Closure(self):void)|null $beforeParameterRead Internal validation before exposing the public parameter bag.
      */
-    public function __construct(
-        public readonly ReflectionClass $class,
+    private function __construct(
+        ReflectionClass $class,
         array|Closure $parameters = [],
-        private readonly ?Closure $beforeParameterRead = null,
     ) {
-        $this->parameterValues = $parameters;
+        $this->declaration = ReflectionSnapshot::forConstruction($class);
+        $this->parameterValues = $parameters instanceof Closure
+            ? $parameters
+            : ResolutionMetadata::invocationSlots($parameters);
+        $this->constructorOwner = self::executionOwner();
     }
 
     /**
-     * @internal Creates a new context and gives its owner control of the attempt.
-     * @param ReflectionClass<covariant object> $class
+     * @template T of object
+     * @param ReflectionClass<T> $class
      * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters
      * @param (Closure(self):void)|null $beforeParameterRead
      */
-    public static function begin(
+    protected static function startAttempt(
         ReflectionClass $class,
-        array|Closure $parameters = [],
-        ?Closure $beforeParameterRead = null,
+        array|Closure $parameters,
+        ?Closure $beforeParameterRead,
     ): ObjectCreationAttempt {
-        return self::owned(new self($class, $parameters, $beforeParameterRead));
+        $context = new self($class, $parameters);
+        $context->beforeParameterRead = $beforeParameterRead;
+        return self::owned($context);
     }
 
     private static function owned(self $context): ObjectCreationAttempt
@@ -92,19 +120,63 @@ final class ObjectCreationContext
         );
     }
 
-    /** Validate parameter access through the same guard as the public parameter bag. */
-    public function assertParametersReadable(): void
+    protected function assertParametersReadable(): void
     {
+        if ($this->parameterValues instanceof Closure) {
+            if ($this->entry === null) {
+                $this->assertConstructorPolicyOpen();
+            } else {
+                $this->assertPropertyWritesOpen();
+            }
+        }
         $this->beforeParameterRead?->__invoke($this);
+    }
+
+    /**
+     * @template T
+     * @param Closure():T $dispatch
+     * @return T
+     */
+    protected function runPhase(AttributePhase $phase, Closure $dispatch): mixed
+    {
+        if ($phase === AttributePhase::Both) {
+            throw new LogicException('Object creation requires a single phase.');
+        }
+        if ($this->processingPhase) {
+            throw new LogicException('An object creation phase is already running.');
+        }
+        $before = $phase === AttributePhase::BeforeInstantiation;
+        if ($before) {
+            $this->assertConstructorPolicyOpen();
+        } else {
+            if ($this->entry === null) {
+                throw new LogicException('The object property phase requires an initialized entry.');
+            }
+            $this->assertPropertyWritesOpen();
+        }
+
+        $this->processingPhase = true;
+        try {
+            return $dispatch();
+        } finally {
+            $this->processingPhase = false;
+            if ($before) {
+                $this->constructorPolicyLocked = true;
+            } else {
+                $this->propertyWritesLocked = true;
+            }
+        }
     }
 
     public function disableConstructor(): void
     {
+        $this->assertConstructorPolicyOpen();
         $this->constructorEnabled = false;
     }
 
     public function selectStrategy(CreationStrategy $strategy): void
     {
+        $this->assertConstructorPolicyOpen();
         if ($strategy === CreationStrategy::Eager) {
             if ($this->strategy !== CreationStrategy::Eager) {
                 throw $this->conflictingStrategy($strategy);
@@ -122,14 +194,50 @@ final class ObjectCreationContext
         }
     }
 
+    private function assertConstructorPolicyOpen(): void
+    {
+        if ($this->constructorPolicyLocked) {
+            throw new LogicException('Object creation policy is fixed after the before-instantiation phase.');
+        }
+        self::assertExecutionOwner($this->constructorOwner);
+    }
+
+    protected function assertPropertyWritesOpen(): void
+    {
+        if ($this->propertyWritesLocked) {
+            throw new LogicException('The object property phase has completed.');
+        }
+        self::assertExecutionOwner($this->entry === null ? $this->constructorOwner : $this->propertyOwner);
+    }
+
+    /** @return WeakReference<object>|null */
+    private static function executionOwner(): ?WeakReference
+    {
+        $fiber = Fiber::getCurrent();
+        return $fiber === null ? null : WeakReference::create($fiber);
+    }
+
+    /** @param WeakReference<object>|null $owner */
+    private static function assertExecutionOwner(?WeakReference $owner): void
+    {
+        $fiber = Fiber::getCurrent();
+        if ($fiber === null ? $owner !== null : $owner?->get() !== $fiber) {
+            throw new LogicException('This phase belongs to another execution.');
+        }
+    }
+
     /** @param array<string|int,mixed>|(Closure():array<string|int,mixed>)|null $parameters */
     private function freshAttempt(array|Closure|null $parameters): self
     {
         $attempt = clone $this;
         if ($parameters !== null) {
-            $attempt->parameterValues = $parameters;
+            $attempt->parameterValues = $parameters instanceof Closure
+                ? $parameters
+                : ResolutionMetadata::invocationSlots($parameters);
         }
         $attempt->entry = null;
+        $attempt->propertyOwner = null;
+        $attempt->propertyWritesLocked = false;
         $attempt->claimedProperties = [];
         $attempt->pendingPropertyWrites = [];
         return $attempt;
@@ -140,11 +248,11 @@ final class ObjectCreationContext
         if ($this->entry !== null) {
             throw new LogicException(sprintf(
                 'Object creation context for "%s" is already initialized.',
-                $this->class->getName(),
+                $this->declaration->getName(),
             ));
         }
 
-        $className = $this->class->getName();
+        $className = $this->declaration->getName();
         if (!$entry instanceof $className) {
             throw new LogicException(sprintf(
                 'Expected an instance of "%s", got "%s".',
@@ -154,18 +262,22 @@ final class ObjectCreationContext
         }
 
         $this->entry = $entry;
+        $this->propertyOwner = self::executionOwner();
+        $this->constructorPolicyLocked = true;
     }
 
     public function claimProperty(ReflectionProperty $property, bool $allowPromoted = false): bool
     {
+        $this->assertPropertyWritesOpen();
         if ($this->entry === null) {
             throw new LogicException(sprintf(
                 'Cannot claim property "%s" before "%s" is initialized.',
                 $property->getName(),
-                $this->class->getName(),
+                $this->declaration->getName(),
             ));
         }
 
+        $key = $this->propertyKey($property);
         if ($property->isStatic()) {
             throw ResolutionException::forProperty(
                 $property,
@@ -186,7 +298,6 @@ final class ObjectCreationContext
             return false;
         }
 
-        $key = self::propertyKey($property);
         if (isset($this->claimedProperties[$key])) {
             return false;
         }
@@ -197,7 +308,7 @@ final class ObjectCreationContext
 
     public function propertyClaimed(ReflectionProperty $property): bool
     {
-        return isset($this->claimedProperties[self::propertyKey($property)]);
+        return isset($this->claimedProperties[$this->propertyKey($property)]);
     }
 
     /**
@@ -206,9 +317,10 @@ final class ObjectCreationContext
      * @param Closure():void $resolve
      * @throws LogicException If the same property is already being resolved.
      */
-    public function resolveProperty(ReflectionProperty $property, Closure $resolve): void
+    protected function resolveProperty(ReflectionProperty $property, Closure $resolve): void
     {
-        $key = self::propertyKey($property);
+        $this->assertPropertyWritesOpen();
+        $key = $this->propertyKey($property);
         if (isset($this->pendingPropertyWrites[$key])) {
             throw new LogicException(sprintf(
                 'Property "%s::$%s" is already being resolved.',
@@ -236,10 +348,10 @@ final class ObjectCreationContext
         $entry = $this->entry ?? throw new LogicException(sprintf(
             'Cannot read property "%s" before "%s" is initialized.',
             $property->getName(),
-            $this->class->getName(),
+            $this->declaration->getName(),
         ));
 
-        $pending = $this->pendingPropertyWrites[self::propertyKey($property)] ?? [];
+        $pending = $this->pendingPropertyWrites[$this->propertyKey($property)] ?? [];
         if (array_key_exists('value', $pending)) {
             return $pending['value'];
         }
@@ -259,7 +371,9 @@ final class ObjectCreationContext
 
     public function writeProperty(ReflectionProperty $property, mixed $value): void
     {
-        if (!$this->propertyClaimed($property)) {
+        $this->assertPropertyWritesOpen();
+        $key = $this->propertyKey($property);
+        if (!isset($this->claimedProperties[$key])) {
             throw new LogicException(sprintf(
                 'Property "%s::$%s" must be claimed before it is written.',
                 $property->getDeclaringClass()->getName(),
@@ -270,10 +384,9 @@ final class ObjectCreationContext
         $entry = $this->entry ?? throw new LogicException(sprintf(
             'Cannot write property "%s" before "%s" is initialized.',
             $property->getName(),
-            $this->class->getName(),
+            $this->declaration->getName(),
         ));
 
-        $key = self::propertyKey($property);
         if (isset($this->pendingPropertyWrites[$key])) {
             $this->pendingPropertyWrites[$key]['value'] = $value;
             return;
@@ -287,10 +400,7 @@ final class ObjectCreationContext
             ) {
                 // Select the native slot without reading overridden metadata
                 // methods or field hooks on the custom reflector.
-                /** @var ReflectionClass<object> $owner */
-                $owner = new ReflectionMethod(ReflectionProperty::class, 'getDeclaringClass')->invoke($property);
-                /** @var string $name */
-                $name = new ReflectionMethod(ReflectionProperty::class, 'getName')->invoke($property);
+                [$owner, $name] = self::nativeProperty($property);
                 $writer = $owner->getProperty($name);
             }
             $writer->setValue($entry, $value);
@@ -301,18 +411,40 @@ final class ObjectCreationContext
         }
     }
 
+    private function __clone() {}
+
     private function conflictingStrategy(CreationStrategy $strategy): InvalidConfigurationException
     {
         return new InvalidConfigurationException(sprintf(
             'Creation strategies "%s" and "%s" cannot be combined for "%s".',
             $this->strategy->name,
             $strategy->name,
-            $this->class->getName(),
+            $this->declaration->getName(),
         ));
     }
 
-    private static function propertyKey(ReflectionProperty $property): string
+    private function propertyKey(ReflectionProperty $property): string
     {
-        return $property->getDeclaringClass()->getName() . "\0" . $property->getName();
+        // Native setValue() can write a same-named public property on an unrelated object.
+        [$declaringClass, $name] = self::nativeProperty($property);
+        $owner = $declaringClass->getName();
+        if (!is_a($this->entry ?? $this->declaration->getName(), $owner, true)) {
+            throw new LogicException(sprintf('Property "%s::$%s" does not belong to this creation context.', $owner, $name));
+        }
+        return $owner . "\0" . $name;
+    }
+
+    /** @return array{ReflectionClass<object>,string} */
+    private static function nativeProperty(ReflectionProperty $property): array
+    {
+        if ($property::class === ReflectionProperty::class) {
+            return [$property->getDeclaringClass(), $property->getName()];
+        }
+
+        /** @var ReflectionClass<object> $declaringClass */
+        $declaringClass = new ReflectionMethod(ReflectionProperty::class, 'getDeclaringClass')->invoke($property);
+        /** @var string $name */
+        $name = new ReflectionMethod(ReflectionProperty::class, 'getName')->invoke($property);
+        return [$declaringClass, $name];
     }
 }

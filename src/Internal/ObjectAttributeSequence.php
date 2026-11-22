@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal;
 
 use Componenta\DI\Attribute\Composition\AttributePlan;
-use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ExceptionInterface;
@@ -37,9 +36,9 @@ final class ObjectAttributeSequence
     /** @var array<int,array<int,array{AttributeUsage,object}>> */
     private array $pending = [];
 
-    /** @param list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod> $targets */
+    /** @param list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod> $targets */
     public function __construct(
-        private readonly AttributePlanBuilder $builder,
+        private readonly AttributePlans $builder,
         private readonly array $targets,
         private readonly AttributePhase $phase,
     ) {}
@@ -54,7 +53,7 @@ final class ObjectAttributeSequence
         return $this->ordered[$this->completed] ?? null;
     }
 
-    /** @return ReflectionClass<object>|ReflectionProperty|ReflectionMethod */
+    /** @return ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod */
     public function target(AttributeUsage $usage): ReflectionClass|ReflectionProperty|ReflectionMethod
     {
         return $this->targets[$this->owners[spl_object_id($usage)]];
@@ -83,7 +82,7 @@ final class ObjectAttributeSequence
 
     public function isCurrent(): bool
     {
-        return $this->revision === $this->builder->revision;
+        return $this->revision === $this->builder->refreshAvailability();
     }
 
     public function dispatch(AttributeUsage $usage): void
@@ -111,7 +110,7 @@ final class ObjectAttributeSequence
     private function refresh(): void
     {
         while (!$this->isCurrent()) {
-            $revision = $this->builder->revision;
+            $revision = $this->builder->refreshAvailability();
             $plans = [];
             $ordered = [];
             $owners = [];
@@ -128,7 +127,7 @@ final class ObjectAttributeSequence
                     }
                 }
             }
-            if ($revision !== $this->builder->revision) {
+            if ($revision !== $this->builder->refreshAvailability()) {
                 continue;
             }
 
@@ -190,7 +189,7 @@ final class ObjectAttributeSequence
             // The new owners snapshot is not published yet. Keep this instance
             // across discovery retries without replaying its native arguments.
             $this->pending[$owner][$usage->declarationOrder] = [$usage, $this->materialize($usage, $owner)];
-            return $revision === $this->builder->revision;
+            return $revision === $this->builder->refreshAvailability();
         } catch (ExceptionInterface $exception) {
             throw $exception;
         } catch (Throwable $exception) {

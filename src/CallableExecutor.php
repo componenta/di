@@ -7,11 +7,12 @@ namespace Componenta\DI;
 use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Internal\CallableReflector;
 use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\Reflection\Reflection;
-use InvalidArgumentException;
 use LogicException;
 use ReflectionFunction;
 use ReflectionParameter;
@@ -22,13 +23,17 @@ use function Componenta\DI\Internal\is_magic_closure_trampoline;
 /** DI-aware callable executor. */
 final class CallableExecutor implements CallableExecutorInterface
 {
-    /** @var array<string, PreparedParameterPlan|null> */
+    /** @var array<string, PreparedParameterPlan> */
     private array $callablePlans = [];
+
+    private readonly ParameterExecution $parameters;
 
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
-        private readonly ParametersResolver $parameters,
-    ) {}
+        ParametersResolver $parameters,
+    ) {
+        $this->parameters = ParameterExecutionAccess::for($parameters);
+    }
 
     /** @param array<string|int, mixed> $params */
     public function call(mixed $callable, array $params = []): mixed
@@ -120,51 +125,25 @@ final class CallableExecutor implements CallableExecutorInterface
         }
 
         $key = self::cacheKey($callable);
-        if (array_key_exists($key, $this->callablePlans)) {
+        if (isset($this->callablePlans[$key])) {
             $cached = $this->callablePlans[$key];
-            if ($cached === null || $this->parameters->isCurrentPlan($cached)) {
+            if ($this->parameters->isCurrentPlan($cached)) {
                 return $cached;
             }
             unset($this->callablePlans[$key]);
         }
 
-        // Missing methods use native magic dispatch and have no signature to
-        // cache. Their names may vary on every call in a long-running process;
-        // retain metadata only for actual declarations, not that input history.
-        if (is_array($callable) && !method_exists($callable[0], (string) $callable[1])) {
+        $reflection = CallableReflector::reflect($callable);
+        if ($reflection === null) {
+            // Magic-dispatched names can vary on every call and have no signature to cache.
             return null;
-        }
-        if (is_string($callable) && ($separator = strrpos($callable, '::')) !== false) {
-            $class = substr($callable, 0, $separator);
-            $method = substr($callable, $separator + 2);
-            if (!method_exists($class, $method)) {
-                return null;
-            }
-            if (str_contains($class, '::')) {
-                // Normalize only reflection's input for a native class alias;
-                // invocation and the cache key keep the original callable.
-                $metadataCallable = [$class, $method];
-                if (!is_callable($metadataCallable)) {
-                    return null;
-                }
-                $callable = $metadataCallable;
-            }
-        }
-
-        try {
-            $reflection = Reflection::callable($callable);
-        } catch (InvalidArgumentException) {
-            // CallableResolver has already established native callability. If
-            // reflection cannot expose a concrete method, PHP is dispatching
-            // through __call()/__callStatic(); preserve native argument binding.
-            return $this->callablePlans[$key] = null;
         }
 
         /** @var list<ReflectionParameter> $parameters */
         $parameters = array_values($reflection->getParameters());
         $plan = $this->parameters->prepare($parameters);
 
-        if ($this->parameters->canCachePlans && !$plan->requiresFreshValidation) {
+        if ($this->parameters->isSealed && !$plan->requiresFreshValidation) {
             $this->callablePlans[$key] = $plan;
         }
 

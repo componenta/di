@@ -4,20 +4,36 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Target;
 
-use Componenta\DI\Internal\Resolver\Parameter\ParameterAttributeObservation;
+use Componenta\DI\Internal\ReflectionSnapshot;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterDeclaration;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterTargetScope;
 use Componenta\DI\Resolver\TypeHints;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
+use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionType;
+use WeakReference;
 
 use function Componenta\DI\Internal\is_attribute_class_loaded;
 use function Componenta\DI\Internal\is_closure_reflector;
 
-/** Immutable, precomputed view of one reflected parameter. */
-final class ParameterTarget
+/**
+ * Immutable, precomputed view of one reflected parameter.
+ */
+final class ParameterTarget extends ParameterTargetScope
 {
+    /** Native reflectors returned to extensions are independent of the stored declaration. */
+    public ReflectionParameter $reflection {
+        get => $this->declaration->snapshot();
+    }
+
+    /** Evaluates the declared default anew, including object defaults. */
+    public mixed $defaultValue {
+        get => $this->declaration->defaultValue();
+    }
+
     /** @var list<ReflectionAttribute<object>> */
     private readonly array $attributeReflectors;
 
@@ -44,13 +60,11 @@ final class ParameterTarget
     public readonly bool $variadic;
     public readonly bool $byReference;
     public readonly string $declaringContext;
-    /** @internal Whether the resolver classification can be reused for this target. */
-    public readonly bool $canCacheClassification;
 
-    public function __construct(
-        public readonly ReflectionParameter $reflection,
-        private ?ParameterAttributeObservation $observation = null,
-    ) {
+    public function __construct(ReflectionParameter $reflection)
+    {
+        $source = $reflection;
+        $reflection = ReflectionSnapshot::parameter($reflection);
         $this->name = $reflection->getName();
         $this->position = $reflection->getPosition();
         $this->type = $reflection->getType();
@@ -62,7 +76,11 @@ final class ParameterTarget
         $this->variadic = $reflection->isVariadic();
         $this->byReference = $reflection->isPassedByReference();
         $function = $reflection->getDeclaringFunction();
-        $this->canCacheClassification = $reflection::class === ReflectionParameter::class && !is_closure_reflector($function);
+        $native = $reflection::class === ReflectionParameter::class;
+        $nativeOmission = $native ? !$this->variadic && $reflection->isOptional() && $function->isInternal() : null;
+        $nativeClosure = $native && is_closure_reflector($function);
+        $canCacheClassification = $native && !$nativeClosure;
+        $closureMethodSource = $nativeClosure && $function instanceof ReflectionMethod ? WeakReference::create($source) : null;
         $this->declaringContext = self::declaringContext($reflection, $function);
         unset($function);
 
@@ -81,6 +99,7 @@ final class ParameterTarget
         $this->attributeReflectors = $allAttributes;
         $this->attributesByClass = $attributes;
         $this->attributeClasses = array_keys($classes);
+        parent::__construct(new ParameterDeclaration($reflection, $nativeOmission, $canCacheClassification, !$native || $allAttributes !== [], $closureMethodSource));
     }
 
     public function hasAttribute(string $attributeClass): bool
@@ -107,7 +126,7 @@ final class ParameterTarget
             }
         }
 
-        $this->observation?->record($this, $attributeClass);
+        $this->attributeObserver?->record($this, $attributeClass);
         return false;
     }
 
@@ -144,7 +163,7 @@ final class ParameterTarget
         }
 
         if ($reflector === null) {
-            $this->observation?->record($this, $attributeClass);
+            $this->attributeObserver?->record($this, $attributeClass);
             return null;
         }
 
@@ -158,24 +177,25 @@ final class ParameterTarget
     public function watchAttributeAvailability(string $attributeClass): void
     {
         if ($attributeClass !== '' && $this->attributeClasses !== []) {
-            $this->observation?->record($this, $attributeClass);
+            $this->attributeObserver?->record($this, $attributeClass);
         }
     }
 
-    /** @internal A separately owned target gets its own view for observation. */
-    public function forObservation(ParameterAttributeObservation $observation): self
+    public function __clone()
     {
-        if ($this->observation === $observation) {
-            return $this;
-        }
-        $target = clone $this;
-        $target->observation = $observation;
-        return $target;
+        $this->attributeObserver = null;
+        $this->declaration = clone $this->declaration;
     }
 
     public function accepts(mixed $value): bool
     {
         return TypeHints::matches($this->type, $value, $this->declaringClass);
+    }
+
+    /** @return list<class-string> */
+    public function unionCandidates(): array
+    {
+        return TypeHints::simpleUnionClassNames($this->type, $this->declaringClass);
     }
 
     private static function declaringContext(ReflectionParameter $parameter, ReflectionFunctionAbstract $function): string

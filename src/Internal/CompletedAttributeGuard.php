@@ -7,7 +7,6 @@ namespace Componenta\DI\Internal;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlan;
-use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -26,17 +25,17 @@ use ReflectionProperty;
  */
 final class CompletedAttributeGuard
 {
-    /** @var list<array{target:ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,plan:AttributePlan,phase:?AttributePhase}> */
+    /** @var list<array{target:ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,plan:AttributePlan,phase:?AttributePhase}> */
     private array $completed = [];
     /** @var (Closure():void)|null */
     private ?Closure $checkParameterSources = null;
 
     public function __construct(
-        private readonly AttributePlanBuilder $plans,
+        private readonly AttributePlans $plans,
         private int $verifiedRevision = -1,
     ) {}
 
-    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function record(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         AttributePlan $plan,
@@ -74,7 +73,7 @@ final class CompletedAttributeGuard
 
     public function assertUnchanged(): void
     {
-        while (($revision = $this->plans->revision) !== $this->verifiedRevision) {
+        while (($revision = $this->plans->refreshAvailability()) !== $this->verifiedRevision) {
             foreach ($this->completed as $completed) {
                 $current = $this->plans->build($completed['target']);
                 if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
@@ -88,7 +87,7 @@ final class CompletedAttributeGuard
     /** Checks consumed constructor declarations at the native invocation boundary. */
     public function assertLoadedParametersUnchanged(): void
     {
-        if ($this->plans->loadedRevision === $this->verifiedRevision) {
+        if ($this->plans->refreshLoaded() === $this->verifiedRevision) {
             return;
         }
         foreach ($this->completed as $completed) {
@@ -110,7 +109,7 @@ final class CompletedAttributeGuard
         $this->checkParameterSources?->__invoke();
     }
 
-    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     private static function throwChanged(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         ?AttributePhase $phase,
@@ -169,7 +168,7 @@ final class CompletedAttributeGuard
         return $definition->phase === $phase || $definition->phase === AttributePhase::Both;
     }
 
-    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     private static function targetName(ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target): string
     {
         if ($target instanceof ReflectionClass) {

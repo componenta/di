@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Closure;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use LogicException;
 use WeakMap;
 
 /**
@@ -15,7 +17,7 @@ use WeakMap;
  */
 final class ObjectResolutionParameterStore
 {
-    /** @var WeakMap<ObjectCreationContext, array<string|int, mixed>|Closure():array<string|int,mixed>> */
+    /** @var WeakMap<ObjectCreationContext, EntryParameters|(Closure():EntryParameters)> */
     private WeakMap $parameters;
     /** @var WeakMap<ObjectCreationContext,list<Closure():void>>|null */
     private ?WeakMap $setupSourceChecks = null;
@@ -25,16 +27,18 @@ final class ObjectResolutionParameterStore
         $this->parameters = new WeakMap();
     }
 
-    /** @param array<string|int, mixed>|Closure():array<string|int,mixed> $parameters */
-    public function attach(ObjectCreationContext $context, array|Closure $parameters): void
+    /** @param array<string|int, mixed>|EntryParameters|(Closure():EntryParameters) $parameters */
+    public function attach(ObjectCreationContext $context, array|Closure|EntryParameters $parameters): void
     {
-        $this->parameters[$context] = $parameters;
+        if (isset($this->parameters[$context])) {
+            throw new LogicException('This object creation attempt already owns its parameters.');
+        }
+        $this->parameters[$context] = $parameters instanceof Closure ? $parameters : ConstructionParameters::from($parameters);
     }
 
-    /** @return array<string|int, mixed> */
-    public function get(ObjectCreationContext $context): array
+    public function get(ObjectCreationContext $context): EntryParameters
     {
-        $parameters = $this->parameters[$context] ?? [];
+        $parameters = $this->parameters[$context] ?? ConstructionParameters::from([]);
         if ($parameters instanceof Closure) {
             $parameters = $parameters();
             $this->parameters[$context] = $parameters;
@@ -46,7 +50,7 @@ final class ObjectResolutionParameterStore
     public function copy(ObjectCreationContext $from, ObjectCreationContext $to): void
     {
         if (isset($this->parameters[$from])) {
-            $this->parameters[$to] = $this->parameters[$from];
+            $this->attach($to, $this->parameters[$from]);
         }
     }
 

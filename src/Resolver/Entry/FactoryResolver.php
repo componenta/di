@@ -13,10 +13,12 @@ use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\AvailableEntryLookup;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\ConfiguredFactoryDefinition;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
+use Componenta\DI\Internal\Resolver\Entry\PreparedClassDefinition;
 use Componenta\DI\Internal\Resolver\Entry\PreparedFactoryDefinition;
-use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
@@ -51,8 +53,8 @@ final class FactoryResolver implements DefinitionResolverInterface
     public function resolveDefinition(string $id, DefinitionInterface $validated, array $params = []): mixed
     {
         try {
-            if ($validated instanceof ClassDefinition) {
-                return $this->classDefinition($validated, $params);
+            if ($validated instanceof PreparedClassDefinition) {
+                return $validated->resolve($this, $params);
             }
             if (!$validated instanceof PreparedFactoryDefinition) {
                 throw InvalidConfigurationException::forUnsupportedDefinition($validated, self::class);
@@ -74,7 +76,7 @@ final class FactoryResolver implements DefinitionResolverInterface
                 throw new InvalidConfigurationException('ContainerValue bootstrap service is unavailable.');
             }
 
-            $factoryParams = MappedRequestContext::strip($params);
+            $factoryParams = ResolutionMetadata::publicParameters($params);
 
             return $factory instanceof LazyServiceFactoryInterface
                 ? $factory->lazy($container, $this->proxyFactory, $factoryParams)
@@ -92,7 +94,7 @@ final class FactoryResolver implements DefinitionResolverInterface
         $class = $definition->value;
         $reflection = new ReflectionClass($class);
         $constructor = $reflection->getConstructor();
-        $arguments = $this->arguments($constructor, $definition->constructorParams, MappedRequestContext::strip($params), $definition->autowire);
+        $arguments = $this->arguments($constructor, $definition->constructorParams, ResolutionMetadata::publicParameters($params), $definition->autowire);
         $entry = new $class(...$arguments);
 
         foreach ($definition->methodCalls as $call) {
@@ -233,8 +235,8 @@ final class FactoryResolver implements DefinitionResolverInterface
     {
         $factory = $definition->factory;
 
-        if (is_string($factory) && $this->container->has($factory)) {
-            $factory = $this->container->get($factory);
+        if (is_string($factory) && AvailableEntryLookup::has($this->container, $factory)) {
+            $factory = AvailableEntryLookup::get($this->container, $factory);
             if (is_array($factory)) {
                 // A service can return caller-owned routing references. Capture
                 // this invocation before validation can autoload application code.
@@ -248,9 +250,9 @@ final class FactoryResolver implements DefinitionResolverInterface
             && !$this->isNativeFactory($factory)
             && isset($factory[0])
             && is_string($factory[0])
-            && $this->container->has($factory[0])
+            && AvailableEntryLookup::has($this->container, $factory[0])
         ) {
-            $factory[0] = $this->container->get($factory[0]);
+            $factory[0] = AvailableEntryLookup::get($this->container, $factory[0]);
         }
 
         if (!$factory instanceof LazyServiceFactoryInterface && !is_callable($factory)) {
@@ -266,15 +268,17 @@ final class FactoryResolver implements DefinitionResolverInterface
     public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface
     {
         if ($definition instanceof ClassDefinition) {
-            $snapshots = [];
+            [$constructor, $calls] = ResolutionMetadata::snapshot([$definition->constructorParams, $definition->methodCalls]);
             $definition = new ClassDefinition(
                 $definition->value,
-                self::snapshotDefinitionArray($definition->constructorParams, $snapshots),
-                self::snapshotDefinitionArray($definition->methodCalls, $snapshots),
+                $constructor,
+                $calls,
                 $definition->autowire,
             );
             FactorySpecificationValidator::assertValid($id, $definition);
-            return $definition;
+            return new PreparedClassDefinition(
+                static fn(self $resolver, array $params): object => $resolver->classDefinition($definition, $params),
+            );
         }
         $factory = match (true) {
             $definition instanceof FactoryDefinition => $definition->value,
@@ -305,41 +309,6 @@ final class FactoryResolver implements DefinitionResolverInterface
             }
             return false;
         }
-    }
-
-    /**
-     * @template T of array<array-key, mixed>
-     * @param T $values
-     * @param array<string, array<array-key, mixed>> $snapshots
-     * @return T
-     */
-    private static function snapshotDefinitionArray(array $values, array &$snapshots): array
-    {
-        $snapshot = [];
-        foreach ($values as $key => $value) {
-            if (!is_array($value)) {
-                $snapshot[$key] = $value;
-                continue;
-            }
-            $reference = ReflectionReference::fromArrayElement($values, $key);
-            if ($reference === null) {
-                $snapshot[$key] = self::snapshotDefinitionArray($value, $snapshots);
-                continue;
-            }
-
-            $referenceId = $reference->getId();
-            if (!array_key_exists($referenceId, $snapshots)) {
-                // Preserve cycles inside the owned graph. They remain errors only
-                // when resolved, so runtime overrides can bypass unused defaults.
-                $snapshots[$referenceId] = [];
-                $snapshots[$referenceId] = self::snapshotDefinitionArray($value, $snapshots);
-            }
-            $snapshot[$key] = &$snapshots[$referenceId];
-        }
-
-        $result = $snapshot === [] ? $values : array_replace($values, $snapshot);
-        /** @var T $result Array shape and values are unchanged; only reference ownership differs. */
-        return $result;
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool

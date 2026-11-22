@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Internal\Resolver\Entry\ConstructionParameters;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
@@ -122,14 +123,14 @@ test('publishing a DTO validates the source of its consumed constructor values',
     $pipeline = $runtime->objects;
     Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $fields = ['value' => 'example'];
-    $source = MappedRequestContext::with($fields, $fields);
+    $parameters = ConstructionParameters::capture($fields, new MappedRequestContext($fields));
     $callbacks = 0;
     $configure = $strategy === 'constructor' ? null : static function (object $entry) use ($attribute, $matches, &$callbacks): void {
         ++$callbacks;
         class_alias($matches ? LabelSource::class : LabelMetadata::class, $attribute);
     };
-    $read = static function () use ($pipeline, $class, $source, $configure): string {
-        $entry = $pipeline->create($class, $source, $configure);
+    $read = static function () use ($pipeline, $class, $parameters, $configure): string {
+        $entry = $pipeline->create($class, $parameters, $configure);
         if (!$entry instanceof Label) {
             throw new LogicException('Expected a label fixture.');
         }
@@ -176,8 +177,9 @@ test('completed setup input is checked after final configuration of the same obj
         $configured[] = $entry->value;
         class_alias(LabelSource::class, $attribute);
     };
-    $read = static function () use ($pipeline, $class, $data, $configure): string {
-        $entry = $pipeline->create($class, MappedRequestContext::with($data, $data), $configure);
+    $parameters = ConstructionParameters::capture($data, new MappedRequestContext($data));
+    $read = static function () use ($pipeline, $class, $parameters, $configure): string {
+        $entry = $pipeline->create($class, $parameters, $configure);
         if (!$entry instanceof Label) {
             throw new LogicException('Expected a configured label.');
         }

@@ -18,12 +18,13 @@ final class VariadicArguments
     /** @return array{0:int,1:mixed}|null */
     public static function provided(ParameterTarget $target, ParameterResolutionContext $context): ?array
     {
-        if (array_key_exists($target->name, $context->provided)) {
-            return [$target->position, $context->provided[$target->name]];
+        $provided = ParameterContextAccess::provided($context);
+        if (array_key_exists($target->name, $provided)) {
+            return [$target->position, $provided[$target->name]];
         }
 
         $values = [];
-        foreach ($context->provided as $position => $value) {
+        foreach ($provided as $position => $value) {
             if (is_int($position) && $position >= $target->position) {
                 $values[$position] = $value;
             }

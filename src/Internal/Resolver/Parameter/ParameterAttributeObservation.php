@@ -28,7 +28,7 @@ final class ParameterAttributeObservation
      */
     public function capture(ParameterTarget $target, Closure $classify): array
     {
-        $target = $target->forObservation($this);
+        $target = ParameterTargetAccess::forObservation($target, $this);
         $queries = $this->queries ??= new WeakMap();
         $execution = self::executionId();
         $queries[$target] ??= [];

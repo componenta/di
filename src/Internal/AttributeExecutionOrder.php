@@ -7,8 +7,6 @@ namespace Componenta\DI\Internal;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
-use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 
 /**
@@ -19,7 +17,7 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 final class AttributeExecutionOrder
 {
     /** @param array<int,AttributeUsage> $executed */
-    public static function assertPrefix(AttributePlan $plan, array $executed, ?AttributePhase $phase = null): void
+    public static function assertPrefix(AttributePlan $plan, array $executed): void
     {
         if ($executed === []) {
             return;
@@ -27,12 +25,7 @@ final class AttributeExecutionOrder
 
         $ordered = [];
         foreach ($plan->usages as $usage) {
-            $definition = $usage->definition;
-            $applicable = $phase === null
-                ? $definition->handler instanceof ParameterAttributeHandlerInterface
-                : $definition->handler instanceof AttributeHandlerInterface
-                    && ($definition->phase === $phase || $definition->phase === AttributePhase::Both);
-            if ($applicable) {
+            if ($usage->definition->handler instanceof ParameterAttributeHandlerInterface) {
                 $ordered[$usage->declarationOrder] = $usage;
             }
         }

@@ -9,8 +9,8 @@ use Componenta\Config\ContainerValue;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\CallableReflector;
 use Componenta\DI\LazyServiceFactoryInterface;
-use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
 use Error;
 use InvalidArgumentException;
@@ -32,8 +32,10 @@ use function Componenta\DI\Internal\is_magic_closure_trampoline;
  */
 final class FactorySpecificationValidator
 {
-    /** @var WeakMap<Closure|ReflectionFunctionAbstract,true>|null */
-    private static ?WeakMap $validatedCallables = null;
+    /** @var WeakMap<Closure,true>|null */
+    private static ?WeakMap $validatedClosures = null;
+    /** @var array<string,true> */
+    private static array $validatedDeclarations = [];
     private static ?ContainerValue $containerArgument = null;
 
     public static function assertValid(string $id, mixed $factory): void
@@ -91,25 +93,33 @@ final class FactorySpecificationValidator
             $factory = Closure::fromCallable($factory);
         }
 
-        try {
-            // A ReflectionFunction strongly owns its closure. A weak key with
-            // just a validation flag leaves the callable free to retire.
-            $key = $factory instanceof Closure ? $factory : Reflection::callable($factory);
-        } catch (InvalidArgumentException) {
+        if ($factory instanceof Closure) {
+            $validated = self::$validatedClosures ??= new WeakMap();
+            if (!isset($validated[$factory])) {
+                $reflection = new ReflectionFunction($factory);
+                if (!is_magic_closure_trampoline($reflection)) {
+                    self::assertSignature($id, $reflection);
+                }
+                $validated[$factory] = true;
+            }
             return;
         }
 
-        $validated = self::$validatedCallables ??= new WeakMap();
-        if (isset($validated[$key])) {
+        $reflection = CallableReflector::reflect($factory);
+        if ($reflection === null) {
             return;
         }
-        $reflection = $key instanceof Closure ? new ReflectionFunction($key) : $key;
-
-        if (is_magic_closure_trampoline($reflection)) {
-            $validated[$key] = true;
-            return;
+        $key = $reflection instanceof ReflectionMethod
+            ? $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName()
+            : $reflection->getName();
+        if (!isset(self::$validatedDeclarations[$key])) {
+            self::assertSignature($id, $reflection);
+            self::$validatedDeclarations[$key] = true;
         }
+    }
 
+    private static function assertSignature(string $id, ReflectionFunctionAbstract $reflection): void
+    {
         self::assertArgumentCount($id, $reflection);
 
         /** @var list<ReflectionParameter> $parameters */
@@ -117,8 +127,6 @@ final class FactorySpecificationValidator
         $scope = self::callableScope($reflection);
         self::assertArgument($id, $parameters, 0, self::containerArgument(), $scope);
         self::assertArgument($id, $parameters, 1, [], $scope);
-
-        $validated[$key] = true;
     }
 
     private static function assertKnownCallable(string $id, callable $factory): void
