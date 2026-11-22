@@ -7,11 +7,8 @@ namespace Componenta\DI\Tests\Contract;
 use AllowDynamicProperties;
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
-use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
@@ -36,20 +33,20 @@ final class ReflectionLifetimeTarget
 }
 
 test('metadata preparation does not keep reflected objects alive', function (string $service, bool $objectReflection): void {
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ReflectionLifetimeMarker::class))
-        ->build();
+        ->assemble();
     $object = new ReflectionLifetimeTarget();
     $objectReference = WeakReference::create($object);
     $payloadReference = WeakReference::create($object->payload);
     $reflection = reflectionLifetimeTarget($object, $objectReflection);
 
     if ($service === 'attribute plans') {
-        expect($container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build($reflection)->target)->toBe($reflection);
+        expect($runtime->plans->build($reflection)->target)->toBe($reflection);
     } elseif ($service === 'attribute processor') {
-        $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->prepare($reflection);
+        $runtime->attributeProcessor->prepare($reflection);
     } else {
-        $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->prepare($reflection);
+        $runtime->objects->prepare($reflection);
     }
     unset($reflection, $object);
     gc_collect_cycles();
@@ -78,9 +75,9 @@ final class ReflectionPropertyObservationHandler implements AttributeHandlerInte
 
 test('object reflections keep their own metadata when class plans are already warm', function (bool $pipeline): void {
     $handler = new ReflectionPropertyObservationHandler();
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ReflectionLifetimeMarker::class, $handler))
-        ->build();
+        ->assemble();
     $first = new ReflectionLifetimeTarget();
     $first->first = true;
     $second = new ReflectionLifetimeTarget();
@@ -94,9 +91,9 @@ test('object reflections keep their own metadata when class plans are already wa
 
     foreach ($targets as $target) {
         if ($pipeline) {
-            $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->create($target);
+            $runtime->objects->create($target);
         } else {
-            $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->process(
+            $runtime->attributeProcessor->process(
                 $target,
                 AttributePhase::AfterInstantiation,
                 new ObjectCreationContext($target),

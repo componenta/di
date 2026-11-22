@@ -8,11 +8,13 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use LogicException;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -61,6 +63,37 @@ final class Handler implements AttributeHandlerInterface
     }
 }
 
+#[Attribute(Attribute::TARGET_CLASS)]
+final class CompletionMarker {}
+
+#[Marker, CompletionMarker]
+final class CompletionProduct {}
+
+/** @extends ReflectionClass<object> */
+final class CompletionReflection extends ReflectionClass
+{
+    public bool $published = false;
+
+    public function __construct(
+        private readonly AttributeDefinitionRegistry $registry,
+        private readonly Handler $handler,
+        private readonly AttributePhase $latePhase,
+    ) {
+        parent::__construct(CompletionProduct::class);
+    }
+
+    /** @return list<ReflectionAttribute<object>> */
+    public function getAttributes(?string $name = null, int $flags = 0): array
+    {
+        if (!$this->published && $this->handler->events !== []) {
+            $this->published = true;
+            $this->registry->register(new AttributeDefinition(CompletionMarker::class, $this->handler, phase: $this->latePhase));
+        }
+
+        return parent::getAttributes($name, $flags);
+    }
+}
+
 /**
  * @param class-string $class
  * @return ReflectionClass<object>
@@ -81,12 +114,13 @@ test('standalone processors execute both object phases without an optional boots
 
     foreach ([1, 2] as $_attempt) {
         $handler->events = [];
-        $context = new ObjectCreationContext($reflection);
+        $attempt = ObjectCreationContext::begin($reflection);
+        $context = $attempt->context;
         $processor->process($reflection, AttributePhase::BeforeInstantiation, $context);
         expect($handler->events)->toBe(['before:class', 'before:property', 'before:method']);
 
         $entry = new Product();
-        $context->initialize($entry);
+        $attempt->initialize($entry);
         $processor->process($reflection, AttributePhase::AfterInstantiation, $context);
 
         expect($entry->value)->toBe('configured')
@@ -97,3 +131,25 @@ test('standalone processors execute both object phases without an optional boots
             ]);
     }
 });
+
+test('standalone processing validates changes discovered while completing its phase', function (AttributePhase $latePhase): void {
+    $handler = new Handler();
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(Marker::class, $handler, phase: AttributePhase::BeforeInstantiation));
+    $processor = new AttributeProcessor($registry, new AttributePlanBuilder($registry));
+    $reflection = new CompletionReflection($registry, $handler, $latePhase);
+    $context = new ObjectCreationContext($reflection);
+
+    if ($latePhase === AttributePhase::BeforeInstantiation) {
+        expect(fn() => $processor->process($reflection, AttributePhase::BeforeInstantiation, $context))
+            ->toThrow(AttributeCompositionException::class);
+    } else {
+        $processor->process($reflection, AttributePhase::BeforeInstantiation, $context);
+    }
+
+    expect($reflection->published)->toBeTrue()
+        ->and($handler->events)->toBe(['before:class']);
+})->with([
+    'changed the completed phase' => AttributePhase::BeforeInstantiation,
+    'changed the other phase' => AttributePhase::AfterInstantiation,
+]);

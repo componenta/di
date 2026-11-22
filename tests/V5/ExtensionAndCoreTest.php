@@ -10,6 +10,8 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final class CoreService {}
 
 final readonly class FactoryProduct
@@ -76,7 +78,7 @@ test('custom parameter resolvers participate in the same ordered pipeline', func
         ->addParameterResolver(new MessageParameterResolver(), 350)
         ->build();
 
-    expect($container->makeAs(CustomResolverDto::class, CustomResolverDto::class)->message)->toBe('from-resolver');
+    expect(fixtureInstance($container->make(CustomResolverDto::class), CustomResolverDto::class)->message)->toBe('from-resolver');
 });
 
 test('explicit caller parameters keep their v4 precedence over lower-priority custom resolvers', function (): void {
@@ -84,6 +86,6 @@ test('explicit caller parameters keep their v4 precedence over lower-priority cu
         ->addParameterResolver(new MessageParameterResolver(), 350)
         ->build();
 
-    expect($container->makeAs(CustomResolverDto::class, CustomResolverDto::class, ['message' => 'explicit'])->message)
+    expect(fixtureInstance($container->make(CustomResolverDto::class, ['message' => 'explicit']), CustomResolverDto::class)->message)
         ->toBe('explicit');
 });

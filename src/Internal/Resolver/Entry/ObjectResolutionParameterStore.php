@@ -8,7 +8,11 @@ use Closure;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use WeakMap;
 
-/** Keeps raw internal resolution parameters outside extension-facing object contexts. @internal */
+/**
+ * Keeps raw internal resolution parameters outside extension-facing object contexts.
+ *
+ * @internal
+ */
 final class ObjectResolutionParameterStore
 {
     /** @var WeakMap<ObjectCreationContext, array<string|int, mixed>|Closure():array<string|int,mixed>> */

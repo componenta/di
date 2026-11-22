@@ -12,7 +12,11 @@ use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionFunction;
 
-/** Binds one semantic argument while resolving only the callback's DI suffix. @internal */
+/**
+ * Binds one semantic argument while resolving only the callback's DI suffix.
+ *
+ * @internal
+ */
 final readonly class AttributeCallbackInvoker
 {
     public function __construct(

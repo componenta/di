@@ -10,14 +10,14 @@ use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Config as ConfigValue;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use PHPUnit\Framework\Assert;
 use ReflectionMethod;
 use ReflectionParameter;
 
-use function Componenta\DI\Tests\Support\container;
-
 test('resolves config attributes independently for closure method parameters', function (bool $explicitTargets): void {
-    $container = container(config: new Config(['a' => 'config:A', 'b' => 'config:B'], new Environment([])));
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = \Componenta\DI\Tests\Support\assembledContainer(config: new Config(['a' => 'config:A', 'b' => 'config:B'], new Environment([])));
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $first = static fn(#[ConfigValue('a')] string $value): string => $value;
     $second = static fn(#[ConfigValue('b')] string $value): string => $value;
     $resolve = static function (Closure $closure) use ($resolver, $explicitTargets): array {
@@ -33,8 +33,9 @@ test('resolves config attributes independently for closure method parameters', f
 })->with(['native parameters' => false, 'explicit targets' => true]);
 
 test('releases captures after resolving closure method parameters', function (bool $explicitTargets): void {
-    $container = container(config: new Config(['a' => 'resolved'], new Environment([])));
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = \Componenta\DI\Tests\Support\assembledContainer(config: new Config(['a' => 'resolved'], new Environment([])));
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $capture = new \stdClass();
     $reference = \WeakReference::create($capture);
     $closure = static fn(#[ConfigValue('a')] string $value): array => [$capture, $value];

@@ -14,8 +14,11 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 interface TypedMappedSourceContract {}
 
@@ -152,18 +155,20 @@ test('mapped values cannot shadow Proxy parameter sources', function (): void {
 
 test('ordinary programmatic typed explicit parameters remain valid', function (): void {
     $value = new TypedMappedSourceValue();
-    $dto = (new ContainerBuilder())->build()->makeAs(TypedMappedSourceDto::class, TypedMappedSourceDto::class, [
+    $dto = (new ContainerBuilder())->build()->make(TypedMappedSourceDto::class, [
         TypedMappedSourceContract::class => $value,
     ]);
+    Assert::assertInstanceOf(TypedMappedSourceDto::class, $dto);
 
     expect($dto->service)->toBe($value);
 });
 
 test('ordinary programmatic explicit values can still override Proxy sources', function (): void {
     $value = new ProxyMappedSourceValue();
-    $dto = (new ContainerBuilder())->build()->makeAs(ProxyMappedSourceDto::class, ProxyMappedSourceDto::class, [
+    $dto = (new ContainerBuilder())->build()->make(ProxyMappedSourceDto::class, [
         'service' => $value,
     ]);
+    Assert::assertInstanceOf(ProxyMappedSourceDto::class, $dto);
 
     expect($dto->service)->toBe($value);
 });
@@ -172,9 +177,9 @@ test('typed explicit keys in unions accept only values implementing that exact k
     $container = (new ContainerBuilder())->build();
     $right = new TypedUnionRightValue();
 
-    expect($container->makeAs(TypedUnionTarget::class, TypedUnionTarget::class, [
+    expect(fixtureInstance($container->make(TypedUnionTarget::class, [
         TypedUnionRight::class => $right,
-    ])->service)->toBe($right)
+    ]), TypedUnionTarget::class)->service)->toBe($right)
         ->and(fn() => $container->make(TypedUnionTarget::class, [
             TypedUnionLeft::class => $right,
         ]))->toThrow(ResolutionException::class);

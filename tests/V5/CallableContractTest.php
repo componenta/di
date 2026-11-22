@@ -12,6 +12,7 @@ use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
 
@@ -19,7 +20,8 @@ final class CallableDependency {}
 
 test('CallableExecutor exposes the DI-aware call API', function (): void {
     $container = (new ContainerBuilder())->build();
-    $executor = $container->getAs(CallableExecutorInterface::class, CallableExecutorInterface::class);
+    $executor = $container->get(CallableExecutorInterface::class);
+    Assert::assertInstanceOf(CallableExecutorInterface::class, $executor);
 
     expect($executor)->toBeInstanceOf(CallableInvokerInterface::class)
         ->and($executor->call(
@@ -42,7 +44,8 @@ test('reflected zero-argument callables ignore unrelated provided parameters', f
 
 test('container CallableInvokerInterface remains DI-aware', function (): void {
     $container = (new ContainerBuilder())->build();
-    $invoker = $container->getAs(CallableInvokerInterface::class, CallableInvokerInterface::class);
+    $invoker = $container->get(CallableInvokerInterface::class);
+    Assert::assertInstanceOf(CallableInvokerInterface::class, $invoker);
 
     expect($invoker)->toBe($container)
         ->and($container)->toBeInstanceOf(Container::class)

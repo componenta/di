@@ -8,7 +8,11 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use stdClass;
 use WeakMap;
 
-/** Claims the mutable collaborators of one container at attachment. @internal */
+/**
+ * Claims the mutable collaborators of one container at attachment.
+ *
+ * @internal
+ */
 final class RuntimeCollaboratorOwnership
 {
     /** @var WeakMap<object, true>|null */

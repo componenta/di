@@ -41,8 +41,8 @@ final class FixedPipelineValue implements ParameterResolverInterface
 function pipelineAuditCallable(string $value): void {}
 
 test('the public attribute resolver returns the declared position and preserves supplied value priority', function (): void {
-    $container = (new ContainerBuilder(new Config([], new Environment(['PIPELINE_LABEL' => 'environment']))))->build();
-    $resolver = new AttributeParameterResolver($container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class));
+    [$container, $runtime] = (new ContainerBuilder(new Config([], new Environment(['PIPELINE_LABEL' => 'environment']))))->assemble();
+    $resolver = new AttributeParameterResolver($runtime->plans);
     $target = new ParameterTarget(new ReflectionParameter(
         static fn(string $prefix, #[Env('PIPELINE_LABEL')] string $value): string => $prefix . $value,
         'value',

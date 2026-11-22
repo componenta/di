@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\Contract\FactoryClassAvailability;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final readonly class Product
 {
@@ -100,8 +101,9 @@ enum IneligibleEnum
 /** @param class-string $class */
 test('implicit entries reject ineligible class kinds even when constructor policy would permit allocation', function (string $class): void {
     /** @var class-string $class */
-    $container = (new ContainerBuilder())->build();
-    $pipeline = $container->getAs(\Componenta\DI\Object\ObjectPipeline::class, \Componenta\DI\Object\ObjectPipeline::class);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $pipeline = $runtime->objects;
+    Assert::assertInstanceOf(\Componenta\DI\Object\ObjectPipeline::class, $pipeline);
 
     expect($pipeline->canCreate(new \ReflectionClass($class)))->toBeFalse()
         ->and($container->has($class))->toBeFalse()
@@ -116,8 +118,9 @@ test('implicit entries reject ineligible class kinds even when constructor polic
 ]);
 
 test('implicit entries can create concrete consumers of traits', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $pipeline = $container->getAs(\Componenta\DI\Object\ObjectPipeline::class, \Componenta\DI\Object\ObjectPipeline::class);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $pipeline = $runtime->objects;
+    Assert::assertInstanceOf(\Componenta\DI\Object\ObjectPipeline::class, $pipeline);
 
     expect($pipeline->canCreate(new \ReflectionClass(EligibleTraitConsumer::class)))->toBeTrue()
         ->and($container->has(EligibleTraitConsumer::class))->toBeTrue();

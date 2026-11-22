@@ -18,6 +18,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use Reflector;
 use RuntimeException;
@@ -212,7 +213,8 @@ test('late property Proxy materializes valid native arguments once per phase bef
         if ($loadSuffix) {
             $before[] = 'suffix';
         }
-        $owner = $container->makeAs($fixture['class'], Owner::class);
+        $owner = $container->make($fixture['class']);
+        Assert::assertInstanceOf(Owner::class, $owner);
         $after = [...$before, 'constructor', 'argument'];
         expect(Trace::$events)->toBe($strategy === 'eager' ? $after : $before)
             ->and($owner->ready)->toBeTrue()

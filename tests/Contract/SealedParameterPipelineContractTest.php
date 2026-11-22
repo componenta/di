@@ -9,11 +9,10 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-
-use function Componenta\DI\Tests\Support\container;
+use PHPUnit\Framework\Assert;
 
 test('a built container rejects late parameter resolvers and retains its original behavior', function (): void {
-    $container = container();
+    [$container, $runtime] = \Componenta\DI\Tests\Support\assembledContainer();
     $callable = static fn(string $value = 'original'): string => $value;
     expect($container->call($callable))->toBe('original');
 
@@ -28,7 +27,8 @@ test('a built container rejects late parameter resolvers and retains its origina
             return [$target->position, 'replacement'];
         }
     };
-    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
 
     expect(fn() => $parameters->add($resolver, 2000))->toThrow(InvalidConfigurationException::class, 'sealed')
         ->and($container->call($callable))->toBe('original');

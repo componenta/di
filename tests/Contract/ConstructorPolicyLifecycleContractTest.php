@@ -12,6 +12,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use Reflector;
 
@@ -84,14 +85,16 @@ test('a constructor policy active in both phases creates and initializes classes
     expect($container->has($class))->toBeTrue()
         ->and($handler->events)->toBe([]);
 
-    $shared = $container->getAs($class, $class);
+    $shared = $container->get($class);
+    Assert::assertInstanceOf($class, $shared);
     expect($shared)->toBeInstanceOf($class)
         ->and($shared->state)->toBe('initialized')
         ->and($handler->events)->toBe(['before', 'after'])
         ->and($container->get($class))->toBe($shared)
         ->and($handler->events)->toBe(['before', 'after']);
 
-    $fresh = $container->makeAs($class, $class);
+    $fresh = $container->make($class);
+    Assert::assertInstanceOf($class, $fresh);
     expect($fresh)->toBeInstanceOf($class)
         ->and($fresh)->not->toBe($shared)
         ->and($fresh->state)->toBe('initialized')

@@ -16,14 +16,17 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use DomainException;
 use Fiber;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionAttribute;
 use ReflectionParameter;
 use WeakReference;
 
 use function Componenta\DI\Tests\Support\container;
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 interface LabelKind {}
 
@@ -154,11 +157,11 @@ test('a warm classification observes aliases consulted by parameter attribute lo
     };
     spl_autoload_register($loader);
     try {
-        expect($di->makeAs(Product::class, Product::class)->label)->toBe('default')
+        expect(fixtureInstance($di->make(Product::class), Product::class)->label)->toBe('default')
             ->and($di->call($named))->toBe('default')
             ->and($di->call($closure))->toBe('default');
         $before = $resolver->classifications;
-        expect($di->makeAs(Product::class, Product::class)->label)->toBe('default')
+        expect(fixtureInstance($di->make(Product::class), Product::class)->label)->toBe('default')
             ->and($di->call($named))->toBe('default')
             ->and($resolver->classifications)->toBe($before);
 
@@ -166,11 +169,11 @@ test('a warm classification observes aliases consulted by parameter attribute lo
             class_alias($matches ? Label::class : OtherLabel::class, $query);
         }
         $value = $matches === true ? 'attribute' : 'default';
-        expect($di->makeAs(Product::class, Product::class)->label)->toBe($value)
+        expect(fixtureInstance($di->make(Product::class), Product::class)->label)->toBe($value)
             ->and($di->call($named))->toBe($value)
             ->and($di->call($closure))->toBe($value);
         $fresh = $build();
-        expect($fresh->makeAs(Product::class, Product::class)->label)->toBe($value)
+        expect(fixtureInstance($fresh->make(Product::class), Product::class)->label)->toBe($value)
             ->and($fresh->call($named))->toBe($value)
             ->and($autoloads)->toBe(0);
     } finally {
@@ -194,10 +197,11 @@ test('native reflection can watch an interface alias', function (): void {
 test('an alias loaded by a later classifier is reflected in the same parameter selection', function (string $lookup): void {
     $query = nextAlias();
     $type = $query . 'Trigger';
-    $di = container([
+    [$di, $runtime] = \Componenta\DI\Tests\Support\assembledContainer([
         ConfigKey::PARAMETER_RESOLVERS => [1000 => new LabelResolver($query, $lookup), 900 => new OptionalTypeResolver($type)],
     ]);
-    $parameters = $di->getAs(ParametersResolver::class, ParametersResolver::class);
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
     $target = $parameters->target(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $loader = static function (string $class) use ($query, $type): void {
         if ($class === $type) {
@@ -223,7 +227,7 @@ test('bootstrap rejects a changed attribute lookup for a parameter already consu
             ConfigKey::PARAMETER_RESOLVERS => [
                 1000 => new LabelResolver($query, $lookup, invert: $invert),
                 900 => static function (Container $di) use ($query, $matches, &$values): ParameterResolverInterface {
-                    $values[] = $di->getAs(Product::class, Product::class)->label;
+                    $values[] = fixtureInstance($di->get(Product::class), Product::class)->label;
                     class_alias($matches ? Label::class : OtherLabel::class, $query);
                     return new OptionalTypeResolver($query . 'NeverDeclared');
                 },
@@ -234,7 +238,7 @@ test('bootstrap rejects a changed attribute lookup for a parameter already consu
     if ($matches) {
         expect($build)->toThrow(InvalidConfigurationException::class, LabelResolver::class);
     } else {
-        expect($build()->getAs(Product::class, Product::class)->label)->toBe($invert ? 'attribute' : 'default');
+        expect(fixtureInstance($build()->get(Product::class), Product::class)->label)->toBe($invert ? 'attribute' : 'default');
     }
     expect($values)->toBe([$invert ? 'attribute' : 'default']);
 })->with(['matching alias' => true, 'unrelated alias' => false])
@@ -301,7 +305,7 @@ test('a bootstrap Fiber verifies aliases revealed during its post-publication cl
             expect($fiber->getReturn())->toBe($di->get(Product::class));
         }
         expect(class_exists($query, false))->toBeTrue()
-            ->and($di->getAs(Product::class, Product::class)->label)->toBe($matches ? 'attribute' : 'original');
+            ->and(fixtureInstance($di->get(Product::class), Product::class)->label)->toBe($matches ? 'attribute' : 'original');
     } finally {
         spl_autoload_unregister($loader);
     }
@@ -310,12 +314,14 @@ test('a bootstrap Fiber verifies aliases revealed during its post-publication cl
 test('nested classification in one execution keeps the original attribute lookup', function (string $lookup): void {
     $query = nextAlias();
     $type = $query . 'Trigger';
-    $outer = container([
+    $outer = \Componenta\DI\Tests\Support\assembledContainer([
         ConfigKey::PARAMETER_RESOLVERS => [1000 => new LabelResolver($query, $lookup), 900 => new OptionalTypeResolver($type)],
-    ])->getAs(ParametersResolver::class, ParametersResolver::class);
-    $inner = container([
+    ])[1]->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $outer);
+    $inner = \Componenta\DI\Tests\Support\assembledContainer([
         ConfigKey::PARAMETER_RESOLVERS => [1000 => new LabelResolver(nextAlias(), $lookup)],
-    ])->getAs(ParametersResolver::class, ParametersResolver::class);
+    ])[1]->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $inner);
     $target = $outer->target(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $loader = static function (string $class) use ($query, $type, $inner, $target): void {
         if ($class === $type && !class_exists($query, false)) {
@@ -334,8 +340,9 @@ test('nested classification in one execution keeps the original attribute lookup
 })->with(['presence lookup' => 'presence', 'native reflection' => 'native']);
 
 test('an explicit availability observation records only unavailable names in the current annotated target scope', function (): void {
-    $target = new ParameterTarget(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
-    $plain = new ParameterTarget(new ReflectionParameter(static fn(string $value): string => $value, 0));
+    $targets = new ParameterTargetFactory();
+    $target = $targets->create(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
+    $plain = $targets->create(new ReflectionParameter(static fn(string $value): string => $value, 0));
     $missing = nextAlias();
     $target->watchAttributeAvailability(nextAlias());
     $observe = static function (ParameterTarget $current) use ($missing): string {
@@ -346,13 +353,14 @@ test('an explicit availability observation records only unavailable names in the
         return 'ready';
     };
 
-    expect($target->observeAttributeQueries($observe))->toBe(['ready', [$missing]])
-        ->and($target->observeAttributeQueries(static fn(): string => 'finished'))->toBe(['finished', []])
-        ->and($plain->observeAttributeQueries($observe))->toBe(['ready', []]);
+    expect($targets->observeAttributeQueries($target, $observe))->toBe(['ready', [$missing]])
+        ->and($targets->observeAttributeQueries($target, static fn(): string => 'finished'))->toBe(['finished', []])
+        ->and($targets->observeAttributeQueries($plain, $observe))->toBe(['ready', []]);
 });
 
 test('attribute observation closes its own scope when a nested classifier throws', function (): void {
-    $target = new ParameterTarget(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
+    $targets = new ParameterTargetFactory();
+    $target = $targets->create(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
     $methods = get_class_methods($target);
     expect($methods)->not->toContain('beginAttributeQueries')
         ->and($methods)->not->toContain('endAttributeQueries');
@@ -360,11 +368,12 @@ test('attribute observation closes its own scope when a nested classifier throws
     $outer = nextAlias();
     $inner = nextAlias();
     $failure = new DomainException('The nested classifier failed.');
-    [$supported, $queries] = $target->observeAttributeQueries(
-        static function (ParameterTarget $observed) use ($outer, $inner, $failure): bool {
+    [$supported, $queries] = $targets->observeAttributeQueries(
+        $target,
+        static function (ParameterTarget $observed) use ($outer, $inner, $failure, $targets): bool {
             $observed->hasAttribute($outer);
             try {
-                $observed->observeAttributeQueries(static function (ParameterTarget $nested) use ($inner, $failure): never {
+                $targets->observeAttributeQueries($observed, static function (ParameterTarget $nested) use ($inner, $failure): never {
                     $nested->hasAttribute($inner);
                     throw $failure;
                 });
@@ -378,14 +387,37 @@ test('attribute observation closes its own scope when a nested classifier throws
 
     expect($supported)->toBeTrue()
         ->and($queries)->toBe([$outer])
-        ->and($target->observeAttributeQueries(static fn(): string => 'ready'))->toBe(['ready', []]);
+        ->and($targets->observeAttributeQueries($target, static fn(): string => 'ready'))->toBe(['ready', []]);
+});
+
+test('a second target factory observes its own view of an existing target', function (): void {
+    $owner = new ParameterTargetFactory();
+    $other = new ParameterTargetFactory();
+    $target = $owner->create(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));
+    $outer = nextAlias();
+    $inner = nextAlias();
+
+    [[$view, $otherQueries], $ownerQueries] = $owner->observeAttributeQueries(
+        $target,
+        static function (ParameterTarget $current) use ($other, $outer, $inner): array {
+            return $other->observeAttributeQueries($current, static function (ParameterTarget $copy) use ($current, $outer, $inner): ParameterTarget {
+                $current->watchAttributeAvailability($outer);
+                $copy->watchAttributeAvailability($inner);
+                return $copy;
+            });
+        },
+    );
+
+    expect($view)->not->toBe($target)
+        ->and($otherQueries)->toBe([$inner])
+        ->and($ownerQueries)->toBe([$outer]);
 });
 
 test('observations of the same parameter remain independent across suspended Fibers', function (string $lookup): void {
     $query = nextAlias();
-    $build = static fn(LabelResolver $resolver): ParametersResolver => container([
+    $build = static fn(LabelResolver $resolver): ParametersResolver => \Componenta\DI\Tests\Support\assembledContainer([
         ConfigKey::PARAMETER_RESOLVERS => [1000 => $resolver],
-    ])->getAs(ParametersResolver::class, ParametersResolver::class);
+    ])[1]->parameters;
     $first = $build(new LabelResolver($query, $lookup, pauseOnMiss: true));
     $second = $build(new LabelResolver(nextAlias(), $lookup, pauseOnMiss: true));
     $target = $first->target(new ReflectionParameter(__NAMESPACE__ . '\\render', 0));

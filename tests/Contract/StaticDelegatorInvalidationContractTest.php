@@ -54,6 +54,22 @@ final class InstanceDecorator
     }
 }
 
+final class LateRouteDecorator
+{
+    public static int $calls = 0;
+
+    public static function fromClass(Product $entry): Product
+    {
+        ++self::$calls;
+        return new Product($entry->value . ':static');
+    }
+
+    public function decorate(Product $entry): Product
+    {
+        return new Product($entry->value . ':instance');
+    }
+}
+
 test('native static delegators preserve shared results when an unused owner binding changes', function (string $method): void {
     StaticDecorator::$calls = 0;
     $container = (new ContainerBuilder())->addService('product', new Product('base'))->build();
@@ -124,6 +140,47 @@ test('native static pairs remain independent of both owner bindings and exact st
         ->and($container->resolve($specification))->toBe($specification)
         ->and($container->resolve(StaticDecorator::class . '::' . $method))->toBe($replacement);
 })->with(['declared', 'dynamic']);
+
+test('late native method arrays retain shared results unless a delegate consumes their owner', function (string $chain): void {
+    LateRouteDecorator::$calls = 0;
+    $owner = __NAMESPACE__ . '\\LateMethodArrayOwner_' . bin2hex(random_bytes(5));
+    $container = (new ContainerBuilder())->addService('product', new Product('base'))->build();
+    $container->delegator('product', [$owner, 'fromClass']);
+    if ($chain === 'independent') {
+        $container->delegator('product', static fn(Product $entry): Product => $entry);
+    } elseif ($chain === 'uses-owner') {
+        $container->delegator('product', [$owner, 'decorate']);
+    }
+    $attempts = 0;
+    $loader = static function (string $requested) use ($owner, &$attempts): void {
+        if ($requested === $owner && ++$attempts === 3) {
+            class_alias(LateRouteDecorator::class, $owner, autoload: false);
+        }
+    };
+
+    spl_autoload_register($loader);
+    try {
+        $first = $container->get('product');
+        $container->set($owner, new InstanceDecorator(':replacement'));
+        $current = $container->get('product');
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+
+    if ($chain === 'uses-owner') {
+        expect($first)->toEqual(new Product('base:static:instance'))
+            ->and($current)->toEqual(new Product('base:static:replacement'))
+            ->and(LateRouteDecorator::$calls)->toBe(2);
+    } else {
+        expect($first)->toEqual(new Product('base:static'))
+            ->and($current)->toBe($first)
+            ->and(LateRouteDecorator::$calls)->toBe(1);
+    }
+})->with([
+    'single native delegate' => 'single',
+    'independent second delegate' => 'independent',
+    'second delegate uses the owner' => 'uses-owner',
+]);
 
 test('native static alias strings do not depend on an unused delimiter prefix', function (string $method): void {
     StaticDecorator::$calls = 0;

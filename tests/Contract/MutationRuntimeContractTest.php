@@ -4,8 +4,17 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract;
 
+use Componenta\DI\Tests\Support\MutationRuntime;
 use Pest\Mutate\Support\StreamWrapper;
 use Symfony\Component\Process\Process;
+
+test('mutation workers keep positional tests and use the coverage selector', function (): void {
+    $arguments = ['tests/Contract/TypedEntryContractTest.php', '--exclude-filter=excluded', '--compact'];
+
+    expect(MutationRuntime::workerArguments($arguments))->toBe($arguments)
+        ->and(MutationRuntime::workerArguments(['--filter=selected method', ...$arguments]))->toBe($arguments)
+        ->and(MutationRuntime::workerArguments(['--filter', 'selected method', ...$arguments]))->toBe($arguments);
+});
 
 test('mutation workers inherit the selected PHP configuration', function (): void {
     $active = getenv('PEST_MUTATION_TESTING') !== false;

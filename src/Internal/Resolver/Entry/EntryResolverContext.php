@@ -9,7 +9,11 @@ use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Resolver\Entry\ReflectionResolver;
 
-/** Filters internal resolution metadata at entry-resolver extension boundaries. @internal */
+/**
+ * Filters internal resolution metadata at entry-resolver extension boundaries.
+ *
+ * @internal
+ */
 final class EntryResolverContext
 {
     /**

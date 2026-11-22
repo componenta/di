@@ -8,7 +8,11 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Explicit input and collection validation for one variadic parameter. @internal */
+/**
+ * Explicit input and collection validation for one variadic parameter.
+ *
+ * @internal
+ */
 final class VariadicArguments
 {
     /** @return array{0:int,1:mixed}|null */

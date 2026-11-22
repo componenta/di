@@ -9,10 +9,13 @@ use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Container;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use ReflectionClass;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class SelectedMakeProduct
 {
@@ -39,17 +42,18 @@ function selectedMakeParameter(#[Make, Proxy] SelectedMakeProduct $value): Selec
 
 it('does not activate an unregistered Proxy beside Make', function (bool $property): void {
     SelectedMakeProduct::$constructions = 0;
-    $container = (new ContainerBuilder())
+    $runtime = new ResolutionRuntime();
+    [$container] = (new ContainerBuilder())
         ->replaceAttributeDefinitions()
         ->addAttributeDefinition(static fn(Container $container): AttributeDefinition => new AttributeDefinition(
             Make::class,
-            $container->getAs(MakeHandler::class, MakeHandler::class),
+            new MakeHandler($container, $runtime->proxies, $runtime->plans),
             [ValueProvider::class],
         ))
-        ->build();
+        ->assemble($runtime);
 
     $product = $property
-        ? $container->makeAs(SelectedMakeProperty::class, SelectedMakeProperty::class)->value
+        ? fixtureInstance($container->make(SelectedMakeProperty::class), SelectedMakeProperty::class)->value
         : $container->call(__NAMESPACE__ . '\selectedMakeParameter');
 
     if (!$product instanceof SelectedMakeProduct) {
@@ -79,8 +83,8 @@ test('Proxy infers its concrete class from Make when the injection point has no 
     $mixed = static fn(#[Make(SelectedMakeProduct::class), Proxy] mixed $value): mixed => $value;
     $untyped = static fn(#[Make(SelectedMakeProduct::class), Proxy] $value): mixed => $value;
     $resolve = match ($kind) {
-        'mixed property' => static fn(): mixed => $container->makeAs(InferredMixedProxyProperty::class, InferredMixedProxyProperty::class)->value,
-        'untyped property' => static fn(): mixed => $container->makeAs(InferredUntypedProxyProperty::class, InferredUntypedProxyProperty::class)->value,
+        'mixed property' => static fn(): mixed => fixtureInstance($container->make(InferredMixedProxyProperty::class), InferredMixedProxyProperty::class)->value,
+        'untyped property' => static fn(): mixed => fixtureInstance($container->make(InferredUntypedProxyProperty::class), InferredUntypedProxyProperty::class)->value,
         'mixed parameter' => static fn(): mixed => $container->call($mixed),
         'untyped parameter' => static fn(): mixed => $container->call($untyped),
         default => throw new LogicException('Unknown proxy inference target.'),
@@ -129,16 +133,17 @@ function selectedProxyParameter(
 it('does not read an unregistered Make or evaluate its arguments beside Proxy', function (bool $property): void {
     SelectedMakeProduct::$constructions = 0;
     UnusedMakeArgument::$constructions = 0;
-    $container = (new ContainerBuilder())
+    $runtime = new ResolutionRuntime();
+    [$container] = (new ContainerBuilder())
         ->replaceAttributeDefinitions()
         ->addAttributeDefinition(static fn(Container $container): AttributeDefinition => new AttributeDefinition(
             Proxy::class,
-            $container->getAs(MakeHandler::class, MakeHandler::class),
+            new MakeHandler($container, $runtime->proxies, $runtime->plans),
         ))
-        ->build();
+        ->assemble($runtime);
 
     $product = $property
-        ? $container->makeAs(SelectedProxyProperty::class, SelectedProxyProperty::class)->value
+        ? fixtureInstance($container->make(SelectedProxyProperty::class), SelectedProxyProperty::class)->value
         : $container->call(__NAMESPACE__ . '\selectedProxyParameter');
 
     if (!$product instanceof SelectedMakeProduct) {

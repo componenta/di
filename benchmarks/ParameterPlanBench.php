@@ -20,8 +20,7 @@ namespace Componenta\DI\Benchmarks\ParameterPlan {
     use Componenta\Config\Config;
     use Componenta\Config\DependencyDefinitions;
     use Componenta\Config\Environment;
-    use Componenta\DI\Container;
-    use Componenta\DI\ContainerFactory;
+    use Componenta\DI\Internal\ContainerAssembly;
     use Componenta\DI\Resolver\Parameter\ParametersResolver;
     use ReflectionMethod;
 
@@ -41,18 +40,14 @@ namespace Componenta\DI\Benchmarks\ParameterPlan {
         ): void {}
     }
 
-    function createContainer(): Container
+    function createParameters(): ParametersResolver
     {
-        $container = (new ContainerFactory())->create(
+        [, $runtime] = ContainerAssembly::assemble(
             new Config([], new Environment([])),
             new DependencyDefinitions([]),
-        )->container;
+        );
 
-        if (!$container instanceof Container) {
-            throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
-        }
-
-        return $container;
+        return $runtime->parameters;
     }
 
     /** @return array{nanoseconds:float,operations:float} */
@@ -82,11 +77,7 @@ namespace Componenta\DI\Benchmarks\ParameterPlan {
     }
 
     $iterations = max(10_000, (int) ($_SERVER['DI_BENCH_ITERATIONS'] ?? 100_000));
-    $container = createContainer();
-    $parameters = $container->get(ParametersResolver::class);
-    if (!$parameters instanceof ParametersResolver) {
-        throw new \RuntimeException('ParametersResolver bootstrap service is unavailable.');
-    }
+    $parameters = createParameters();
 
     $providedByMethod = [
         'one' => ['a' => 1],

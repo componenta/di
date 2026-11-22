@@ -8,6 +8,7 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class ArgumentDiagnosticProduct
 {
@@ -116,7 +117,8 @@ test('definition variadics retain numeric positions across configured and runtim
         ->call('configure', [3 => 'third', 1 => 'first', 'tag' => 'method']);
     $container = (new ContainerBuilder())->addDefinition('product', $definition)->build();
 
-    $entry = $container->makeAs('product', NativeOmissionDefinitionProduct::class, [1 => 'first', 3 => 'third']);
+    $entry = $container->make('product', [1 => 'first', 3 => 'third']);
+    Assert::assertInstanceOf(NativeOmissionDefinitionProduct::class, $entry);
 
     expect($entry->observed[0][3])->toBe(['first', 'third', 'fourth', 'tag' => 'constructor'])
         ->and($entry->observed[1][3])->toBe(['first', 'third', 'tag' => 'method']);

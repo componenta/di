@@ -7,7 +7,11 @@ namespace Componenta\DI\Internal\Resolver\Entry;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Resolver\Entry\DefinitionResolverInterface;
 
-/** Immutable registration snapshot, independent of its originating composite. @internal */
+/**
+ * Immutable registration snapshot, independent of its originating composite.
+ *
+ * @internal
+ */
 final readonly class DefinitionBinding
 {
     public function __construct(

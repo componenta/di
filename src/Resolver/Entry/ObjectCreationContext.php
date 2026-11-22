@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAttempt;
 use Componenta\DI\Object\CreationStrategy;
 use LogicException;
 use PropertyHookType;
@@ -19,6 +20,12 @@ use Throwable;
 /** Mutable state owned by exactly one object-creation attempt. */
 final class ObjectCreationContext
 {
+    /** @var (Closure(self,object):void)|null */
+    private static ?Closure $initializeAttempt = null;
+
+    /** @var (Closure(self,array<string|int,mixed>|(Closure():array<string|int,mixed>)|null):ObjectCreationAttempt)|null */
+    private static ?Closure $retryAttempt = null;
+
     public private(set) bool $constructorEnabled = true;
     public private(set) CreationStrategy $strategy = CreationStrategy::Eager;
     public private(set) ?object $entry = null;
@@ -47,7 +54,7 @@ final class ObjectCreationContext
     private array $pendingPropertyWrites = [];
 
     /**
-     * @param ReflectionClass<object> $class
+     * @param ReflectionClass<covariant object> $class
      * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters Caller-visible parameters only.
      * @param (Closure(self):void)|null $beforeParameterRead Internal validation before exposing the public parameter bag.
      */
@@ -57,6 +64,32 @@ final class ObjectCreationContext
         private readonly ?Closure $beforeParameterRead = null,
     ) {
         $this->parameterValues = $parameters;
+    }
+
+    /**
+     * @internal Creates a new context and gives its owner control of the attempt.
+     * @param ReflectionClass<covariant object> $class
+     * @param array<string|int,mixed>|Closure():array<string|int,mixed> $parameters
+     * @param (Closure(self):void)|null $beforeParameterRead
+     */
+    public static function begin(
+        ReflectionClass $class,
+        array|Closure $parameters = [],
+        ?Closure $beforeParameterRead = null,
+    ): ObjectCreationAttempt {
+        return self::owned(new self($class, $parameters, $beforeParameterRead));
+    }
+
+    private static function owned(self $context): ObjectCreationAttempt
+    {
+        return new ObjectCreationAttempt(
+            $context,
+            self::$initializeAttempt ??= static function (self $context, object $entry): void {
+                $context->initialize($entry);
+            },
+            self::$retryAttempt ??= static fn(self $context, array|Closure|null $parameters): ObjectCreationAttempt
+                => self::owned($context->freshAttempt($parameters)),
+        );
     }
 
     /** Validate parameter access through the same guard as the public parameter bag. */
@@ -90,7 +123,7 @@ final class ObjectCreationContext
     }
 
     /** @param array<string|int,mixed>|(Closure():array<string|int,mixed>)|null $parameters */
-    public function freshAttempt(array|Closure|null $parameters = null): self
+    private function freshAttempt(array|Closure|null $parameters): self
     {
         $attempt = clone $this;
         if ($parameters !== null) {
@@ -102,7 +135,7 @@ final class ObjectCreationContext
         return $attempt;
     }
 
-    public function initialize(object $entry): void
+    private function initialize(object $entry): void
     {
         if ($this->entry !== null) {
             throw new LogicException(sprintf(

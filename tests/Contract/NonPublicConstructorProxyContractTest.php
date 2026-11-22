@@ -11,7 +11,10 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class Events
 {
@@ -92,7 +95,7 @@ test('proxy injection defers an application factory that owns a nonpublic constr
         ->build();
 
     $proxy = $property
-        ? $container->makeAs($consumer, $consumer)->product
+        ? fixtureInstance($container->make($consumer), $consumer)->product
         : $container->call($callable);
     if (!$proxy instanceof Product) {
         throw new LogicException('Expected the declared product type.');
@@ -145,13 +148,14 @@ function skippedPrivateParameter(#[Proxy] SkippedPrivateProduct $product): Skipp
 test('proxy injection preserves the NoConstructor policy accepted by ordinary reflection creation', function (bool $property): void {
     Events::$values = [];
     $container = (new ContainerBuilder())->build();
-    $eager = $container->makeAs(SkippedPrivateProduct::class, SkippedPrivateProduct::class);
+    $eager = $container->make(SkippedPrivateProduct::class);
+    Assert::assertInstanceOf(SkippedPrivateProduct::class, $eager);
     expect($eager->value)->toBe('initialized')
         ->and(Events::$values)->toBe(['setup']);
     Events::$values = [];
 
     $proxy = $property
-        ? $container->makeAs(SkippedPrivateConsumer::class, SkippedPrivateConsumer::class)->product
+        ? fixtureInstance($container->make(SkippedPrivateConsumer::class), SkippedPrivateConsumer::class)->product
         : $container->call(__NAMESPACE__ . '\\skippedPrivateParameter');
     if (!$proxy instanceof SkippedPrivateProduct) {
         throw new LogicException('Expected the constructor-policy target.');

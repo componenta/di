@@ -67,7 +67,8 @@ if (defined('COMPONENTA_DI_MUTATION_ARGUMENTS')) {
         $arguments = $mutationConfiguration->cliConfiguration->fromArguments($arguments);
         array_shift($arguments);
         $php = \Componenta\DI\Tests\Support\MutationRuntime::command();
-        $mutationRunner->setOriginalArguments([...$php, __DIR__ . '/mutate.php', ...$arguments]);
+        $workerArguments = \Componenta\DI\Tests\Support\MutationRuntime::workerArguments(array_values($arguments));
+        $mutationRunner->setOriginalArguments([...$php, __DIR__ . '/mutate.php', ...$workerArguments]);
         $fallback = new \Componenta\DI\Tests\Support\MutationFallback([
                 ...$php,
                 '-d', 'xdebug.mode=off',

@@ -13,6 +13,7 @@ use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 
 abstract class Label
 {
@@ -117,8 +118,9 @@ test('publishing a DTO validates the source of its consumed constructor values',
     if (!is_a($class, Label::class, true)) {
         throw new LogicException('Expected a mapped label class.');
     }
-    $di = (new ContainerBuilder())->build();
-    $pipeline = $di->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    [$di, $runtime] = (new ContainerBuilder())->assemble();
+    $pipeline = $runtime->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $fields = ['value' => 'example'];
     $source = MappedRequestContext::with($fields, $fields);
     $callbacks = 0;
@@ -163,7 +165,8 @@ test('completed setup input is checked after final configuration of the same obj
     if (!is_a($class, Label::class, true)) {
         throw new LogicException('Expected a configured label class.');
     }
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $data = ['value' => 'example'];
     $configured = [];
     $configure = static function (object $entry) use (&$configured, $attribute): void {

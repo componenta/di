@@ -14,13 +14,4 @@ final readonly class ParameterDiagnostic
         public string $context,
     ) {}
 
-    public function getName(): string
-    {
-        return $this->name;
-    }
-
-    public function getPosition(): int
-    {
-        return $this->position;
-    }
 }

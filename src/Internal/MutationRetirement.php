@@ -8,7 +8,11 @@ use Componenta\DI\Exception\MutationRetirementException;
 use LogicException;
 use Throwable;
 
-/** Holds retired roots until a mutation has completed every state write. @internal */
+/**
+ * Holds retired roots until a mutation has completed every state write.
+ *
+ * @internal
+ */
 final class MutationRetirement
 {
     /** @var list<mixed> */

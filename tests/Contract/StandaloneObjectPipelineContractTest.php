@@ -9,7 +9,6 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactory;
-use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use LogicException;
 
@@ -32,7 +31,7 @@ test('standalone object pipelines construct and configure objects without option
     $parameters->seal();
     $pipeline = new ObjectPipeline(
         $plans,
-        new InstanceCreator($parameters),
+        $parameters,
         new ProxyFactory(),
         $registry,
         new ObjectResolutionParameterStore(),

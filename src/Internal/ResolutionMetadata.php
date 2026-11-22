@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
-/** Internal metadata transport helpers for DI resolution parameter arrays. @internal */
+/**
+ * Internal metadata transport helpers for DI resolution parameter arrays.
+ *
+ * @internal
+ */
 final class ResolutionMetadata
 {
     private const string PREFIX = "\0componenta.di.";

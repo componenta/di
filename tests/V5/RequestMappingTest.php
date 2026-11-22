@@ -31,8 +31,11 @@ use Componenta\DI\Tests\Support\TestCasterProvider;
 use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Stream;
 use Nyholm\Psr7\UploadedFile as NyholmUploadedFile;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class HeaderCastDto
 {
@@ -261,11 +264,11 @@ function requestContainer(): \Componenta\DI\Container
 
 test('request attributes resolve and cast through RequestResolver', function (): void {
     $request = (new ServerRequest('GET', '/'))->withHeader('X-Count', '41');
-    $dto = requestContainer()->makeAs(
-        HeaderCastDto::class,
+    $dto = requestContainer()->make(
         HeaderCastDto::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(HeaderCastDto::class, $dto);
 
     expect($dto->count)->toBe(41);
 });
@@ -292,11 +295,11 @@ test('all single-value request sources resolve through the public container boun
         ->withAttribute('actor', 'customer-42')
         ->withUploadedFiles(['files' => ['avatar' => $uploadedFile]]);
 
-    $target = requestContainer()->makeAs(
-        RequestSourceAttributesTarget::class,
+    $target = requestContainer()->make(
         RequestSourceAttributesTarget::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(RequestSourceAttributesTarget::class, $target);
 
     expect($target->header)->toBe('header-token')
         ->and($target->cookie)->toBe('cookie-token')
@@ -320,11 +323,11 @@ test('specialized request maps select their documented PSR-7 source bags', funct
         ->withQueryParams(['query' => 'query-value'])
         ->withParsedBody(['payload' => 'payload-value']);
 
-    $target = requestContainer()->makeAs(
-        SpecializedRequestMapsTarget::class,
+    $target = requestContainer()->make(
         SpecializedRequestMapsTarget::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(SpecializedRequestMapsTarget::class, $target);
 
     expect($target->query)->toBe(['query' => 'query-value'])
         ->and($target->payload)->toBe(['payload' => 'payload-value'])
@@ -335,11 +338,11 @@ test('specialized request maps select their documented PSR-7 source bags', funct
 
 test('MapRequest creates nested DTOs through request-only mapped provenance', function (): void {
     $request = (new ServerRequest('POST', '/'))->withParsedBody(['name' => 'Ada']);
-    $entry = requestContainer()->makeAs(
-        MappedPayloadEnvelope::class,
+    $entry = requestContainer()->make(
         MappedPayloadEnvelope::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(MappedPayloadEnvelope::class, $entry);
 
     expect($entry->dto->name)->toBe('Ada');
 });
@@ -371,7 +374,7 @@ test('mapped source guard runs before a higher-priority custom resolver', functi
     ))->toThrow(RequestParameterSourceConflictException::class);
     expect($resolver->calls)->toBe(0);
 
-    expect($container->makeAs(HeaderProtectedMappedDto::class, HeaderProtectedMappedDto::class)->token)
+    expect(fixtureInstance($container->make(HeaderProtectedMappedDto::class), HeaderProtectedMappedDto::class)->token)
         ->toBe('custom-high-priority')
         ->and($resolver->calls)->toBe(1);
 });
@@ -393,11 +396,11 @@ test('PayloadParam infers names and traverses object payload paths with defaults
         'profile' => ['name' => 'Ada'],
     ]);
 
-    $target = requestContainer()->makeAs(
-        PayloadExtractionTarget::class,
+    $target = requestContainer()->make(
         PayloadExtractionTarget::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(PayloadExtractionTarget::class, $target);
 
     expect($target->inferred)->toBe('inferred-value')
         ->and($target->nested)->toBe('Ada')
@@ -431,11 +434,10 @@ test('MapRequest exposes every declared PSR-7 source through one public mapping'
         ->withAttribute('attribute', 'attribute-value')
         ->withUploadedFiles(['file' => $uploadedFile]);
 
-    $data = requestContainer()->makeAs(
-        AllRequestSourcesTarget::class,
+    $data = fixtureInstance(requestContainer()->make(
         AllRequestSourcesTarget::class,
         [ServerRequestInterface::class => $request],
-    )->data;
+    ), AllRequestSourcesTarget::class)->data;
 
     expect($data)->toBe([
         ...($withPayload ? ['payload' => 'payload-value'] : []),
@@ -454,11 +456,10 @@ test('MapRequest wildcard selection includes all explicit attribute and file val
         ->withAttribute('route', 17)
         ->withUploadedFiles(['avatar' => $uploadedFile]);
 
-    $data = requestContainer()->makeAs(
-        SelectedSharedRequestSourcesTarget::class,
+    $data = fixtureInstance(requestContainer()->make(
         SelectedSharedRequestSourcesTarget::class,
         [ServerRequestInterface::class => $request],
-    )->data;
+    ), SelectedSharedRequestSourcesTarget::class)->data;
 
     expect($data)->toBe(['route' => 17, 'avatar' => $uploadedFile]);
 });
@@ -475,11 +476,10 @@ test(
             ->withAttribute('id', 'attribute')
             ->withAttribute('unselected', 'excluded');
 
-        $data = requestContainer()->makeAs(
-            $target,
+        $data = fixtureInstance(requestContainer()->make(
             $target,
             [ServerRequestInterface::class => $request],
-        )->data;
+        ), $target)->data;
 
         expect($data)->toBe(['id' => $expectedFirst, 'after' => 'kept']);
     },

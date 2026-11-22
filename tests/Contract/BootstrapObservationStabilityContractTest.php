@@ -12,11 +12,13 @@ use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use LogicException;
 use ReflectionMethod;
 
-use function Componenta\DI\Tests\Support\container;
+use function Componenta\DI\Tests\Support\assembledContainer;
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class Marker {}
@@ -69,6 +71,8 @@ final class Observations
     public int $attempts = 0;
     public int $completed = 0;
 
+    public function __construct(private readonly ParametersResolver $parameters) {}
+
     /** @param Closure(string=):string $same */
     public function resolve(string $kind, Closure $same): void
     {
@@ -81,7 +85,7 @@ final class Observations
         if ($kind === 'closure' || $kind === 'closure-invoke') {
             $value = $di->call($kind === 'closure' ? $same : [$same, '__invoke']);
         } elseif ($kind === 'reflection-resolve' || $kind === 'reflection-targets') {
-            $parameters = $di->getAs(ParametersResolver::class, ParametersResolver::class);
+            $parameters = $this->parameters;
             $reflections = (new ReflectionMethod($same, '__invoke'))->getParameters();
             $arguments = $kind === 'reflection-resolve'
                 ? $parameters->resolve($reflections)
@@ -99,7 +103,7 @@ final class Observations
                 'method' => StableMethod::class,
                 default => throw new LogicException('Unexpected stable dependency fixture.'),
             };
-            $value = $di->makeAs($class, $class)->value;
+            $value = fixtureInstance($di->make($class), $class)->value;
         }
         if ($value !== 'stable') {
             throw new LogicException('Repeated resolution changed the stable dependency value.');
@@ -121,9 +125,10 @@ final readonly class ResolvingRule implements AttributeCompositionRuleInterface
 
 test('bootstrap proof converges when a composition rule repeatedly resolves the same stable dependency', function (string $kind): void {
     SeedState::$constructions = 0;
-    $observations = new Observations();
+    $runtime = new ResolutionRuntime();
+    $observations = new Observations($runtime->parameters);
     $same = static fn(string $value = 'stable'): string => $value;
-    $di = container([
+    [$di] = assembledContainer([
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             new AttributeDefinition(StableMetadata::class),
             static function (Container $di) use ($observations, $kind, $same): AttributeDefinition {
@@ -135,7 +140,7 @@ test('bootstrap proof converges when a composition rule repeatedly resolves the 
                 return new AttributeDefinition(Extension::class);
             },
         ],
-    ]);
+    ], runtime: $runtime);
 
     $cached = $di->get(Seed::class);
     expect($cached)->toBeInstanceOf(Seed::class)
@@ -160,7 +165,8 @@ test('bootstrap proof converges when an unresolved attribute autoloader repeated
     eval(sprintf('namespace %s; #[Pending_%s] final class %s extends SeedState {}', __NAMESPACE__, $suffix, $target));
     /** @var class-string<SeedState> $class */
     $class = __NAMESPACE__ . '\\' . $target;
-    $observations = new Observations();
+    $runtime = new ResolutionRuntime();
+    $observations = new Observations($runtime->parameters);
     $same = static fn(string $value = 'stable'): string => $value;
     $loader = static function (string $requested) use ($pending, $observations, $kind, $same): void {
         if ($requested === $pending) {
@@ -171,7 +177,7 @@ test('bootstrap proof converges when an unresolved attribute autoloader repeated
     spl_autoload_register($loader);
 
     try {
-        $di = container([
+        [$di] = assembledContainer([
             ConfigKey::ATTRIBUTE_DEFINITIONS => [
                 new AttributeDefinition(StableMetadata::class),
                 static function (Container $di) use ($observations, $class): AttributeDefinition {
@@ -180,7 +186,7 @@ test('bootstrap proof converges when an unresolved attribute autoloader repeated
                     return new AttributeDefinition(Extension::class);
                 },
             ],
-        ]);
+        ], runtime: $runtime);
 
         $cached = $di->get($class);
         expect($cached)->toBeInstanceOf(SeedState::class)

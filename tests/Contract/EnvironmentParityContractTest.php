@@ -12,6 +12,9 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\NotFoundException;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final readonly class EnvironmentParityProduct
 {
@@ -81,8 +84,10 @@ function environmentParitySnapshot(
         throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $shared = $container->getAs(EnvironmentParityProduct::class, EnvironmentParityProduct::class);
-    $fresh = $container->makeAs(EnvironmentParityProduct::class, EnvironmentParityProduct::class, ['runtime' => 'fresh']);
+    $shared = $container->get(EnvironmentParityProduct::class);
+    Assert::assertInstanceOf(EnvironmentParityProduct::class, $shared);
+    $fresh = $container->make(EnvironmentParityProduct::class, ['runtime' => 'fresh']);
+    Assert::assertInstanceOf(EnvironmentParityProduct::class, $fresh);
 
     try {
         $container->get('missing.service');
@@ -94,7 +99,7 @@ function environmentParitySnapshot(
     return [
         'config_identity' => $container->get(Config::class) === $config,
         'environment_identity' => $container->get(Environment::class) === $environment,
-        'environment_mode' => $container->getAs(Environment::class, Environment::class)->get('APP_ENV') === $mode,
+        'environment_mode' => fixtureInstance($container->get(Environment::class), Environment::class)->get('APP_ENV') === $mode,
         'config_has_dependencies' => $config->has(ConfigKey::DEPENDENCIES),
         'shared_identity' => $container->get(EnvironmentParityProduct::class) === $shared,
         'fresh_identity' => $fresh !== $shared,

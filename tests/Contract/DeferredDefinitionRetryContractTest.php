@@ -10,6 +10,7 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final readonly class RetryDefinitionDependency
 {
@@ -56,13 +57,15 @@ test('failed creation retries dependencies at the selected construction boundary
         expect(fn() => $container->get($class))->toThrow(ResolutionException::class, 'Dependency must be replaced.');
         $replacement = new RetryDefinitionDependency('good');
         $container->set(RetryDefinitionDependency::class, $replacement);
-        $entry = $container->getAs($class, $class);
+        $entry = $container->get($class);
+        Assert::assertInstanceOf($class, $entry);
         expect($entry->value)->toBe('good')
             ->and($container->get($class))->toBe($entry)
             ->and($container->get(RetryDefinitionDependency::class))->toBe($replacement);
         return;
     }
-    $entry = $container->getAs($class, $class);
+    $entry = $container->get($class);
+    Assert::assertInstanceOf($class, $entry);
 
     expect(fn() => $entry->value)->toThrow(ResolutionException::class, 'Dependency must be replaced.');
 
@@ -177,14 +180,16 @@ test('ClassDefinition resolves fresh references without executing deferred strat
         ->build();
     $container->addContainer($external);
 
-    $entry = $container->makeAs($class, $class);
+    $entry = $container->make($class);
+    Assert::assertInstanceOf($class, $entry);
 
     expect($observer->before)->toBe([])
         ->and($observer->after)->toBe([])
         ->and($external->calls)->toBe(1)
         ->and($entry->dependency->generation)->toBe(1);
 
-    $fresh = $container->makeAs($class, $class);
+    $fresh = $container->make($class);
+    Assert::assertInstanceOf($class, $fresh);
     expect($fresh->dependency->generation)->toBe(2)
         ->and($entry->dependency->generation)->toBe(1)
         ->and($external->calls)->toBe(2)

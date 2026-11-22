@@ -6,7 +6,11 @@ namespace Componenta\DI\Internal;
 
 use Psr\Container\ContainerInterface;
 
-/** Captures the entry IDs inspected while selecting one delegator chain. @internal */
+/**
+ * Captures the entry IDs fetched while selecting one delegator chain.
+ *
+ * @internal
+ */
 final class CallableDependencyLookup implements ContainerInterface
 {
     /** @var array<string, true> */
@@ -16,7 +20,6 @@ final class CallableDependencyLookup implements ContainerInterface
 
     public function has(string $id): bool
     {
-        $this->dependencies[$id] = true;
         return $this->container->has($id);
     }
 

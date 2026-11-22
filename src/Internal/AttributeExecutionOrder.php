@@ -11,7 +11,11 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 
-/** Validates that a refreshed plan preserves the handlers already executed. @internal */
+/**
+ * Validates that a refreshed plan preserves the handlers already executed.
+ *
+ * @internal
+ */
 final class AttributeExecutionOrder
 {
     /** @param array<int,AttributeUsage> $executed */

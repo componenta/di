@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\V5;
 
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final readonly class VirtualHookDependency {}
 
@@ -57,8 +58,10 @@ test('virtual and write-only property set hooks behave identically for every con
     ];
 
     foreach ($containers as $container) {
-        $virtual = $container->makeAs(VirtualHookTarget::class, VirtualHookTarget::class);
-        $writeOnly = $container->makeAs(WriteOnlyHookTarget::class, WriteOnlyHookTarget::class);
+        $virtual = $container->make(VirtualHookTarget::class);
+        Assert::assertInstanceOf(VirtualHookTarget::class, $virtual);
+        $writeOnly = $container->make(WriteOnlyHookTarget::class);
+        Assert::assertInstanceOf(WriteOnlyHookTarget::class, $writeOnly);
 
         expect($virtual->dependency)->toBe($dependency)
             ->and($virtual->writes)->toBe(1)

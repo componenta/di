@@ -15,6 +15,7 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Definition\ClassDefinition;
+use PHPUnit\Framework\Assert;
 
 final class SkippedConstructorDependency {}
 
@@ -98,7 +99,8 @@ test('NoConstructor bypasses private signatures only during attribute-driven cre
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs($class, $class);
+    $target = $container->make($class);
+    Assert::assertInstanceOf($class, $target);
 
     expect($events->initializations)->toBe($deferred ? 0 : 1)
         ->and($target->state)->toBe('ready')

@@ -16,6 +16,7 @@ use Psr\Container\ContainerInterface;
 use Reflector;
 
 use function Componenta\DI\Tests\Support\container;
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class BootstrapReady {}
@@ -62,7 +63,7 @@ it('rejects bootstrap dependencies created before their attribute extension is r
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             static fn(Container $container): AttributeDefinition => new AttributeDefinition(
                 BootstrapConsumer::class,
-                $container->getAs(BootstrapConsumerHandler::class, BootstrapConsumerHandler::class),
+                fixtureInstance($container->get(BootstrapConsumerHandler::class), BootstrapConsumerHandler::class),
                 [LifecycleHook::class],
             ),
             new AttributeDefinition(BootstrapReady::class, new BootstrapReadyHandler(), [LifecycleHook::class]),
@@ -110,14 +111,14 @@ it('initializes bootstrap dependencies when their attribute extension is registe
             new AttributeDefinition(BootstrapReady::class, new BootstrapReadyHandler(), [LifecycleHook::class]),
             static fn(Container $container): AttributeDefinition => new AttributeDefinition(
                 BootstrapConsumer::class,
-                $container->getAs(BootstrapConsumerHandler::class, BootstrapConsumerHandler::class),
+                fixtureInstance($container->get(BootstrapConsumerHandler::class), BootstrapConsumerHandler::class),
                 [LifecycleHook::class],
             ),
         ],
     ]);
 
-    expect($container->makeAs(BootstrapConsumerTarget::class, BootstrapConsumerTarget::class)->ready)->toBeTrue()
-        ->and($container->getAs(BootstrapDependency::class, BootstrapDependency::class)->ready)->toBeTrue();
+    expect(fixtureInstance($container->make(BootstrapConsumerTarget::class), BootstrapConsumerTarget::class)->ready)->toBeTrue()
+        ->and(fixtureInstance($container->get(BootstrapDependency::class), BootstrapDependency::class)->ready)->toBeTrue();
 });
 
 it('permits a later resolver whose priority cannot intercept an already resolved parameter', function (): void {
@@ -133,8 +134,8 @@ it('permits a later resolver whose priority cannot intercept an already resolved
         ],
     ]);
 
-    expect($container->getAs(BootstrapConventionDependency::class, BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback')
-        ->and($container->makeAs(BootstrapConventionDependency::class, BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback');
+    expect(fixtureInstance($container->get(BootstrapConventionDependency::class), BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback')
+        ->and(fixtureInstance($container->make(BootstrapConventionDependency::class), BootstrapConventionDependency::class)->bootstrapValue)->toBe('fallback');
 });
 
 it('permits later extensions unrelated to bootstrap dependencies and metadata only inspection', function (): void {
@@ -152,7 +153,7 @@ it('permits later extensions unrelated to bootstrap dependencies and metadata on
     ]);
 
     expect($container->get(BootstrapConsumerHandler::class))->toBeInstanceOf(BootstrapConsumerHandler::class)
-        ->and($container->makeAs(BootstrapConventionDependency::class, BootstrapConventionDependency::class)->bootstrapValue)->toBe('resolved');
+        ->and(fixtureInstance($container->make(BootstrapConventionDependency::class), BootstrapConventionDependency::class)->bootstrapValue)->toBe('resolved');
 });
 
 #[Attribute(Attribute::TARGET_PARAMETER)]

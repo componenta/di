@@ -14,6 +14,7 @@ use LogicException;
 use Reflector;
 
 use function Componenta\DI\Tests\Support\container;
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class IdentityAttribute {}
@@ -82,6 +83,6 @@ it('uses one definition for different spellings of the same attribute', function
         throw new LogicException('Expected the attribute identity fixture.');
     }
 
-    expect($container->makeAs(CanonicalAttributeTarget::class, CanonicalAttributeTarget::class)->value)->toBe('handled')
+    expect(fixtureInstance($container->make(CanonicalAttributeTarget::class), CanonicalAttributeTarget::class)->value)->toBe('handled')
         ->and($lowercase->value)->toBe('handled');
 });

@@ -23,7 +23,6 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use SensitiveParameter;
@@ -84,11 +83,11 @@ final class ObservedInvoker implements CallableInvokerInterface
 
 test('semantic callback input bypasses resolver classification and remains visible to its suffix', function (bool $uncached): void {
     $probe = new SuffixStateResolver();
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->addParameterResolver($probe, 2000)
-        ->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+        ->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
     $callback = static fn(int $semantic = 99, int $suffixState = 0): array => [$semantic, $suffixState];
 
     expect($callbacks->invoke($callback, 7, [0 => 80, 'semantic' => 90]))->toBe([7, 7])
@@ -97,11 +96,11 @@ test('semantic callback input bypasses resolver classification and remains visib
 })->with(['cached' => false, 'non-memoized' => true]);
 
 test('semantic callbacks resolve full suffix signatures and current services', function (bool $uncached): void {
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->addService('callback.dependency', new Dependency('first'))
-        ->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+        ->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
     $callback = static fn(
         array $whole,
         #[EntryId('callback.dependency')] Dependency $dependency,
@@ -119,9 +118,9 @@ test('semantic callbacks resolve full suffix signatures and current services', f
 })->with(['cached' => false, 'non-memoized' => true]);
 
 test('empty callbacks receive zero native arguments through one prepared decorator call', function (): void {
-    $container = (new ContainerBuilder())->build();
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
     $observed = new ObservedInvoker($container);
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $observed);
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $observed);
 
     expect($callbacks->invoke(static fn(): int => func_num_args(), ['whole' => 'value'], ['unused' => 42]))->toBe(0)
         ->and($observed->calls)->toBe(1)
@@ -130,9 +129,9 @@ test('empty callbacks receive zero native arguments through one prepared decorat
 });
 
 test('semantic callbacks preserve native omitted defaults and a single prepared invocation', function (): void {
-    $container = (new ContainerBuilder())->build();
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
     $observed = new ObservedInvoker($container);
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $observed);
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $observed);
 
     expect($callbacks->invoke(array_keys(...), ['nil' => null, 'one' => 1]))->toBe(['nil', 'one'])
         ->and($observed->calls)->toBe(1)
@@ -144,16 +143,16 @@ test('semantic callbacks preserve native omitted defaults and a single prepared 
 });
 
 test('semantic callbacks allow ordinary metadata and optional nullable first arguments', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
 
     expect($callbacks->invoke(static fn(#[SensitiveParameter] ?string $value = 'default'): ?string => $value, null))->toBeNull()
         ->and($callbacks->invoke(static fn(?string $arbitrary = 'default'): ?string => $arbitrary, 'actual'))->toBe('actual');
 });
 
 test('semantic callback first arguments reject incompatible types', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
 
     try {
         $callbacks->invoke(static fn(int $semantic): int => $semantic, '7');
@@ -168,8 +167,8 @@ test('semantic callback first arguments reject incompatible types', function ():
 });
 
 test('semantic callbacks reject unsupported first parameter ABI', function (Closure $callback): void {
-    $container = (new ContainerBuilder())->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
 
     expect(fn() => $callbacks->invoke($callback, 7))->toThrow(InvalidConfigurationException::class);
 })->with([
@@ -180,10 +179,10 @@ test('semantic callbacks reject unsupported first parameter ABI', function (Clos
 ]);
 
 test('semantic callbacks reject registered first parameter DI metadata', function (Closure $callback): void {
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class))
-        ->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+        ->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
 
     expect(fn() => $callbacks->invoke($callback, 'actual'))->toThrow(InvalidConfigurationException::class);
 })->with([
@@ -192,8 +191,8 @@ test('semantic callbacks reject registered first parameter DI metadata', functio
 ]);
 
 test('semantic callbacks preserve target failures and release invocation values and closures', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
     $value = new \stdClass();
     $capture = new \stdClass();
     $callback = static fn(object $semantic, Dependency $dependency): array => [$semantic, $capture, $dependency->value];
@@ -249,14 +248,14 @@ final class LoadingDependency {}
 test('late DI metadata on the reserved callback argument rejects completed suffix work without replay', function (bool $uncached): void {
     $attribute = 'ReservedAfterSuffix_' . bin2hex(random_bytes(5));
     $counter = new CountedTransformer();
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->addAttributeDefinition(new AttributeDefinition(CompletedTransformer::class, $counter, [ValueTransformer::class]))
         ->addFactory(LoadingDependency::class, static function () use ($attribute): LoadingDependency {
             eval(sprintf('namespace %s; #[\\Attribute(\\Attribute::TARGET_PARAMETER)] final class %s extends ReservedMetadata {}', __NAMESPACE__, $attribute));
             return new LoadingDependency();
         })
-        ->build();
+        ->assemble();
     $callback = eval(sprintf(
         'namespace %s; return static function (#[%s] object $semantic, #[CompletedTransformer] string $value, LoadingDependency $dependency): void { ++InvocationLog::$calls; };',
         __NAMESPACE__,
@@ -265,7 +264,7 @@ test('late DI metadata on the reserved callback argument rejects completed suffi
     if (!$callback instanceof Closure) {
         throw new \LogicException('Expected the late-metadata callback fixture.');
     }
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
     InvocationLog::$calls = 0;
 
     expect(fn() => $callbacks->invoke($callback, new \stdClass()))
@@ -281,14 +280,14 @@ test('reserved-target discovery cannot change an already completed callback suff
     $counter = new CountedTransformer();
     $late = new CountedTransformer();
     $armed = false;
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(CompletedTransformer::class, $counter, [ValueTransformer::class], rules: $uncached ? [new NoOpRule()] : []))
         ->addAttributeDefinition(new AttributeDefinition(LateTransformer::class, $late, [ValueTransformer::class]))
         ->addFactory(LoadingDependency::class, static function () use (&$armed): LoadingDependency {
             $armed = true;
             return new LoadingDependency();
         })
-        ->build();
+        ->assemble();
     $callback = eval(sprintf(
         'namespace %s; return static function (#[%s] object $semantic, #[CompletedTransformer, %s] string $value, LoadingDependency $trigger): void { ++InvocationLog::$calls; };',
         __NAMESPACE__,
@@ -309,7 +308,7 @@ test('reserved-target discovery cannot change an already completed callback suff
         }
     };
     spl_autoload_register($autoload);
-    $callbacks = new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container);
+    $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
     InvocationLog::$calls = 0;
 
     try {

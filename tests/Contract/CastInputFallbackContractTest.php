@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use RuntimeException;
 use Throwable;
 
@@ -193,7 +194,8 @@ test('Cast provider and caster failures preserve diagnostics and allow a later s
     $caster->failure = null;
     if ($property) {
         $container->set('cast-recovery-input', '  recovered  ');
-        $product = $container->getAs(CastRecoveryProduct::class, CastRecoveryProduct::class);
+        $product = $container->get(CastRecoveryProduct::class);
+        Assert::assertInstanceOf(CastRecoveryProduct::class, $product);
         expect($product->value)->toBe('recovered')
             ->and($container->get(CastRecoveryProduct::class))->toBe($product)
             ->and($state->constructions)->toBe(2)

@@ -125,7 +125,7 @@ final class AttributeProcessor
         AttributePhase $phase,
         ObjectCreationContext $context,
     ): void {
-        $this->processTracked($class, $phase, $context);
+        $this->processTracked($class, $phase, $context)->assertUnchanged();
     }
 
     /**

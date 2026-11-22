@@ -15,7 +15,10 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class QueryThenCastDto
 {
@@ -63,11 +66,11 @@ test('a request value source composes with Cast on one parameter', function (): 
     $request = (new ServerRequest('GET', '/?count=41'))
         ->withQueryParams(['count' => '41']);
 
-    $entry = composedParameterContainer()->makeAs(
-        QueryThenCastDto::class,
+    $entry = composedParameterContainer()->make(
         QueryThenCastDto::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(QueryThenCastDto::class, $entry);
 
     expect($entry->count)->toBe(41);
 });
@@ -76,11 +79,11 @@ test('composition ordering runs value providers before transformers regardless o
     $request = (new ServerRequest('GET', '/?count=42'))
         ->withQueryParams(['count' => '42']);
 
-    $entry = composedParameterContainer()->makeAs(
-        CastDeclaredBeforeQueryDto::class,
+    $entry = composedParameterContainer()->make(
         CastDeclaredBeforeQueryDto::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(CastDeclaredBeforeQueryDto::class, $entry);
 
     expect($entry->count)->toBe(42);
 });
@@ -97,11 +100,11 @@ test('incompatible parameter value sources fail composition before resolution', 
 });
 
 test('attribute composition transforms explicit caller input', function (): void {
-    $entry = composedParameterContainer()->makeAs(
-        ExplicitCastCompositionDto::class,
+    $entry = composedParameterContainer()->make(
         ExplicitCastCompositionDto::class,
         ['value' => '43'],
     );
+    Assert::assertInstanceOf(ExplicitCastCompositionDto::class, $entry);
 
     expect($entry->value)->toBe(43);
 });
@@ -114,7 +117,7 @@ test('property value providers compose with transformers in semantic order', fun
         ->addService(CasterProviderInterface::class, new TestCasterProvider())
         ->build();
 
-    expect($container->makeAs(ConfigThenCastPropertyDto::class, ConfigThenCastPropertyDto::class)->value)->toBe('composed');
+    expect(fixtureInstance($container->make(ConfigThenCastPropertyDto::class), ConfigThenCastPropertyDto::class)->value)->toBe('composed');
 });
 
 test('composed parameter attributes execute identically for every container build', function (): void {
@@ -127,6 +130,6 @@ test('composed parameter attributes execute identically for every container buil
     $params = [ServerRequestInterface::class => $request];
 
     foreach ($containers as $container) {
-        expect($container->makeAs(QueryThenCastDto::class, QueryThenCastDto::class, $params)->count)->toBe(44);
+        expect(fixtureInstance($container->make(QueryThenCastDto::class, $params), QueryThenCastDto::class)->count)->toBe(44);
     }
 });

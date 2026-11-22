@@ -24,6 +24,8 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final class ConflictingSourcesDto
 {
     public function __construct(
@@ -104,7 +106,7 @@ test('third party parameter attributes execute through the shared attribute reso
         ))
         ->build();
 
-    expect($container->makeAs(CustomValueDto::class, CustomValueDto::class)->value)->toBe('custom');
+    expect(fixtureInstance($container->make(CustomValueDto::class), CustomValueDto::class)->value)->toBe('custom');
 });
 
 test('third party capabilities can define their own cardinality without runtime behavior', function (): void {

@@ -24,6 +24,7 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use LogicException;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use Reflector;
 use WeakReference;
@@ -235,7 +236,8 @@ test('handlers discovered after the handlerless constructor path receive guarded
 })->with(['cached' => false, 'non-memoized' => true]);
 
 test('lazy retries guard the current attempt parameters and release failed object contexts', function (string $strategy, bool $uncached): void {
-    $pipeline = builder($uncached, AttributePhase::AfterInstantiation)->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = builder($uncached, AttributePhase::AfterInstantiation)->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $factory = new DeferredFactory($pipeline);
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
@@ -292,7 +294,8 @@ test('object policies that do not read context parameters preserve deferred supp
     if (!is_a($name, Product::class, true)) {
         throw new LogicException('Expected the unread policy fixture.');
     }
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $suppliers = 0;
     $product = $pipeline->create($name, resolveParameters: static function () use (&$suppliers): array {
         ++$suppliers;
@@ -334,7 +337,8 @@ test('deferred supplier source discovery rejects mapped context before handler s
         $enableSource = static function () use ($availability): void {
             $availability->enabled = true;
         };
-        $pipeline = builder($uncached)->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+        $pipeline = builder($uncached)->assemble()[1]->objects;
+        Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
         $factory = new class ($pipeline, $enableSource) implements FactoryInterface {
             public int $suppliers = 0;
 

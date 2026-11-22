@@ -8,7 +8,6 @@ use Attribute;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -16,10 +15,12 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Reflector;
 use RuntimeException;
-use stdClass;
 use Throwable;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class CreationContextExtension {}
@@ -55,7 +56,8 @@ test('object handlers materialize public parameters once and share them with the
     });
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
-        ->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+        ->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $calls = 0;
     $source = static function () use (&$calls): array {
         ++$calls;
@@ -80,7 +82,7 @@ test('object handlers may select the same creation strategy repeatedly', functio
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
         ->build();
 
-    expect($container->makeAs(CreationContextProduct::class, CreationContextProduct::class, ['value' => 9])->value)->toBe(9);
+    expect(fixtureInstance($container->make(CreationContextProduct::class, ['value' => 9]), CreationContextProduct::class)->value)->toBe(9);
 })->with(CreationStrategy::cases());
 
 test('a creation strategy cannot change after a handler selects deferred construction', function (CreationStrategy $first, CreationStrategy $second): void {
@@ -106,23 +108,18 @@ test('a creation strategy cannot change after a handler selects deferred constru
     [CreationStrategy::Proxy, CreationStrategy::Lazy],
 ]);
 
-test('a custom handler cannot initialize a creation context with an unrelated object', function (): void {
+test('object handlers cannot install an entry or reset the current creation attempt', function (): void {
     $handler = new CreationContextObserver(static function (ObjectCreationContext $context): void {
-        $context->initialize(new stdClass());
+        $operations = get_class_methods($context);
+
+        expect(array_intersect(['initialize', 'freshAttempt'], $operations))->toBe([])
+            ->and($context->entry)->toBeNull();
     });
     $container = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
         ->build();
 
-    try {
-        $container->make(CreationContextProduct::class, ['value' => 9]);
-    } catch (ResolutionException $error) {
-        expect($error->getPrevious())->toBeInstanceOf(LogicException::class)
-            ->and($error->getPrevious()?->getMessage())
-            ->toBe(sprintf('Expected an instance of "%s", got "stdClass".', CreationContextProduct::class));
-        return;
-    }
-    throw new LogicException('An unrelated initialization should fail.');
+    expect($container->make(CreationContextProduct::class, ['value' => 9]))->toEqual(new CreationContextProduct(9));
 });
 
 test('same-property reentry preserves the original value and permits a new resolution', function (): void {
@@ -161,6 +158,7 @@ test('same-property reentry preserves the original value and permits a new resol
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::AfterInstantiation))
         ->build();
 
-    $entry = $container->makeAs(CreationContextProperties::class, CreationContextProperties::class);
+    $entry = $container->make(CreationContextProperties::class);
+    Assert::assertInstanceOf(CreationContextProperties::class, $entry);
     expect($entry->value)->toBe(4)->and($entry->other)->toBe(11);
 });

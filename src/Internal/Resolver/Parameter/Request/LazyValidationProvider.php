@@ -9,7 +9,11 @@ use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use Psr\Container\ContainerInterface;
 
-/** Mutable-container-aware validation provider bridge. @internal */
+/**
+ * Mutable-container-aware validation provider bridge.
+ *
+ * @internal
+ */
 final readonly class LazyValidationProvider implements ValidationProviderInterface
 {
     public function __construct(private ContainerInterface $container) {}

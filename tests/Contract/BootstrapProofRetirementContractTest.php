@@ -17,16 +17,20 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use stdClass;
 use WeakReference;
 
+use function Componenta\DI\Tests\Support\assembledContainer;
 use function Componenta\DI\Tests\Support\container;
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute]
 final class Metadata {}
@@ -142,7 +146,8 @@ test('bootstrap verifies a parameter classification changed by an unavailable at
         class_alias($matches ? LabelPolicy::class : Metadata::class, $pending);
     };
     $own = null;
-    $newResolver = static function (Container $di) use ($stage, $class, $attribute, $load, &$events, &$own): ParameterResolverInterface {
+    $runtime = new ResolutionRuntime();
+    $newResolver = static function (Container $di) use ($stage, $class, $attribute, $load, $runtime, &$events, &$own): ParameterResolverInterface {
         if ($stage === 'live closure' || $stage === 'semantic callback') {
             $own = eval(sprintf(
                 'namespace %s; return static fn(%s#[\\%s] string $label = "fallback"): string => $label;',
@@ -153,9 +158,9 @@ test('bootstrap verifies a parameter classification changed by an unavailable at
             if (!$own instanceof Closure) {
                 throw new LogicException('Expected a live callable.');
             }
-            $events[] = callLabel($di, $own, $stage);
+            $events[] = callLabel($di, $runtime->parameters, $own, $stage);
         } else {
-            $events[] = $di->getAs($class, Label::class)->label;
+            $events[] = fixtureInstance($di->get($class), Label::class)->label;
         }
 
         if ($stage === 'extension') {
@@ -170,18 +175,18 @@ test('bootstrap verifies a parameter classification changed by an unavailable at
 
         return new PassiveResolver();
     };
-    $build = static fn(): Container => container([
+    $build = static fn(): Container => assembledContainer([
         ConfigKey::PARAMETER_RESOLVERS => [500 => new LabelResolver($query), 499 => $newResolver],
-    ]);
+    ], runtime: $runtime)[0];
 
     if ($matches) {
         expect($build)->toThrow(InvalidConfigurationException::class, LabelResolver::class);
     } else {
         $di = $build();
         if ($own instanceof Closure) {
-            expect(callLabel($di, $own, $stage))->toBe('fallback');
+            expect(callLabel($di, $runtime->parameters, $own, $stage))->toBe('fallback');
         } else {
-            expect($di->getAs($class, Label::class)->label)->toBe('fallback');
+            expect(fixtureInstance($di->get($class), Label::class)->label)->toBe('fallback');
         }
     }
     expect($events)->toBe($stage === 'extension'
@@ -192,12 +197,12 @@ test('bootstrap verifies a parameter classification changed by an unavailable at
     ->with(['related source' => true, 'ordinary metadata' => false])
     ->with(['late declaration' => false, 'late alias query' => true]);
 
-function callLabel(Container $di, Closure $call, string $stage): mixed
+function callLabel(Container $di, ParametersResolver $parameters, Closure $call, string $stage): mixed
 {
     if ($stage !== 'semantic callback') {
         return $di->call($call);
     }
-    $binder = new AttributeCallbackInvoker($di->getAs(ParametersResolver::class, ParametersResolver::class), $di);
+    $binder = new AttributeCallbackInvoker($parameters, $di);
     return $binder->invoke($call, null);
 }
 
@@ -341,7 +346,8 @@ test('bootstrap checks attribute matching after a temporary factory closure is r
             expect($build)->toThrow(InvalidConfigurationException::class, $required);
         } else {
             $di = $build();
-            $shared = $di->getAs(ReleasedLabel::class, ReleasedLabel::class);
+            $shared = $di->get(ReleasedLabel::class);
+            Assert::assertInstanceOf(ReleasedLabel::class, $shared);
             expect($shared->value)->toBe(match ($scenario) {
                 'early alias' => 'classified',
                 'explicit input' => 'provided',

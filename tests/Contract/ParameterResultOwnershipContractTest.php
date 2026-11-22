@@ -15,6 +15,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use ReflectionParameter;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -83,9 +84,10 @@ test('parameter result validation owns the tuple it accepted across autoloading 
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
-    $container = $builder->build();
+    [$container, $runtime] = $builder->assemble();
     $receiver = new Receiver();
-    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
     $target = $parameters->target(new ReflectionParameter([Receiver::class, 'consume'], 0));
     $contexts = [];
 
@@ -144,9 +146,10 @@ test('parameter result ownership still rejects invalid extension values and posi
     $extension = new ReferencedResolver();
     $extension->position = $invalidPosition ? 9 : 0;
     $extension->value = $invalidPosition ? CallableOwner::value(...) : 23;
-    $container = (new ContainerBuilder())->addParameterResolver($extension, 2000)->build();
+    [$container, $runtime] = (new ContainerBuilder())->addParameterResolver($extension, 2000)->assemble();
     $receiver = new Receiver();
-    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
     $target = $parameters->target(new ReflectionParameter([Receiver::class, 'consume'], 0));
     $operation = $single
         ? static fn(): array => $parameters->resolveParameter($target, new ParameterResolutionContext())
@@ -190,7 +193,7 @@ test('variadic result validation retains its accepted collection across tuple re
     $original = $requested . '::value';
     $extension = new ReferencedResolver();
     $extension->value = [$original];
-    $container = (new ContainerBuilder())->addParameterResolver($extension, 2000)->build();
+    [$container, $runtime] = (new ContainerBuilder())->addParameterResolver($extension, 2000)->assemble();
     $callback = static fn(callable ...$value): array => array_map(static fn(callable $item): mixed => $item(), $value);
     $loads = 0;
     $loader = static function (string $class) use ($requested, $extension, &$loads): void {
@@ -205,7 +208,8 @@ test('variadic result validation retains its accepted collection across tuple re
 
     try {
         if ($single) {
-            $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+            $parameters = $runtime->parameters;
+            Assert::assertInstanceOf(ParametersResolver::class, $parameters);
             $target = $parameters->target(new ReflectionParameter($callback, 0));
             expect($parameters->resolveParameter($target, new ParameterResolutionContext()))->toBe([0, [$original]]);
         } else {

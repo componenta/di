@@ -7,7 +7,6 @@ namespace Componenta\DI\Tests\Contract\AttributeDiscoveryRevision;
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -103,7 +102,7 @@ test('attribute discovery validates one revision when a later autoload reveals a
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(DiscoveryUncachedMarker::class, rules: [new DiscoveryNoOpRule()]));
     }
-    $container = $builder->build();
+    [$container, $runtime] = $builder->assemble();
     DiscoveryTarget::$constructions = 0;
     DiscoveryPayload::$instances = [];
     if ($warm) {
@@ -123,7 +122,7 @@ test('attribute discovery validates one revision when a later autoload reveals a
     spl_autoload_register($loader);
     try {
         if ($directPlan) {
-            $plan = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build(new ReflectionClass($class));
+            $plan = $runtime->plans->build(new ReflectionClass($class));
             expect($plan->attributes(DiscoveryRequired::class))->toHaveCount(1)
                 ->and($plan->attributes(DiscoveryDependent::class))->toHaveCount(1)
                 ->and(DiscoveryTarget::$constructions)->toBe(0)

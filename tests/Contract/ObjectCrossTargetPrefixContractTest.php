@@ -18,11 +18,11 @@ use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
-use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionAttribute;
 use ReflectionClass;
 use Reflector;
@@ -106,7 +106,8 @@ test('a late earlier target cannot replace an executed prefix with the same attr
         ->and(Product::$constructions)->toBe($before ? 0 : 1);
 
     $handler->events = [];
-    $entry = $container->makeAs($class, $class);
+    $entry = $container->make($class);
+    Assert::assertInstanceOf($class, $entry);
     expect($entry->value)->toBe('constructed')
         ->and($handler->events)->toBe($before ? ['class', 'property'] : ['property', 'class'])
         ->and(Product::$constructions)->toBe($before ? 1 : 2);
@@ -171,7 +172,7 @@ final class RecordConcreteAttribute implements AttributeHandlerInterface
 test('a refreshed slot cannot replace its concrete attribute after native instantiation or dispatch', function (bool $beforeDispatch): void {
     $registry = new AttributeDefinitionRegistry();
     $plans = new AttributePlanBuilder($registry);
-    $objects = new ObjectPipeline($plans, new InstanceCreator(new ParametersResolver($plans)), new ProxyFactory(), $registry, new ObjectResolutionParameterStore());
+    $objects = new ObjectPipeline($plans, new ParametersResolver($plans), new ProxyFactory(), $registry, new ObjectResolutionParameterStore());
     $reflection = new SwitchingReflection(ReflectedProduct::class);
     $refresh = static function () use ($reflection, $registry): void {
         if (!$reflection->switched) {

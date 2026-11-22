@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class DeferredDefinitionDependency {}
 
@@ -44,7 +45,8 @@ test('ClassDefinition resolves constructor references eagerly even with deferred
         ]))
         ->build();
 
-    $target = $container->getAs($class, $class);
+    $target = $container->get($class);
+    Assert::assertInstanceOf($class, $target);
 
     expect($created)->toBe(1)
         ->and($target->dependency)->toBe($dependency)
@@ -122,7 +124,8 @@ test('failed ClassDefinition constructor references can resolve on the next get'
             ->and($attempts)->toBe(1);
     }
 
-    $target = $container->getAs($class, $class);
+    $target = $container->get($class);
+    Assert::assertInstanceOf($class, $target);
     expect($target->dependency)->toBe($dependency)
         ->and($attempts)->toBe(2)
         ->and($container->get($class))->toBe($target);
@@ -174,7 +177,8 @@ test('ClassDefinition resolves references and preserves literal overrides withou
         ]))
         ->build();
 
-    $target = $container->makeAs(InspectedDefinitionTarget::class, InspectedDefinitionTarget::class, ['options' => ['nested' => $literal]]);
+    $target = $container->make(InspectedDefinitionTarget::class, ['options' => ['nested' => $literal]]);
+    Assert::assertInstanceOf(InspectedDefinitionTarget::class, $target);
 
     expect($observer->parameters)->toBe([])
         ->and($target->dependency)->toBe($dependency)

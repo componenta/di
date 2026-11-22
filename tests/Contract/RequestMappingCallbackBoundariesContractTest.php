@@ -8,7 +8,6 @@ use Attribute;
 use Closure;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\CurrentRequest;
@@ -19,6 +18,7 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -64,11 +64,7 @@ function builder(RequestDataExtractorInterface&MapperInterface $mapper): Contain
 {
     return (new ContainerBuilder())->addAttributeDefinition(
         static function (ContainerInterface $container) use ($mapper): AttributeDefinition {
-            $registry = $container->get(AttributeDefinitionRegistry::class);
-            if (!$registry instanceof AttributeDefinitionRegistry) {
-                throw new \LogicException('Expected the attribute registry.');
-            }
-            $handler = $registry->definition(MapRequest::class)?->handler;
+            $handler = $container->get(RequestAttributeHandler::class);
             if (!$handler instanceof ParameterAttributeHandlerInterface) {
                 throw new \LogicException('Expected the built-in request handler.');
             }

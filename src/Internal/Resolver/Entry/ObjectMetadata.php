@@ -2,14 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Componenta\DI\Object;
+namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 use ReflectionMethod;
 
-/** Fully discovered immutable runtime metadata for one object class. */
+/**
+ * Fully discovered immutable runtime metadata for one object class.
+ *
+ * @internal
+ */
 final readonly class ObjectMetadata
 {
     /**

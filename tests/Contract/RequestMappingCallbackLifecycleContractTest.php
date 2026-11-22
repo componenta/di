@@ -9,7 +9,6 @@ use Closure;
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
@@ -315,7 +314,7 @@ final class ProxyPayloadProduct extends PayloadProduct {}
 function transientContainer(bool $uncached): Container
 {
     return builder($uncached)->addAttributeDefinition(static function (Container $container): AttributeDefinition {
-        $handler = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition(MapRequest::class)?->handler;
+        $handler = $container->get(RequestAttributeHandler::class);
         if (!$handler instanceof RequestAttributeHandler) {
             throw new LogicException('Expected the shared request attribute handler.');
         }

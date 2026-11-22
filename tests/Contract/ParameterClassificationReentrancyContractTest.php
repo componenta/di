@@ -23,6 +23,7 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
+use PHPUnit\Framework\Assert;
 use ReflectionFunction;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -86,7 +87,7 @@ test('immutable classification tolerates metadata refreshed by nested or interle
         $type,
     ));
     $handler = new SourceHandler();
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(
             DeclaredSource::class,
             $handler,
@@ -94,7 +95,7 @@ test('immutable classification tolerates metadata refreshed by nested or interle
             rules: $uncached ? [new NoOpRule()] : [],
         ))
         ->addParameterResolver(new TypeClassifier(), -1000)
-        ->build();
+        ->assemble();
     $nestedResults = [];
     $loader = static function (string $class) use ($type, $attribute, $container, $suspend, &$nestedResults): void {
         if ($class !== __NAMESPACE__ . '\\' . $type) {
@@ -116,7 +117,8 @@ test('immutable classification tolerates metadata refreshed by nested or interle
 
     try {
         $callable = __NAMESPACE__ . '\\' . $function;
-        $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+        $resolver = $runtime->parameters;
+        Assert::assertInstanceOf(ParametersResolver::class, $resolver);
         $target = $resolver->target(new ReflectionFunction($callable)->getParameters()[0]);
         $operation = $path === 'call'
             ? static fn(): mixed => $container->call($callable)
@@ -145,8 +147,9 @@ test('immutable classification tolerates metadata refreshed by nested or interle
     ->with(['nested autoloader call' => false, 'interleaved fiber' => true]);
 
 test('a selected parameter target stays in use if an autoloader rebinds the caller slot', function (): void {
-    $container = (new ContainerBuilder())->addParameterResolver(new TypeClassifier(), -1000)->build();
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = (new ContainerBuilder())->addParameterResolver(new TypeClassifier(), -1000)->assemble();
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $suffix = bin2hex(random_bytes(5));
     $type = 'UnavailableTargetType_' . $suffix;
     $function = 'target_' . $suffix;

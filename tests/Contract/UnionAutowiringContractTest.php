@@ -24,6 +24,8 @@ use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 use ReflectionFunction;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 interface Left {}
 interface Right {}
 interface Other {}
@@ -251,8 +253,8 @@ test('unavailable unions preserve reflection defaults and nullable fallback', fu
     $container = builder()->build();
 
     expect($container->call(__NAMESPACE__ . '\\optional'))->toBeFalse()
-        ->and($container->makeAs(OptionalTarget::class, OptionalTarget::class)->value)->toBeFalse()
-        ->and($container->makeAs(NullableTarget::class, NullableTarget::class)->value)->toBeNull()
+        ->and(fixtureInstance($container->make(OptionalTarget::class), OptionalTarget::class)->value)->toBeFalse()
+        ->and(fixtureInstance($container->make(NullableTarget::class), NullableTarget::class)->value)->toBeNull()
         ->and(fn() => $container->call(__NAMESPACE__ . '\\select'))->toThrow(ResolutionException::class);
 });
 

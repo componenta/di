@@ -13,6 +13,8 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionClass;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 test('Inject and Init are declared for properties only', function (): void {
     $inject = (new ReflectionClass(Inject::class))->getAttributes(Attribute::class)[0]->newInstance();
     $init = (new ReflectionClass(Init::class))->getAttributes(Attribute::class)[0]->newInstance();
@@ -84,8 +86,8 @@ test('promotion keeps valid attributes following a copy for the other target', f
         ->addAttributeDefinition(new AttributeDefinition(PromotedParameterMetadata::class))
         ->build();
     $entry = $property
-        ? $container->makeAs(PromotedFollowingPropertyAttribute::class, PromotedFollowingPropertyAttribute::class)
-        : $container->makeAs(PromotedFollowingParameterAttribute::class, PromotedFollowingParameterAttribute::class);
+        ? fixtureInstance($container->make(PromotedFollowingPropertyAttribute::class), PromotedFollowingPropertyAttribute::class)
+        : fixtureInstance($container->make(PromotedFollowingParameterAttribute::class), PromotedFollowingParameterAttribute::class);
 
     expect($entry->value)->toBe($property ? 'property' : 'parameter');
 })->with(['parameter target' => false, 'property target' => true]);

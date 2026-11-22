@@ -15,13 +15,14 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\Resolver\Entry\ConstructorInvocation;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
-use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use LogicException;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use ReflectionClass;
 
@@ -58,7 +59,7 @@ final readonly class PreparingFactory implements FactoryInterface
 {
     /** @param Closure():void $beforeConstructor */
     public function __construct(
-        private InstanceCreator $creator,
+        private ParametersResolver $parameters,
         private bool $initialize,
         private Closure $beforeConstructor,
     ) {}
@@ -73,13 +74,15 @@ final readonly class PreparingFactory implements FactoryInterface
         if ($constructor === null) {
             throw new LogicException('Expected the fixture constructor.');
         }
-        $plan = $this->creator->parameters()->prepareTargets($this->creator->targets($constructor));
-        if (!$this->initialize) {
-            return $this->creator->createPrepared($class, $constructor, $plan, $params, $this->beforeConstructor);
+        $plan = $this->parameters->prepare($constructor->getParameters());
+        if ($this->initialize) {
+            $product = $class->newInstanceWithoutConstructor();
+            ConstructorInvocation::initialize($this->parameters, $product, $constructor, $plan, $params, $this->beforeConstructor, $proof);
+        } else {
+            $product = ConstructorInvocation::create($this->parameters, $class, $constructor, $plan, $params, $this->beforeConstructor, $proof);
         }
-
-        $product = $class->newInstanceWithoutConstructor();
-        $this->creator->initializePrepared($product, $constructor, $plan, $params, $this->beforeConstructor);
+        $proof?->assertLoadedParametersUnchanged();
+        $proof?->assertParameterSourcesUnchanged();
         return $product;
     }
 }
@@ -121,9 +124,10 @@ test('request sources revealed by the final constructor callback are checked bef
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
-    $parameters = $builder->build()->getAs(ParametersResolver::class, ParametersResolver::class);
+    $parameters = $builder->assemble()[1]->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
     $factory = new PreparingFactory(
-        new InstanceCreator($parameters),
+        $parameters,
         $initialize,
         static function () use ($source, $conflict): void {
             ++Observation::$callbacks;

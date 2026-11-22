@@ -9,7 +9,6 @@ use Closure;
 use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\EntryId;
@@ -182,8 +181,7 @@ function profileBuilder(): ContainerBuilder
 /** @param class-string $attribute */
 function callbackDefinition(string $attribute, Container $container): AttributeDefinition
 {
-    $registry = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class);
-    $handler = $registry->definition(MapRequest::class)?->handler;
+    $handler = $container->get(RequestAttributeHandler::class);
     if (!$handler instanceof RequestAttributeHandler) {
         throw new LogicException('Expected the configured request attribute handler.');
     }

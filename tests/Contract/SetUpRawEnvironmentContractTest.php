@@ -9,6 +9,7 @@ use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 #[SetUp('configure', ['value' => new Env('RAW_VALUE')])]
 final class UntypedSetUpTarget
@@ -39,7 +40,8 @@ test('SetUp Env descriptors preserve raw values for untyped and union method par
     $class = $union ? UnionSetUpTarget::class : UntypedSetUpTarget::class;
 
     foreach ([1, 2] as $_attempt) {
-        $target = $container->makeAs($class, $class);
+        $target = $container->make($class);
+        Assert::assertInstanceOf($class, $target);
 
         expect($target->value)->toBe('008')
             ->and($target->value)->toBe($environment->get('RAW_VALUE'));

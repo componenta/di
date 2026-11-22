@@ -21,6 +21,7 @@ use Componenta\DI\LazyObjectFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\VirtualProxyFactoryInterface;
@@ -55,6 +56,7 @@ test('core service ids cannot be replaced redirected or decorated at runtime', f
     AttributeDefinitionRegistry::class,
     AttributePlanBuilder::class,
     AttributeProcessor::class,
+    RequestAttributeHandler::class,
     ParametersResolver::class,
     ObjectPipeline::class,
 ]);

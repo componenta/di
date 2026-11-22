@@ -15,6 +15,8 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final readonly class PriorityResolverA implements ParameterResolverInterface
 {
     public function supports(ParameterTarget $target): bool
@@ -76,5 +78,5 @@ test('higher parameter resolver priorities win in the public resolution pipeline
 
     /** @var Container $container */
     $container = $value->container;
-    expect($container->makeAs(PriorityResolvedTarget::class, PriorityResolvedTarget::class)->value)->toBe('priority-a');
+    expect(fixtureInstance($container->make(PriorityResolvedTarget::class), PriorityResolvedTarget::class)->value)->toBe('priority-a');
 });

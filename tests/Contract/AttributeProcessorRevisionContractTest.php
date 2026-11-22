@@ -15,6 +15,7 @@ use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use Reflector;
 
@@ -81,8 +82,9 @@ test('object handler discovery returns a complete revision after member autoload
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
     }
-    $container = $builder->build();
-    $processor = $container->getAs(AttributeProcessor::class, AttributeProcessor::class);
+    [$container, $runtime] = $builder->assemble();
+    $processor = $runtime->attributeProcessor;
+    Assert::assertInstanceOf(AttributeProcessor::class, $processor);
     $reflection = new ReflectionClass($class);
     NativePayload::$constructions = 0;
     if ($warm) {
@@ -104,8 +106,9 @@ test('object handler discovery returns a complete revision after member autoload
             ->and(NativePayload::$constructions)->toBe(0)
             ->and($handler->calls)->toBe(0);
 
-        $context = new ObjectCreationContext($reflection);
-        $context->initialize(new $class());
+        $attempt = ObjectCreationContext::begin($reflection);
+        $context = $attempt->context;
+        $attempt->initialize(new $class());
         $processor->process($reflection, AttributePhase::AfterInstantiation, $context);
         expect($handler->calls)->toBe(1)
             ->and(NativePayload::$constructions)->toBe(1)

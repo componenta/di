@@ -7,15 +7,17 @@ namespace Componenta\DI\Tests\Contract\BootstrapInFlightFinalization;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Fiber;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use stdClass;
 use WeakReference;
 
+use function Componenta\DI\Tests\Support\assembledContainer;
 use function Componenta\DI\Tests\Support\container;
 
 final class Seed
@@ -39,7 +41,6 @@ final class LoadedMarker {}
 
 final class State
 {
-    public ?Container $container = null;
     /** @var Fiber<mixed,mixed,mixed,mixed>|null */
     public ?Fiber $fiber = null;
     public int $earlyValues = 0;
@@ -107,7 +108,8 @@ test('bootstrap proof checks old resolver prefixes completed by a Fiber during f
     InFlight::$constructions = 0;
     $state = new State();
     $marker = __NAMESPACE__ . '\\PendingMarker_' . bin2hex(random_bytes(5));
-    $loader = static function (string $requested) use ($marker, $state): void {
+    $runtime = new ResolutionRuntime();
+    $loader = static function (string $requested) use ($marker, $state, $runtime): void {
         if ($requested !== $marker) {
             return;
         }
@@ -115,9 +117,8 @@ test('bootstrap proof checks old resolver prefixes completed by a Fiber during f
         if (++$state->loads > 256) {
             throw new LogicException('Fixture stopped repeated finalization loads at 256.');
         }
-        $di = $state->container ?? throw new LogicException('Expected the bootstrap container.');
         $fiber = $state->fiber ?? throw new LogicException('Expected the suspended Fiber.');
-        $state->resumedAfterSeal = $di->getAs(ParametersResolver::class, ParametersResolver::class)->isSealed;
+        $state->resumedAfterSeal = $runtime->parameters->isSealed;
         if (!$fiber->isSuspended()) {
             throw new LogicException('Expected a suspended parameter resolver.');
         }
@@ -131,11 +132,10 @@ test('bootstrap proof checks old resolver prefixes completed by a Fiber during f
         $di = null;
         $failure = null;
         try {
-            $di = container([
+            [$di] = assembledContainer([
                 ConfigKey::PARAMETER_RESOLVERS => [
                     500 => new EarlyWinner($state),
                     100 => static function (Container $di) use ($state): ParameterResolverInterface {
-                        $state->container = $di;
                         $di->get(Seed::class);
                         $state->fiber = new Fiber(static fn(): mixed => $di->get(InFlight::class));
                         if ($state->fiber->start() !== 'suspended' || !$state->fiber->isSuspended()) {
@@ -146,7 +146,7 @@ test('bootstrap proof checks old resolver prefixes completed by a Fiber during f
                     },
                     1000 => new LaterInterceptor($marker, $applicable, $state),
                 ],
-            ]);
+            ], runtime: $runtime);
         } catch (InvalidConfigurationException $error) {
             $failure = $error;
         }
@@ -229,7 +229,8 @@ test('a bootstrap fiber resumed after the factory returns checks its original re
     if ($applicable) {
         expect(fn() => $fiber->resume())->toThrow(InvalidConfigurationException::class, LaterInterceptor::class)
             ->and(InFlight::$constructions)->toBe(0);
-        $value = $di->getAs(InFlight::class, InFlight::class);
+        $value = $di->get(InFlight::class);
+        Assert::assertInstanceOf(InFlight::class, $value);
         expect($value->value)->toBe('late')
             ->and(InFlight::$constructions)->toBe(1)
             ->and($state->lateValues)->toBe(1);

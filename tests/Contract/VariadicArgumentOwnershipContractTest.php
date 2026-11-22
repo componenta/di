@@ -14,6 +14,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use ReflectionParameter;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -76,9 +77,10 @@ test('variadic validation owns all argument slots before an autoloader can chang
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
-    $container = $builder->build();
+    [$container, $runtime] = $builder->assemble();
     $receiver = new Receiver();
-    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
     $target = $parameters->target(new ReflectionParameter([Receiver::class, 'consume'], 0));
     $single = str_ends_with($route, 'single');
 
@@ -141,12 +143,13 @@ test('owning variadic slots preserves nested references object identity and sing
     unset($values[11]);
     $values['object'] = $object;
     $values['nested'] = ['value' => &$original];
-    $container = (new ContainerBuilder())->build();
-    $parameters = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
     $callback = static fn(mixed ...$values): array => $values;
     $target = $parameters->target(new ReflectionParameter($callback, 0));
     $tuple = $parameters->resolveParameter($target, new ParameterResolutionContext(provided: ['values' => $values]));
-    if (!is_array($tuple) || !is_array($tuple[1]) || !is_array($tuple[1]['nested'] ?? null)) {
+    if (!is_array($tuple[1]) || !is_array($tuple[1]['nested'] ?? null)) {
         throw new \LogicException('Expected the selected variadic argument collection.');
     }
     $result = $tuple[1];

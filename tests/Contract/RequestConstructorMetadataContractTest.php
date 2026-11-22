@@ -16,8 +16,8 @@ use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\Resolver\Entry\ConstructorInvocation;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
-use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
@@ -82,7 +82,7 @@ final readonly class PreparingFactory implements FactoryInterface
      * @param class-string|null $diagnosticOwner
      */
     public function __construct(
-        private InstanceCreator $creator,
+        private ParametersResolver $parameters,
         private bool $initialize,
         private int $position,
         private Closure $beforeConstructor,
@@ -102,13 +102,15 @@ final readonly class PreparingFactory implements FactoryInterface
         }
         $reflections = $constructor->getParameters();
         $reflections[$this->position] = new ReportingParameter($entry, $this->position, $this->onRead, $this->diagnosticOwner);
-        $plan = $this->creator->parameters()->prepare(array_values($reflections));
-        if (!$this->initialize) {
-            return $this->creator->createPrepared($class, $constructor, $plan, $params, $this->beforeConstructor);
+        $plan = $this->parameters->prepare(array_values($reflections));
+        if ($this->initialize) {
+            $product = $class->newInstanceWithoutConstructor();
+            ConstructorInvocation::initialize($this->parameters, $product, $constructor, $plan, $params, $this->beforeConstructor, $proof);
+        } else {
+            $product = ConstructorInvocation::create($this->parameters, $class, $constructor, $plan, $params, $this->beforeConstructor, $proof);
         }
-
-        $product = $class->newInstanceWithoutConstructor();
-        $this->creator->initializePrepared($product, $constructor, $plan, $params, $this->beforeConstructor);
+        $proof?->assertLoadedParametersUnchanged();
+        $proof?->assertParameterSourcesUnchanged();
         return $product;
     }
 }
@@ -133,7 +135,7 @@ function target(string $parameters): Closure
     return $target;
 }
 
-function creator(bool $uncached): InstanceCreator
+function parameters(bool $uncached): ParametersResolver
 {
     $builder = (new ContainerBuilder())
         ->addService('trusted.role', 'trusted role')
@@ -141,7 +143,7 @@ function creator(bool $uncached): InstanceCreator
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
-    return new InstanceCreator($builder->build()->getAs(ParametersResolver::class, ParametersResolver::class));
+    return $builder->assemble()[1]->parameters;
 }
 
 function container(PreparingFactory $factory): Container
@@ -164,7 +166,7 @@ test('successful mapped source checks do not execute diagnostic metadata callbac
         $source,
     ));
     $container = container(new PreparingFactory(
-        creator($uncached),
+        parameters($uncached),
         $initialize,
         1,
         static function (): void {
@@ -192,7 +194,7 @@ test('a final mapped source conflict keeps the custom declaring class diagnostic
     $source = 'Conflict_' . bin2hex(random_bytes(5));
     $target = target(sprintf('#[%s("trusted.role")] public string $role', $source));
     $container = container(new PreparingFactory(
-        creator($uncached),
+        parameters($uncached),
         $initialize,
         0,
         static function () use ($source): void {

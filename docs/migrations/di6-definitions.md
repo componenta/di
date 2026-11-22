@@ -271,12 +271,7 @@ A destructor that reenters lookup observes completed publication and invalidatio
 
 `get()` throws the PSR-11 `NotFoundExceptionInterface` when no route exists for the requested ID. A missing dependency inside a selected factory, constructor or delegator is a `ResolutionException` with the original failure in `getPrevious()`. The same classification applies when a selected external container throws `NotFoundExceptionInterface`. Update catch blocks that treated a missing dependency as a missing requested entry. `make()` and exceptions raised after a lazy object has been returned retain their own error boundaries.
 
-Service IDs accept arbitrary bindings, including class names bound to factories returning a different class. The general `get()` now has a static result of `mixed`, and `FactoryInterface::make()` returns `object`. The concrete `Container` provides checked access with an independent expected class. A mismatch raises `ResolutionException`.
-
-```php
-$shared = $container->getAs('reports.client', Client::class);
-$fresh = $container->makeAs(Client::class, Client::class, ['timeout' => 5]);
-```
+Service IDs accept arbitrary bindings, including class names bound to factories returning a different class. The static result of `get()` is `mixed`, and `FactoryInterface::make()` returns `object`.
 
 When `alias()` turns a canonical ID into an alias, it releases the former definition and base value after publishing the route and invalidating the caches. Synchronous destructor failures are reported through `MutationRetirementException`. An active resolution can return its previously selected result and checks the binding revision before writing to the cache.
 
@@ -291,6 +286,8 @@ $container->notifyExternalEntriesChanged($provider, 'reports.decorator');
 Bootstrap records both the selected parameter resolver and the classification of the preceding resolvers. It checks newly loaded declarations on named parameters and live callbacks after releasing its temporary references. For a callback whose reflector is gone, the semantic attribute check uses the recorded declaration names. A suspended attempt verifies its original resolver selection even if it resumes after the factory returns.
 
 Constructor argument policies and the provenance of mapped request values are checked through final configuration. Lazy objects and proxies run those checks at initialization. An incompatible change fails the attempt before caching the result or completing initialization.
+
+Use `InstanceCreator::create()` and `initialize()` for standalone construction. Pass `ParametersResolver` directly to a standalone `ObjectPipeline`. Container assembly owns the attribute registry, plan builder, attribute processor, parameter resolver chain and object pipeline. Register extensions through `DependencyDefinitions`. Custom HTTP mappers obtain the configured handler with `get(RequestAttributeHandler::class)`.
 
 ## Migration checks
 

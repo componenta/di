@@ -6,7 +6,11 @@ namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
 use Psr\Http\Message\ServerRequestInterface;
 
-/** Internal PSR-7 request transport carried through the ordinary parameter array. @internal */
+/**
+ * Internal PSR-7 request transport carried through the ordinary parameter array.
+ *
+ * @internal
+ */
 final class RequestParameter
 {
     public const string KEY = ServerRequestInterface::class;

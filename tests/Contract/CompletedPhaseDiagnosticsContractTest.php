@@ -13,6 +13,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Reflector;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_METHOD)]
@@ -42,7 +43,8 @@ test('a late member policy identifies its target and completed phase after a con
     $handler = new CompletedPhaseObserver();
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(CompletedPhaseMarker::class, $handler, phase: AttributePhase::BeforeInstantiation))
-        ->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+        ->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
 
     expect(fn() => $pipeline->create($class, configure: static function (object $entry) use ($fullAlias): void {
         class_alias(CompletedPhaseMarker::class, $fullAlias);

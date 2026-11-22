@@ -15,10 +15,10 @@ use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Config as ConfigValue;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionFunction;
@@ -196,7 +196,7 @@ function customValue(#[CacheControl] string $custom = 'default'): string
     return $custom;
 }
 
-/** @return array{Container,ClassificationProbe} */
+/** @return array{Container,ClassificationProbe,ResolutionRuntime} */
 function auditContainer(bool $uncached, ?MutableResolution $mutable = null): array
 {
     $probe = new ClassificationProbe();
@@ -210,7 +210,8 @@ function auditContainer(bool $uncached, ?MutableResolution $mutable = null): arr
     if ($mutable !== null) {
         $builder->addParameterResolver($mutable, 2000);
     }
-    return [$builder->build(), $probe];
+    [$container, $runtime] = $builder->assemble();
+    return [$container, $probe, $runtime];
 }
 
 /** @return array{class-string<Throwable>,string,class-string<Throwable>|null} */
@@ -228,8 +229,8 @@ test('cache parity control reclassifies every parameter without changing the pro
     $function = __NAMESPACE__ . '\\signature';
     $chains = [];
     foreach ([false, true] as $uncached) {
-        [$container, $probe] = auditContainer($uncached);
-        $chains[] = array_map(static fn(ParameterResolverInterface $resolver): string => $resolver::class, $container->getAs(ParametersResolver::class, ParametersResolver::class)->resolverList);
+        [$container, $probe, $runtime] = auditContainer($uncached);
+        $chains[] = array_map(static fn(ParameterResolverInterface $resolver): string => $resolver::class, $runtime->parameters->resolverList);
         $container->call($function, ['explicit' => 1]);
         $first = $probe->calls[$function];
         $container->call($function, ['explicit' => 2]);
@@ -247,8 +248,8 @@ test('full prepared parameter plans match fresh resolution through mutation defa
     $reports = [];
     foreach ([false, true] as $uncached) {
         DefaultToken::$created = 0;
-        [$container] = auditContainer($uncached);
-        $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+        [$container, , $runtime] = auditContainer($uncached);
+        $resolver = $runtime->parameters;
         $reflection = new ReflectionFunction(__NAMESPACE__ . '\\signature');
         $parameters = $reflection->getParameters();
         $plan = $resolver->prepare($parameters);
@@ -487,8 +488,8 @@ test('warm callable metadata does not retain supplied owners closures or prepare
 })->with(['cached' => false, 'fresh' => true]);
 
 test('repeated named reflectors reuse stable targets while caller-owned targets remain collectable', function (bool $uncached): void {
-    [$container] = auditContainer($uncached);
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [, , $runtime] = auditContainer($uncached);
+    $resolver = $runtime->parameters;
     $references = [];
     for ($iteration = 0; $iteration < 40; ++$iteration) {
         $parameter = new ReflectionFunction(__NAMESPACE__ . '\\customValue')->getParameters()[0];

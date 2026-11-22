@@ -19,7 +19,11 @@ use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
 
-/** Retains completed metadata only for the current resolution. @internal */
+/**
+ * Retains completed metadata only for the current resolution.
+ *
+ * @internal
+ */
 final class CompletedAttributeGuard
 {
     /** @var list<array{target:ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,plan:AttributePlan,phase:?AttributePhase}> */

@@ -16,6 +16,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use Reflector;
 use WeakReference;
@@ -166,7 +167,8 @@ test('property Proxy discovered by a later before handler applies in its pending
 
     foreach ([1, 2] as $attempt) {
         Trace::$events = [];
-        $owner = $container->makeAs($fixture['class'], Owner::class);
+        $owner = $container->make($fixture['class']);
+        Assert::assertInstanceOf(Owner::class, $owner);
         expect(Trace::$events)->toBe($strategy === 'eager' ? ['loader', 'constructor', 'property', 'setup'] : ['loader']);
         $product = $owner->product;
         expect(Trace::$events)->toBe(['loader', 'constructor', 'property', 'setup'])
@@ -214,7 +216,8 @@ test('a late Proxy retains before-phase ordering when it owns a class strategy o
         return;
     }
 
-    $owner = $container->makeAs($fixture['class'], Owner::class);
+    $owner = $container->make($fixture['class']);
+    Assert::assertInstanceOf(Owner::class, $owner);
     expect($owner->ready)->toBeTrue()
         ->and(Trace::$events)->toBe($classProxy
             ? ['loader', 'constructor', 'setup']
@@ -256,7 +259,8 @@ test('ordinary property Proxy arguments retain their before-constructor material
     try {
         $container = (new ContainerBuilder())->build();
         expect($container->has($name))->toBeTrue()->and(Trace::$events)->toBe([]);
-        $owner = $container->makeAs($name, $name);
+        $owner = $container->make($name);
+        Assert::assertInstanceOf($name, $owner);
         expect(Trace::$events)->toBe($strategy === 'eager' ? ['proxy argument', 'constructor', 'setup'] : ['proxy argument'])
             ->and($owner->ready)->toBeTrue()
             ->and(Trace::$events)->toBe(['proxy argument', 'constructor', 'setup'])
@@ -353,7 +357,8 @@ test('pending attributes survive repeated refreshes without restoring an inactiv
 
     foreach ([1, 2] as $attempt) {
         Trace::$events = [];
-        $owner = $container->makeAs($name, $name);
+        $owner = $container->make($name);
+        Assert::assertInstanceOf($name, $owner);
         expect($owner->ready)->toBeTrue()
             ->and(Trace::$events)->toBe(['first', 'pending', 'suffix', 'constructor', 'setup'])
             ->and(Trace::$pending)->toHaveCount($attempt)
@@ -411,7 +416,8 @@ test('multiple property Proxy discoveries preserve the active before-phase prefi
     ))->build();
     expect($container->has($name))->toBeTrue()->and(Trace::$events)->toBe([]);
 
-    $owner = $container->makeAs($name, $name);
+    $owner = $container->make($name);
+    Assert::assertInstanceOf($name, $owner);
     $reflection = new ReflectionClass(Product::class);
     expect($owner->ready)->toBeTrue()
         ->and(Trace::$events)->toBe(['loader', 'constructor', 'setup'])

@@ -19,7 +19,10 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Componenta\DI\Tests\Support\TestCounter;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class CastParameterParityDto
 {
@@ -171,7 +174,8 @@ function parityValueContainer(): \Componenta\DI\Container
 }
 
 test('Cast parameter resolution stays in the parameter resolver chain', function (): void {
-    $dto = parityValueContainer()->makeAs(CastParameterParityDto::class, CastParameterParityDto::class, ['value' => '42']);
+    $dto = parityValueContainer()->make(CastParameterParityDto::class, ['value' => '42']);
+    Assert::assertInstanceOf(CastParameterParityDto::class, $dto);
 
     expect($dto->value)->toBe(42);
 });
@@ -179,15 +183,15 @@ test('Cast parameter resolution stays in the parameter resolver chain', function
 test('Cast keeps its attribute-owned default contract', function (): void {
     $container = parityValueContainer();
 
-    expect($container->makeAs(CastDefaultParityDto::class, CastDefaultParityDto::class)->value)->toBe(7)
-        ->and($container->makeAs(CastDefaultPropertyParityDto::class, CastDefaultPropertyParityDto::class)->value)->toBe(7)
-        ->and($container->makeAs(CastDefaultPropertyParityDto::class, CastDefaultPropertyParityDto::class, ['value' => '0'])->value)->toBe(0);
+    expect(fixtureInstance($container->make(CastDefaultParityDto::class), CastDefaultParityDto::class)->value)->toBe(7)
+        ->and(fixtureInstance($container->make(CastDefaultPropertyParityDto::class), CastDefaultPropertyParityDto::class)->value)->toBe(7)
+        ->and(fixtureInstance($container->make(CastDefaultPropertyParityDto::class, ['value' => '0']), CastDefaultPropertyParityDto::class)->value)->toBe(0);
 });
 
 test('Cast property reads object creation parameters rather than initialized property state', function (): void {
     $container = parityValueContainer();
 
-    expect($container->makeAs(CastPropertyParityDto::class, CastPropertyParityDto::class, ['value' => '9'])->value)->toBe(9)
+    expect(fixtureInstance($container->make(CastPropertyParityDto::class, ['value' => '9']), CastPropertyParityDto::class)->value)->toBe(9)
         ->and(fn() => $container->make(CastPropertyParityDto::class))
         ->toThrow(ResolutionException::class);
 });
@@ -195,7 +199,8 @@ test('Cast property reads object creation parameters rather than initialized pro
 test('Init remains a property attribute handler and executes once after instantiation', function (): void {
     TestCounter::reset();
 
-    $dto = parityValueContainer()->makeAs(InitPropertyParityDto::class, InitPropertyParityDto::class);
+    $dto = parityValueContainer()->make(InitPropertyParityDto::class);
+    Assert::assertInstanceOf(InitPropertyParityDto::class, $dto);
 
     expect($dto->value)->toBe(1)
         ->and(TestCounter::$value)->toBe(1);
@@ -207,7 +212,7 @@ test('explicit parameters including null keep precedence over Config parameter r
         new Environment([]),
     ))->build();
 
-    expect($container->makeAs(ConfigOverrideParityDto::class, ConfigOverrideParityDto::class, $provided)->value)
+    expect(fixtureInstance($container->make(ConfigOverrideParityDto::class, $provided), ConfigOverrideParityDto::class)->value)
         ->toBe($expected);
 })->with([
     'named value' => [['value' => 'explicit'], 'explicit'],
@@ -225,17 +230,17 @@ test('HTTP request transport is not a generic attributed typed override', functi
         new Environment([]),
     ))->build();
 
-    expect($container->makeAs(AttributedRequestTransportDto::class, AttributedRequestTransportDto::class, [
+    expect(fixtureInstance($container->make(AttributedRequestTransportDto::class, [
         ServerRequestInterface::class => $transport,
-    ])->request)->toBe($configured)
-        ->and($container->makeAs(AttributedRequestTransportDto::class, AttributedRequestTransportDto::class, [
+    ]), AttributedRequestTransportDto::class)->request)->toBe($configured)
+        ->and(fixtureInstance($container->make(AttributedRequestTransportDto::class, [
             ServerRequestInterface::class => $transport,
             'request' => $explicit,
-        ])->request)->toBe($explicit)
-        ->and($container->makeAs(AttributedRequestUnionTransportDto::class, AttributedRequestUnionTransportDto::class, [
+        ]), AttributedRequestTransportDto::class)->request)->toBe($explicit)
+        ->and(fixtureInstance($container->make(AttributedRequestUnionTransportDto::class, [
             ServerRequestInterface::class => $transport,
             AttributedTypedOverrideA::class => $typed,
-        ])->request)->toBe($typed);
+        ]), AttributedRequestUnionTransportDto::class)->request)->toBe($typed);
 });
 
 test('attributed typed overrides must satisfy the type named by their key', function (): void {
@@ -248,15 +253,15 @@ test('attributed typed overrides must satisfy the type named by their key', func
         new Environment([]),
     ))->build();
 
-    expect($container->makeAs(AttributedTypedOverrideDto::class, AttributedTypedOverrideDto::class, [
+    expect(fixtureInstance($container->make(AttributedTypedOverrideDto::class, [
         AttributedTypedOverrideA::class => $validOverride,
-    ])->dependency)->toBe($validOverride)
-        ->and($container->makeAs(AttributedTypedOverrideDto::class, AttributedTypedOverrideDto::class, [
+    ]), AttributedTypedOverrideDto::class)->dependency)->toBe($validOverride)
+        ->and(fixtureInstance($container->make(AttributedTypedOverrideDto::class, [
             AttributedTypedOverrideA::class => $wrongKeyValue,
-        ])->dependency)->toBe($configured)
-        ->and($container->makeAs(AttributedTypedOverrideDto::class, AttributedTypedOverrideDto::class, [
+        ]), AttributedTypedOverrideDto::class)->dependency)->toBe($configured)
+        ->and(fixtureInstance($container->make(AttributedTypedOverrideDto::class, [
             AttributedTypedOverrideB::class => $validSecondOverride,
-        ])->dependency)->toBe($validSecondOverride);
+        ]), AttributedTypedOverrideDto::class)->dependency)->toBe($validSecondOverride);
 });
 
 test('Env uses explicit names and converts values for scalar target types', function (): void {
@@ -270,7 +275,8 @@ test('Env uses explicit names and converts values for scalar target types', func
         ]),
     ))->build();
 
-    $dto = $container->makeAs(TypedEnvironmentParityDto::class, TypedEnvironmentParityDto::class);
+    $dto = $container->make(TypedEnvironmentParityDto::class);
+    Assert::assertInstanceOf(TypedEnvironmentParityDto::class, $dto);
 
     expect($dto->port)->toBe(3306)
         ->and($dto->debug)->toBeTrue();
@@ -279,7 +285,7 @@ test('Env uses explicit names and converts values for scalar target types', func
 test('Env uses its attribute default when the runtime environment key is missing', function (): void {
     $container = ContainerBuilder::configure(new Config([], new Environment([])))->build();
 
-    expect($container->makeAs(MissingEnvironmentDefaultParityDto::class, MissingEnvironmentDefaultParityDto::class)->port)->toBe(8080);
+    expect(fixtureInstance($container->make(MissingEnvironmentDefaultParityDto::class), MissingEnvironmentDefaultParityDto::class)->port)->toBe(8080);
 });
 
 test('EntryId resolves the exact configured entry for constructor parameters and properties', function (): void {
@@ -288,8 +294,8 @@ test('EntryId resolves the exact configured entry for constructor parameters and
         ->addService('explicit.entry', $entry)
         ->build();
 
-    expect($container->makeAs(EntryIdParameterParityDto::class, EntryIdParameterParityDto::class)->entry)->toBe($entry)
-        ->and($container->makeAs(EntryIdPropertyParityDto::class, EntryIdPropertyParityDto::class)->entry)->toBe($entry);
+    expect(fixtureInstance($container->make(EntryIdParameterParityDto::class), EntryIdParameterParityDto::class)->entry)->toBe($entry)
+        ->and(fixtureInstance($container->make(EntryIdPropertyParityDto::class), EntryIdPropertyParityDto::class)->entry)->toBe($entry);
 });
 
 test('EntryId preserves the container missing-entry failure contract', function (): void {
@@ -313,7 +319,8 @@ test('Config Env and Make resolve properties through the same public object pipe
     );
     $container = ContainerBuilder::configure($config)->build();
 
-    $dto = $container->makeAs(PropertyValueSourcesDto::class, PropertyValueSourcesDto::class);
+    $dto = $container->make(PropertyValueSourcesDto::class);
+    Assert::assertInstanceOf(PropertyValueSourcesDto::class, $dto);
 
     expect($dto->applicationName)->toBe('Componenta')
         ->and($dto->configDefault)->toBe('configured-default')

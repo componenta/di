@@ -15,6 +15,7 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Definition\ClassDefinition;
+use PHPUnit\Framework\Assert;
 
 final class PromotedPropertyDependency {}
 
@@ -94,7 +95,8 @@ test('promoted properties follow attribute injection or explicit ClassDefinition
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs($class, $class);
+    $target = $container->make($class);
+    Assert::assertInstanceOf($class, $target);
 
     expect($target->label)->toBe($useDefinition ? 'explicit' : 'configured')
         ->and($target->dependency)->toBe($dependency)
@@ -129,7 +131,8 @@ test('enabled constructors retain their explicit promoted values', function (boo
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs($class, $class, ['label' => 'caller', 'dependency' => $explicit]);
+    $target = $container->make($class, ['label' => 'caller', 'dependency' => $explicit]);
+    Assert::assertInstanceOf($class, $target);
 
     expect($target->label)->toBe('caller')
         ->and($target->dependency)->toBe($explicit)

@@ -12,6 +12,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
+use Error;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionFunction;
@@ -20,6 +21,7 @@ use ReflectionMethod;
 use ReflectionParameter;
 use WeakMap;
 
+use function Componenta\DI\Internal\is_abstract_static_dispatch_error;
 use function Componenta\DI\Internal\is_entry_class_eligible;
 use function Componenta\DI\Internal\is_magic_closure_trampoline;
 
@@ -51,9 +53,15 @@ final class FactorySpecificationValidator
         if (is_string($factory) && $factory !== '') {
             return;
         }
-        if (is_callable($factory)) {
-            self::assertResolvedCallable($id, $factory);
-            return;
+        try {
+            if (is_callable($factory)) {
+                self::assertResolvedCallable($id, $factory);
+                return;
+            }
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
         }
         if (self::isDeferredCallable($factory)) {
             return;

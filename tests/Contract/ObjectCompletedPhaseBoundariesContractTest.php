@@ -13,6 +13,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Reflector;
 
 #[Attribute(Attribute::TARGET_CLASS)]
@@ -105,12 +106,13 @@ test('completed before-phase changes stop later object effects and allow a fresh
         $strategy === 'handlerless' ? __NAMESPACE__ . '\\' . $after : null,
     );
     $handler = new Handler($trace);
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addService(Trace::class, $trace)
         ->addAttributeDefinition(new AttributeDefinition(BeforeMarker::class, $handler, phase: AttributePhase::BeforeInstantiation))
         ->addAttributeDefinition(new AttributeDefinition(AfterMarker::class, $handler))
-        ->build();
-    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
+        ->assemble();
+    $pipeline = $runtime->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $create = static function () use ($pipeline, $class, $trace): bool {
         $entry = $pipeline->create($class, configure: static function () use ($trace): void {
             $trace->events[] = 'configure';

@@ -17,6 +17,7 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -252,7 +253,8 @@ test('cached and uncached deferred plans release unused runtime closures and pay
     $callback = static fn(): object => $payload;
     $payloadReference = WeakReference::create($payload);
     $callbackReference = WeakReference::create($callback);
-    $entry = $container->makeAs($class, $class, ['value' => 37, 'unused' => $callback]);
+    $entry = $container->make($class, ['value' => 37, 'unused' => $callback]);
+    Assert::assertInstanceOf($class, $entry);
     unset($payload, $callback);
     expect(DeferredFixture::$constructions)->toBe(0)
         ->and($payloadReference->get())->not->toBeNull()

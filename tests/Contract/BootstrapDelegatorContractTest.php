@@ -18,7 +18,10 @@ use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class BootstrapValue {}
@@ -130,12 +133,13 @@ test('bootstrap extensions use the delegators composed by all providers', functi
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs(BootstrapValueTarget::class, BootstrapValueTarget::class);
+    $target = $container->make(BootstrapValueTarget::class);
+    Assert::assertInstanceOf(BootstrapValueTarget::class, $target);
 
     expect($target->attribute)->toBe('attribute:decorated')
         ->and($target->convention)->toBe('resolver:first:second')
-        ->and($container->getAs(BootstrapValueHandler::class, BootstrapValueHandler::class)->value)->toBe($target->attribute)
-        ->and($container->getAs(BootstrapValueResolver::class, BootstrapValueResolver::class)->value)->toBe($target->convention);
+        ->and(fixtureInstance($container->get(BootstrapValueHandler::class), BootstrapValueHandler::class)->value)->toBe($target->attribute)
+        ->and(fixtureInstance($container->get(BootstrapValueResolver::class), BootstrapValueResolver::class)->value)->toBe($target->convention);
 })->with([
     'extensions first, resolver service' => [false, false],
     'decorators first, resolver service' => [true, false],

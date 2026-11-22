@@ -16,9 +16,12 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionProperty;
 use Reflector;
 use RuntimeException;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
 final class ReadExisting {}
@@ -152,7 +155,8 @@ test('custom property handlers read hooks even before their backing slot is init
     }
     $container = builder($uncached)->build();
     for ($attempt = 0; $attempt < 2; ++$attempt) {
-        $entry = $container->makeAs($class, $class);
+        $entry = $container->make($class);
+        Assert::assertInstanceOf($class, $entry);
         expect($entry->value)->toBe($expected)
             ->and($entry->reads)->toBe($reads)
             ->and($entry->writes)->toBe($writes);
@@ -184,7 +188,8 @@ test('uninitialized backing does not suppress getter errors and a subsequent cre
         ->and($failure->propertyClass)->toBe(BackedGetter::class)
         ->and($failure->propertyName)->toBe('value');
 
-    $entry = $container->makeAs(BackedGetter::class, BackedGetter::class);
+    $entry = $container->make(BackedGetter::class);
+    Assert::assertInstanceOf(BackedGetter::class, $entry);
     expect($entry->value)->toBe('INITIAL')
         ->and($entry->reads)->toBe(2)
         ->and($entry->writes)->toBe(1);
@@ -193,6 +198,6 @@ test('uninitialized backing does not suppress getter errors and a subsequent cre
 test('pending property values bypass getters and virtual write-only reads remain rejected', function (bool $uncached): void {
     $container = builder($uncached)->addService('source', 'pending')->build();
 
-    expect($container->makeAs(PendingValue::class, PendingValue::class)->written)->toBe('PENDING')
+    expect(fixtureInstance($container->make(PendingValue::class), PendingValue::class)->written)->toBe('PENDING')
         ->and(fn() => $container->make(WriteOnly::class))->toThrow(ResolutionException::class, 'write-only virtual properties');
 })->with(['cached' => false, 'uncached' => true]);

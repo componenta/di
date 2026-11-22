@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\Support;
 
 use Pest\Mutate\Mutation;
 use Pest\Mutate\Plugins\Mutate;
+use PHPUnit\TestRunner\TestResult\Facade as TestResultFacade;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -13,6 +14,8 @@ use Symfony\Component\Filesystem\Filesystem;
 final class MutationWorkerCheck
 {
     public const string ENVIRONMENT_KEY = 'COMPONENTA_DI_MUTATION_WORKERS';
+
+    private static ?string $startupRecord = null;
 
     /** @var array<string,int>|null */
     private ?array $ready = null;
@@ -47,10 +50,22 @@ final class MutationWorkerCheck
             throw new RuntimeException('Mutation worker startup did not install the requested replacement.');
         }
 
-        $name = self::key($source, $override) . '.' . bin2hex(random_bytes(8));
-        if (file_put_contents($directory . '/' . $name, '') === false) {
+        $record = $directory . '/' . self::key($source, $override) . '.' . bin2hex(random_bytes(8));
+        if (file_put_contents($record, '') === false) {
             throw new RuntimeException('Cannot record mutation worker startup.');
         }
+        self::$startupRecord = $record;
+    }
+
+    public static function discardEmptyRun(): void
+    {
+        if (self::$startupRecord === null || TestResultFacade::result()->numberOfTestsRun() !== 0) {
+            return;
+        }
+        if (!unlink(self::$startupRecord)) {
+            throw new RuntimeException('Cannot discard a mutation startup record without tests.');
+        }
+        self::$startupRecord = null;
     }
 
     public function consumeStartup(Mutation $mutation): bool

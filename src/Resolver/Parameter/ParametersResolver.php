@@ -21,6 +21,8 @@ use ReflectionParameter;
 use Throwable;
 use WeakMap;
 
+use function Componenta\DI\Internal\is_attribute_class_loaded;
+
 /** Orchestrates the ordered ParameterResolverInterface chain. */
 final class ParametersResolver
 {
@@ -275,7 +277,7 @@ final class ParametersResolver
         }
 
         $plan = $this->refreshPlan($plan);
-        $state = new ParameterResolutionContext(
+        [$context, $accept] = ParameterResolutionContext::begin(
             ParameterResolutionBoundary::publicParameters($plan, $providedParameters, $diagnosticOwner),
             $arguments,
         );
@@ -311,7 +313,7 @@ final class ParametersResolver
         foreach ($plan->targets as $target) {
             $result = $this->resolvePreparedParameter(
                 $target,
-                $state,
+                $context,
                 $completed,
                 allowOmission: true,
                 beforeConsumption: $beforeConsumption,
@@ -331,7 +333,7 @@ final class ParametersResolver
             }
 
             [$position, $value] = $result;
-            $state->resolve($position, $value);
+            $accept($position, $value);
             // Resolver state retains one value per declaration; only the native
             // invocation vector expands a variadic collection.
             if ($target->variadic && is_array($value)) {
@@ -506,7 +508,7 @@ final class ParametersResolver
             $cache = $this->preparedSlots ??= new WeakMap();
             if (isset($cache[$target])) {
                 if (!isset($this->pendingAttributeQueries[$target])
-                    || !array_any($this->pendingAttributeQueries[$target], ParameterTarget::isAttributeClassLoaded(...))
+                    || !array_any($this->pendingAttributeQueries[$target], is_attribute_class_loaded(...))
                 ) {
                     return $cache[$target];
                 }
@@ -533,13 +535,13 @@ final class ParametersResolver
                 $queries = [];
                 $resolverSlots = $this->classifyResolverSlots($target);
             } else {
-                [$resolverSlots, $queries] = $target->observeAttributeQueries($this->classifyResolverSlots(...));
+                [$resolverSlots, $queries] = $this->targetFactory->observeAttributeQueries($target, $this->classifyResolverSlots(...));
             }
             // Immutable type classification can autoload a class file that
             // also declares attributes. Do not publish slots that skipped a
             // newly available handler, including for single-parameter calls.
             $this->synchronizeAttributeRevision();
-        } while ($revision !== $this->revision || ($queries !== [] && array_any($queries, ParameterTarget::isAttributeClassLoaded(...))));
+        } while ($revision !== $this->revision || ($queries !== [] && array_any($queries, is_attribute_class_loaded(...))));
 
         if ($queries !== []) {
             $pending = $this->pendingAttributeQueries ??= new WeakMap();

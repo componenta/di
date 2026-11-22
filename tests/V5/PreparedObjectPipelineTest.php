@@ -7,6 +7,9 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class AuditPrivateConstructorEntry
 {
@@ -70,8 +73,10 @@ test('NoConstructor keeps inaccessible constructors resolvable', function (): vo
 test('plain autowiring applies constructor defaults and explicit overrides', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    $defaults = $container->makeAs(AuditFastConstructorEntry::class, AuditFastConstructorEntry::class);
-    $overrides = $container->makeAs(AuditFastConstructorEntry::class, AuditFastConstructorEntry::class, ['number' => 42]);
+    $defaults = $container->make(AuditFastConstructorEntry::class);
+    Assert::assertInstanceOf(AuditFastConstructorEntry::class, $defaults);
+    $overrides = $container->make(AuditFastConstructorEntry::class, ['number' => 42]);
+    Assert::assertInstanceOf(AuditFastConstructorEntry::class, $overrides);
 
     expect([$defaults->number, $defaults->name])->toBe([1, 'default'])
         ->and([$overrides->number, $overrides->name])->toBe([42, 'default'])
@@ -84,6 +89,6 @@ test('by-reference constructors remain unsupported while variadics accept explic
     $dependency = new AuditFastDependency();
 
     expect(fn() => $container->make(AuditByReferenceConstructorEntry::class))->toThrow(ResolutionException::class)
-        ->and($container->makeAs(AuditVariadicConstructorEntry::class, AuditVariadicConstructorEntry::class)->captured)->toBe([])
-        ->and($container->makeAs(AuditVariadicConstructorEntry::class, AuditVariadicConstructorEntry::class, ['dependencies' => [$dependency]])->captured)->toBe([$dependency]);
+        ->and(fixtureInstance($container->make(AuditVariadicConstructorEntry::class), AuditVariadicConstructorEntry::class)->captured)->toBe([])
+        ->and(fixtureInstance($container->make(AuditVariadicConstructorEntry::class, ['dependencies' => [$dependency]]), AuditVariadicConstructorEntry::class)->captured)->toBe([$dependency]);
 });

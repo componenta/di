@@ -15,9 +15,12 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionProperty;
 use Reflector;
 use WeakReference;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final readonly class Payload
 {
@@ -78,12 +81,13 @@ test('interleaved object handlers isolate their state and release a cancelled cr
             rules: $uncached ? [new UncachedRule()] : [],
         ))
         ->build();
-    $warm = $container->makeAs(Product::class, Product::class, ['payload' => new Payload('warm')]);
+    $warm = $container->make(Product::class, ['payload' => new Payload('warm')]);
+    Assert::assertInstanceOf(Product::class, $warm);
     expect($warm->payload->label)->toBe('warm');
     unset($warm);
 
-    $first = new Fiber(static fn(): Product => $container->makeAs(Product::class, Product::class, ['payload' => new Payload('first')]));
-    $second = new Fiber(static fn(): Product => $container->makeAs(Product::class, Product::class, ['payload' => new Payload('second')]));
+    $first = new Fiber(static fn(): Product => fixtureInstance($container->make(Product::class, ['payload' => new Payload('first')]), Product::class));
+    $second = new Fiber(static fn(): Product => fixtureInstance($container->make(Product::class, ['payload' => new Payload('second')]), Product::class));
 
     expect($first->start())->toBe('first')
         ->and($second->start())->toBe('second')
@@ -106,5 +110,5 @@ test('interleaved object handlers isolate their state and release a cancelled cr
     gc_collect_cycles();
     expect(array_all($handler->references['second'], static fn(WeakReference $reference): bool => $reference->get() === null))
         ->toBeTrue()
-        ->and($container->makeAs(Product::class, Product::class, ['payload' => new Payload('next')])->payload->label)->toBe('next');
+        ->and(fixtureInstance($container->make(Product::class, ['payload' => new Payload('next')]), Product::class)->payload->label)->toBe('next');
 })->with(['cached plans' => false, 'uncached rules' => true]);

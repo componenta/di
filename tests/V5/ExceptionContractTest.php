@@ -23,6 +23,7 @@ use Componenta\Validation\Provider\ValidationProviderInterface;
 use Componenta\Validation\ValidatorInterface;
 use DomainException;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -237,7 +238,8 @@ test('constructor failures have the same Componenta contract for get and make', 
 
 test('built in lazy initialization keeps the strict exception boundary after get returns', function (): void {
     $container = (new ContainerBuilder())->build();
-    $entry = $container->getAs(LazyThrowingConstructorTarget::class, LazyThrowingConstructorTarget::class);
+    $entry = $container->get(LazyThrowingConstructorTarget::class);
+    Assert::assertInstanceOf(LazyThrowingConstructorTarget::class, $entry);
 
     $error = exceptionFrom(static fn() => $entry->value);
 
@@ -363,7 +365,7 @@ test('request validation failures are preserved as the cause of a parameter Reso
     }
 
     expect($error)->toBeInstanceOf(ResolutionException::class)
-        ->and($error->parameter?->getName())->toBe('dto')
+        ->and($error->parameter?->name)->toBe('dto')
         ->and($error->getPrevious())->toBeInstanceOf(SyntheticValidationFailure::class);
 });
 

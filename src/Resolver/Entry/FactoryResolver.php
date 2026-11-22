@@ -22,12 +22,15 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
+use Error;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionReference;
 use Throwable;
+
+use function Componenta\DI\Internal\is_abstract_static_dispatch_error;
 
 /** Validates and executes factory definitions without owning registrations. */
 final class FactoryResolver implements DefinitionResolverInterface
@@ -242,7 +245,7 @@ final class FactoryResolver implements DefinitionResolverInterface
                 $factory = $snapshot;
             }
         } elseif (is_array($factory)
-            && !is_callable($factory)
+            && !$this->isNativeFactory($factory)
             && isset($factory[0])
             && is_string($factory[0])
             && $this->container->has($factory[0])
@@ -287,9 +290,21 @@ final class FactoryResolver implements DefinitionResolverInterface
             }
             $factory = $snapshot;
         }
-        $validateResolved = is_string($factory) || !is_callable($factory);
+        $validateResolved = is_string($factory) || !$this->isNativeFactory($factory);
         FactorySpecificationValidator::assertValid($id, $factory);
         return new PreparedFactoryDefinition($factory, $validateResolved);
+    }
+
+    private function isNativeFactory(mixed $factory): bool
+    {
+        try {
+            return is_callable($factory);
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
+            return false;
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ use Componenta\DI\CallableResolverInterface;
 use Componenta\DI\Configuration\DependencyConfiguration;
 use Componenta\DI\Exception\DelegatorException;
 use Componenta\DI\Exception\ExceptionInterface;
+use Error;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
@@ -115,10 +116,9 @@ final class DelegatorRegistry
         return isset($this->dependents[$id]);
     }
 
-    /** @return non-negative-int */
-    public function dependencyCount(): int
-    {
-        return count($this->dependents);
+    /** @var non-negative-int */
+    public int $dependencyCount {
+        get => count($this->dependents);
     }
 
     /**
@@ -201,11 +201,17 @@ final class DelegatorRegistry
             $callables = $this->resolveChain($id, $resolver);
             if (($this->revisions[$id] ?? 0) === $revision) {
                 if ($lookup !== null) {
-                    $this->indexDependencies($id, $lookup->dependencies);
+                    $dependencies = $lookup->dependencies;
+                    // Exact string bindings can override the currently selected callable.
+                    foreach ($this->raw[$id] as $specification) {
+                        if (is_string($specification)) {
+                            $dependencies[$specification] = true;
+                        }
+                    }
+                    $this->indexDependencies($id, $dependencies);
                     if (count($callables) === 1 && $callables[0] === $this->raw[$id][0]) {
                         // A native callable with its original route stays available.
-                        // Any exact string binding still has precedence on re-resolution.
-                        $this->registeredDependencies[$id] = $lookup->dependencies;
+                        $this->registeredDependencies[$id] = $dependencies;
                         unset($this->refinableDependencies[$id]);
                     }
                 }
@@ -275,7 +281,7 @@ final class DelegatorRegistry
         if (is_string($delegator)) {
             return $resolver->resolve($delegator);
         }
-        if (is_callable($delegator)) {
+        if (self::isNativeCallable($delegator)) {
             return $delegator;
         }
         return $resolver->resolve($delegator);
@@ -295,7 +301,7 @@ final class DelegatorRegistry
                 // Engine aliases can contain delimiters. A loaded native callable
                 // bypasses container owner lookup, including the first prefix.
                 if ((class_exists($nativeOwner, false) || interface_exists($nativeOwner, false))
-                    && is_callable($delegator)
+                    && self::isNativeCallable($delegator)
                 ) {
                     return array_map('strval', array_keys($ids));
                 }
@@ -303,8 +309,10 @@ final class DelegatorRegistry
                 [$owner, $method] = explode('::', $delegator, 2);
                 if ($owner !== '' && $method !== '') {
                     // The interface probe can autoload a class after the first probe failed.
+                    // Qualified method shorthand resolves through the service receiver.
                     $isNativeStatic = (class_exists($owner) || interface_exists($owner) || class_exists($owner, false))
-                        && is_callable([$owner, $method]);
+                        && !str_contains($method, '::')
+                        && self::isNativeCallable([$owner, $method]);
                     if (!$isNativeStatic) {
                         // A class may be autoloaded only after registration. Track
                         // its owner conservatively so a later non-static method
@@ -317,7 +325,7 @@ final class DelegatorRegistry
         }
 
         if (is_array($delegator)
-            && !is_callable($delegator)
+            && !self::isNativeCallable($delegator)
             && array_keys($delegator) === [0, 1]
             && is_string($delegator[0])
             && $delegator[0] !== ''
@@ -326,5 +334,18 @@ final class DelegatorRegistry
         }
 
         return [];
+    }
+
+    /** @phpstan-assert-if-true callable $specification */
+    private static function isNativeCallable(mixed $specification): bool
+    {
+        try {
+            return is_callable($specification);
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
+            return false;
+        }
     }
 }

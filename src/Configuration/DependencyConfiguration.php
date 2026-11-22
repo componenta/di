@@ -12,6 +12,9 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasGraphBuilder;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Error;
+
+use function Componenta\DI\Internal\is_abstract_static_dispatch_error;
 
 /**
  * Validates configuration shape and canonicalizes ids, aliases and extension lists.
@@ -352,10 +355,16 @@ final class DependencyConfiguration
 
     public static function assertExtensionSpecification(mixed $extension, string $kind): void
     {
-        if (is_callable($extension)
-            || (is_string($extension) && $extension !== '')
-            || self::deferredServiceMethod($extension)
-        ) {
+        try {
+            if (is_callable($extension)) {
+                return;
+            }
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
+        }
+        if ((is_string($extension) && $extension !== '') || self::deferredServiceMethod($extension)) {
             return;
         }
 

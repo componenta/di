@@ -8,6 +8,9 @@ use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 abstract class ConstructionState
 {
@@ -58,8 +61,10 @@ it('rejects a constructor policy loaded by its dependency before invoking the co
     if (!$preloaded) {
         expect(fn() => $container->get($class))->toThrow(AttributeCompositionException::class, $class);
     }
-    $fresh = $container->makeAs($class, $class);
-    $shared = $container->getAs($class, $class);
+    $fresh = $container->make($class);
+    Assert::assertInstanceOf($class, $fresh);
+    $shared = $container->get($class);
+    Assert::assertInstanceOf($class, $shared);
     expect($fresh->state)->toBe('default')
         ->and($shared->state)->toBe('default')
         ->and($container->get($class))->toBe($shared)
@@ -103,12 +108,14 @@ it('rejects a late constructor policy when a lazy object initializes and allows 
         return new \stdClass();
     })->build();
     ConstructionState::$constructors = 0;
-    $pending = $container->makeAs($class, $class);
+    $pending = $container->make($class);
+    Assert::assertInstanceOf($class, $pending);
     expect($loads)->toBe(0)->and(ConstructionState::$constructors)->toBe(0);
 
     expect(fn() => $pending->state)->toThrow(AttributeCompositionException::class, $class)
         ->and($loads)->toBe(1)->and(ConstructionState::$constructors)->toBe(0);
-    $fresh = $container->makeAs($class, $class);
+    $fresh = $container->make($class);
+    Assert::assertInstanceOf($class, $fresh);
     expect($fresh->state)->toBe('default')
         ->and(fn() => $pending->state)->toThrow(AttributeCompositionException::class, $class)
         ->and(ConstructionState::$constructors)->toBe(0)->and($loads)->toBe(1);
@@ -153,8 +160,8 @@ it('does not share an object when a constructor or lifecycle hook loads a policy
 
     expect(fn() => $container->get($class))->toThrow(AttributeCompositionException::class, $class)
         ->and(ConstructionState::$constructors)->toBe(1);
-    expect($container->getAs($class, $class)->state)->toBe('default')
-        ->and($container->makeAs($class, $class)->state)->toBe('default')
+    expect(fixtureInstance($container->get($class), $class)->state)->toBe('default')
+        ->and(fixtureInstance($container->make($class), $class)->state)->toBe('default')
         ->and(ConstructionState::$constructors)->toBe(1);
 })->with(['constructor' => false, 'lifecycle hook' => true]);
 
@@ -190,7 +197,8 @@ it('rejects a policy loaded before lazy initialization without resolving constru
         })
         ->build();
     ConstructionState::$constructors = 0;
-    $pending = $container->makeAs($class, $class);
+    $pending = $container->make($class);
+    Assert::assertInstanceOf($class, $pending);
     expect($dependencies)->toBe(0)->and(ConstructionState::$constructors)->toBe(0);
 
     class_alias(NoConstructor::class, $fullAlias);
@@ -199,7 +207,8 @@ it('rejects a policy loaded before lazy initialization without resolving constru
         ->and($dependencies)->toBe(0)
         ->and(ConstructionState::$constructors)->toBe(0);
 
-    $fresh = $container->makeAs($class, $class);
+    $fresh = $container->make($class);
+    Assert::assertInstanceOf($class, $fresh);
     expect($fresh->state)->toBe('default')
         ->and(fn() => $pending->state)->toThrow(AttributeCompositionException::class, 'BeforeInstantiation completed')
         ->and($dependencies)->toBe(0)

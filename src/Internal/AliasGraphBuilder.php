@@ -8,7 +8,11 @@ use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use LogicException;
 
-/** Validates an append-only alias graph in declaration order. @internal */
+/**
+ * Validates an append-only alias graph in declaration order.
+ *
+ * @internal
+ */
 final class AliasGraphBuilder
 {
     /** @var array<string, non-empty-string> */

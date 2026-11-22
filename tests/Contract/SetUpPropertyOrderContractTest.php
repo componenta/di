@@ -24,7 +24,10 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use Reflector;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final readonly class SetUpPropertyDependency
 {
@@ -104,7 +107,8 @@ test('property injection and setup run only for attribute-driven creation', func
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs($class, $class);
+    $target = $container->make($class);
+    Assert::assertInstanceOf($class, $target);
 
     expect($events->steps)->toBe($useDefinition || $deferred ? [] : ['initialize', 'finish'])
         ->and($target->observed)->toBe($useDefinition ? 'raw' : 'dependency:configured:finished')
@@ -168,6 +172,6 @@ test('a lifecycle capability selector orders an extension before the built-in se
         ))
         ->build();
 
-    expect($container->makeAs(SetUpCapabilityTarget::class, SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup'])
-        ->and($container->makeAs(SetUpCapabilityTarget::class, SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup']);
+    expect(fixtureInstance($container->make(SetUpCapabilityTarget::class), SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup'])
+        ->and(fixtureInstance($container->make(SetUpCapabilityTarget::class), SetUpCapabilityTarget::class)->events)->toBe(['predecessor', 'setup']);
 });

@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 class Ancestor {}
 
@@ -113,7 +114,8 @@ test('inherited property injection resolves self and parent in their declaration
         ->addService(Ancestor::class, $ancestor)
         ->build();
 
-    $result = $container->makeAs(InheritedInjection::class, InheritedInjection::class);
+    $result = $container->make(InheritedInjection::class);
+    Assert::assertInstanceOf(InheritedInjection::class, $result);
 
     expect($result)->toBeInstanceOf(InheritedInjection::class)
         ->and($result->same)->toBe($same)

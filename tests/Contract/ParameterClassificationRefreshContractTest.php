@@ -19,6 +19,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use ReflectionFunction;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -94,7 +95,7 @@ test('all parameter paths observe sources loaded incidentally while classifying 
 
     try {
         $handler = new SourceHandler();
-        $container = (new ContainerBuilder())
+        [$container, $runtime] = (new ContainerBuilder())
             ->addAttributeDefinition(new AttributeDefinition(
                 DeclaredSource::class,
                 $handler,
@@ -102,8 +103,9 @@ test('all parameter paths observe sources loaded incidentally while classifying 
                 rules: $uncached ? [new NoOpRule()] : [],
             ))
             ->addParameterResolver(new TypeClassifier(), -1000)
-            ->build();
-        $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+            ->assemble();
+        $resolver = $runtime->parameters;
+        Assert::assertInstanceOf(ParametersResolver::class, $resolver);
         $callable = __NAMESPACE__ . '\\' . $function;
         if (!is_callable($callable)) {
             throw new \LogicException('The generated function must be callable.');

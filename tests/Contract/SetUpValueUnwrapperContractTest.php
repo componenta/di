@@ -17,11 +17,13 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use ReflectionFunction;
 use stdClass;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 test('setup value unwrapping resolves each supported descriptor in its own context', function (object $descriptor, mixed $expected): void {
     $container = (new ContainerBuilder(new Config(['setting' => 'configured'], new Environment(['VALUE' => 'environment']))))
         ->addService('service', 'container')
         ->build();
-    $unwrapper = new ContainerValueUnwrapper($container->getAs(ContainerValue::class, ContainerValue::class));
+    $unwrapper = new ContainerValueUnwrapper(fixtureInstance($container->get(ContainerValue::class), ContainerValue::class));
 
     expect($unwrapper->supports($descriptor))->toBeTrue()
         ->and($unwrapper->unwrap($descriptor, 'argument'))->toBe($expected);
@@ -40,7 +42,7 @@ test('setup value unwrapping resolves each supported descriptor in its own conte
 
 test('setup value unwrapping leaves unsupported values unchanged', function (mixed $value): void {
     $container = (new ContainerBuilder())->build();
-    $unwrapper = new ContainerValueUnwrapper($container->getAs(ContainerValue::class, ContainerValue::class));
+    $unwrapper = new ContainerValueUnwrapper(fixtureInstance($container->get(ContainerValue::class), ContainerValue::class));
 
     expect($unwrapper->supports($value))->toBeFalse()
         ->and($unwrapper->unwrap($value, 'argument'))->toBe($value);
@@ -48,7 +50,7 @@ test('setup value unwrapping leaves unsupported values unchanged', function (mix
 
 test('setup environment descriptors convert according to the declared parameter type', function (Closure $signature, mixed $raw, mixed $expected): void {
     $container = (new ContainerBuilder(new Config([], new Environment([]))))->build();
-    $unwrapper = new ContainerValueUnwrapper($container->getAs(ContainerValue::class, ContainerValue::class));
+    $unwrapper = new ContainerValueUnwrapper(fixtureInstance($container->get(ContainerValue::class), ContainerValue::class));
     $parameter = (new ReflectionFunction($signature))->getParameters()[0];
 
     expect($unwrapper->unwrap(new EnvironmentEntry('MISSING', $raw), 'value', $parameter))->toBe($expected);

@@ -24,8 +24,8 @@ final readonly class ForeignFactoryDefinition implements DefinitionInterface
 }
 
 test('direct reflection resolution rejects unavailable entries without a preceding can check', function (string $id): void {
-    $container = (new ContainerBuilder())->build();
-    $objects = $container->get(ObjectPipeline::class);
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $objects = $runtime->objects;
     if (!$objects instanceof ObjectPipeline) {
         throw new LogicException('Expected the configured object pipeline.');
     }

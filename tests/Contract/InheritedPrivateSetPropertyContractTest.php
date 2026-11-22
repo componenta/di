@@ -17,6 +17,7 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use RuntimeException;
 use Throwable;
@@ -139,7 +140,8 @@ test('inherited private setters retain property injection and native hooks throu
 
     foreach ([1, 2] as $_attempt) {
         State::$events = [];
-        $product = $container->makeAs($class, $class);
+        $product = $container->make($class);
+        Assert::assertInstanceOf($class, $product);
         expect(State::$events)->toBe($deferred ? [] : ['constructor', 'hook:injected', 'virtual:injected', 'setup:INJECTED'])
             ->and($product->plain)->toBe('injected')
             ->and($product->protectedValue())->toBe('injected')
@@ -162,7 +164,8 @@ test('failed inherited private setter initialization retries readonly injection 
     $container = builder($uncached, $first)->build();
     $cause = new RuntimeException('inherited hook unavailable');
     State::$failure = $cause;
-    $product = $container->makeAs($class, $class);
+    $product = $container->make($class);
+    Assert::assertInstanceOf($class, $product);
     $reflection = new ReflectionClass($class);
     $failure = null;
     try {

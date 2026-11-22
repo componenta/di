@@ -6,8 +6,11 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Error;
 use Psr\Container\ContainerInterface;
 use Throwable;
+
+use function Componenta\DI\Internal\is_abstract_static_dispatch_error;
 
 /**
  * Resolves various formats into PHP callables.
@@ -36,14 +39,11 @@ class CallableResolver implements CallableResolverInterface
 
             if (is_array($callable)) {
                 $callable = self::snapshotCallable($callable);
+                return $this->isNativeCallable($callable) ? $callable : $this->resolveArray($callable);
             }
 
             if (is_callable($callable)) {
                 return $callable;
-            }
-
-            if (is_array($callable)) {
-                return $this->resolveArray($callable);
             }
 
             throw InvalidCallableException::forValue($callable);
@@ -68,7 +68,7 @@ class CallableResolver implements CallableResolverInterface
         }
 
         if (str_contains($callable, '::')) {
-            if (is_callable($callable)) {
+            if ($this->isNativeCallable($callable)) {
                 return $callable;
             }
             return $this->resolveClassMethod($callable);
@@ -98,7 +98,7 @@ class CallableResolver implements CallableResolverInterface
             }
             // Discovery can reveal a native static route ahead of the instance service.
             // Qualified names keep their existing receiver selection.
-            if (!str_contains($method, '::') && is_callable($callable)) {
+            if (!str_contains($method, '::') && $this->isNativeCallable($callable)) {
                 return $callable;
             }
         }
@@ -142,7 +142,13 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forValue($callable);
         }
 
+        $unqualifiedMethod = !str_contains($method, '::');
+        $canDiscoverNative = $unqualifiedMethod && !class_exists($objectOrClass, false);
         if ($this->container->has($objectOrClass)) {
+            // Availability checks may load the native owner before instantiation.
+            if ($canDiscoverNative && class_exists($objectOrClass, false) && $this->isNativeCallable($callable)) {
+                return $callable;
+            }
             $entry = $this->container->get($objectOrClass);
             if (is_object($entry) && is_callable([$entry, $method])) {
                 return [$entry, $method];
@@ -153,7 +159,7 @@ class CallableResolver implements CallableResolverInterface
         if (!self::classOrInterfaceExists($objectOrClass)) {
             throw InvalidCallableException::forValue($callable);
         }
-        if (!str_contains($method, '::') && is_callable($callable)) {
+        if ($unqualifiedMethod && $this->isNativeCallable($callable)) {
             return $callable;
         }
         if (!method_exists($objectOrClass, $method)) {
@@ -164,6 +170,19 @@ class CallableResolver implements CallableResolverInterface
         }
 
         throw InvalidCallableException::forMissingService($objectOrClass);
+    }
+
+    /** @phpstan-assert-if-true callable $candidate */
+    private function isNativeCallable(mixed $candidate): bool
+    {
+        try {
+            return is_callable($candidate);
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
+            return false;
+        }
     }
 
     private static function classOrInterfaceExists(string $name): bool

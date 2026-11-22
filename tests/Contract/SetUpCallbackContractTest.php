@@ -28,14 +28,16 @@ use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use Componenta\DI\Resolver\Entry\SetUpRunner;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use ReflectionClass;
 use ReflectionParameter;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute]
 final class UnusedMarker {}
@@ -91,7 +93,8 @@ final class LazyHookTarget extends HookTarget {}
 
 test('callback setup runs after committed properties in declaration order and ignores returned objects', function (bool $uncached): void {
     $container = setupBuilder($uncached)->build();
-    $entry = $container->getAs(HookTarget::class, HookTarget::class);
+    $entry = $container->get(HookTarget::class);
+    Assert::assertInstanceOf(HookTarget::class, $entry);
 
     expect($entry)->toBeInstanceOf(HookTarget::class)
         ->and($entry->steps)->toBe(['first:dependency:dependency', 'middle:dependency', 'last:dependency:dependency'])
@@ -101,7 +104,8 @@ test('callback setup runs after committed properties in declaration order and ig
 
 test('callback setup respects lazy object initialization', function (): void {
     $container = (new ContainerBuilder())->build();
-    $entry = $container->makeAs(LazyHookTarget::class, LazyHookTarget::class);
+    $entry = $container->make(LazyHookTarget::class);
+    Assert::assertInstanceOf(LazyHookTarget::class, $entry);
 
     expect(new ReflectionClass($entry)->isUninitializedLazyObject($entry))->toBeTrue()
         ->and($entry->steps)->toBe(['lazy:dependency:dependency']);
@@ -144,21 +148,22 @@ final class DirectTarget
  */
 function directRunner(array $parameters = []): array
 {
-    $container = (new ContainerBuilder())->build();
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
     $store = new ObjectResolutionParameterStore();
     $unwrapper = new ObservingUnwrapper();
     $entry = new DirectTarget();
     $context = setupContext($entry, $parameters);
     $store->attach($context, $parameters);
-    $runner = new SetUpRunner($container, $store, new AttributeCallbackInvoker($container->getAs(ParametersResolver::class, ParametersResolver::class), $container), $unwrapper);
+    $runner = new SetUpRunner($container, $store, new AttributeCallbackInvoker($runtime->parameters, $container), $unwrapper);
     return [$runner, $context, $unwrapper, $entry];
 }
 
 /** @param array<string|int,mixed> $parameters */
 function setupContext(object $entry, array $parameters): ObjectCreationContext
 {
-    $context = new ObjectCreationContext(new ReflectionClass($entry), $parameters);
-    $context->initialize($entry);
+    $attempt = ObjectCreationContext::begin(new ReflectionClass($entry), $parameters);
+    $context = $attempt->context;
+    $attempt->initialize($entry);
     return $context;
 }
 
@@ -524,5 +529,5 @@ final class ForwardedTarget
 test('constructor only setup subclasses preserve named method and params arguments', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    expect($container->makeAs(ForwardedTarget::class, ForwardedTarget::class)->label)->toBe('forwarded');
+    expect(fixtureInstance($container->make(ForwardedTarget::class), ForwardedTarget::class)->label)->toBe('forwarded');
 });

@@ -19,6 +19,7 @@ use LogicException;
 use Reflector;
 
 use function Componenta\DI\Tests\Support\container;
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class SemanticSnapshotFirst {}
@@ -99,13 +100,13 @@ it('preserves registered handler ordering after a selector reference changes', f
         ],
     ]);
     if ($warm) {
-        expect($container->makeAs(SemanticSnapshotTarget::class, SemanticSnapshotTarget::class)->events)
+        expect(fixtureInstance($container->make(SemanticSnapshotTarget::class), SemanticSnapshotTarget::class)->events)
             ->toBe([SemanticSnapshotSecond::class, SemanticSnapshotFirst::class]);
     }
 
     $predecessor = SemanticSnapshotOther::class;
 
-    expect($container->makeAs(SemanticSnapshotTarget::class, SemanticSnapshotTarget::class)->events)
+    expect(fixtureInstance($container->make(SemanticSnapshotTarget::class), SemanticSnapshotTarget::class)->events)
         ->toBe([SemanticSnapshotSecond::class, SemanticSnapshotFirst::class]);
 })->with(['cold' => false, 'warm' => true])->with(['cached' => false, 'uncached' => true]);
 

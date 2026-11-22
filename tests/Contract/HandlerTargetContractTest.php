@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract;
 
 use Componenta\DI\Attribute\Cast;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Config;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
@@ -28,13 +27,14 @@ final class HandlerTargetFixture
 }
 
 test('object handler interfaces reject method targets unsupported by their attribute', function (object $attribute): void {
-    $container = (new ContainerBuilder())->build();
-    $handler = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute::class)?->handler;
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $handler = $runtime->attributes->definition($attribute::class)?->handler;
     if (!$handler instanceof AttributeHandlerInterface) {
         throw new LogicException('Expected an object handler.');
     }
-    $context = handlerTargetContext(HandlerTargetFixture::class);
-    $context->initialize(new HandlerTargetFixture());
+    $attempt = ObjectCreationContext::begin(new ReflectionClass(HandlerTargetFixture::class));
+    $attempt->initialize(new HandlerTargetFixture());
+    $context = $attempt->context;
     $target = new ReflectionMethod(HandlerTargetFixture::class, 'run');
     $shortName = substr($handler::class, strrpos($handler::class, '\\') + 1);
 
@@ -49,8 +49,8 @@ test('class creation handlers reject an unrelated attribute even on a class targ
     if (!class_exists($attribute)) {
         throw new LogicException('Expected a class attribute.');
     }
-    $container = (new ContainerBuilder())->build();
-    $handler = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $handler = $runtime->attributes->definition($attribute)?->handler;
     if (!$handler instanceof AttributeHandlerInterface) {
         throw new LogicException('Expected an object handler.');
     }

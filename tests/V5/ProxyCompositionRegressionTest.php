@@ -13,6 +13,7 @@ use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class ProxyCompositionValue
 {
@@ -93,7 +94,8 @@ test('Proxy supplies its value before Cast transforms it', function (): void {
         ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
         ->build();
 
-    $target = $container->makeAs(ProxyCastParameterTarget::class, ProxyCastParameterTarget::class);
+    $target = $container->make(ProxyCastParameterTarget::class);
+    Assert::assertInstanceOf(ProxyCastParameterTarget::class, $target);
 
     expect($target->value->label)->toBe('source:cast');
 });

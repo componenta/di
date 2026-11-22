@@ -10,6 +10,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use PHPUnit\Framework\Assert;
 use Random\Engine\Mt19937;
 
 use function Componenta\DI\Tests\Support\container;
@@ -32,7 +33,8 @@ test('internal optional arguments after a gap keep their native named binding', 
 
 test('internal methods and constructors keep native defaults', function (): void {
     $container = container();
-    $engine = $container->makeAs(Mt19937::class, Mt19937::class);
+    $engine = $container->make(Mt19937::class);
+    Assert::assertInstanceOf(Mt19937::class, $engine);
     expect($engine)->toBeInstanceOf(Mt19937::class)
         ->and($engine->generate())->toBeString()
         ->and($container->call([$engine, 'generate']))->toBeString();

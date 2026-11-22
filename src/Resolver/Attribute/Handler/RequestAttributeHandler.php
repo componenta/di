@@ -36,13 +36,13 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /** Handles all request-source attributes on parameters. */
-final class RequestAttributeHandler implements ParameterAttributeHandlerInterface
+final readonly class RequestAttributeHandler implements ParameterAttributeHandlerInterface
 {
     public function __construct(
-        private readonly FactoryInterface $factory,
-        private readonly CasterProviderInterface $casterProvider,
-        private readonly ?ValidationProviderInterface $validationProvider = null,
-        private readonly ?AttributeCallbackInvoker $callbacks = null,
+        private FactoryInterface $factory,
+        private CasterProviderInterface $casterProvider,
+        private ?ValidationProviderInterface $validationProvider = null,
+        private ?AttributeCallbackInvoker $callbacks = null,
     ) {}
 
     public function resolveParameter(

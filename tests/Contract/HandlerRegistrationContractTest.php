@@ -7,7 +7,6 @@ namespace Componenta\DI\Tests\Contract;
 use Attribute;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Config;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
@@ -33,8 +32,8 @@ test('a misregistered built-in parameter handler rejects an unrelated attribute 
     if (!class_exists($attribute)) {
         throw new LogicException('Expected a built-in attribute.');
     }
-    $source = (new ContainerBuilder())->build();
-    $handler = $source->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
+    [$source, $sourceRuntime] = (new ContainerBuilder())->assemble();
+    $handler = $sourceRuntime->attributes->definition($attribute)?->handler;
     if ($handler === null) {
         throw new LogicException('Expected a built-in handler.');
     }
@@ -57,8 +56,8 @@ test('a misregistered built-in object handler reports an unsupported attribute t
     if (!class_exists($attribute)) {
         throw new LogicException('Expected a built-in attribute.');
     }
-    $source = (new ContainerBuilder())->build();
-    $handler = $source->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition($attribute)?->handler;
+    [$source, $sourceRuntime] = (new ContainerBuilder())->assemble();
+    $handler = $sourceRuntime->attributes->definition($attribute)?->handler;
     if ($handler === null) {
         throw new LogicException('Expected a built-in handler.');
     }

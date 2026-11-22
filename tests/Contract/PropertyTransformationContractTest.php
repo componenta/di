@@ -12,6 +12,8 @@ use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final class BooleanPropertyCaster implements CasterInterface
 {
     public string $name { get => 'boolean'; }
@@ -39,7 +41,7 @@ test('property sources are transformed before PHP assigns the final property typ
         ->addService(CasterProviderInterface::class, $provider)
         ->build();
 
-    expect($container->makeAs(BooleanPropertySource::class, BooleanPropertySource::class)->flag)->toBeFalse();
+    expect(fixtureInstance($container->make(BooleanPropertySource::class), BooleanPropertySource::class)->flag)->toBeFalse();
 });
 
 final class TransformedWriteOnlyProperty
@@ -60,5 +62,5 @@ test('a write-only property hook receives only the final transformed value once'
         ->addService(CasterProviderInterface::class, new \Componenta\DI\Tests\Support\TestCasterProvider())
         ->build();
 
-    expect($container->makeAs(TransformedWriteOnlyProperty::class, TransformedWriteOnlyProperty::class)->assigned)->toBe(['ready']);
+    expect(fixtureInstance($container->make(TransformedWriteOnlyProperty::class), TransformedWriteOnlyProperty::class)->assigned)->toBe(['ready']);
 });

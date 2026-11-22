@@ -12,6 +12,9 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class Dependency {}
 
@@ -53,7 +56,8 @@ it('creates ClassDefinition results using only explicit instructions and native 
             ->call('configure', ['value' => 'explicit']))
         ->build();
 
-    $entry = $di->getAs(ExplicitProduct::class, ExplicitProduct::class);
+    $entry = $di->get(ExplicitProduct::class);
+    Assert::assertInstanceOf(ExplicitProduct::class, $entry);
 
     expect($entry->events)->toBe(['constructor', 'method-default', 'explicit'])
         ->and($entry->value)->toBe('native-default')
@@ -94,8 +98,10 @@ it('uses autowiring only as an explicit fallback for constructor and method argu
         ->addDefinition(FallbackProduct::class, $definition)
         ->build();
 
-    $defaults = $di->makeAs(FallbackProduct::class, FallbackProduct::class);
-    $override = $di->makeAs(FallbackProduct::class, FallbackProduct::class, ['dependency' => $explicit]);
+    $defaults = $di->make(FallbackProduct::class);
+    Assert::assertInstanceOf(FallbackProduct::class, $defaults);
+    $override = $di->make(FallbackProduct::class, ['dependency' => $explicit]);
+    Assert::assertInstanceOf(FallbackProduct::class, $override);
 
     expect($defaults->dependency)->toBe($enabled ? $shared : null)
         ->and($defaults->configured)->toBe($enabled ? $shared : null)
@@ -125,7 +131,8 @@ it('preserves explicitly supplied variadic arguments and omitted native defaults
         ->call('append', ['third', 'fourth']);
     $di = (new ContainerBuilder())->addDefinition(VariadicProduct::class, $definition)->build();
 
-    $entry = $di->makeAs(VariadicProduct::class, VariadicProduct::class, $override ? [0 => 'runtime'] : []);
+    $entry = $di->make(VariadicProduct::class, $override ? [0 => 'runtime'] : []);
+    Assert::assertInstanceOf(VariadicProduct::class, $entry);
 
     expect($entry->values)->toBe([$override ? 'runtime' : 'default', 'first', 'second', 'third', 'fourth']);
 })->with(['native default' => false, 'runtime override' => true]);
@@ -140,8 +147,10 @@ it('keeps factory and invokable results outside the attribute lifecycle', functi
     };
     $di = \Componenta\DI\Tests\Support\container($sections);
 
-    $shared = $di->getAs(ExplicitProduct::class, ExplicitProduct::class);
-    $fresh = $di->makeAs(ExplicitProduct::class, ExplicitProduct::class);
+    $shared = $di->get(ExplicitProduct::class);
+    Assert::assertInstanceOf(ExplicitProduct::class, $shared);
+    $fresh = $di->make(ExplicitProduct::class);
+    Assert::assertInstanceOf(ExplicitProduct::class, $fresh);
 
     expect($shared->events)->toBe(['constructor'])
         ->and($fresh->events)->toBe(['constructor'])
@@ -174,10 +183,11 @@ it('lets referenced dependencies use their own registered lifecycle', function (
     }
     $di = (new ContainerBuilder())->addDefinition(ReferencingProduct::class, $definition)->build();
 
-    $entry = $di->makeAs(ReferencingProduct::class, ReferencingProduct::class);
+    $entry = $di->make(ReferencingProduct::class);
+    Assert::assertInstanceOf(ReferencingProduct::class, $entry);
 
     expect($entry->dependency->initializations)->toBe(1)
-        ->and($entry->dependency)->toBe($di->getAs(ManagedDependency::class, ManagedDependency::class));
+        ->and($entry->dependency)->toBe($di->get(ManagedDependency::class));
 })->with(['explicit reference' => false, 'type fallback' => true]);
 
 final readonly class RequiredProduct
@@ -193,7 +203,7 @@ it('does not supply implicit null or autowire a required argument when fallback 
         ->build();
 
     expect(fn() => $di->get(RequiredProduct::class))->toThrow(\Componenta\DI\Exception\ResolutionException::class)
-        ->and($di->makeAs(RequiredProduct::class, RequiredProduct::class, ['dependency' => null])->dependency)->toBeNull();
+        ->and(fixtureInstance($di->make(RequiredProduct::class, ['dependency' => null]), RequiredProduct::class)->dependency)->toBeNull();
     $di->set(RequiredProduct::class, ClassDefinition::create(RequiredProduct::class)->autowire());
-    expect($di->getAs(RequiredProduct::class, RequiredProduct::class)->dependency)->toBe($dependency);
+    expect(fixtureInstance($di->get(RequiredProduct::class), RequiredProduct::class)->dependency)->toBe($dependency);
 });

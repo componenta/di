@@ -13,6 +13,7 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Definition\ClassDefinition;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 
 final readonly class ConfiguredRequestSourceTarget
@@ -55,7 +56,8 @@ test('ClassDefinition fallback uses container services while request attributes 
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs($class, $class, [ServerRequestInterface::class => $current]);
+    $target = $container->make($class, [ServerRequestInterface::class => $current]);
+    Assert::assertInstanceOf($class, $target);
 
     expect($target->request)->toBe($selected)
         ->and($target->context)->toBe('explicit-context')
@@ -84,10 +86,11 @@ test('ClassDefinition still accepts explicit request arguments by name or positi
         throw new \LogicException('Expected the Componenta container.');
     }
 
-    $target = $container->makeAs(ConfiguredRequestSourceTarget::class, ConfiguredRequestSourceTarget::class, [
+    $target = $container->make(ConfiguredRequestSourceTarget::class, [
         ServerRequestInterface::class => $current,
         $key => $explicit,
     ]);
+    Assert::assertInstanceOf(ConfiguredRequestSourceTarget::class, $target);
 
     expect($target->request)->toBe($explicit)
         ->and($target->context)->toBe('explicit-context');

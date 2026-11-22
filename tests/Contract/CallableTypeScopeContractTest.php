@@ -15,6 +15,8 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\TypeHints;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class CacheControl {}
 
@@ -175,7 +177,7 @@ test('constructor callable parameters retain native private visibility', functio
 
     expect((new ConstructorScope($value))->result)->toBe('constructor');
     foreach ([1, 2] as $_attempt) {
-        expect($container->makeAs(ConstructorScope::class, ConstructorScope::class, ['value' => $value])->result)->toBe('constructor');
+        expect(fixtureInstance($container->make(ConstructorScope::class, ['value' => $value]), ConstructorScope::class)->result)->toBe('constructor');
     }
 })->with(['cached' => false, 'non-memoized' => true]);
 

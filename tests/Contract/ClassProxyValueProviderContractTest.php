@@ -16,6 +16,7 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use Reflector;
 
@@ -83,7 +84,8 @@ test('class Proxy defers a custom value provider without treating it as an injec
     Product::$constructions = 0;
 
     expect($container->has($class))->toBeTrue();
-    $first = $container->getAs($class, $class);
+    $first = $container->get($class);
+    Assert::assertInstanceOf($class, $first);
     expect($reflection->isUninitializedLazyObject($first))->toBeTrue()
         ->and(Product::$constructions)->toBe(0)
         ->and($handler->calls)->toBe(0)
@@ -92,7 +94,8 @@ test('class Proxy defers a custom value provider without treating it as an injec
         ->and($handler->calls)->toBe(1)
         ->and($container->get($class))->toBe($first);
 
-    $fresh = $container->makeAs($class, $class);
+    $fresh = $container->make($class);
+    Assert::assertInstanceOf($class, $fresh);
     expect($fresh)->not->toBe($first)
         ->and($reflection->isUninitializedLazyObject($fresh))->toBeTrue()
         ->and($fresh->label)->toBe('provided')

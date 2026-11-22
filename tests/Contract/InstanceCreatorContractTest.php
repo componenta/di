@@ -7,7 +7,6 @@ namespace Componenta\DI\Tests\Contract\InstanceCreator;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
-use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use ReflectionClass;
@@ -28,10 +27,16 @@ final class Product
     }
 }
 
+test('standalone instance creation keeps tracked constructor execution out of its public API', function (): void {
+    $publicMethods = get_class_methods(InstanceCreator::class);
+
+    expect(array_intersect(['createTracked', 'initializeTracked'], $publicMethods))->toBe([]);
+});
+
 test('direct instance creation and initialization resolve explicit arguments alongside attributed dependencies and defaults', function (bool $initialize): void {
     $dependency = new Dependency();
-    $container = (new ContainerBuilder())->addService('direct.dependency', $dependency)->build();
-    $creator = new InstanceCreator($container->getAs(ParametersResolver::class, ParametersResolver::class));
+    [$container, $runtime] = (new ContainerBuilder())->addService('direct.dependency', $dependency)->assemble();
+    $creator = new InstanceCreator($runtime->parameters);
     $class = new ReflectionClass(Product::class);
 
     if ($initialize) {
@@ -53,8 +58,8 @@ final class ConstructorlessProduct
 }
 
 test('direct constructorless creation uses declared defaults and initialization preserves an existing instance', function (bool $initialize): void {
-    $container = (new ContainerBuilder())->build();
-    $creator = new InstanceCreator($container->getAs(ParametersResolver::class, ParametersResolver::class));
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $creator = new InstanceCreator($runtime->parameters);
     $class = new ReflectionClass(ConstructorlessProduct::class);
 
     if ($initialize) {
@@ -71,8 +76,8 @@ test('direct constructorless creation uses declared defaults and initialization 
 abstract class AbstractProduct {}
 
 test('direct creation normalizes native allocation failures for classes without constructors', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $creator = new InstanceCreator($container->getAs(ParametersResolver::class, ParametersResolver::class));
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $creator = new InstanceCreator($runtime->parameters);
 
     try {
         $creator->create(new ReflectionClass(AbstractProduct::class));

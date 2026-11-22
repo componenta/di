@@ -8,7 +8,11 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
-/** Lazily obtains the protected runtime FactoryInterface service. @internal */
+/**
+ * Lazily obtains the protected runtime FactoryInterface service.
+ *
+ * @internal
+ */
 final class LazyFactory implements FactoryInterface
 {
     private ?FactoryInterface $factory = null;

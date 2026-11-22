@@ -13,11 +13,25 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\Reflection\Reflection;
+use Error;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionProperty;
+
+/** @internal */
+function is_abstract_static_dispatch_error(Error $error, string $source): bool
+{
+    // Only the native probe's error is recoverable. Application autoload may
+    // itself fail with the same error type and message.
+    return $error::class === Error::class
+        && $error->getFile() === $source
+        && ($error->getTrace()[0]['function'] ?? null) === 'is_callable'
+        && str_starts_with($error->getMessage(), 'Cannot call abstract method ');
+}
 
 /** @internal */
 function is_closure_reflector(ReflectionFunctionAbstract $reflection): bool
@@ -28,6 +42,14 @@ function is_closure_reflector(ReflectionFunctionAbstract $reflection): bool
         || ($reflection instanceof ReflectionMethod
             && $reflection->getDeclaringClass()->getName() === Closure::class
             && $reflection->getName() === '__invoke');
+}
+
+/** @internal Observes availability without invoking an autoloader. */
+function is_attribute_class_loaded(string $attributeClass): bool
+{
+    return \class_exists($attributeClass, false)
+        || \interface_exists($attributeClass, false)
+        || \trait_exists($attributeClass, false);
 }
 
 /** @internal */
@@ -70,6 +92,35 @@ function is_magic_closure_trampoline(ReflectionFunctionAbstract $reflection): bo
     }
 
     return false;
+}
+
+/**
+ * @internal
+ * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+ */
+function describe_attribute_target(
+    ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+): string {
+    return match (true) {
+        $target instanceof ReflectionParameter => sprintf(
+            '$%s of %s',
+            $target->getName(),
+            $target->getDeclaringClass() !== null
+                ? $target->getDeclaringClass()->getName() . '::' . $target->getDeclaringFunction()->getName() . '()'
+                : $target->getDeclaringFunction()->getName() . '()',
+        ),
+        $target instanceof ReflectionProperty => sprintf(
+            '%s::$%s',
+            $target->getDeclaringClass()->getName(),
+            $target->getName(),
+        ),
+        $target instanceof ReflectionMethod => sprintf(
+            '%s::%s()',
+            $target->getDeclaringClass()->getName(),
+            $target->getName(),
+        ),
+        default => $target->getName(),
+    };
 }
 
 /** @internal */

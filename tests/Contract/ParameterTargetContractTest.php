@@ -44,7 +44,7 @@ test('parameter extensions can find inherited attributes and receive the first m
         ->and($target->hasDefault)->toBeTrue()
         ->and($target->allowsNull)->toBeFalse()
         ->and($target->declaringContext)->toBe(TargetMetadataExample::class . '::read()')
-        ->and($target->reflector())->toBe($reflection);
+        ->and($target->reflection)->toBe($reflection);
 });
 
 test('missing attributes remain absent even when a different attribute is present', function (): void {

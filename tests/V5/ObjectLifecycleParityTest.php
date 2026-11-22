@@ -11,6 +11,9 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 interface LifecycleProxyContract
 {
@@ -134,7 +137,8 @@ test('Proxy keeps explicit concrete implementation for interface targets', funct
             static fn(): LifecycleProxyContract => new LifecycleProxyService(),
         )
         ->build();
-    $consumer = $container->makeAs(LifecycleProxyConsumer::class, LifecycleProxyConsumer::class);
+    $consumer = $container->make(LifecycleProxyConsumer::class);
+    Assert::assertInstanceOf(LifecycleProxyConsumer::class, $consumer);
 
     expect($consumer->service)->toBeInstanceOf(LifecycleProxyService::class)
         ->and($consumer->service->value())->toBe('proxied');
@@ -148,7 +152,7 @@ test('Make service id and Proxy concrete class remain independent', function ():
         )
         ->build();
 
-    expect($container->makeAs(LifecycleServiceIdProxyConsumer::class, LifecycleServiceIdProxyConsumer::class)->service->value())
+    expect(fixtureInstance($container->make(LifecycleServiceIdProxyConsumer::class), LifecycleServiceIdProxyConsumer::class)->service->value())
         ->toBe('service-id');
 });
 
@@ -176,7 +180,8 @@ test('Proxy normalizes a deferred backing type mismatch to ResolutionException',
             static fn(): object => new \stdClass(),
         )
         ->build();
-    $consumer = $container->makeAs(LifecycleWrongBackingProxyConsumer::class, LifecycleWrongBackingProxyConsumer::class);
+    $consumer = $container->make(LifecycleWrongBackingProxyConsumer::class);
+    Assert::assertInstanceOf(LifecycleWrongBackingProxyConsumer::class, $consumer);
 
     expect(fn() => $consumer->service->value())
         ->toThrow(ResolutionException::class, 'must be an instance of');
@@ -188,13 +193,15 @@ test('Make detects cycles created by Make attributes', function (): void {
 });
 
 test('Init overwrites a mutable promoted property after construction', function (): void {
-    $entry = (new ContainerBuilder())->build()->makeAs(LifecyclePromotedInitTarget::class, LifecyclePromotedInitTarget::class);
+    $entry = (new ContainerBuilder())->build()->make(LifecyclePromotedInitTarget::class);
+    Assert::assertInstanceOf(LifecyclePromotedInitTarget::class, $entry);
 
     expect($entry->value)->toBe('INITIALIZED');
 });
 
 test('Init leaves an initialized readonly promoted property unchanged', function (): void {
-    $entry = (new ContainerBuilder())->build()->makeAs(LifecycleReadonlyPromotedInitTarget::class, LifecycleReadonlyPromotedInitTarget::class);
+    $entry = (new ContainerBuilder())->build()->make(LifecycleReadonlyPromotedInitTarget::class);
+    Assert::assertInstanceOf(LifecycleReadonlyPromotedInitTarget::class, $entry);
 
     expect($entry->value)->toBe('constructor');
 });
@@ -205,5 +212,5 @@ test('Attribute processing includes private properties declared by ancestors', f
         ->addService(LifecycleInjectedDependency::class, $dependency)
         ->build();
 
-    expect($container->makeAs(LifecyclePrivateInjectedChild::class, LifecyclePrivateInjectedChild::class)->dependency())->toBe($dependency);
+    expect(fixtureInstance($container->make(LifecyclePrivateInjectedChild::class), LifecyclePrivateInjectedChild::class)->dependency())->toBe($dependency);
 });

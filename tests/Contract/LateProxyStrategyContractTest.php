@@ -14,6 +14,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 
 #[Attribute(Attribute::TARGET_CLASS)]
@@ -75,7 +76,8 @@ test('a late class Proxy cannot retroactively change a completed eager creation 
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new UncachedRule()]));
     }
-    $pipeline = $builder->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = $builder->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $pipeline->prepare($class);
     $create = static fn(): object => $pipeline->create($class, configure: static function () use ($state): void {
         $state->events[] = 'configure';

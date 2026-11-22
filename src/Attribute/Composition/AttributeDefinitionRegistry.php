@@ -35,8 +35,7 @@ final class AttributeDefinitionRegistry
     private int $snapshotMinimum = self::MINIMUM_SNAPSHOT_SIZE;
     /** @var array{int, list<string>, list<string>}|null */
     private ?array $checkedDeclarations = null;
-    /** @internal */
-    public private(set) bool $targetedDiscovery = false;
+    private bool $targetedDiscovery = false;
     /** @internal An undiscovered declaration may introduce a user rule. */
     public private(set) bool $hasCustomRules = false;
 

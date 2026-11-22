@@ -14,6 +14,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Reflector;
 
 #[Attribute(Attribute::TARGET_CLASS)]
@@ -105,7 +106,8 @@ test('constructor discovery outside the completed before phase preserves its pro
         ->and(DiscoveredMetadata::$constructions)->toBe(0);
     foreach ([1, 2] as $attempt) {
         $events->values = [];
-        $entry = $container->makeAs($class, $class, ['alias' => __NAMESPACE__ . '\\' . $attribute]);
+        $entry = $container->make($class, ['alias' => __NAMESPACE__ . '\\' . $attribute]);
+        Assert::assertInstanceOf($class, $entry);
         expect($entry->state)->toBe('constructed')
             ->and($events->values)->toBe($kind === 'after handler' ? ['before', 'constructor', 'after'] : ['before', 'constructor'])
             ->and(DiscoveredMetadata::$constructions)->toBe($kind === 'after handler' ? $attempt : 0);

@@ -13,7 +13,13 @@ use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionParameter;
 
-/** Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources. @internal */
+use function Componenta\DI\Internal\is_attribute_class_loaded;
+
+/**
+ * Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources.
+ *
+ * @internal
+ */
 final class MappedRequestParameterSourceGuard
 {
     /** @var array<class-string,list<array{parameter:string,source:class-string,keys:list<string>}>> */
@@ -190,7 +196,7 @@ final class MappedRequestParameterSourceGuard
             $pending = [];
             foreach ($attributes as $attribute) {
                 $attributeClass = $attribute->getName();
-                if (!self::isAvailable($attributeClass)) {
+                if (!is_attribute_class_loaded($attributeClass)) {
                     $pending[] = $attributeClass;
                 }
             }
@@ -206,7 +212,7 @@ final class MappedRequestParameterSourceGuard
         return static function () use ($checks, $owner): void {
             foreach ($checks as [$name, $key, $pending]) {
                 foreach ($pending as $attribute) {
-                    if (self::isAvailable($attribute) && is_a($attribute, ParameterSourceAttributeInterface::class, true)) {
+                    if (is_attribute_class_loaded($attribute) && is_a($attribute, ParameterSourceAttributeInterface::class, true)) {
                         throw new RequestParameterSourceConflictException($owner, $key, $attribute, $name);
                     }
                 }
@@ -317,25 +323,18 @@ final class MappedRequestParameterSourceGuard
     private static function declaredTargetSource(ParameterTarget $target, bool &$complete, bool $autoload): ?string
     {
         foreach ($target->attributeClasses as $attributeClass) {
-            if (!$autoload && !self::isAvailable($attributeClass)) {
+            if (!$autoload && !is_attribute_class_loaded($attributeClass)) {
                 $complete = false;
                 continue;
             }
             if (is_a($attributeClass, ParameterSourceAttributeInterface::class, true)) {
                 return $attributeClass;
             }
-            if (!self::isAvailable($attributeClass)) {
+            if (!is_attribute_class_loaded($attributeClass)) {
                 $complete = false;
             }
         }
         return null;
-    }
-
-    private static function isAvailable(string $attributeClass): bool
-    {
-        return class_exists($attributeClass, false)
-            || interface_exists($attributeClass, false)
-            || trait_exists($attributeClass, false);
     }
 
     /**

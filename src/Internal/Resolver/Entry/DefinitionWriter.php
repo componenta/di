@@ -9,7 +9,11 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 
-/** Writes to the binding table of one attached composite. @internal */
+/**
+ * Writes to the binding table of one attached composite.
+ *
+ * @internal
+ */
 final readonly class DefinitionWriter
 {
     /**

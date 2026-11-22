@@ -15,31 +15,27 @@ use LogicException;
  */
 final class ContainerBootstrapState
 {
-    private ?EntryResolverInterface $entryResolver = null;
+    private ?EntryResolverInterface $resolver = null;
 
-    private ?CallableExecutorInterface $callableExecutor = null;
+    private ?CallableExecutorInterface $executor = null;
+
+    public EntryResolverInterface $entryResolver {
+        get => $this->resolver ?? throw new LogicException('Container entry resolver is not initialized.');
+    }
+
+    public CallableExecutorInterface $callableExecutor {
+        get => $this->executor ?? throw new LogicException('Container callable executor is not initialized.');
+    }
 
     public function initialize(
         EntryResolverInterface $entryResolver,
         CallableExecutorInterface $callableExecutor,
     ): void {
-        if ($this->entryResolver !== null || $this->callableExecutor !== null) {
+        if ($this->resolver !== null || $this->executor !== null) {
             throw new LogicException('Container bootstrap state is already initialized.');
         }
 
-        $this->entryResolver = $entryResolver;
-        $this->callableExecutor = $callableExecutor;
-    }
-
-    public function entryResolver(): EntryResolverInterface
-    {
-        return $this->entryResolver
-            ?? throw new LogicException('Container entry resolver is not initialized.');
-    }
-
-    public function callableExecutor(): CallableExecutorInterface
-    {
-        return $this->callableExecutor
-            ?? throw new LogicException('Container callable executor is not initialized.');
+        $this->resolver = $entryResolver;
+        $this->executor = $callableExecutor;
     }
 }

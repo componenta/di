@@ -18,6 +18,9 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final readonly class ProviderResolverA implements ParameterResolverInterface
 {
@@ -146,7 +149,8 @@ test('ordered provider composition survives the complete DI consumer boundary', 
     if (!$container instanceof \Componenta\DI\Container) {
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
-    $builtInDefaults = $container->makeAs(ProviderBuiltInDefaultsTarget::class, ProviderBuiltInDefaultsTarget::class);
+    $builtInDefaults = $container->make(ProviderBuiltInDefaultsTarget::class);
+    Assert::assertInstanceOf(ProviderBuiltInDefaultsTarget::class, $builtInDefaults);
 
     expect($composition->dependencies->sections[ConfigKey::PARAMETER_RESOLVERS_REPLACE])
         ->toBeFalse()
@@ -158,7 +162,7 @@ test('ordered provider composition survives the complete DI consumer boundary', 
         ->and($container->get('atomic.service'))->toBe('provider-b')
         ->and($container->get('composed.alias'))->toBe('second')
         ->and($container->get('decorated.service'))->toBe('base:a:b')
-        ->and($container->makeAs(ProviderComposedTarget::class, ProviderComposedTarget::class)->composed)->toBe('provider-b');
+        ->and(fixtureInstance($container->make(ProviderComposedTarget::class), ProviderComposedTarget::class)->composed)->toBe('provider-b');
 });
 
 test('provider merge preserves keyed overrides and numeric invokable order at the DI boundary', function (): void {
@@ -199,7 +203,7 @@ test('provider merge preserves keyed overrides and numeric invokable order at th
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    expect($container->getAs(ProviderFactoryProduct::class, ProviderFactoryProduct::class)->origin)->toBe('b')
+    expect(fixtureInstance($container->get(ProviderFactoryProduct::class), ProviderFactoryProduct::class)->origin)->toBe('b')
         ->and($container->get(ProviderFirstFactoryProduct::class))->toBeInstanceOf(ProviderFirstFactoryProduct::class)
         ->and($container->get(ProviderSecondFactoryProduct::class))->toBeInstanceOf(ProviderSecondFactoryProduct::class)
         ->and($container->get('selected.invokable'))->toBeInstanceOf(ProviderSecondInvokable::class)

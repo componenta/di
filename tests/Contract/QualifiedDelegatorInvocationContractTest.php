@@ -149,6 +149,29 @@ test('qualified static delegators preserve the called class', function (bool $ob
     });
 })->with(['class receiver' => false, 'object receiver' => true]);
 
+test('qualified static shorthand refreshes the called class after service replacement', function (): void {
+    allowingQualifiedCallable(static function (): void {
+        $owner = new Ancestor();
+        $container = (new ContainerBuilder())
+            ->addServices(['entry' => 'value', Ancestor::class => $owner])
+            ->build();
+        $method = Ancestor::class . '::staticDecorate';
+        $specification = Ancestor::class . '::' . $method;
+        expect($container->resolve($specification))->toBe([$owner, $method]);
+        $container->delegator('entry', $specification);
+
+        expect($container->get('entry'))->toBe('value:' . Ancestor::class)
+            ->and($container->get('entry'))->toBe('value:' . Ancestor::class);
+
+        $replacement = new Child();
+        $container->set(Ancestor::class, $replacement);
+
+        expect($container->resolve($specification))->toBe([$replacement, $method])
+            ->and($container->get('entry'))->toBe('value:' . Child::class)
+            ->and($container->get('entry'))->toBe('value:' . Child::class);
+    });
+});
+
 test('qualified delegators preserve strict binding and body failure ownership', function (string $kind): void {
     allowingQualifiedCallable(static function () use ($kind): void {
         $owner = new Child();

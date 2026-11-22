@@ -16,6 +16,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class CurrentRuleLimit
 {
@@ -96,7 +97,8 @@ test('repeated calls validate current composition rule arguments', function (boo
     $container = (new ContainerBuilder())->addAttributeDefinition(
         new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]),
     )->build();
-    $executor = $container->getAs(CallableExecutorInterface::class, CallableExecutorInterface::class);
+    $executor = $container->get(CallableExecutorInterface::class);
+    Assert::assertInstanceOf(CallableExecutorInterface::class, $executor);
     $callable = $named ? __NAMESPACE__ . '\\withCurrentLimit'
         : static fn(#[PositiveLimit(new CurrentRuleLimit())] string $value = 'ok'): string => $value;
 
@@ -181,7 +183,8 @@ test('an earlier availability check does not change optional dependency resoluti
     $container = (new ContainerBuilder())->addAttributeDefinition(
         new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]),
     )->build();
-    $executor = $container->getAs(CallableExecutorInterface::class, CallableExecutorInterface::class);
+    $executor = $container->get(CallableExecutorInterface::class);
+    Assert::assertInstanceOf(CallableExecutorInterface::class, $executor);
     $callable = static fn(?ClassWithLimit $service = null): ?ClassWithLimit => $service;
 
     try {

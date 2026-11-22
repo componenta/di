@@ -11,6 +11,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 
@@ -33,14 +34,16 @@ final class PipelineInvalidConstruction
 }
 
 test('object pipeline preparation validates constructor attributes without constructing an object', function (): void {
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
 
     expect(fn() => $pipeline->prepare(PipelineInvalidConstruction::class))
         ->toThrow(AttributeCompositionException::class, 'cannot target constructor parameter $request');
 });
 
 test('object pipeline exposes constructor targets and accepts class-name inputs', function (): void {
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $targets = $pipeline->constructorTargets(PipelineSourceProduct::class);
 
     expect(array_map(static fn(ParameterTarget $target): string => $target->name, $targets))->toBe(['value'])
@@ -52,7 +55,8 @@ test('deferred object initialization retries the parameter source after configur
     if (!is_a($class, PipelineSourceProduct::class, true)) {
         throw new \LogicException('Expected a deferred pipeline fixture.');
     }
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $sources = 0;
     $configures = 0;
     $entry = $pipeline->create(
@@ -114,7 +118,8 @@ test('deferred initialization owns one source snapshot per completed or cancelle
     if (!is_a($class, PipelineCancellableProduct::class, true)) {
         throw new \LogicException('Expected a cancellable pipeline fixture.');
     }
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $sources = 0;
     $references = [];
     $state = new PipelineFiberState();

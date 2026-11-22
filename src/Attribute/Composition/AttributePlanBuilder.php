@@ -9,8 +9,7 @@ use Componenta\DI\Attribute\Composition\Capability\InvocationOnlyValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\Rule\ProxyCompositionRule;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
-use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Internal\AttributeOrdering;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use LogicException;
 use ReflectionAttribute;
@@ -18,9 +17,9 @@ use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
-use SplMinHeap;
 use Throwable;
 
+use function Componenta\DI\Internal\describe_attribute_target;
 use function Componenta\DI\Internal\is_closure_reflector;
 
 /** Builds, validates, orders and memoizes the semantic attribute plan for stable targets. */
@@ -31,8 +30,12 @@ final class AttributePlanBuilder
     /** @var array<class-string,int> */
     private array $attributeTargetFlags = [];
     private int $registryRevision = -1;
+    private readonly AttributeOrdering $ordering;
 
-    public function __construct(private readonly AttributeDefinitionRegistry $registry) {}
+    public function __construct(private readonly AttributeDefinitionRegistry $registry)
+    {
+        $this->ordering = new AttributeOrdering();
+    }
 
     /** @internal */
     public int $revision {
@@ -124,7 +127,7 @@ final class AttributePlanBuilder
             break;
         }
 
-        $plan = new AttributePlan($target, $this->ordered($target, $usages), $awaitsDiscovery || $validatedUserRules);
+        $plan = new AttributePlan($target, $this->ordering->order($target, $usages), $awaitsDiscovery || $validatedUserRules);
         if ($key === null || $plan->requiresFreshValidation) {
             // User rules can read mutable state. ReflectionObject and closure
             // targets must not be retained by a named shared plan.
@@ -177,7 +180,7 @@ final class AttributePlanBuilder
                 throw new AttributeCompositionException(sprintf(
                     'Attribute "%s" must not be repeated on %s.',
                     $attributeClass,
-                    self::targetName($target),
+                    describe_attribute_target($target),
                 ));
             }
 
@@ -327,7 +330,7 @@ final class AttributePlanBuilder
 
             throw new AttributeCompositionException(sprintf(
                 '%s accepts at most %d attribute(s) with capability %s; found %s.',
-                self::targetName($target),
+                describe_attribute_target($target),
                 $policy->maxPerTarget,
                 $policy->capability,
                 implode(', ', array_map(
@@ -365,7 +368,7 @@ final class AttributePlanBuilder
             throw new AttributeCompositionException(sprintf(
                 '#[%s] is invocation-only and can target callable parameters only; got %s.',
                 $invocationOnly->attributeClass,
-                self::targetName($target),
+                describe_attribute_target($target),
             ));
         }
 
@@ -417,7 +420,7 @@ final class AttributePlanBuilder
 
         throw new AttributeCompositionException(sprintf(
             '%s resolves through multiple parameter source handlers: %s.',
-            self::targetName($target),
+            describe_attribute_target($target),
             implode(', ', array_map(
                 static fn(ParameterAttributeHandlerInterface $handler): string => $handler::class,
                 array_values($sources),
@@ -440,7 +443,7 @@ final class AttributePlanBuilder
                 }
                 throw new AttributeCompositionException(sprintf(
                     '%s requires %s because of #[%s].',
-                    self::targetName($target),
+                    describe_attribute_target($target),
                     $selector,
                     $usage->attributeClass,
                 ));
@@ -452,7 +455,7 @@ final class AttributePlanBuilder
                 }
                 throw new AttributeCompositionException(sprintf(
                     '%s forbids %s together with #[%s].',
-                    self::targetName($target),
+                    describe_attribute_target($target),
                     $selector,
                     $usage->attributeClass,
                 ));
@@ -498,134 +501,6 @@ final class AttributePlanBuilder
     }
 
     /**
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     * @param list<AttributeUsage> $usages
-     * @return list<AttributeUsage>
-     */
-    private function ordered(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-        array $usages,
-    ): array {
-        if (count($usages) < 2) {
-            return $usages;
-        }
-
-        /** @var array<int, array<int, true>> $edges */
-        $edges = [];
-        /** @var array<int, int> $indegree */
-        $indegree = array_fill(0, count($usages), 0);
-
-        foreach ($usages as $from => $usage) {
-            foreach ($usage->definition->before as $selector) {
-                foreach ($this->matchingIndexes($selector, $usages, $from) as $to) {
-                    self::addEdge($edges, $indegree, $from, $to);
-                }
-            }
-            foreach ($usage->definition->after as $selector) {
-                foreach ($this->matchingIndexes($selector, $usages, $from) as $other) {
-                    self::addEdge($edges, $indegree, $other, $from);
-                }
-            }
-        }
-
-        $this->assertPhaseOrder($target, $usages, $edges);
-
-        if ($edges === []) {
-            // Custom reflectors may return attribute indexes out of sequence.
-            $inDeclarationOrder = true;
-            for ($index = 1, $count = count($usages); $index < $count; ++$index) {
-                if ($usages[$index - 1]->declarationOrder > $usages[$index]->declarationOrder) {
-                    $inDeclarationOrder = false;
-                    break;
-                }
-            }
-            if ($inDeclarationOrder) {
-                return $usages;
-            }
-        }
-
-        /** @var SplMinHeap<array{int, int}> $ready */
-        $ready = new SplMinHeap();
-        foreach ($indegree as $index => $incoming) {
-            if ($incoming === 0) {
-                $ready->insert([$usages[$index]->declarationOrder, $index]);
-            }
-        }
-
-        $ordered = [];
-        while (!$ready->isEmpty()) {
-            [, $next] = $ready->extract();
-            $ordered[] = $usages[$next];
-            foreach ($edges[$next] ?? [] as $to => $_) {
-                if (--$indegree[$to] === 0) {
-                    $ready->insert([$usages[$to]->declarationOrder, $to]);
-                }
-            }
-        }
-
-        if (count($ordered) !== count($usages)) {
-            throw new AttributeCompositionException(sprintf(
-                'Attribute ordering for %s contains a cycle.',
-                self::targetName($target),
-            ));
-        }
-
-        return $ordered;
-    }
-
-    /**
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     * @param list<AttributeUsage> $usages
-     * @param array<int, array<int, true>> $edges
-     */
-    private function assertPhaseOrder(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-        array $usages,
-        array $edges,
-    ): void {
-        if ($target instanceof ReflectionParameter) {
-            return;
-        }
-
-        foreach ($usages as $from => $before) {
-            if (!$before->definition->handler instanceof AttributeHandlerInterface
-                || $before->definition->phase !== AttributePhase::AfterInstantiation
-            ) {
-                continue;
-            }
-
-            $pending = array_keys($edges[$from] ?? []);
-            $visited = [];
-            while ($pending !== []) {
-                $index = array_pop($pending);
-                if (isset($visited[$index])) {
-                    continue;
-                }
-                $visited[$index] = true;
-                $after = $usages[$index];
-
-                if ($after->definition->handler instanceof AttributeHandlerInterface) {
-                    if ($after->definition->phase === AttributePhase::BeforeInstantiation) {
-                        throw new AttributeCompositionException(sprintf(
-                            'Attribute ordering for %s requires #[%s] before #[%s], which contradicts their execution phases.',
-                            self::targetName($target),
-                            $before->attributeClass,
-                            $after->attributeClass,
-                        ));
-                    }
-
-                    // Both has separate invocations in each phase; only metadata is transparent here.
-                    continue;
-                }
-
-                foreach (array_keys($edges[$index] ?? []) as $next) {
-                    $pending[] = $next;
-                }
-            }
-        }
-    }
-
-    /**
      * @param class-string $selector
      * @param list<AttributeUsage> $usages
      * @return list<AttributeUsage>
@@ -634,46 +509,11 @@ final class AttributePlanBuilder
     {
         $matches = [];
         foreach ($usages as $usage) {
-            if ($usage !== $except && $this->matches($selector, $usage)) {
+            if ($usage !== $except && $usage->matches($selector)) {
                 $matches[] = $usage;
             }
         }
         return $matches;
-    }
-
-    /**
-     * @param class-string $selector
-     * @param list<AttributeUsage> $usages
-     * @return list<int>
-     */
-    private function matchingIndexes(string $selector, array $usages, int $except): array
-    {
-        $matches = [];
-        foreach ($usages as $index => $usage) {
-            if ($index !== $except && $this->matches($selector, $usage)) {
-                $matches[] = $index;
-            }
-        }
-        return $matches;
-    }
-
-    /** @param class-string $selector */
-    private function matches(string $selector, AttributeUsage $usage): bool
-    {
-        return $usage->matches($selector);
-    }
-
-    /**
-     * @param array<int, array<int, true>> $edges
-     * @param array<int, int> $indegree
-     */
-    private static function addEdge(array &$edges, array &$indegree, int $from, int $to): void
-    {
-        if ($from === $to || isset($edges[$from][$to])) {
-            return;
-        }
-        $edges[$from][$to] = true;
-        ++$indegree[$to];
     }
 
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
@@ -713,31 +553,5 @@ final class AttributePlanBuilder
             $function->getName(),
             $parameter->getPosition(),
         );
-    }
-
-    /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
-    private static function targetName(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-    ): string {
-        return match (true) {
-            $target instanceof ReflectionParameter => sprintf(
-                '$%s of %s',
-                $target->getName(),
-                $target->getDeclaringClass() !== null
-                    ? $target->getDeclaringClass()->getName() . '::' . $target->getDeclaringFunction()->getName() . '()'
-                    : $target->getDeclaringFunction()->getName() . '()',
-            ),
-            $target instanceof ReflectionProperty => sprintf(
-                '%s::$%s',
-                $target->getDeclaringClass()->getName(),
-                $target->getName(),
-            ),
-            $target instanceof ReflectionMethod => sprintf(
-                '%s::%s()',
-                $target->getDeclaringClass()->getName(),
-                $target->getName(),
-            ),
-            default => $target->getName(),
-        };
     }
 }

@@ -12,6 +12,8 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final readonly class Dependency
 {
     public function __construct(public string $label) {}
@@ -100,7 +102,7 @@ test('setup rejects static methods before resolving their dependencies or invoki
         ->build();
 
     foreach ([1, 2] as $_attempt) {
-        expect(fn(): object => $container->getAs(StaticSetupOwner::class, StaticSetupOwner::class))
+        expect(fn(): object => fixtureInstance($container->get(StaticSetupOwner::class), StaticSetupOwner::class))
             ->toThrow(ResolutionException::class, 'must be public, concrete and non-static.')
             ->and($dependencyCreations)->toBe(0)
             ->and(StaticSetupOwner::$calls)->toBe(0);

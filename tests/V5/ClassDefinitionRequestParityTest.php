@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 
 interface MappedClassDefinitionContract {}
@@ -51,11 +52,11 @@ test('ClassDefinition bound to an interface consumes mapped fields without activ
             'token' => 'payload-token',
         ]);
 
-    $envelope = mappedClassDefinitionBuilder()->build()->makeAs(
-        MappedClassDefinitionEnvelope::class,
+    $envelope = mappedClassDefinitionBuilder()->build()->make(
         MappedClassDefinitionEnvelope::class,
         [ServerRequestInterface::class => $request],
     );
+    Assert::assertInstanceOf(MappedClassDefinitionEnvelope::class, $envelope);
     if (!$envelope->command instanceof MappedClassDefinitionCommand) {
         throw new \LogicException('Expected the explicitly configured command.');
     }

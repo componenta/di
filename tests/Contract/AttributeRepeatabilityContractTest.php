@@ -9,6 +9,8 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 #[Attribute(Attribute::TARGET_ALL)]
 final class SingleMetadataMarker
 {
@@ -83,5 +85,5 @@ it('does not treat promotion copies as repeated declarations on one target', fun
         ->addAttributeDefinition(new AttributeDefinition(SingleMetadataMarker::class))
         ->build();
 
-    expect($container->makeAs(ValidPromotedMetadata::class, ValidPromotedMetadata::class)->value)->toBe('default');
+    expect(fixtureInstance($container->make(ValidPromotedMetadata::class), ValidPromotedMetadata::class)->value)->toBe('default');
 });

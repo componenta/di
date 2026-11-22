@@ -13,7 +13,6 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
@@ -128,12 +127,7 @@ test('bootstrap rejects an object phase consumed before the first replacement at
     $builder = (new ContainerBuilder())
         ->replaceAttributeDefinitions()
         ->addAttributeDefinition(static function (Container $container): AttributeDefinition {
-            $class = reflection(BootstrapTarget::class);
-            $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->process(
-                $class,
-                AttributePhase::BeforeInstantiation,
-                new ObjectCreationContext($class),
-            );
+            $container->make(BootstrapTarget::class);
             return new AttributeDefinition(BootstrapMarker::class, new BeforeHandler(), phase: AttributePhase::BeforeInstantiation);
         });
 

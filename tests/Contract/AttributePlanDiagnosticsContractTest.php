@@ -13,6 +13,7 @@ use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
@@ -131,8 +132,9 @@ test('native attribute flags preserve load failures and can be prepared after th
     }
     $handler = new PlanFlagsHandler();
     $definition = new AttributeDefinition($attribute, $handler);
-    $container = (new ContainerBuilder())->addAttributeDefinition($definition)->build();
-    $plans = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class);
+    [$container, $runtime] = (new ContainerBuilder())->addAttributeDefinition($definition)->assemble();
+    $plans = $runtime->plans;
+    Assert::assertInstanceOf(AttributePlanBuilder::class, $plans);
     $reflection = new ReflectionClass($target);
     $failure = $compositionFailure
         ? new AttributeCompositionException('flags loader failed')

@@ -6,7 +6,11 @@ namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
 use Componenta\DI\Internal\ResolutionMetadata;
 
-/** Carries transformed HTTP DTO provenance through nested make(). @internal */
+/**
+ * Carries transformed HTTP DTO provenance through nested make().
+ *
+ * @internal
+ */
 final readonly class MappedRequestContext
 {
     private const string KEY = "\0componenta.di.mapped-request";

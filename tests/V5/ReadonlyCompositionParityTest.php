@@ -19,6 +19,8 @@ use Componenta\DI\Tests\Support\TestCasterProvider;
 use ReflectionProperty;
 use Reflector;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final readonly class PromotedReadonlyConfigCastTarget
 {
     public function __construct(
@@ -103,7 +105,7 @@ test('promoted readonly values compose identically for every container build', f
     ];
 
     foreach ($containers as $container) {
-        expect($container->makeAs(PromotedReadonlyConfigCastTarget::class, PromotedReadonlyConfigCastTarget::class)->value)
+        expect(fixtureInstance($container->make(PromotedReadonlyConfigCastTarget::class), PromotedReadonlyConfigCastTarget::class)->value)
             ->toBe('composed');
     }
 });

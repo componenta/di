@@ -50,7 +50,11 @@ test('mutation generation rebuilds stale artifacts while retaining prior scores'
     }
 });
 
-test('a worker that never installed its substitution cannot satisfy the mutation gate', function (bool $startupSucceeds): void {
+test('the mutation gate requires an installed substitution and a valid worker outcome', function (
+    bool $validOutcome,
+    bool $emptySuite,
+    string $diagnostic,
+): void {
     $active = getenv('PEST_MUTATION_TESTING') !== false;
     $key = MutationWorkerCheck::ENVIRONMENT_KEY;
     $parentDirectory = getenv($key);
@@ -66,7 +70,9 @@ test('a worker that never installed its substitution cannot satisfy the mutation
             throw new RuntimeException('Cannot locate the Composer function file.');
         }
         $replacement = $directory . '/replacement.php';
-        if ($startupSucceeds) {
+        if ($emptySuite) {
+            $replacement = $source;
+        } elseif ($validOutcome) {
             file_put_contents($replacement, '<?php throw new RuntimeException("WORKER_REACHED_SUBSTITUTION");');
         }
         $mutation = new Mutation(new SplFileInfo($source, '', ''), 'startup', 'fixture', 1, 1, '', $replacement);
@@ -81,18 +87,21 @@ test('a worker that never installed its substitution cannot satisfy the mutation
         $workers = new MutationWorkerCheck($directory . '/workers [current]');
         $workers->start();
         $command = [PHP_BINARY, '-d', 'opcache.enable_cli=0', $root . '/tests/mutate.php', 'tests/Contract/TypedEntryContractTest.php', '--no-coverage', '--colors=never'];
+        if ($emptySuite) {
+            $command[] = '--filter=NoSuchDiMutationWorkerTest';
+        }
         $process = new Process($command, $root, [
             'PEST_MUTATION_TESTING' => $source,
             'PEST_MUTATION_FILE' => $replacement,
         ]);
         $process->run();
         expect($process->getExitCode())->toBeGreaterThan(0)
-            ->and($process->getOutput() . $process->getErrorOutput())->toContain($startupSucceeds ? 'WORKER_REACHED_SUBSTITUTION' : 'Override file does not exist');
+            ->and($process->getOutput() . $process->getErrorOutput())->toContain($diagnostic);
 
         $path = $directory . '/report.json';
         $reporter = new MutationReport($root, $path, workers: $workers);
         $event = new FinishMutationSuite($suite);
-        if ($startupSucceeds) {
+        if ($validOutcome) {
             $reporter->notify($event);
         } else {
             expect(fn() => $reporter->notify($event))->toThrow(RuntimeException::class, 'worker startup');
@@ -101,9 +110,9 @@ test('a worker that never installed its substitution cannot satisfy the mutation
         if (!is_array($report)) {
             throw new RuntimeException('Expected a mutation report object.');
         }
-        expect($report['complete'])->toBe($startupSucceeds)
-            ->and($report['pest_score'])->toBe($startupSucceeds ? 100 : null)
-            ->and($report['worker_failures'] ?? [])->toBe($startupSucceeds ? [] : ['startup']);
+        expect($report['complete'])->toBe($validOutcome)
+            ->and($report['pest_score'])->toBe($validOutcome ? 100 : null)
+            ->and($report['worker_failures'] ?? [])->toBe($validOutcome ? [] : ['startup']);
     } finally {
         if ($parentDirectory === false) {
             putenv($key);
@@ -117,4 +126,8 @@ test('a worker that never installed its substitution cannot satisfy the mutation
             StreamWrapper::enable();
         }
     }
-})->with(['error after substitution' => true, 'missing override' => false]);
+})->with([
+    'error after substitution' => [true, false, 'WORKER_REACHED_SUBSTITUTION'],
+    'missing override' => [false, false, 'Override file does not exist'],
+    'empty selection' => [false, true, 'No tests found'],
+]);

@@ -21,6 +21,8 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final class Dependency {}
 
 class Product
@@ -85,7 +87,7 @@ test('constructor variadics preserve preceding autowiring and defaults', functio
 
 test('SetUp receives its explicit variadic collection', function (): void {
     $di = (new ContainerBuilder())->build();
-    expect($di->makeAs(ConfiguredProduct::class, ConfiguredProduct::class)->parts)->toBe(['setup-one', 'setup-two']);
+    expect(fixtureInstance($di->make(ConfiguredProduct::class), ConfiguredProduct::class)->parts)->toBe(['setup-one', 'setup-two']);
 });
 
 test('array variadics preserve each array argument', function (): void {

@@ -6,7 +6,11 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Immutable prepared execution structure for one ordered parameter list. @internal */
+/**
+ * Immutable prepared execution structure for one ordered parameter list.
+ *
+ * @internal
+ */
 final readonly class PreparedParameterPlan
 {
     /**

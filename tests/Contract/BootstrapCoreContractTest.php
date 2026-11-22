@@ -6,7 +6,9 @@ namespace Componenta\DI\Tests\Contract;
 
 use Attribute;
 use Closure;
+use Componenta\Config\Config as ContainerConfig;
 use Componenta\Config\ContainerValue;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
@@ -18,10 +20,12 @@ use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class BootstrapCoreMarker {}
@@ -37,9 +41,36 @@ final class BootstrapCoreSetupTarget
     }
 }
 
-test('extension factories and the completed container share the same core resolution services', function (): void {
-    $ids = [ContainerValue::class, AttributeDefinitionRegistry::class, AttributePlanBuilder::class,
-        AttributeProcessor::class, ParametersResolver::class, ObjectPipeline::class];
+test('resolution collaborators are private during bootstrap and after construction', function (string $id): void {
+    $check = static function (Container $container, string $lookup): void {
+        if ($lookup === '') {
+            throw new \LogicException('Expected a non-empty service identifier.');
+        }
+
+        expect($container->has($lookup))->toBeFalse()
+            ->and(fn() => $container->get($lookup))->toThrow(NotFoundException::class)
+            ->and(fn() => $container->make($lookup))->toThrow(NotFoundException::class);
+    };
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(static function (Container $container) use ($check, $id): AttributeDefinition {
+            $check($container, $id);
+            return new AttributeDefinition(BootstrapCoreMarker::class);
+        })->build();
+
+    $container->alias('runtime.alias', $id);
+    $check($container, $id);
+    $check($container, strtolower($id));
+    $check($container, 'runtime.alias');
+})->with([
+    AttributeDefinitionRegistry::class,
+    AttributePlanBuilder::class,
+    AttributeProcessor::class,
+    ParametersResolver::class,
+    ObjectPipeline::class,
+]);
+
+test('extension factories and the completed container share the public configuration services', function (): void {
+    $ids = [ContainerConfig::class, Environment::class, ContainerValue::class];
     $seen = [];
     $definition = new AttributeDefinition(BootstrapCoreMarker::class);
     $container = (new ContainerBuilder())
@@ -53,15 +84,14 @@ test('extension factories and the completed container share the same core resolu
     foreach ($ids as $id) {
         expect($container->get($id))->toBe($seen[$id]);
     }
-    expect($container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class)->definition(BootstrapCoreMarker::class))->toBe($definition)
-        ->and($container->getAs(ObjectPipeline::class, ObjectPipeline::class)->parameters())->toBe($container->getAs(ParametersResolver::class, ParametersResolver::class));
 });
 
-test('the exposed object pipeline preserves surrounding parameters for configured setup handlers', function (): void {
-    $container = (new ContainerBuilder())->build();
-    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
+test('the object pipeline preserves surrounding parameters for configured setup handlers', function (): void {
+    [$container, $runtime] = (new ContainerBuilder())->assemble();
+    $pipeline = $runtime->objects;
     $created = $pipeline->create(BootstrapCoreSetupTarget::class, ['label' => 'pipeline']);
-    $resolved = $container->makeAs(BootstrapCoreSetupTarget::class, BootstrapCoreSetupTarget::class, ['label' => 'container']);
+    $resolved = $container->make(BootstrapCoreSetupTarget::class, ['label' => 'container']);
+    Assert::assertInstanceOf(BootstrapCoreSetupTarget::class, $resolved);
     if (!$created instanceof BootstrapCoreSetupTarget) {
         throw new \LogicException('Expected the configured setup target.');
     }

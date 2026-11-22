@@ -10,6 +10,7 @@ use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -67,9 +68,10 @@ test('mapped request provenance stays internal when a DTO is created by a user f
     $request = (new ServerRequest('POST', '/'))
         ->withParsedBody(['value' => 'payload']);
 
-    $envelope = $container->makeAs(AuditMappedFactoryEnvelope::class, AuditMappedFactoryEnvelope::class, [
+    $envelope = $container->make(AuditMappedFactoryEnvelope::class, [
         ServerRequestInterface::class => $request,
     ]);
+    Assert::assertInstanceOf(AuditMappedFactoryEnvelope::class, $envelope);
 
     expect($envelope->dto->value)->toBe('payload')
         ->and($captured)->not->toBeNull();

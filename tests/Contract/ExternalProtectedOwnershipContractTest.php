@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\ExternalProtectedOwnership;
 
 use Closure;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
-use Componenta\DI\Attribute\MapRequest;
+use Componenta\Config\Config;
 use Componenta\DI\Container;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
@@ -21,7 +20,7 @@ final readonly class Lookup
 {
     public function __construct(public string $label) {}
 
-    public function definition(string $name): object
+    public function only(string $name): object
     {
         return $this;
     }
@@ -52,8 +51,8 @@ final class External implements ContainerInterface
 
 function installProduct(Container $container, string $id, string $owner): void
 {
-    $container->set($id, MapRequest::class);
-    $container->delegator($id, [$owner, 'definition']);
+    $container->set($id, 'selected');
+    $container->delegator($id, [$owner, 'only']);
     $container->delegator($id, static fn(object $source): Product => new Product($source));
 }
 
@@ -65,8 +64,8 @@ function product(Container $container, string $id = 'product'): Product
 
 test('external registration preserves protected dependency pipelines without inspecting protected ownership', function (string $owner, string $failure): void {
     $container = (new ContainerBuilder())->build();
-    if ($owner !== AttributeDefinitionRegistry::class) {
-        $container->alias($owner, AttributeDefinitionRegistry::class);
+    if ($owner !== Config::class) {
+        $container->alias($owner, Config::class);
     }
     $earlier = new External([], static function (string $id) use ($owner, $failure): bool {
         if ($id === $owner && $failure === 'existing callback') {
@@ -77,7 +76,7 @@ test('external registration preserves protected dependency pipelines without ins
     $container->addContainer($earlier);
     installProduct($container, 'product', $owner);
     $previous = product($container);
-    $registry = $container->get(AttributeDefinitionRegistry::class);
+    $config = $container->get(Config::class);
     $marker = new \stdClass();
     $candidate = new External(['marker' => $marker], static function (string $id) use ($owner, $failure): bool {
         if ($id === $owner && $failure === 'candidate callback') {
@@ -89,12 +88,12 @@ test('external registration preserves protected dependency pipelines without ins
     $container->addContainer($candidate);
 
     expect(product($container))->toBe($previous)
-        ->and($container->get(AttributeDefinitionRegistry::class))->toBe($registry)
+        ->and($container->get(Config::class))->toBe($config)
         ->and($container->get('marker'))->toBe($marker)
         ->and($earlier->queries)->not->toContain($owner)
         ->and($candidate->queries)->not->toContain($owner);
 })->with([
-    'protected id' => AttributeDefinitionRegistry::class,
+    'protected id' => Config::class,
     'alias to protected id' => 'protected.lookup',
     'numeric string alias' => '7',
 ])
@@ -103,7 +102,7 @@ test('external registration preserves protected dependency pipelines without ins
 test('external callbacks can read an alias after retargeting it to protected core', function (bool $availability, bool $claims): void {
     $container = (new ContainerBuilder())->addService('local.lookup', new Lookup('local'))->build();
     $container->alias('lookup', 'local.lookup');
-    $registry = $container->get(AttributeDefinitionRegistry::class);
+    $config = $container->get(Config::class);
     $observed = new class () {
         public ?bool $available = null;
         public mixed $value = null;
@@ -112,7 +111,7 @@ test('external callbacks can read an alias after retargeting it to protected cor
         if ($id !== 'lookup') {
             return false;
         }
-        $container->alias('lookup', AttributeDefinitionRegistry::class);
+        $container->alias('lookup', Config::class);
         $observed->available = $container->has('lookup');
         $observed->value = $container->get('lookup');
         return $claims;
@@ -122,8 +121,8 @@ test('external callbacks can read an alias after retargeting it to protected cor
     $result = $availability ? $container->has('lookup') : $container->get('lookup');
 
     expect($observed->available)->toBeTrue()
-        ->and($observed->value)->toBe($registry)
-        ->and($result)->toBe($availability ? true : $registry)
+        ->and($observed->value)->toBe($config)
+        ->and($result)->toBe($availability ? true : $config)
         ->and($external->queries)->toBe(['lookup']);
 })->with(['get' => false, 'has' => true])
     ->with(['declined ownership' => false, 'claimed ownership' => true]);
@@ -140,7 +139,7 @@ test('registration rechecks protection between existing ownership callbacks and 
         if ($id === 'lookup' && $state->armed) {
             $state->armed = false;
             $state->protected = true;
-            $container->alias('lookup', AttributeDefinitionRegistry::class);
+            $container->alias('lookup', Config::class);
             $warmed = product($container);
             return $claims;
         }
@@ -195,7 +194,7 @@ test('registration preserves a protected alias warmed by its candidate ownership
             return false;
         }
         $state->protected = true;
-        $container->alias('lookup', AttributeDefinitionRegistry::class);
+        $container->alias('lookup', Config::class);
         $warmed = product($container);
         return true;
     });
@@ -220,7 +219,7 @@ test('later ownership proof cannot invalidate an earlier alias that became prote
     $earlier = new External([], static function (string $id) use ($container, $state, &$triggerProbes, &$warmed): bool {
         if ($state->armed && $id === 'trigger' && ++$triggerProbes === 2) {
             $state->armed = false;
-            $container->alias('lookup', AttributeDefinitionRegistry::class);
+            $container->alias('lookup', Config::class);
             $warmed = product($container);
         }
         return false;
@@ -258,7 +257,7 @@ test('final ownership proof continues to later public dependencies after protect
     $earlier = new External([], static function (string $id) use ($container, $state): bool {
         if ($state->armed && $id === 'lookup' && ++$state->probes === 2) {
             $state->armed = false;
-            $container->alias('lookup', AttributeDefinitionRegistry::class);
+            $container->alias('lookup', Config::class);
             $state->warmed = product($container);
         }
         return false;
@@ -291,7 +290,7 @@ test('a skipped protected alias is inspected once if a later candidate callback 
         'local.lookup' => $local,
         'trigger' => new Lookup('trigger local'),
     ])->build();
-    $container->alias('lookup', AttributeDefinitionRegistry::class);
+    $container->alias('lookup', Config::class);
     installProduct($container, 'product', 'lookup');
     installProduct($container, 'trigger.product', 'trigger');
     product($container);
@@ -355,7 +354,7 @@ test('final proof revisits an alias that becomes public again without replaying 
         if ($id === 'lookup' && $protectOnce) {
             $protectOnce = false;
             $state->protected = true;
-            $container->alias('lookup', AttributeDefinitionRegistry::class);
+            $container->alias('lookup', Config::class);
             product($container);
         }
         return $id === 'lookup' || $id === 'trigger';
@@ -377,7 +376,7 @@ test('lookups stop external inspection when an earlier provider retargets an ali
     $container->alias('lookup', 'local.lookup');
     $earlier = new External(['lookup' => new Lookup('external')], static function (string $id) use ($container, $claims): bool {
         if ($id === 'lookup') {
-            $container->alias('lookup', AttributeDefinitionRegistry::class);
+            $container->alias('lookup', Config::class);
             return $claims;
         }
         return false;
@@ -390,11 +389,11 @@ test('lookups stop external inspection when an earlier provider retargets an ali
     });
     $container->addContainer($earlier);
     $container->addContainer($later);
-    $registry = $container->get(AttributeDefinitionRegistry::class);
+    $config = $container->get(Config::class);
 
     $result = $availability ? $container->has('lookup') : $container->get('lookup');
 
-    expect($result)->toBe($availability ? true : $registry)
+    expect($result)->toBe($availability ? true : $config)
         ->and($earlier->queries)->toBe(['lookup'])
         ->and($later->queries)->toBe([]);
 })->with(['get' => false, 'has' => true])

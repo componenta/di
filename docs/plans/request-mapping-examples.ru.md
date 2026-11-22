@@ -130,7 +130,6 @@ $result = $container->call(simpleProfile(...), [ServerRequestInterface::class =>
 ```php
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\MapRequestPayload;
@@ -200,10 +199,9 @@ final readonly class MapProfileHandler implements ParameterAttributeHandlerInter
 
 function currentDefinition(Container $container): AttributeDefinition
 {
-    $registry = $container->get(AttributeDefinitionRegistry::class);
-    $handler = $registry->definition(MapRequest::class)?->handler;
+    $handler = $container->get(RequestAttributeHandler::class);
     if (!$handler instanceof RequestAttributeHandler) {
-        throw new \LogicException('The built-in MapRequest definition must be enabled.');
+        throw new \LogicException('Expected the configured request attribute handler.');
     }
     return new AttributeDefinition(
         MapProfile::class,
@@ -300,7 +298,6 @@ function createProfileNative(
 use Attribute;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\Request\CallbackMapperInterface;
@@ -333,10 +330,9 @@ final readonly class MapProfileAttribute implements RequestDataExtractorInterfac
 
 function customDefinition(Container $container): AttributeDefinition
 {
-    $registry = $container->get(AttributeDefinitionRegistry::class);
-    $handler = $registry->definition(MapRequest::class)?->handler;
+    $handler = $container->get(RequestAttributeHandler::class);
     if (!$handler instanceof RequestAttributeHandler) {
-        throw new \LogicException('The built-in MapRequest definition must be enabled.');
+        throw new \LogicException('Expected the configured request attribute handler.');
     }
     return new AttributeDefinition(
         MapProfileAttribute::class,

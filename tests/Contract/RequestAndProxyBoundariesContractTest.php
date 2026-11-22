@@ -16,6 +16,8 @@ use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Stream;
 use Nyholm\Psr7\UploadedFile;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 class ExplicitProxyBase
 {
     public int $value = 17;
@@ -34,7 +36,7 @@ test('an explicit concrete proxy class takes precedence over a concrete declared
         ->addFactory('proxy-product', static fn(): object => new ExplicitProxyChild())
         ->build();
     $product = $property
-        ? $container->makeAs(ExplicitProxyOwner::class, ExplicitProxyOwner::class)->product
+        ? fixtureInstance($container->make(ExplicitProxyOwner::class), ExplicitProxyOwner::class)->product
         : $container->call(static fn(#[Make('proxy-product'), Proxy(ExplicitProxyChild::class)] ExplicitProxyBase $product): ExplicitProxyBase => $product);
 
     if (!$product instanceof ExplicitProxyBase) {

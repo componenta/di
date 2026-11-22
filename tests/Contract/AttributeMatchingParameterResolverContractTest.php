@@ -27,6 +27,8 @@ test('an attribute matching resolver receives the actual target and invocation c
     $resolver = new AttributeMatchingParameterResolver(
         $attribute,
         static function (ParameterTarget $target, ParameterResolutionContext $context): array {
+            expect(in_array('resolve', get_class_methods($context), true))->toBeFalse();
+            expect(in_array('observeAttributeQueries', get_class_methods($target), true))->toBeFalse();
             $value = $context->resolved[0] ?? null;
             if (!is_string($value)) {
                 throw new LogicException('Expected the preceding argument.');

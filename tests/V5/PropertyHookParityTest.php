@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\V5;
 use Componenta\DI\Attribute\Init;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final readonly class HookInjectedDependency {}
 
@@ -47,8 +48,10 @@ test('Inject and Init execute PHP property set hooks identically for every conta
     ];
 
     foreach ($containers as $container) {
-        $injected = $container->makeAs(HookInjectedTarget::class, HookInjectedTarget::class);
-        $initialized = $container->makeAs(HookInitTarget::class, HookInitTarget::class);
+        $injected = $container->make(HookInjectedTarget::class);
+        Assert::assertInstanceOf(HookInjectedTarget::class, $injected);
+        $initialized = $container->make(HookInitTarget::class);
+        Assert::assertInstanceOf(HookInitTarget::class, $initialized);
 
         expect($injected->dependency)->toBe($dependency)
             ->and($injected->writes)->toBe(1)

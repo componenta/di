@@ -11,6 +11,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use ErrorException;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 use Throwable;
 use WeakReference;
@@ -123,7 +124,8 @@ test('qualified factory arrays invoke their selected ancestor with reference par
             default => throw new LogicException('Unexpected factory route.'),
         };
         $container = $builder->build();
-        $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
+        $facade = $container->get(ContainerValue::class);
+        Assert::assertInstanceOf(ContainerValue::class, $facade);
         $nativeParameters = ['value' => 'native'];
         $native = call_user_func_array($callable, [$facade, &$nativeParameters]);
 
@@ -147,7 +149,8 @@ test('qualified static factory arrays preserve the native called class', functio
     allowingQualifiedCallable(static function () use ($object): void {
         $callable = nativeCallable([$object ? new Child() : Child::class, Ancestor::class . '::createStatic']);
         $container = (new ContainerBuilder())->addFactory('product', $callable)->build();
-        $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
+        $facade = $container->get(ContainerValue::class);
+        Assert::assertInstanceOf(ContainerValue::class, $facade);
         $calledClass = $object ? Child::class : Ancestor::class;
         $expected = new Product($facade, ['value' => 'native'], $calledClass);
 
@@ -200,7 +203,8 @@ test('qualified static factories retain a temporary object receiver until invoca
         };
         $container = (new ContainerBuilder())->addFactory('product', 'factory.lifetime')->build();
         $container->addContainer($external);
-        $facade = $container->getAs(ContainerValue::class, ContainerValue::class);
+        $facade = $container->get(ContainerValue::class);
+        Assert::assertInstanceOf(ContainerValue::class, $facade);
 
         try {
             $native = nativeCallable($external->get('factory.lifetime'));

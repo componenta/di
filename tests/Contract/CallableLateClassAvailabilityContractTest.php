@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use Psr\Container\ContainerInterface;
 
@@ -26,6 +27,28 @@ final readonly class Receiver
     {
         return 'native:' . $value;
     }
+
+    public function create(): self
+    {
+        return new self('factory:' . $this->label);
+    }
+}
+
+interface StaticDispatch
+{
+    /** @param array<array-key, mixed> $arguments */
+    public static function __callStatic(string $name, array $arguments): mixed;
+}
+
+abstract class AbstractReceiver implements StaticDispatch
+{
+    public static function native(string $value): string
+    {
+        return 'native:' . $value;
+    }
+
+    /** @param array<array-key, mixed> $arguments */
+    abstract public static function __callStatic(string $name, array $arguments): mixed;
 }
 
 final class EmptyServices implements ContainerInterface
@@ -120,6 +143,169 @@ test('an unbound method array can resolve a static method declared during class 
 
     expect($callable('value'))->toBe('native:value');
 })->with(['loaded control' => 0, 'class probe' => 2, 'fallback probe' => 3]);
+
+test('a method array uses a static method revealed by service lookup without constructing its owner', function (int $loadOn): void {
+    [$alias, $loader] = receiverAlias($loadOn);
+    $di = container();
+
+    spl_autoload_register($loader);
+    try {
+        expect($di->call([$alias, 'native'], ['value' => 'test']))->toBe('native:test');
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['loaded control' => 0, 'service lookup loads the class' => 2]);
+
+test('a method array can still use a registered receiver whose class name is unavailable', function (): void {
+    [$alias, $loader] = receiverAlias(2);
+    $di = container();
+    $di->set($alias, new class () {
+        public function native(string $value): string
+        {
+            return 'registered:' . $value;
+        }
+    });
+
+    spl_autoload_register($loader);
+    try {
+        expect($di->call([$alias, 'native'], ['value' => 'test']))->toBe('registered:test')
+            ->and(class_exists($alias, false))->toBeFalse();
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+});
+
+test('late abstract static dispatch does not hide a registered method array receiver', function (
+    string $type,
+    string $method,
+    string $label,
+    int $expectedGets,
+): void {
+    $owner = __NAMESPACE__ . '\\LateAbstractOwner_' . bin2hex(random_bytes(6));
+    $services = new class ($owner, $type) implements ContainerInterface {
+        public int $gets = 0;
+
+        public function __construct(private readonly string $owner, private readonly string $type) {}
+
+        public function has(string $id): bool
+        {
+            if ($id !== $this->owner) {
+                return false;
+            }
+            if (!class_exists($id, false) && !interface_exists($id, false)) {
+                class_alias($this->type, $id, autoload: false);
+            }
+            return true;
+        }
+
+        public function get(string $id): Receiver
+        {
+            if ($id !== $this->owner) {
+                throw new LogicException('No service was advertised: ' . $id);
+            }
+            ++$this->gets;
+            return new Receiver('registered');
+        }
+    };
+
+    $resolver = new CallableResolver($services);
+    $first = $resolver->resolve([$owner, $method]);
+    $second = $resolver->resolve([$owner, $method]);
+
+    expect($first('test'))->toBe($label . ':test')
+        ->and($second('retry'))->toBe($label . ':retry')
+        ->and($services->gets)->toBe(2 * $expectedGets);
+})->with([
+    'interface dispatcher' => [StaticDispatch::class, 'instance', 'registered', 1],
+    'abstract class dispatcher' => [AbstractReceiver::class, 'instance', 'registered', 1],
+    'concrete static method on abstract class' => [AbstractReceiver::class, 'native', 'native', 0],
+]);
+
+test('loaded abstract dispatch allows registered instance methods through the usual container entry points', function (
+    string $owner,
+    string $route,
+): void {
+    $di = container();
+    $di->set($owner, new Receiver('first'));
+    $specification = $route === 'string' ? $owner . '::instance' : [$owner, 'instance'];
+    if ($route === 'delegator') {
+        $di->set('product', 'value');
+        $di->delegator('product', $specification);
+        expect($di->get('product'))->toBe('first:value');
+
+        $di->set($owner, new Receiver('current'));
+        expect($di->get('product'))->toBe('current:value');
+        return;
+    }
+
+    expect($di->call($specification, ['value' => 'value']))->toBe('first:value');
+})->with([
+    'interface dispatcher' => [StaticDispatch::class],
+    'abstract class dispatcher' => [AbstractReceiver::class],
+])->with(['array', 'string', 'delegator']);
+
+test('an application autoloader retains its own abstract dispatch error from a nested native probe', function (): void {
+    $alias = __NAMESPACE__ . '\\FailingAbstractOwner_' . bin2hex(random_bytes(6));
+    $error = null;
+    $di = container();
+    $di->set($alias, new Receiver('registered'));
+    $loader = static function (string $name) use ($alias, &$error): void {
+        if ($name === $alias) {
+            class_alias(AbstractReceiver::class, $alias, autoload: false);
+            try {
+                is_callable([$name, 'instance']);
+            } catch (\Error $failure) {
+                $error = $failure;
+                throw $failure;
+            }
+        }
+    };
+    spl_autoload_register($loader);
+    try {
+        try {
+            $di->resolve([$alias, 'instance']);
+            throw new LogicException('The autoload failure must escape the native probe.');
+        } catch (InvalidCallableException $failure) {
+            expect($error)->toBeInstanceOf(\Error::class)
+                ->and($failure->getPrevious())->toBe($error);
+        }
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+});
+
+test('configured factory methods can use an owner whose type has abstract static dispatch', function (string $owner): void {
+    $di = (new ContainerBuilder())
+        ->addService($owner, new Receiver('registered'))
+        ->addFactory('product', [$owner, 'create'])
+        ->build();
+
+    $expected = new Receiver('factory:registered');
+    expect($di->get('product'))->toEqual($expected)
+        ->and($di->make('product'))->toEqual($expected);
+})->with([
+    'interface dispatcher' => [StaticDispatch::class],
+    'abstract class dispatcher' => [AbstractReceiver::class],
+]);
+
+test('abstract static dispatch does not hide an exact string binding for a delegator', function (string $owner): void {
+    $id = $owner . '::decorate';
+    $di = container();
+    $original = static fn(string $entry): string => $entry . ':original';
+    $di->set('product', 'base');
+    $di->set($id, $original);
+
+    expect($di->resolve($id))->toBe($original);
+    $di->delegator('product', $id);
+    expect($di->get('product'))->toBe('base:original');
+
+    $di->set($id, static fn(string $entry): string => $entry . ':current');
+
+    expect($di->get('product'))->toBe('base:current');
+})->with([
+    'interface dispatcher' => [StaticDispatch::class],
+    'abstract class dispatcher' => [AbstractReceiver::class],
+]);
 
 test('a late class without a binding retains the missing-service diagnostic', function (bool $method, int $loadOn): void {
     [$alias, $loader] = receiverAlias($loadOn);

@@ -6,7 +6,11 @@ namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Componenta\DI\Definition\DefinitionInterface;
 
-/** Factory specification and its validation policy captured as one snapshot. @internal */
+/**
+ * Factory specification and its validation policy captured as one snapshot.
+ *
+ * @internal
+ */
 final readonly class PreparedFactoryDefinition implements DefinitionInterface
 {
     public function __construct(

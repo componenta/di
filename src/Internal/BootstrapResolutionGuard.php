@@ -13,6 +13,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionMethod;
@@ -59,7 +60,10 @@ final class BootstrapResolutionGuard
     /** @var WeakMap<ParameterTarget,WeakReference<Closure>>|null */
     private ?WeakMap $closureOwners = null;
 
-    public function __construct(private readonly AttributePlanBuilder $plans) {}
+    public function __construct(
+        private readonly AttributePlanBuilder $plans,
+        private readonly ParameterTargetFactory $targets,
+    ) {}
 
     public bool $isActive {
         get => $this->active;
@@ -130,7 +134,7 @@ final class BootstrapResolutionGuard
         $resolvers = $this->finalResolvers;
         if (!$this->active) {
             // The attempt started during bootstrap and resumed after publication.
-            self::assertParameterUse($target, $selection, $resolvers ?? [], $pending);
+            $this->assertParameterUse($target, $selection, $resolvers ?? [], $pending);
             return;
         }
 
@@ -185,9 +189,9 @@ final class BootstrapResolutionGuard
                     continue;
                 }
                 $progress = true;
-                $target = self::restoreTarget($use['target'], $use['position']);
+                $target = $this->restoreTarget($use['target'], $use['position']);
                 if ($target !== null) {
-                    $parameterUses[$index]['pending'] = self::assertParameterUse($target, $use['selection'], $this->finalResolvers ?? [], $use['pending']);
+                    $parameterUses[$index]['pending'] = $this->assertParameterUse($target, $use['selection'], $this->finalResolvers ?? [], $use['pending']);
                 } elseif ($use['requiredAttributes'] !== []) {
                     self::assertLoadedAttributeMatches($use);
                     // A later live check can reveal another declaration in this sweep.
@@ -232,7 +236,7 @@ final class BootstrapResolutionGuard
                 }
             }
             foreach ($this->parameterUses as $index => $use) {
-                $this->parameterUses[$index]['pending'] = self::assertParameterUse(
+                $this->parameterUses[$index]['pending'] = $this->assertParameterUse(
                     $use['target'],
                     $use['selection'],
                     $resolvers,
@@ -302,10 +306,10 @@ final class BootstrapResolutionGuard
     private static function assertLoadedAttributeMatches(array $use): void
     {
         foreach ($use['requiredAttributes'] as $required) {
-            $loaded = ParameterTarget::isAttributeClassLoaded($required);
+            $loaded = is_attribute_class_loaded($required);
             foreach ($use['declaredAttributes'] as $declared) {
                 if ($declared === $required
-                    || ($loaded && ParameterTarget::isAttributeClassLoaded($declared) && is_a($declared, $required, true))
+                    || ($loaded && is_attribute_class_loaded($declared) && is_a($declared, $required, true))
                 ) {
                     throw new InvalidConfigurationException(sprintf(
                         'DI bootstrap resolved $%s of %s before a parameter resolver matching "%s" could run.',
@@ -326,7 +330,7 @@ final class BootstrapResolutionGuard
      * @param list<string> $pending
      * @return list<string>
      */
-    private static function assertParameterUse(ParameterTarget $target, array $selection, array $resolvers, array $pending): array
+    private function assertParameterUse(ParameterTarget $target, array $selection, array $resolvers, array $pending): array
     {
         if ($target->attributeClasses === []) {
             self::assertParameterSelection($target, $selection, $resolvers, declarationsChanged: false);
@@ -337,7 +341,8 @@ final class BootstrapResolutionGuard
         do {
             $missing = array_values(array_filter($pending, self::isUnavailable(...)));
             $changed = $changed || $missing !== $pending;
-            [, $observed] = $target->observeAttributeQueries(
+            [, $observed] = $this->targets->observeAttributeQueries(
+                $target,
                 static fn(ParameterTarget $observedTarget) => self::assertParameterSelection(
                     $observedTarget,
                     $selection,
@@ -393,7 +398,7 @@ final class BootstrapResolutionGuard
 
     private static function isUnavailable(string $name): bool
     {
-        return !ParameterTarget::isAttributeClassLoaded($name);
+        return !is_attribute_class_loaded($name);
     }
 
     /** @return ParameterTarget|WeakReference<Closure|ReflectionParameter> */
@@ -418,14 +423,14 @@ final class BootstrapResolutionGuard
     }
 
     /** @param ParameterTarget|WeakReference<Closure|ReflectionParameter> $reference */
-    private static function restoreTarget(ParameterTarget|WeakReference $reference, int $position): ?ParameterTarget
+    private function restoreTarget(ParameterTarget|WeakReference $reference, int $position): ?ParameterTarget
     {
         if ($reference instanceof ParameterTarget) {
             return $reference;
         }
         return match (true) {
-            ($target = $reference->get()) instanceof Closure => new ParameterTarget(new ReflectionParameter($target, $position)),
-            $target instanceof ReflectionParameter => new ParameterTarget($target),
+            ($target = $reference->get()) instanceof Closure => $this->targets->create(new ReflectionParameter($target, $position)),
+            $target instanceof ReflectionParameter => $this->targets->create($target),
             default => null,
         };
     }

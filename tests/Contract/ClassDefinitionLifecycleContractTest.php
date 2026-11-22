@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class DefinitionLifecycleEvents
 {
@@ -84,7 +85,8 @@ test('ClassDefinition calls run eagerly after the constructor without attribute 
         ->addDefinition($class, $definition)
         ->build();
 
-    $target = $container->makeAs($class, $class);
+    $target = $container->make($class);
+    Assert::assertInstanceOf($class, $target);
 
     expect($events->steps)->toBe(['constructor', 'method dependency', 'first', 'second'])
         ->and($target->state)->toBe('constructed');
@@ -116,7 +118,8 @@ test('failed ClassDefinition calls stop creation and a later get creates a fresh
             ->and($events->steps)->toBe(['constructor', 'configure']);
     }
 
-    $target = $container->getAs($class, $class);
+    $target = $container->get($class);
+    Assert::assertInstanceOf($class, $target);
     expect($target->state)->toBe('constructed')
         ->and($events->steps)->toBe(['constructor', 'configure', 'constructor', 'configure', 'finished']);
 })->with([

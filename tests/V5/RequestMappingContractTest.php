@@ -17,6 +17,8 @@ use Componenta\Validation\ValidatorInterface;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 final readonly class RequestMappingContractDto
 {
     /** @param array<string, mixed>|null $orderBy */
@@ -247,11 +249,10 @@ test('MapRequest applies optional renames and atomic key swaps', function (): vo
     ]);
     $container = (new ContainerBuilder())->build();
 
-    $data = $container->makeAs(
-        OptionalSwapMappingTarget::class,
+    $data = fixtureInstance($container->make(
         OptionalSwapMappingTarget::class,
         [ServerRequestInterface::class => $request],
-    )->data;
+    ), OptionalSwapMappingTarget::class)->data;
 
     expect($data)->toBe(['right' => 'L', 'left' => 'R']);
 });
@@ -293,11 +294,10 @@ test('MapRequest emits a null order when sort aliases are configured but absent'
     $request = (new ServerRequest('GET', '/items'))->withQueryParams(['value' => 'kept']);
     $container = (new ContainerBuilder())->build();
 
-    $data = $container->makeAs(
-        MissingSortMappingTarget::class,
+    $data = fixtureInstance($container->make(
         MissingSortMappingTarget::class,
         [ServerRequestInterface::class => $request],
-    )->data;
+    ), MissingSortMappingTarget::class)->data;
 
     expect($data)->toBe(['value' => 'kept', 'orderBy' => null]);
 });

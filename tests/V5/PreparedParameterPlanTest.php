@@ -8,6 +8,9 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
 
 final class AuditPreparedValueResolver implements ParameterResolverInterface
 {
@@ -53,14 +56,16 @@ test('has does not execute custom parameter classification', function (): void {
 
     expect($container->has(AuditPreparedTarget::class))->toBeTrue()
         ->and($resolver->supportsCalls)->toBe(0)
-        ->and($container->makeAs(AuditPreparedTarget::class, AuditPreparedTarget::class)->value)->toBe('prepared');
+        ->and(fixtureInstance($container->make(AuditPreparedTarget::class), AuditPreparedTarget::class)->value)->toBe('prepared');
 });
 
 test('repeated resolutions do not reuse object default values', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    $first = $container->makeAs(AuditPreparedDefaultObjectTarget::class, AuditPreparedDefaultObjectTarget::class);
-    $second = $container->makeAs(AuditPreparedDefaultObjectTarget::class, AuditPreparedDefaultObjectTarget::class);
+    $first = $container->make(AuditPreparedDefaultObjectTarget::class);
+    Assert::assertInstanceOf(AuditPreparedDefaultObjectTarget::class, $first);
+    $second = $container->make(AuditPreparedDefaultObjectTarget::class);
+    Assert::assertInstanceOf(AuditPreparedDefaultObjectTarget::class, $second);
 
     expect($first->value)->toBeInstanceOf(AuditPreparedDefaultObject::class)
         ->and($second->value)->toBeInstanceOf(AuditPreparedDefaultObject::class)

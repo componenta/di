@@ -11,10 +11,10 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
-use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -110,10 +110,11 @@ function target(string $kind, bool $custom, bool $hideAttributes = true, ?object
 }
 
 test('custom reflectors and native metadata keep independent attribute plans in either warmup order', function (string $kind, bool $customFirst): void {
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(Marker::class))
-        ->build();
-    $plans = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class);
+        ->assemble();
+    $plans = $runtime->plans;
+    Assert::assertInstanceOf(AttributePlanBuilder::class, $plans);
 
     foreach ([$customFirst, !$customFirst, $customFirst] as $custom) {
         $reflector = target($kind, $custom);
@@ -139,9 +140,9 @@ final class InitializeHandler implements AttributeHandlerInterface
 }
 
 test('custom class metadata does not disable or inherit native object handlers after warmup', function (bool $pipeline, bool $customFirst): void {
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(Marker::class, new InitializeHandler()))
-        ->build();
+        ->assemble();
 
     foreach ([$customFirst, !$customFirst, $customFirst] as $custom) {
         $reflector = target('class', $custom);
@@ -149,12 +150,13 @@ test('custom class metadata does not disable or inherit native object handlers a
             throw new LogicException('Expected a class reflector.');
         }
         if ($pipeline) {
-            $product = $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->create($reflector);
+            $product = $runtime->objects->create($reflector);
         } else {
             $product = new Product();
-            $context = new ObjectCreationContext($reflector);
-            $context->initialize($product);
-            $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->process($reflector, AttributePhase::AfterInstantiation, $context);
+            $attempt = ObjectCreationContext::begin($reflector);
+            $context = $attempt->context;
+            $attempt->initialize($product);
+            $runtime->attributeProcessor->process($reflector, AttributePhase::AfterInstantiation, $context);
         }
         if (!$product instanceof Product) {
             throw new LogicException('Expected the reflected product.');
@@ -166,9 +168,9 @@ test('custom class metadata does not disable or inherit native object handlers a
     ->with(['custom first' => true, 'native first' => false]);
 
 test('metadata caches release state carried by custom class reflectors when their callers release them', function (string $service): void {
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(Marker::class))
-        ->build();
+        ->assemble();
     $payload = new stdClass();
     $reference = WeakReference::create($payload);
     $reflector = target('class', true, false, $payload);
@@ -177,9 +179,9 @@ test('metadata caches release state carried by custom class reflectors when thei
     }
 
     match ($service) {
-        'plans' => $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build($reflector),
-        'processor' => $container->getAs(AttributeProcessor::class, AttributeProcessor::class)->prepare($reflector),
-        'pipeline' => $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->prepare($reflector),
+        'plans' => $runtime->plans->build($reflector),
+        'processor' => $runtime->attributeProcessor->prepare($reflector),
+        'pipeline' => $runtime->objects->prepare($reflector),
         default => throw new LogicException('Unknown metadata service.'),
     };
     unset($reflector, $payload);
@@ -225,8 +227,9 @@ final class ConstructorMethodReflection extends ReflectionMethod
 }
 
 test('constructor plans keep custom parameter metadata isolated from native construction and release its payload', function (bool $customFirst): void {
-    $container = (new ContainerBuilder())->addService('reflector.value', 'service')->build();
-    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    [$container, $runtime] = (new ContainerBuilder())->addService('reflector.value', 'service')->assemble();
+    $pipeline = $runtime->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
 
     foreach ([$customFirst, !$customFirst, $customFirst] as $custom) {
         $payload = new stdClass();

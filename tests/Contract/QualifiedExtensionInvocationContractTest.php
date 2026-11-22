@@ -41,6 +41,12 @@ final readonly class SelectedResolver implements ParameterResolverInterface
     }
 }
 
+interface AbstractExtensionDispatch
+{
+    /** @param array<array-key,mixed> $arguments */
+    public static function __callStatic(string $method, array $arguments): mixed;
+}
+
 final readonly class SelectedHandler implements ParameterAttributeHandlerInterface
 {
     public function __construct(private string $label) {}
@@ -94,6 +100,18 @@ class Ancestor
         return extension($attribute, static::class);
     }
 }
+
+test('extension service definitions retain their registered route when native dispatch is abstract', function (bool $method): void {
+    $owner = AbstractExtensionDispatch::class;
+    $builder = (new ContainerBuilder())->addService('extension.label', 'configured');
+    $builder->addService(
+        $method ? $owner : $owner . '::build',
+        $method ? new Ancestor(false) : new SelectedResolver('ancestor:configured'),
+    );
+    $di = $builder->addParameterResolver($method ? [$owner, 'build'] : $owner . '::build', 1500)->build();
+
+    expect($di->call(static fn(string $selected): string => $selected))->toBe('ancestor:configured');
+})->with(['method array' => true, 'exact string' => false]);
 
 final class Child extends Ancestor
 {

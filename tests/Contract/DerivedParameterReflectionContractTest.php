@@ -7,13 +7,14 @@ namespace Componenta\DI\Tests\Contract\DerivedParameterReflection;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\EntryId;
-use Componenta\DI\Container;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use ReflectionAttribute;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
@@ -108,8 +109,9 @@ test('parameter targets keep native and derived declarations independent', funct
     ->with(['derived first' => false, 'native first' => true]);
 
 test('parameter resolution uses each native or derived declaration after warming the other', function (bool $method, bool $nativeFirst): void {
-    $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')->assemble();
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $native = new ReflectionParameter(declaration($method), 0);
     $derived = new DerivedParameter(declaration($method), new \stdClass());
 
@@ -120,8 +122,9 @@ test('parameter resolution uses each native or derived declaration after warming
     ->with(['derived first' => false, 'native first' => true]);
 
 test('a retained target with a derived reflector keeps using its current attribute plan', function (bool $method): void {
-    $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')->assemble();
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $reflection = new DerivedParameter(declaration($method), new \stdClass());
     $target = $resolver->target($reflection);
 
@@ -139,7 +142,7 @@ test('completed parameter validation retains a consumed attribute hidden by its 
     $targets = [$reflection, new ReflectionParameter($function, 1)];
     /** @var class-string $alias */
     $alias = __NAMESPACE__ . '\\RevisionMarker_' . bin2hex(random_bytes(6));
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addFactory('trusted.value', static function () use ($reflection, $hide): string {
             $reflection->hideAttributes = $hide;
             return 'source';
@@ -148,10 +151,12 @@ test('completed parameter validation retains a consumed attribute hidden by its 
             class_alias(EntryId::class, $alias, autoload: false);
             return 'next';
         })
-        ->build();
-    $registry = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class);
+        ->assemble();
+    $registry = $runtime->attributes;
+    Assert::assertInstanceOf(AttributeDefinitionRegistry::class, $registry);
     $registry->definition($alias);
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
 
     if ($hide) {
         expect(fn() => $resolver->resolve($targets))->toThrow(
@@ -168,31 +173,32 @@ test('bootstrap validates a used parameter declaration that its reflector later 
     $reflection = new DerivedParameter(__NAMESPACE__ . '\\declared', new \stdClass());
     $reflection->hideAttributes = false;
     $selected = null;
+    $runtime = new ResolutionRuntime();
     $builder = (new ContainerBuilder())
         ->addFactory('trusted.value', static function () use ($reflection, $hide): string {
             $reflection->hideAttributes = $hide;
             return 'source';
         })
-        ->addAttributeDefinition(static function (Container $container) use ($reflection, &$selected): AttributeDefinition {
-            $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
-            $selected = $resolver->resolve([$reflection]);
+        ->addAttributeDefinition(static function () use ($reflection, $runtime, &$selected): AttributeDefinition {
+            $selected = $runtime->parameters->resolve([$reflection]);
             return new AttributeDefinition(BootstrapMarker::class);
         });
 
     if ($hide) {
-        expect(fn() => $builder->build())->toThrow(
+        expect(fn() => $builder->assemble($runtime))->toThrow(
             InvalidConfigurationException::class,
             'before its required attribute extensions were registered',
         );
     } else {
-        expect($builder->build()->get('trusted.value'))->toBe('source');
+        expect($builder->assemble($runtime)[0]->get('trusted.value'))->toBe('source');
     }
     expect($selected)->toBe(['source']);
 })->with(['stable metadata control' => false, 'used declaration disappears' => true]);
 
 test('parameter metadata releases derived reflectors and their declaring function state', function (bool $method, bool $resolve): void {
-    $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')->assemble();
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $factory = new ParameterTargetFactory();
     $payload = new \stdClass();
     $derived = new DerivedParameter(declaration($method), $payload);
@@ -217,8 +223,9 @@ test('parameter metadata releases derived reflectors and their declaring functio
     ->with(['target factory' => false, 'prepared resolver' => true]);
 
 test('parameter resolution does not extend the lifetime of an explicitly supplied target', function (bool $derived): void {
-    $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();
-    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+    [$container, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')->assemble();
+    $resolver = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $resolver);
     $reflection = $derived
         ? new DerivedParameter(declaration(true), new \stdClass())
         : new ReflectionParameter(declaration(true), 0);

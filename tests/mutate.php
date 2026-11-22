@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Componenta\DI\Tests\Support\MutationWorkerCheck;
 use Pest\Kernel;
 use Pest\Mutate\Support\StreamWrapper;
 use Pest\Panic;
@@ -116,7 +117,11 @@ try {
             static fn(string $argument): bool => $argument !== '--processes' && !str_starts_with($argument, '--processes='),
         ));
     }
-    exit($kernel->handle($arguments, $arguments));
+    $status = $kernel->handle($arguments, $arguments);
+    if (class_exists(MutationWorkerCheck::class, false)) {
+        MutationWorkerCheck::discardEmptyRun();
+    }
+    exit($status);
 } catch (Throwable $error) {
     Panic::with($error);
 }

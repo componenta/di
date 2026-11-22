@@ -16,6 +16,7 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class SetUpDependency {}
 
@@ -72,7 +73,8 @@ test('SetUp resolves current config v3 and DI value descriptors with target type
         $environment,
     ))->build();
 
-    $entry = $container->makeAs(SetUpContractTarget::class, SetUpContractTarget::class);
+    $entry = $container->make(SetUpContractTarget::class);
+    Assert::assertInstanceOf(SetUpContractTarget::class, $entry);
 
     expect($entry->name)->toBe('configured')
         ->and($entry->dependency)->toBeInstanceOf(SetUpDependency::class)

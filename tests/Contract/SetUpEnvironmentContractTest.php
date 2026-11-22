@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
+use PHPUnit\Framework\Assert;
 
 #[SetUp('configure', [
     'port' => new Env('PORT'),
@@ -55,7 +56,8 @@ test('SetUp resolves typed environment descriptors through the public runtime fa
         throw new \RuntimeException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $entry = $container->makeAs(SetUpEnvironmentTarget::class, SetUpEnvironmentTarget::class);
+    $entry = $container->make(SetUpEnvironmentTarget::class);
+    Assert::assertInstanceOf(SetUpEnvironmentTarget::class, $entry);
 
     expect($entry->port)->toBe(9001)
         ->and($entry->runtimePort)->toBe(9001)

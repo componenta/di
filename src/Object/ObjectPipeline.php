@@ -10,6 +10,10 @@ use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Entry\ConstructorInvocation;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAttempt;
+use Componenta\DI\Internal\Resolver\Entry\ObjectMetadata;
+use Componenta\DI\Internal\Resolver\Entry\ObjectPlans;
 use Componenta\DI\Internal\Resolver\Entry\ObjectResolutionParameterStore;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
@@ -18,39 +22,29 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
-use Componenta\DI\Resolver\Entry\InstanceCreator;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
-use ReflectionObject;
 
 use function Componenta\DI\Internal\is_entry_class_eligible;
 
 /** Single object-creation runtime shared by every entry resolver. */
 final class ObjectPipeline
 {
-    /** @var array<class-string,ObjectMetadata> */
-    private array $metadata = [];
-    /** @var array<class-string,PreparedParameterPlan> */
-    private array $constructorPlans = [];
-    private int $metadataRevision = -1;
+    private readonly ObjectPlans $objectPlans;
     private readonly AttributeProcessor $attributes;
 
     public function __construct(
-        private readonly AttributePlanBuilder $plans,
-        private readonly InstanceCreator $instances,
+        AttributePlanBuilder $plans,
+        private readonly ParametersResolver $parameters,
         private readonly ProxyFactoryInterface $proxies,
-        private readonly AttributeDefinitionRegistry $registry,
+        AttributeDefinitionRegistry $registry,
         private readonly ObjectResolutionParameterStore $resolutionParameters,
         ?AttributeProcessor $attributes = null,
     ) {
         $this->attributes = $attributes ?? new AttributeProcessor($registry, $plans);
-    }
-
-    public function parameters(): ParametersResolver
-    {
-        return $this->instances->parameters();
+        $this->objectPlans = new ObjectPlans($plans, $parameters, $registry, $this->attributes);
     }
 
     /**
@@ -59,7 +53,7 @@ final class ObjectPipeline
      */
     public function prepare(string|ReflectionClass $class): void
     {
-        $this->metadata($class);
+        $this->objectPlans->metadata($class);
     }
 
     /**
@@ -68,7 +62,7 @@ final class ObjectPipeline
      */
     public function canCreate(string|ReflectionClass $class): bool
     {
-        $metadata = $this->metadata($class);
+        $metadata = $this->objectPlans->metadata($class);
         if (!is_entry_class_eligible($metadata->class)) {
             return false;
         }
@@ -98,7 +92,7 @@ final class ObjectPipeline
      */
     public function constructorTargets(string|ReflectionClass $class): array
     {
-        return $this->metadata($class)->constructorTargets;
+        return $this->objectPlans->metadata($class)->constructorTargets;
     }
 
     /**
@@ -114,15 +108,16 @@ final class ObjectPipeline
         ?Closure $configure = null,
         ?Closure $resolveParameters = null,
     ): object {
-        $metadata = $this->metadata($class);
+        $metadata = $this->objectPlans->metadata($class);
         if (!$metadata->hasAttributeHandlers) {
             $completed = $this->attributes->skippedBeforePhase($metadata->class);
             $this->attributes->recordBootstrapUse($metadata->class, AttributePhase::BeforeInstantiation);
             $parameters = $resolveParameters === null ? $params : $resolveParameters();
-            $entry = $this->instances->createTracked(
+            $entry = ConstructorInvocation::create(
+                $this->parameters,
                 $metadata->class,
                 $metadata->constructor,
-                $this->constructorPlan($metadata),
+                $this->objectPlans->constructorPlan($metadata),
                 $parameters,
                 $completed->assertUnchanged(...),
                 $constructorProof,
@@ -132,13 +127,14 @@ final class ObjectPipeline
             }
             $completed->assertUnchanged();
             if ($this->attributes->hasHandlers($metadata->class)) {
-                $creation = new ObjectCreationContext(
+                $attempt = ObjectCreationContext::begin(
                     $metadata->class,
                     ResolutionMetadata::publicParameters($parameters),
                     $this->parameterReadGuard($metadata, $parameters),
                 );
+                $creation = $attempt->context;
                 $this->resolutionParameters->attach($creation, $parameters);
-                $creation->initialize($entry);
+                $attempt->initialize($entry);
                 $after = $this->attributes->processTracked($metadata->class, AttributePhase::AfterInstantiation, $creation);
             } else {
                 $this->attributes->recordBootstrapUse($metadata->class, AttributePhase::AfterInstantiation);
@@ -163,13 +159,14 @@ final class ObjectPipeline
             ? $params
             : self::parameterSource($className, $resolveParameters);
 
-        $creation = new ObjectCreationContext(
+        $attempt = ObjectCreationContext::begin(
             $metadata->class,
             $parameterSource instanceof Closure
                 ? static fn(): array => ResolutionMetadata::publicParameters($parameterSource())
                 : ResolutionMetadata::publicParameters($parameterSource),
             $this->parameterReadGuard($metadata, $parameterSource),
         );
+        $creation = $attempt->context;
         $this->resolutionParameters->attach($creation, $parameterSource);
 
         $completed = $this->attributes->processTracked(
@@ -179,110 +176,30 @@ final class ObjectPipeline
         );
 
         $constructorPlan = $creation->constructorEnabled
-            ? $this->constructorPlan($metadata)
-            : $this->parameters()->prepareTargets([]);
+            ? $this->objectPlans->constructorPlan($metadata)
+            : $this->parameters->prepareTargets([]);
 
         return match ($creation->strategy) {
-            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $creation, $completed, $configure),
-            CreationStrategy::Lazy => $this->lazy($metadata, $constructorPlan, $creation, $completed, $configure, $resolveParameters),
-            CreationStrategy::Proxy => $this->proxy($metadata, $constructorPlan, $creation, $completed, $configure, $resolveParameters),
+            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $attempt, $completed, $configure),
+            CreationStrategy::Lazy => $this->lazy($metadata, $constructorPlan, $attempt, $completed, $configure, $resolveParameters),
+            CreationStrategy::Proxy => $this->proxy($metadata, $constructorPlan, $attempt, $completed, $configure, $resolveParameters),
         };
-    }
-
-    /**
-     * @template T of object
-     * @param class-string<T>|ReflectionClass<T> $class
-     */
-    private function metadata(string|ReflectionClass $class): ObjectMetadata
-    {
-        $cacheable = is_string($class) || $class::class === ReflectionClass::class;
-        while (true) {
-            $revision = $this->registry->revision;
-            if ($revision !== $this->metadataRevision) {
-                $this->metadata = [];
-                $this->constructorPlans = [];
-                $this->metadataRevision = $revision;
-            }
-
-            $name = $class instanceof ReflectionClass
-                ? $class->getName()
-                : ltrim($class, '\\');
-            if ($cacheable && isset($this->metadata[$name])) {
-                return $this->metadata[$name];
-            }
-
-            /** @var ReflectionClass<object> $reflection */
-            $reflection = $class instanceof ReflectionClass
-                ? $class
-                : new ReflectionClass($class);
-            $name = $reflection->getName();
-            $classPlan = $this->plans->build($reflection);
-            $requiresFreshValidation = $classPlan->requiresFreshValidation;
-            $constructor = $reflection->getConstructor();
-            $constructorTargets = $constructor === null
-                ? []
-                : $this->instances->targets($constructor);
-
-            foreach ($constructorTargets as $target) {
-                $plan = $this->plans->build($target->reflection);
-                $requiresFreshValidation = $requiresFreshValidation || $plan->requiresFreshValidation;
-            }
-
-            $attributePlan = $this->attributes->executionPlan($reflection);
-            if ($this->registry->revision !== $revision) {
-                // Member discovery can load attributes used by an earlier target.
-                // Only publish metadata assembled from one registry revision.
-                continue;
-            }
-
-            $metadata = new ObjectMetadata(
-                $reflection,
-                $classPlan,
-                $constructor,
-                $constructorTargets,
-                $attributePlan['hasHandlers'],
-            );
-            if ($cacheable && !$requiresFreshValidation && !$attributePlan['requiresFreshValidation']) {
-                $this->metadata[$name] = $metadata;
-            }
-            return $metadata;
-        }
-    }
-
-    private function constructorPlan(ObjectMetadata $metadata): PreparedParameterPlan
-    {
-        $name = $metadata->class->getName();
-        // Native ReflectionObject constructors still describe their class, but
-        // a derived reflector may supply different or application-owned targets.
-        $cacheable = $metadata->class::class === ReflectionClass::class
-            || $metadata->class::class === ReflectionObject::class;
-        $cached = $cacheable ? ($this->constructorPlans[$name] ?? null) : null;
-        $parameters = $this->parameters();
-
-        if ($cached !== null && $parameters->isCurrentPlan($cached)) {
-            return $cached;
-        }
-
-        $plan = $parameters->prepareTargets($metadata->constructorTargets);
-        if ($cacheable && $parameters->canCachePlans && !$plan->requiresFreshValidation) {
-            $this->constructorPlans[$name] = $plan;
-        }
-
-        return $plan;
     }
 
     /** @param Closure(object):void|null $configure */
     private function eager(
         ObjectMetadata $metadata,
         PreparedParameterPlan $constructorPlan,
-        ObjectCreationContext $creation,
+        ObjectCreationAttempt $attempt,
         CompletedAttributeGuard $completed,
         ?Closure $configure,
     ): object {
+        $creation = $attempt->context;
         $completed->assertUnchanged();
         $constructorProof = null;
         $entry = $creation->constructorEnabled
-            ? $this->instances->createTracked(
+            ? ConstructorInvocation::create(
+                $this->parameters,
                 $metadata->class,
                 $metadata->constructor,
                 $constructorPlan,
@@ -296,7 +213,7 @@ final class ObjectPipeline
             $completed = $completed->with($constructorProof);
         }
         $completed->assertUnchanged();
-        $creation->initialize($entry);
+        $attempt->initialize($entry);
         $after = $this->attributes->processTracked(
             $metadata->class,
             AttributePhase::AfterInstantiation,
@@ -319,7 +236,7 @@ final class ObjectPipeline
     private function lazy(
         ObjectMetadata $metadata,
         PreparedParameterPlan $constructorPlan,
-        ObjectCreationContext $creation,
+        ObjectCreationAttempt $creation,
         CompletedAttributeGuard $completed,
         ?Closure $configure,
         ?Closure $resolveParameters,
@@ -328,16 +245,18 @@ final class ObjectPipeline
             $metadata->class->getName(),
             function (object $entry) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): void {
                 $attempt = $this->freshAttempt($creation);
+                $context = $attempt->context;
                 $succeeded = false;
                 try {
                     $completed->assertUnchanged();
                     $constructorProof = null;
-                    if ($attempt->constructorEnabled) {
-                        $this->instances->initializeTracked(
+                    if ($context->constructorEnabled) {
+                        ConstructorInvocation::initialize(
+                            $this->parameters,
                             $entry,
                             $metadata->constructor,
                             $constructorPlan,
-                            $this->resolutionParameters->get($attempt),
+                            $this->resolutionParameters->get($context),
                             $completed->assertUnchanged(...),
                             $constructorProof,
                         );
@@ -349,14 +268,14 @@ final class ObjectPipeline
                     $after = $this->attributes->processTracked(
                         $metadata->class,
                         AttributePhase::AfterInstantiation,
-                        $attempt,
+                        $context,
                     );
                     $attemptCompleted = $attemptCompleted->with($after);
                     $attemptCompleted->assertUnchanged();
                     $configure?->__invoke($entry);
                     $attemptCompleted->assertUnchanged();
                     $constructorProof?->assertParameterSourcesUnchanged();
-                    $this->resolutionParameters->assertSetupSourcesUnchanged($attempt);
+                    $this->resolutionParameters->assertSetupSourcesUnchanged($context);
                     $succeeded = true;
                 } finally {
                     if (!$succeeded) {
@@ -375,7 +294,7 @@ final class ObjectPipeline
     private function proxy(
         ObjectMetadata $metadata,
         PreparedParameterPlan $constructorPlan,
-        ObjectCreationContext $creation,
+        ObjectCreationAttempt $creation,
         CompletedAttributeGuard $completed,
         ?Closure $configure,
         ?Closure $resolveParameters,
@@ -405,20 +324,20 @@ final class ObjectPipeline
 
     /** @param (Closure():array<string|int,mixed>)|null $resolveParameters */
     private function freshAttempt(
-        ObjectCreationContext $creation,
+        ObjectCreationAttempt $creation,
         ?Closure $resolveParameters = null,
-    ): ObjectCreationContext {
+    ): ObjectCreationAttempt {
         if ($resolveParameters !== null) {
-            $source = self::parameterSource($creation->class->getName(), $resolveParameters);
-            $attempt = $creation->freshAttempt(
+            $source = self::parameterSource($creation->context->class->getName(), $resolveParameters);
+            $attempt = $creation->retry(
                 static fn(): array => ResolutionMetadata::publicParameters($source()),
             );
-            $this->resolutionParameters->attach($attempt, $source);
+            $this->resolutionParameters->attach($attempt->context, $source);
             return $attempt;
         }
 
-        $attempt = $creation->freshAttempt();
-        $this->resolutionParameters->copy($creation, $attempt);
+        $attempt = $creation->retry();
+        $this->resolutionParameters->copy($creation->context, $attempt->context);
         return $attempt;
     }
 

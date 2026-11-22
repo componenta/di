@@ -12,6 +12,22 @@ final class MutationRuntime
     /** @var array<string, bool> */
     private static array $mbstringAvailability = [];
 
+    /**
+     * @param list<string> $arguments
+     * @return list<string>
+     */
+    public static function workerArguments(array $arguments): array
+    {
+        // Pest supplies a filter from the initial suite's coverage.
+        return array_values(array_filter(
+            $arguments,
+            static fn(string $argument, int $index): bool => $argument !== '--filter'
+                && !str_starts_with($argument, '--filter=')
+                && ($arguments[$index - 1] ?? null) !== '--filter',
+            ARRAY_FILTER_USE_BOTH,
+        ));
+    }
+
     /** @return list<string> */
     public static function command(): array
     {

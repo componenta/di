@@ -13,8 +13,4 @@ final readonly class PropertyDiagnostic
         public ?string $type,
     ) {}
 
-    public function getName(): string
-    {
-        return $this->name;
-    }
 }

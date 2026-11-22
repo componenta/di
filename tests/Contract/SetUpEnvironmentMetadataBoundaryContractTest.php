@@ -11,6 +11,7 @@ use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 final class Effects
 {
@@ -55,7 +56,8 @@ test('setup accepts Env descriptors without a matching declared parameter', func
     $class = $callback ? CallbackTarget::class : MethodTarget::class;
 
     foreach ([1, 2] as $attempt) {
-        $entry = $container->makeAs($class, $class);
+        $entry = $container->make($class);
+        Assert::assertInstanceOf($class, $entry);
 
         expect($entry)->toBeInstanceOf($class)
             ->and($entry->arguments)->toBe($callback ? 1 : 0)

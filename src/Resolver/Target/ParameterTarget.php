@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Target;
 
-use Closure;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterAttributeObservation;
 use Componenta\DI\Resolver\TypeHints;
-use Fiber;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionParameter;
 use ReflectionType;
-use Reflector;
 
+use function Componenta\DI\Internal\is_attribute_class_loaded;
 use function Componenta\DI\Internal\is_closure_reflector;
 
 /** Immutable, precomputed view of one reflected parameter. */
@@ -24,9 +23,6 @@ final class ParameterTarget
 
     /** @var array<class-string, list<ReflectionAttribute<object>>> */
     private readonly array $attributesByClass;
-
-    /** @var array<int, list<array<array-key, string>>> */
-    private array $attributeQueries = [];
 
     /** @var list<class-string> */
     public readonly array $attributeClasses;
@@ -51,8 +47,10 @@ final class ParameterTarget
     /** @internal Whether the resolver classification can be reused for this target. */
     public readonly bool $canCacheClassification;
 
-    public function __construct(public readonly ReflectionParameter $reflection)
-    {
+    public function __construct(
+        public readonly ReflectionParameter $reflection,
+        private ?ParameterAttributeObservation $observation = null,
+    ) {
         $this->name = $reflection->getName();
         $this->position = $reflection->getPosition();
         $this->type = $reflection->getType();
@@ -85,11 +83,6 @@ final class ParameterTarget
         $this->attributeClasses = array_keys($classes);
     }
 
-    public function reflector(): Reflector
-    {
-        return $this->reflection;
-    }
-
     public function hasAttribute(string $attributeClass): bool
     {
         if (isset($this->attributesByClass[$attributeClass])) {
@@ -98,7 +91,7 @@ final class ParameterTarget
 
         $needsRefresh = false;
         foreach ($this->attributeClasses as $class) {
-            $needsRefresh = $needsRefresh || !self::isAttributeClassLoaded($class);
+            $needsRefresh = $needsRefresh || !is_attribute_class_loaded($class);
             if (is_a($class, $attributeClass, true)) {
                 return true;
             }
@@ -108,13 +101,13 @@ final class ParameterTarget
             // Later discovery can reveal an earlier declaration or an alias
             // for the queried base. Recheck without invoking another loader.
             foreach ($this->attributeClasses as $class) {
-                if (self::isAttributeClassLoaded($class) && is_a($class, $attributeClass, true)) {
+                if (is_attribute_class_loaded($class) && is_a($class, $attributeClass, true)) {
                     return true;
                 }
             }
         }
 
-        $this->recordMissingAttributeQuery($attributeClass);
+        $this->observation?->record($this, $attributeClass);
         return false;
     }
 
@@ -129,7 +122,7 @@ final class ParameterTarget
         $needsRefresh = false;
         foreach ($this->attributeReflectors as $attribute) {
             $class = $attribute->getName();
-            if (!self::isAttributeClassLoaded($class)) {
+            if (!is_attribute_class_loaded($class)) {
                 $needsRefresh = true;
             }
             if (is_a($class, $attributeClass, true)) {
@@ -143,7 +136,7 @@ final class ParameterTarget
             $reflector = null;
             foreach ($this->attributeReflectors as $attribute) {
                 $class = $attribute->getName();
-                if (self::isAttributeClassLoaded($class) && is_a($class, $attributeClass, true)) {
+                if (is_attribute_class_loaded($class) && is_a($class, $attributeClass, true)) {
                     $reflector = $attribute;
                     break;
                 }
@@ -151,7 +144,7 @@ final class ParameterTarget
         }
 
         if ($reflector === null) {
-            $this->recordMissingAttributeQuery($attributeClass);
+            $this->observation?->record($this, $attributeClass);
             return null;
         }
 
@@ -165,59 +158,19 @@ final class ParameterTarget
     public function watchAttributeAvailability(string $attributeClass): void
     {
         if ($attributeClass !== '' && $this->attributeClasses !== []) {
-            $this->recordMissingAttributeQuery($attributeClass);
+            $this->observation?->record($this, $attributeClass);
         }
     }
 
-    /** @internal Observes availability without invoking an autoloader. */
-    public static function isAttributeClassLoaded(string $attributeClass): bool
+    /** @internal A separately owned target gets its own view for observation. */
+    public function forObservation(ParameterAttributeObservation $observation): self
     {
-        return class_exists($attributeClass, false)
-            || interface_exists($attributeClass, false)
-            || trait_exists($attributeClass, false);
-    }
-
-    /**
-     * Records unavailable names within one classifier invocation.
-     *
-     * @internal
-     * @template T
-     * @param Closure(self):T $classify
-     * @return array{T, list<string>}
-     */
-    public function observeAttributeQueries(Closure $classify): array
-    {
-        $execution = self::executionId();
-        $this->attributeQueries[$execution][] = [];
-        try {
-            $result = $classify($this);
-        } finally {
-            $queries = array_pop($this->attributeQueries[$execution]);
-            if ($this->attributeQueries[$execution] === []) {
-                unset($this->attributeQueries[$execution]);
-            }
+        if ($this->observation === $observation) {
+            return $this;
         }
-
-        return [$result, $queries === [] ? [] : array_values($queries ?? [])];
-    }
-
-    private function recordMissingAttributeQuery(string $attributeClass): void
-    {
-        if ($this->attributeQueries === [] || self::isAttributeClassLoaded($attributeClass)) {
-            return;
-        }
-        $execution = self::executionId();
-        $scope = array_key_last($this->attributeQueries[$execution] ?? []);
-        if ($scope !== null) {
-            $this->attributeQueries[$execution][$scope][$attributeClass] = $attributeClass;
-        }
-    }
-
-    private static function executionId(): int
-    {
-        // An observation must not retain an abandoned Fiber.
-        $fiber = Fiber::getCurrent();
-        return $fiber === null ? 0 : spl_object_id($fiber);
+        $target = clone $this;
+        $target->observation = $observation;
+        return $target;
     }
 
     public function accepts(mixed $value): bool

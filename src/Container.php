@@ -14,6 +14,7 @@ use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
+use Componenta\DI\Internal\ExternalDependencyInspection;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Internal\Resolver\Entry\DefinitionWriter;
@@ -168,16 +169,6 @@ final class Container implements
         throw NotFoundException::forService($id);
     }
 
-    /**
-     * @template T of object
-     * @param class-string<T> $type
-     * @return T
-     */
-    public function getAs(string $id, string $type): object
-    {
-        return self::requireEntryType($id, $this->get($id), $type);
-    }
-
     private function tryResolveAndStore(string $requestedId, string $entryId, mixed &$entry): bool
     {
         $requestedRevision = $this->cache->resolvedRevision($requestedId);
@@ -288,7 +279,7 @@ final class Container implements
                 $this->cache->replaceBase($canonical, $entry, $retirement);
             }
         }
-        $this->invalidate($id, $retirement, $canonical);
+        $this->invalidate($id, $canonical, $retirement);
         $this->invalidateDeferredDelegators($affected, $retirement);
         $retirement->release();
     }
@@ -326,36 +317,6 @@ final class Container implements
         }
     }
 
-    /**
-     * @template T of object
-     * @param non-empty-string $entry
-     * @param class-string<T> $type
-     * @param array<string|int, mixed> $params
-     * @return T
-     */
-    public function makeAs(string $entry, string $type, array $params = []): object
-    {
-        return self::requireEntryType($entry, $this->make($entry, $params), $type);
-    }
-
-    /**
-     * @template T of object
-     * @param class-string<T> $type
-     * @return T
-     */
-    private static function requireEntryType(string $id, mixed $value, string $type): object
-    {
-        if (!$value instanceof $type) {
-            $actual = get_debug_type($value);
-            throw new ResolutionException(
-                sprintf('Service "%s" resolved to %s, expected %s.', $id, $actual, $type),
-                serviceId: $id,
-                actualType: $actual,
-            );
-        }
-        return $value;
-    }
-
     /** @param array<string|int, mixed> $params */
     public function call(mixed $callable, array $params = []): mixed
     {
@@ -390,7 +351,11 @@ final class Container implements
         // Helper autoloaders may publish nested registrations before inspection.
         $externalContainers = $this->externalContainers ?? new ExternalContainerRegistry();
         try {
-            $affected = $this->deferredDependenciesTakenOverBy($container);
+            $affected = new ExternalDependencyInspection(
+                $this->delegators,
+                fn(): ?ExternalContainerRegistry => $this->externalContainers,
+                fn(string $id): bool => !$this->isProtectedDependency($id),
+            )->takenOverBy($container);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -513,14 +478,8 @@ final class Container implements
         }
     }
 
-    private function invalidate(string $id, MutationRetirement $retirement, ?string $knownCanonical = null): void
+    private function invalidate(string $id, string $canonical, MutationRetirement $retirement): void
     {
-        try {
-            $canonical = $knownCanonical ?? $this->aliases->resolve($id);
-        } catch (Throwable) {
-            $canonical = $id;
-        }
-
         $this->cache->invalidate($id, $canonical, $retirement);
         $this->delegators->invalidate($id, $retirement);
         if ($canonical !== $id) {
@@ -537,7 +496,7 @@ final class Container implements
     /** @return list<string> */
     private function deferredDependenciesResolvingTo(string $canonical): array
     {
-        $dependencyCount = $this->delegators->dependencyCount();
+        $dependencyCount = $this->delegators->dependencyCount;
         if ($dependencyCount === 0 || $this->aliases->has($canonical)) {
             return [];
         }
@@ -556,98 +515,6 @@ final class Container implements
             }
         }
         return $dependencies;
-    }
-
-    /** @return list<string> */
-    private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
-    {
-        $candidates = [];
-        $inspected = [];
-        $pending = [];
-        $mayInspect = fn(string $id): bool => !$this->isProtectedDependency($id);
-        do {
-            $ownershipRevision = $this->externalContainers->ownershipRevision ?? 0;
-            foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-                $dependencyRevision = $this->externalContainers?->ownershipRevisionFor($dependencyId) ?? 0;
-                $previousRevision = $inspected[$dependencyId] ?? null;
-                if ($previousRevision === $dependencyRevision && !isset($pending[$dependencyId])) {
-                    continue;
-                }
-                if ($previousRevision !== null && $previousRevision !== $dependencyRevision) {
-                    unset($candidates[$dependencyId]);
-                }
-                $inspected[$dependencyId] = $dependencyRevision;
-                if ($this->isProtectedDependency($dependencyId)) {
-                    $pending[$dependencyId] = true;
-                    continue;
-                }
-                unset($pending[$dependencyId]);
-                do {
-                    $revision = $this->externalContainers->revision ?? 0;
-                    $owner = $this->externalContainers?->findOwning($dependencyId, $mayInspect);
-                    if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
-                        return [];
-                    }
-                } while ($revision !== ($this->externalContainers->revision ?? 0)
-                    && !$this->isProtectedDependency($dependencyId));
-                if ($this->isProtectedDependency($dependencyId)) {
-                    $pending[$dependencyId] = true;
-                    continue;
-                }
-                if ($owner === null && $container->has($dependencyId)) {
-                    $candidates[$dependencyId] = true;
-                }
-                if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
-                    return [];
-                }
-            }
-
-            // Keep candidate answers, but prove ownership against the completed
-            // registry. Existing-owner callbacks can publish further containers.
-            $dependencies = [];
-            $protectedCandidates = [];
-            $revision = $this->externalContainers->revision ?? 0;
-            foreach ($candidates as $id => $_) {
-                $dependencyId = (string) $id;
-                if (!$this->delegators->dependsOn($dependencyId)) {
-                    continue;
-                }
-                if ($this->isProtectedDependency($dependencyId)) {
-                    $protectedCandidates[$dependencyId] = true;
-                    continue;
-                }
-                $owner = $this->externalContainers?->findOwning($dependencyId, $mayInspect);
-                if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
-                    return [];
-                }
-                if ($this->isProtectedDependency($dependencyId)) {
-                    $protectedCandidates[$dependencyId] = true;
-                    continue;
-                }
-                if ($owner === null) {
-                    $dependencies[] = $dependencyId;
-                }
-            }
-            // A later callback can make a skipped alias externally eligible.
-            // Revisit only its unfinished inspection/proof, never a candidate answer.
-            $retryProtected = false;
-            foreach ($pending + $protectedCandidates as $dependencyId => $_) {
-                if (!$this->isProtectedDependency((string) $dependencyId)) {
-                    $retryProtected = true;
-                    break;
-                }
-            }
-            // Either phase can also introduce new deferred dependency IDs.
-        } while ($retryProtected
-            || $revision !== ($this->externalContainers->revision ?? 0)
-            || $ownershipRevision !== ($this->externalContainers->ownershipRevision ?? 0)
-            || array_diff($this->delegators->deferredDependencies(), array_keys($inspected)) !== []);
-
-        // A later proof may also protect a dependency already selected above.
-        return array_values(array_filter(
-            $dependencies,
-            fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
-        ));
     }
 
     /**

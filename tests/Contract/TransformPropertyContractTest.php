@@ -21,6 +21,8 @@ use RuntimeException;
 use Throwable;
 use WeakReference;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 #[Attribute(Attribute::TARGET_ALL)]
 final class UncachedMarker {}
 
@@ -220,8 +222,8 @@ final class StaticTarget
 
 test('property transformations keep intermediate values outside a typed readonly property', function (bool $uncached): void {
     $container = builder($uncached)->build();
-    expect($container->makeAs(readonlyTarget(), ReadonlyState::class)->label)->toBe('[ready]')
-        ->and($container->makeAs(IntermediateTarget::class, IntermediateTarget::class)->label)->toBeTrue()
+    expect(fixtureInstance($container->make(readonlyTarget()), ReadonlyState::class)->label)->toBe('[ready]')
+        ->and(fixtureInstance($container->make(IntermediateTarget::class), IntermediateTarget::class)->label)->toBeTrue()
         ->and(State::$inputs)->toBe(['  ready  ', 'ready', '  ready  ', 9]);
 })->with(['cached plans' => false, 'uncached plans' => true]);
 
@@ -241,25 +243,26 @@ test('standalone property transforms require an exact context key and preserve e
         throw new LogicException('Expected the constructed source-less target.');
     }
     expect($failed->label)->toBe('default')
-        ->and($container->makeAs(ContextTarget::class, ContextTarget::class, ['label' => null])->label)->toBeNull()
+        ->and(fixtureInstance($container->make(ContextTarget::class, ['label' => null]), ContextTarget::class)->label)->toBeNull()
         ->and(State::$inputs)->toBe([null]);
 })->with(['cached plans' => false, 'uncached plans' => true]);
 
 test('promoted parameters transform once and initialized readonly properties are skipped', function (bool $uncached): void {
     $container = builder($uncached)->build();
-    expect($container->makeAs(PromotedTarget::class, PromotedTarget::class, ['label' => '  promoted  '])->label)->toBe('promoted')
-        ->and($container->makeAs(InitializedReadonlyTarget::class, InitializedReadonlyTarget::class, ['label' => 'replacement'])->label)->toBe('existing')
+    expect(fixtureInstance($container->make(PromotedTarget::class, ['label' => '  promoted  ']), PromotedTarget::class)->label)->toBe('promoted')
+        ->and(fixtureInstance($container->make(InitializedReadonlyTarget::class, ['label' => 'replacement']), InitializedReadonlyTarget::class)->label)->toBe('existing')
         ->and(State::$inputs)->toBe(['  promoted  ']);
 })->with(['cached plans' => false, 'uncached plans' => true]);
 
 test('write-only setters receive the final transformed pending value exactly once', function (bool $uncached): void {
     $container = builder($uncached)->build();
-    expect($container->makeAs(WriteOnlyTarget::class, WriteOnlyTarget::class)->assigned)->toBe(['[ready]'])
+    expect(fixtureInstance($container->make(WriteOnlyTarget::class), WriteOnlyTarget::class)->assigned)->toBe(['[ready]'])
         ->and(State::$inputs)->toBe(['  ready  ', 'ready']);
 })->with(['cached plans' => false, 'uncached plans' => true]);
 
 test('property transforms retain native wider setter input semantics', function (bool $uncached): void {
-    $target = builder($uncached)->build()->makeAs(WiderSetterTarget::class, WiderSetterTarget::class, ['number' => '  42  ']);
+    $target = builder($uncached)->build()->make(WiderSetterTarget::class, ['number' => '  42  ']);
+    Assert::assertInstanceOf(WiderSetterTarget::class, $target);
     expect($target->number)->toBe(42)
         ->and($target->assignments)->toBe(1)
         ->and(State::$inputs)->toBe(['  42  ']);

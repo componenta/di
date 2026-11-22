@@ -18,7 +18,11 @@ use ReflectionMethod;
 use ReflectionProperty;
 use Throwable;
 
-/** Tracks one object phase across targets without replaying dispatched handlers. @internal */
+/**
+ * Tracks one object phase across targets without replaying dispatched handlers.
+ *
+ * @internal
+ */
 final class ObjectAttributeSequence
 {
     private int $revision = -1;

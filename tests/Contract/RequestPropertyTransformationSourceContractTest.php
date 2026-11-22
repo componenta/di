@@ -14,7 +14,6 @@ use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
-use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
@@ -178,9 +177,9 @@ test('transforming a provider-owned property does not materialize unused context
     if (!class_exists($class)) {
         throw new \LogicException('Expected the declared property fixture.');
     }
-    $container = builder($uncached)->build();
+    [$container, $runtime] = builder($uncached)->assemble();
 
-    $entry = $container->getAs(ObjectPipeline::class, ObjectPipeline::class)->create($class, resolveParameters: static function (): never {
+    $entry = $runtime->objects->create($class, resolveParameters: static function (): never {
         throw new \LogicException('The provider supplies the value without reading the public parameter bag.');
     });
 

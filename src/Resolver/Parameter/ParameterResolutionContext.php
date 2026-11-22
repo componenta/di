@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-/** Mutable state owned by one ParametersResolver invocation. */
+use Closure;
+
+/** Arguments visible to resolvers during one invocation. */
 final class ParameterResolutionContext
 {
     /** @var array<string|int, mixed> */
@@ -23,7 +25,19 @@ final class ParameterResolutionContext
         $this->resolved = $resolved;
     }
 
-    public function resolve(int $position, mixed $value): void
+    /**
+     * @internal Gives the invocation owner the writer for a new context.
+     * @param array<string|int, mixed> $provided
+     * @param array<int, mixed> $resolved
+     * @return array{self, Closure(int,mixed):void}
+     */
+    public static function begin(array $provided, array $resolved): array
+    {
+        $context = new self($provided, $resolved);
+        return [$context, $context->resolve(...)];
+    }
+
+    private function resolve(int $position, mixed $value): void
     {
         $this->resolved[$position] = $value;
     }

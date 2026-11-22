@@ -15,6 +15,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Reflector;
 
 #[Attribute(Attribute::TARGET_CLASS)]
@@ -139,7 +140,8 @@ test('member rule discovery refreshes pending class policies without replaying c
 
     foreach ([1, 2] as $attempt) {
         Trace::$events = [];
-        $entry = $container->makeAs($class, $class);
+        $entry = $container->make($class);
+        Assert::assertInstanceOf($class, $entry);
         expect($entry->value)->toBe('declared')
             ->and(Product::$constructions)->toBe(0)
             ->and($state->opens)->toBe($attempt)

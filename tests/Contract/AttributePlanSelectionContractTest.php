@@ -10,9 +10,8 @@ use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use PHPUnit\Framework\Assert;
 use ReflectionMethod;
-
-use function Componenta\DI\Tests\Support\container;
 
 interface SelectionCapability extends AttributeCapabilityInterface {}
 interface FirstSelectionCapability extends SelectionCapability {}
@@ -44,7 +43,7 @@ final class SelectionTarget
 }
 
 test('capability selection applies declaration order to attributes unlocked by a constraint', function (): void {
-    $container = container([
+    [$container, $runtime] = \Componenta\DI\Tests\Support\assembledContainer([
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             new AttributeDefinition(
                 FirstSelectionAttribute::class,
@@ -62,7 +61,8 @@ test('capability selection applies declaration order to attributes unlocked by a
         ],
     ]);
     $target = (new ReflectionMethod(SelectionTarget::class, 'ordered'))->getParameters()[0];
-    $plans = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class);
+    $plans = $runtime->plans;
+    Assert::assertInstanceOf(AttributePlanBuilder::class, $plans);
     $plan = $plans->build($target);
 
     expect(array_map(
@@ -77,14 +77,14 @@ test('capability selection applies declaration order to attributes unlocked by a
 });
 
 test('attribute family selection preserves interleaved declaration order', function (): void {
-    $container = container([
+    [$container, $runtime] = \Componenta\DI\Tests\Support\assembledContainer([
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             new AttributeDefinition(FirstSelectionAttribute::class),
             new AttributeDefinition(MiddleSelectionAttribute::class),
         ],
     ]);
     $target = (new ReflectionMethod(SelectionTarget::class, 'repeated'))->getParameters()[0];
-    $plan = $container->getAs(AttributePlanBuilder::class, AttributePlanBuilder::class)->build($target);
+    $plan = $runtime->plans->build($target);
 
     expect(array_map(
         static fn(AttributeUsage $usage): string => $usage->attributeClass,

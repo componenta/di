@@ -17,6 +17,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -123,7 +124,8 @@ test('container factory materializes deferred attribute and parameter resolver s
         ->addParameterResolver([DeferredExtensionFactoryService::class, 'conventionResolver'], 350)
         ->build();
 
-    $dto = $container->makeAs(DeferredExtensionDto::class, DeferredExtensionDto::class);
+    $dto = $container->make(DeferredExtensionDto::class);
+    Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
 
     expect($dto->value)->toBe('from-service-method')
         ->and($dto->fallback)->toBe('from-deferred-resolver');
@@ -134,7 +136,8 @@ test('deferred extension factories can use constructor autowiring during bootstr
         ->addAttributeDefinition([DeferredAutowiredAttributeFactory::class, 'attribute'])
         ->build();
 
-    $factory = $container->getAs(DeferredAutowiredAttributeFactory::class, DeferredAutowiredAttributeFactory::class);
+    $factory = $container->get(DeferredAutowiredAttributeFactory::class);
+    Assert::assertInstanceOf(DeferredAutowiredAttributeFactory::class, $factory);
 
     expect($factory)->toBeInstanceOf(DeferredAutowiredAttributeFactory::class)
         ->and($factory->dependency)->toBeInstanceOf(DeferredAutowiredDependency::class);
@@ -159,7 +162,8 @@ test('container factory accepts deferred extension service method forms', functi
     if (!$container instanceof Container) {
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
-    $dto = $container->makeAs(DeferredExtensionDto::class, DeferredExtensionDto::class);
+    $dto = $container->make(DeferredExtensionDto::class);
+    Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
 
     expect($dto->value)->toBe('from-service-method')
         ->and($dto->fallback)->toBe('from-deferred-resolver');
@@ -192,7 +196,8 @@ test('container factory materializes closure function and service-id extension f
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
 
-    $dto = $container->makeAs(DeferredExtensionDto::class, DeferredExtensionDto::class);
+    $dto = $container->make(DeferredExtensionDto::class);
+    Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
 
     expect($attributeFactoryCalls)->toBe(1)
         ->and($dto->value)->toBe('from-service-method')

@@ -14,6 +14,7 @@ use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
 
 #[Attribute]
 final class NeutralMetadata {}
@@ -77,8 +78,9 @@ test('configuration cannot silently change a completed after phase or retain fai
     if ($uncached) {
         $builder->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: [new NoOpRule()]));
     }
-    $container = $builder->build();
-    $pipeline = $container->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    [$container, $runtime] = $builder->assemble();
+    $pipeline = $runtime->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $factories = 0;
     $configures = 0;
     State::$constructors = State::$knownCalls = State::$lateCalls = 0;
@@ -131,7 +133,8 @@ test('configuration may load unrelated metadata without rejecting a completed ob
     if (!is_a($class, State::class, true)) {
         throw new \LogicException('Expected the neutral metadata fixture.');
     }
-    $pipeline = (new ContainerBuilder())->build()->getAs(ObjectPipeline::class, ObjectPipeline::class);
+    $pipeline = (new ContainerBuilder())->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $configures = 0;
     State::$constructors = 0;
 
@@ -148,8 +151,8 @@ test('configuration may load unrelated metadata without rejecting a completed ob
 test('handlerless after phases retain validated metadata on every object target', function (bool $uncached): void {
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
-        ->build()
-        ->getAs(ObjectPipeline::class, ObjectPipeline::class);
+        ->assemble()[1]->objects;
+    Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
 
     for ($attempt = 0; $attempt < 2; ++$attempt) {
         $entry = $pipeline->create(RegisteredMetadataProduct::class, configure: static function (object $entry): void {

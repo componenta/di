@@ -18,6 +18,8 @@ use ReflectionProperty;
 use Reflector;
 use WeakReference;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 #[Attribute(Attribute::TARGET_PROPERTY)]
 final class Observed {}
 
@@ -56,7 +58,7 @@ test('completed bootstrap does not retain transient targets from later uncached 
     ))->build();
 
     for ($index = 0; $index < 8; ++$index) {
-        expect($container->makeAs(Target::class, Target::class)->value)->toBe(42);
+        expect(fixtureInstance($container->make(Target::class), Target::class)->value)->toBe(42);
     }
     gc_collect_cycles();
 

@@ -7,7 +7,11 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 
-/** Applies internal resolution metadata policy before public parameter execution. @internal */
+/**
+ * Applies internal resolution metadata policy before public parameter execution.
+ *
+ * @internal
+ */
 final class ParameterResolutionBoundary
 {
     /**
