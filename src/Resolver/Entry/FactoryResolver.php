@@ -162,7 +162,7 @@ final class FactoryResolver implements DefinitionResolverInterface
         foreach (array_replace($configured, $runtime) as $key => $value) {
             $value = array_key_exists($key, $runtime) ? $value : $this->resolveDefinitionValue($value);
             if (is_int($key)) {
-                $positional[] = $value;
+                $positional[$key] = $value;
             } else {
                 $named[$key] = $value;
             }
@@ -170,6 +170,7 @@ final class FactoryResolver implements DefinitionResolverInterface
         if ($positional === []) {
             return $arguments + $named;
         }
+        ksort($positional, SORT_NUMERIC);
 
         // Positional variadic values require the preceding arguments to occupy
         // their native positions. Evaluate omitted defaults only for this call.

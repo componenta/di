@@ -94,3 +94,31 @@ test('targeted discovery can retry pending declarations of the current class', f
         spl_autoload_unregister($loader);
     }
 });
+
+test('a warmed named callable checks only class and interface availability for a pending attribute', function (): void {
+    $container = targetedContainer();
+    $suffix = bin2hex(random_bytes(5));
+    $name = __NAMESPACE__ . '\\renderOptionalParameter_' . $suffix;
+    $attribute = __NAMESPACE__ . '\\PendingParameter_' . $suffix;
+    eval(sprintf(
+        'namespace %s; function renderOptionalParameter_%s(#[PendingParameter_%s] string $value = "ready"): string { return $value; }',
+        __NAMESPACE__,
+        $suffix,
+        $suffix,
+    ));
+    expect($container->call($name))->toBe('ready');
+    $loads = 0;
+    $loader = static function (string $class) use ($attribute, &$loads): void {
+        if ($class === $attribute) {
+            ++$loads;
+        }
+    };
+    spl_autoload_register($loader);
+
+    try {
+        expect($container->call($name))->toBe('ready')
+            ->and($loads)->toBe(2);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+});

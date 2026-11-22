@@ -110,6 +110,18 @@ test('positional definition variadics fill omitted defaults and retain named tra
         ->and($entry->items)->toBe(['first', 'second', 'tail' => 'third']);
 });
 
+test('definition variadics retain numeric positions across configured and runtime arguments', function (): void {
+    $definition = ClassDefinition::create(NativeOmissionDefinitionProduct::class)
+        ->constructor([4 => 'fourth', 3 => 'overridden', 'tag' => 'constructor'])
+        ->call('configure', [3 => 'third', 1 => 'first', 'tag' => 'method']);
+    $container = (new ContainerBuilder())->addDefinition('product', $definition)->build();
+
+    $entry = $container->makeAs('product', NativeOmissionDefinitionProduct::class, [1 => 'first', 3 => 'third']);
+
+    expect($entry->observed[0][3])->toBe(['first', 'third', 'fourth', 'tag' => 'constructor'])
+        ->and($entry->observed[1][3])->toBe(['first', 'third', 'tag' => 'method']);
+});
+
 test('named definition variadics preserve native omission of fixed constructor and method arguments', function (bool $runtime): void {
     $container = (new ContainerBuilder())
         ->addDefinition('product', ClassDefinition::create(NativeOmissionDefinitionProduct::class)

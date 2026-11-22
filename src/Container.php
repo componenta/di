@@ -443,49 +443,35 @@ final class Container implements
         }
 
         $retirement = new MutationRetirement($alias);
-        // Validate the complete candidate graph before mutating the live alias
-        // resolver. Runtime alias changes must preserve protected core routing.
+        // Only this edge and the aliases leading to it can change destination.
         do {
             $revision = $this->aliases->revision;
-            $candidate = clone $this->aliases;
-            $candidate->set($alias, $target);
-            foreach ($this->delegators->entryIds() as $delegatorId) {
-                $canonical = $candidate->resolve($delegatorId);
-                if (ProtectedServiceIds::contains($canonical)) {
-                    throw new InvalidConfigurationException(sprintf(
-                        'Cannot retarget delegator for id "%s" to protected DI id "%s".',
-                        $delegatorId,
-                        $canonical,
-                    ));
-                }
+            $previousTarget = $this->aliases->resolve($alias);
+            $canonical = $this->aliases->validateTarget($alias, $target);
+            $affected = $this->aliases->affectedIds($alias);
+            if (ProtectedServiceIds::contains($canonical)
+                && ($delegatorId = $this->delegators->firstDelegatedEntryAmong($affected)) !== null
+            ) {
+                throw new InvalidConfigurationException(sprintf(
+                    'Cannot retarget delegator for id "%s" to protected DI id "%s".',
+                    $delegatorId,
+                    $canonical,
+                ));
             }
-
-            $changedTargets = $this->aliases->changedTargets($candidate);
-            $before = $this->deferredDependencyTargets();
+            $changedDependencies = $canonical === $previousTarget ? [] : $this->delegators->dependenciesAmong($affected);
             $hidesCanonical = !$this->aliases->has($alias);
-        } while (!$this->aliases->publishValidated($alias, $target, $revision, $this->runtimeAuthority));
+        } while (!$this->aliases->publishValidated($alias, $target, $revision, $this->runtimeAuthority, $affected));
 
         if ($hidesCanonical) {
             $this->definitionWriter->retire($alias, $retirement);
             $this->cache->removeBase($alias, $retirement);
         }
-        foreach ($changedTargets as $changedId => $previousTarget) {
-            $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
-        }
-
-        $changed = [];
-        foreach ($before as $dependencyId => $previousTarget) {
-            $dependencyId = (string) $dependencyId;
-            try {
-                $currentTarget = $this->aliases->resolve($dependencyId);
-            } catch (Throwable) {
-                $currentTarget = null;
-            }
-            if ($currentTarget !== $previousTarget) {
-                $changed[] = $dependencyId;
+        if ($canonical !== $previousTarget) {
+            foreach ($affected as $changedId => $_) {
+                $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
             }
         }
-        $this->invalidateDeferredDelegators($changed, $retirement);
+        $this->invalidateDeferredDelegators($changedDependencies, $retirement);
         $retirement->release();
     }
 
@@ -551,13 +537,22 @@ final class Container implements
     /** @return list<string> */
     private function deferredDependenciesResolvingTo(string $canonical): array
     {
+        $dependencyCount = $this->delegators->dependencyCount();
+        if ($dependencyCount === 0 || $this->aliases->has($canonical)) {
+            return [];
+        }
+
+        $family = $this->aliases->affectedIds($canonical, $dependencyCount);
+        if ($family !== null) {
+            return $this->delegators->dependenciesAmong($family);
+        }
+
+        // A binding can serve many aliases while only a few delegators depend
+        // on them. Bound the reverse walk by the size of the dependency index.
         $dependencies = [];
-        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            try {
-                if ($this->aliases->resolve($dependencyId) === $canonical) {
-                    $dependencies[] = $dependencyId;
-                }
-            } catch (Throwable) {
+        foreach ($this->delegators->deferredDependencies() as $dependency) {
+            if ($this->aliases->resolve($dependency) === $canonical) {
+                $dependencies[] = $dependency;
             }
         }
         return $dependencies;
@@ -663,20 +658,6 @@ final class Container implements
     {
         return ProtectedServiceIds::contains($id)
             || ProtectedServiceIds::contains($this->aliases->resolve($id));
-    }
-
-    /** @return array<string, string|null> */
-    private function deferredDependencyTargets(): array
-    {
-        $targets = [];
-        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            try {
-                $targets[$dependencyId] = $this->aliases->resolve($dependencyId);
-            } catch (Throwable) {
-                $targets[$dependencyId] = null;
-            }
-        }
-        return $targets;
     }
 
     /** @param iterable<string> $dependencyIds */

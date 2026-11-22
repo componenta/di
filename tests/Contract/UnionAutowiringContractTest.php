@@ -20,6 +20,7 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 use ReflectionFunction;
 
@@ -458,6 +459,10 @@ test('variadic intersection and DNF types keep their existing explicit-value con
 
 
 test('PHP 8.4 contextual union aliases select one deterministic service id', function (): void {
+    if (PHP_VERSION_ID >= 80500) {
+        Assert::markTestSkipped('PHP 8.5 and later reject redundant contextual union declarations.');
+    }
+
     $shortName = 'ContextualCaseUnion_' . bin2hex(random_bytes(5));
     $lowerName = strtolower(__NAMESPACE__ . '\\' . $shortName);
     $fixture = eval(sprintf(
@@ -477,4 +482,4 @@ test('PHP 8.4 contextual union aliases select one deterministic service id', fun
         ->build();
 
     expect($container->call([$fixture, 'select']))->toBe($fixture);
-})->skip(PHP_VERSION_ID >= 80500, 'PHP 8.5 rejects redundant contextual union declarations natively.');
+});

@@ -10,7 +10,11 @@ use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\CallableExecutorInterface;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 final class CurrentRuleLimit
@@ -45,6 +49,49 @@ function withCurrentLimit(#[PositiveLimit(new CurrentRuleLimit())] string $value
     return $value;
 }
 
+function withoutRule(string $unrelated = 'ok'): string
+{
+    return $unrelated;
+}
+
+final class EarlierArgument {}
+
+function withLaterLimit(
+    EarlierArgument $dependency,
+    #[PositiveLimit(new CurrentRuleLimit())] string $value = 'ok',
+): string {
+    return $value;
+}
+
+test('a composition rule leaves an unrelated callable classification reusable', function (): void {
+    $observer = new class () implements ParameterResolverInterface {
+        public int $checks = 0;
+
+        public function supports(ParameterTarget $target): bool
+        {
+            if ($target->name === 'unrelated') {
+                ++$this->checks;
+            }
+            return false;
+        }
+
+        public function resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): ?array
+        {
+            return null;
+        }
+    };
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]))
+        ->addParameterResolver($observer, 1000)
+        ->build();
+
+    expect($container->call(__NAMESPACE__ . '\\withoutRule'))->toBe('ok');
+    $checks = $observer->checks;
+
+    expect($container->call(__NAMESPACE__ . '\\withoutRule'))->toBe('ok')
+        ->and($observer->checks)->toBe($checks);
+});
+
 test('repeated calls validate current composition rule arguments', function (bool $named): void {
     $container = (new ContainerBuilder())->addAttributeDefinition(
         new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]),
@@ -64,6 +111,31 @@ test('repeated calls validate current composition rule arguments', function (boo
         CurrentRuleLimit::$current = 1;
     }
 })->with(['named function' => true, 'closure' => false]);
+
+test('a warmed callable validates a changed rule before resolving earlier arguments', function (): void {
+    $container = (new ContainerBuilder())->addAttributeDefinition(
+        new AttributeDefinition(PositiveLimit::class, rules: [new PositiveLimitRule()]),
+    )->build();
+    $calls = 0;
+    $factory = Definition::factory(static function () use (&$calls): EarlierArgument {
+        ++$calls;
+        return new EarlierArgument();
+    });
+    $name = __NAMESPACE__ . '\\withLaterLimit';
+    $container->set(EarlierArgument::class, $factory);
+
+    try {
+        CurrentRuleLimit::$current = 1;
+        expect($container->call($name))->toBe('ok')->and($calls)->toBe(1);
+        $container->set(EarlierArgument::class, $factory);
+        CurrentRuleLimit::$current = -1;
+
+        expect(fn() => $container->call($name))->toThrow(AttributeCompositionException::class)
+            ->and($calls)->toBe(1);
+    } finally {
+        CurrentRuleLimit::$current = 1;
+    }
+});
 
 #[PositiveLimit(new CurrentRuleLimit())]
 final class ClassWithLimit {}

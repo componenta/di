@@ -36,7 +36,7 @@ final class AttributeProcessor
      * @var array<class-string,array{
      *     revision:int,
      *     hasHandlers:bool,
-     *     awaitsDiscovery:bool,
+     *     requiresFreshValidation:bool,
      *     before:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>,
      *     after:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>
      * }>
@@ -220,7 +220,7 @@ final class AttributeProcessor
      * @return array{
      *     revision:int,
      *     hasHandlers:bool,
-     *     awaitsDiscovery:bool,
+     *     requiresFreshValidation:bool,
      *     before:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>,
      *     after:list<ReflectionClass<object>|ReflectionProperty|ReflectionMethod>
      * }
@@ -232,7 +232,7 @@ final class AttributeProcessor
         do {
             $revision = $this->registry->revision;
             $cached = $this->cache[$name] ?? null;
-            if ($cacheable && $this->plans->canCachePlans && $cached !== null && $cached['revision'] === $revision) {
+            if ($cacheable && $cached !== null && $cached['revision'] === $revision) {
                 return $cached;
             }
 
@@ -242,10 +242,10 @@ final class AttributeProcessor
             $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
             $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
             $hasHandlers = false;
-            $awaitsDiscovery = false;
+            $requiresFreshValidation = false;
             foreach ($before as $target) {
                 $plan = $this->plans->build($target);
-                $awaitsDiscovery = $awaitsDiscovery || $this->plans->awaitsDiscovery($plan);
+                $requiresFreshValidation = $requiresFreshValidation || $plan->requiresFreshValidation;
                 foreach ($plan->usages as $usage) {
                     if ($usage->definition->handler instanceof AttributeHandlerInterface) {
                         $hasHandlers = true;
@@ -259,11 +259,11 @@ final class AttributeProcessor
         $plan = [
             'revision' => $revision,
             'hasHandlers' => $hasHandlers,
-            'awaitsDiscovery' => $awaitsDiscovery,
+            'requiresFreshValidation' => $requiresFreshValidation,
             'before' => $before,
             'after' => $after,
         ];
-        if ($cacheable && !$awaitsDiscovery && $this->plans->canCachePlans) {
+        if ($cacheable && !$requiresFreshValidation) {
             $this->cache[$name] = $plan;
         }
         return $plan;

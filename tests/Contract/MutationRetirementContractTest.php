@@ -21,6 +21,14 @@ final readonly class Product
     public function __construct(public string $label) {}
 }
 
+final class NativeDecorator
+{
+    public static function keep(Product $entry): Product
+    {
+        return $entry;
+    }
+}
+
 final class RetiringFactory
 {
     public function __construct(public readonly object $payload, private readonly ?Closure $retire = null) {}
@@ -196,6 +204,40 @@ test('throwing cache wrapper retirement cannot leave a sibling alias with its ol
             throw new LogicException('Expected committed cache retirement failure.');
         }
         expect($error->causes)->toBe([$cause]);
+    } finally {
+        Wrapper::$retire = null;
+    }
+});
+
+test('a reintroduced delegator dependency retires results in its new registration order', function (): void {
+    $owner = __NAMESPACE__ . '\\LateDecorator_' . bin2hex(random_bytes(6));
+    $container = (new ContainerBuilder())
+        ->addAliases([$owner => 'route', 'stable.decorator' => 'route', 'route' => 'old.decorator'])
+        ->addServices([
+            'pruned' => new Product('pruned'),
+            'stable' => new Product('stable'),
+            'relinked' => new Product('relinked'),
+            'old.decorator' => static fn(Product $source): Wrapper => new Wrapper($source, 'old'),
+            'new.decorator' => static fn(Product $source): Wrapper => new Wrapper($source, 'new'),
+        ])
+        ->build();
+    $container->delegator('pruned', $owner . '::keep');
+    $container->delegator('stable', 'stable.decorator');
+    class_alias(NativeDecorator::class, $owner);
+    expect($container->get('pruned'))->toEqual(new Product('pruned'));
+    $container->delegator('relinked', $owner);
+    expect(wrapper($container, 'stable')->name)->toBe('old')
+        ->and(wrapper($container, 'relinked')->name)->toBe('old');
+
+    $retired = [];
+    Wrapper::$retire = static function (Wrapper $wrapper) use (&$retired): void {
+        $retired[] = $wrapper->source->label;
+    };
+    try {
+        $container->alias('route', 'new.decorator');
+        expect($retired)->toBe(['stable', 'relinked'])
+            ->and(wrapper($container, 'stable')->name)->toBe('new')
+            ->and(wrapper($container, 'relinked')->name)->toBe('new');
     } finally {
         Wrapper::$retire = null;
     }

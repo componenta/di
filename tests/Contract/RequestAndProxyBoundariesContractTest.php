@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\MapRequest;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\RequestDataSource;
 use Componenta\DI\Exception\RequestDataConflictException;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use InvalidArgumentException;
 use Nyholm\Psr7\ServerRequest;
@@ -42,6 +43,41 @@ test('an explicit concrete proxy class takes precedence over a concrete declared
     expect($product)->toBeInstanceOf(ExplicitProxyChild::class)
         ->and($product->value)->toBe(17);
 })->with([false, true]);
+
+test('proxy compatibility observes late declarations without another autoload attempt', function (int $loadOn, bool $declared): void {
+    $type = __NAMESPACE__ . '\\UnrelatedProxyType_' . bin2hex(random_bytes(6));
+    if ($loadOn === 0) {
+        class_alias(\stdClass::class, $type, autoload: false);
+    }
+    $attempts = 0;
+    $loader = static function (string $name) use ($type, $loadOn, &$attempts): void {
+        if ($name === $type && ++$attempts === $loadOn) {
+            class_alias(\stdClass::class, $type, autoload: false);
+        }
+    };
+    $callable = eval(sprintf(
+        'return static fn(#[\\%s(\\%s::class)] \\%s $product): object => $product;',
+        Proxy::class,
+        ExplicitProxyChild::class,
+        $type,
+    ));
+    $container = (new ContainerBuilder())->build();
+    $reason = $declared
+        ? sprintf('Virtual proxy class "%s" is incompatible with declared type "%s".', ExplicitProxyChild::class, $type)
+        : 'does not satisfy the declared type';
+
+    spl_autoload_register($loader);
+    try {
+        expect(fn() => $container->call($callable))->toThrow(ResolutionException::class, $reason)
+            ->and(class_exists($type, false))->toBe($declared);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with([
+    'loaded control' => [0, true],
+    'declaration during the interface probe' => [2, true],
+    'type still unavailable after discovery' => [3, false],
+]);
 
 test('request mapping adds selected uploads independently of the primary source list', function (bool $explicitFiles): void {
     $upload = new UploadedFile(Stream::create('file'), 4, UPLOAD_ERR_OK);

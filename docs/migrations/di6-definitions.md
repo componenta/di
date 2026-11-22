@@ -30,6 +30,8 @@ This corrects the former retention of a factory after switching definition strat
 
 Public `Definition::factory()`, `Definition::invokable()`, `ClassDefinition` and `Definition::reference()` retain their existing roles. `ReferenceDefinition` remains an argument/reference descriptor; it is not an independent entry definition supported by the built-in strategies. Explicit invokable construction still calls the constructor with zero arguments. `ClassDefinition` still uses its configured arguments, runtime overrides and ordered method calls; it does not run target DI attributes.
 
+In `ClassDefinition` constructors and configured methods, positional variadic arguments follow their numeric positions after applying runtime overrides. Named trailing arguments keep their order.
+
 Raw-value `set()` continues to replace the shared value while preserving the definition used by `make()`. Setting a new definition replaces that underlying definition and invalidates affected shared results. This example uses only application construction and mutation APIs:
 
 ```php

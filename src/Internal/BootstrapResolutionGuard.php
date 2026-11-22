@@ -71,7 +71,11 @@ final class BootstrapResolutionGuard
         ?AttributePhase $phase = null,
         ?AttributePlan $plan = null,
     ): void {
-        if (!$this->active || ($declared = $target->getAttributes()) === []) {
+        if (!$this->active) {
+            return;
+        }
+        $declared = $target->getAttributes();
+        if ($declared === [] && ($plan === null || $plan->usages === [])) {
             return;
         }
 

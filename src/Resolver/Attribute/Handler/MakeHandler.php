@@ -182,7 +182,7 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
             throw new LogicException(sprintf('Virtual proxy class "%s" must be concrete.', $class));
         }
         if ($typeName !== null
-            && (class_exists($typeName) || interface_exists($typeName))
+            && (class_exists($typeName) || interface_exists($typeName) || class_exists($typeName, false))
             && !is_a($class, $typeName, true)
         ) {
             throw new LogicException(sprintf(

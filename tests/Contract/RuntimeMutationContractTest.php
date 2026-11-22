@@ -59,6 +59,34 @@ test('appending a delegator rebuilds the cached pipeline in registration order',
     expect($container->get('product'))->toBe('base:first:second');
 });
 
+test('redirecting an alias to the same service tracks only its new route for later mutations', function (): void {
+    $calls = 0;
+    $first = static function (string $value) use (&$calls): object {
+        ++$calls;
+        return (object) ['value' => $value . ':first'];
+    };
+    $second = static fn(string $value): object => (object) ['value' => $value . ':second'];
+    $container = (new ContainerBuilder())
+        ->addServices(['first' => $first, 'second' => $second, 'product' => 'base'])
+        ->addAliases(['old.link' => 'first', 'new.link' => 'first', 'route' => 'old.link', 'outer' => 'route'])
+        ->addDelegator('product', 'outer')
+        ->build();
+
+    $original = $container->get('product');
+    $container->alias('route', 'new.link');
+    $container->alias('old.link', 'second');
+
+    expect($container->get('product'))->toBe($original)
+        ->and($calls)->toBe(1);
+
+    $container->alias('new.link', 'second');
+    expect($container->get('product'))->toEqual((object) ['value' => 'base:second'])
+        ->and($calls)->toBe(1);
+
+    $container->set('second', static fn(string $value): object => (object) ['value' => $value . ':updated']);
+    expect($container->get('product'))->toEqual((object) ['value' => 'base:updated']);
+});
+
 test('external takeover continues past dependencies already owned by an earlier container', function (): void {
     $container = (new ContainerBuilder())->build();
     $container->set('first.decorator', new RuntimeLabelDecorator('local-first'));

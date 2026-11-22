@@ -59,7 +59,7 @@ final class ParametersResolver
 
     /** @internal */
     public bool $canCachePlans {
-        get => $this->sealed && $this->plans->canCachePlans;
+        get => $this->sealed;
     }
 
     /** Higher priorities run first; equal priorities preserve insertion order. */
@@ -165,17 +165,20 @@ final class ParametersResolver
         $this->synchronizeAttributeRevision();
         $revision = $this->revision;
         $selected = [];
+        $requiresFreshValidation = false;
         foreach ($targets as $target) {
             // Classification can run application autoloaders. Keep the target
             // selected for this slot even if the caller's reference is rebound.
             $selected[] = $target;
-            $this->prepareTarget($target);
+            $this->prepareTarget($target, $targetRequiresFreshValidation);
+            $requiresFreshValidation = $requiresFreshValidation || $targetRequiresFreshValidation;
         }
 
         return new PreparedParameterPlan(
             $selected,
             $revision,
             $this->planOwner,
+            $requiresFreshValidation,
         );
     }
 
@@ -364,6 +367,7 @@ final class ParametersResolver
         $this->synchronizeAttributeRevision();
 
         return $this->canCachePlans
+            && !$plan->requiresFreshValidation
             && $plan->belongsTo($this->planOwner)
             && $plan->resolverRevision === $this->revision;
     }
@@ -481,16 +485,20 @@ final class ParametersResolver
     {
         $this->synchronizeAttributeRevision();
 
-        if ($this->plans->canCachePlans && $plan->resolverRevision === $this->revision) {
+        if (!$plan->requiresFreshValidation && $plan->resolverRevision === $this->revision) {
             return $plan;
         }
 
         return $this->prepareTargets($plan->targets);
     }
 
-    /** @return list<int> */
-    private function prepareTarget(ParameterTarget $target): array
+    /**
+     * @param-out bool $requiresFreshValidation
+     * @return list<int>
+     */
+    private function prepareTarget(ParameterTarget $target, ?bool &$requiresFreshValidation = null): array
     {
+        $requiresFreshValidation = false;
         $this->synchronizeAttributeRevision();
 
         $cacheable = $this->canCachePlans && $target->canCacheClassification;
@@ -520,7 +528,7 @@ final class ParametersResolver
 
         do {
             $revision = $this->revision;
-            $this->plans->build($target->reflection);
+            $attributePlan = $this->plans->build($target->reflection);
             if ($target->attributeClasses === []) {
                 $queries = [];
                 $resolverSlots = $this->classifyResolverSlots($target);
@@ -540,7 +548,11 @@ final class ParametersResolver
             unset($this->pendingAttributeQueries[$target]);
         }
 
-        if (!$cacheable) {
+        // Preserve invocation preflight when late or mutable metadata could
+        // introduce a user rule, including rules on a later argument.
+        $requiresFreshValidation = ($attributePlan->requiresFreshValidation || $target->reflection::class !== ReflectionParameter::class)
+            && $this->plans->hasCustomRules;
+        if (!$cacheable || $requiresFreshValidation) {
             return $resolverSlots;
         }
 

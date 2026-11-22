@@ -30,6 +30,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      - name: Validate release tag
+        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.4'
+        shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: bash .github/scripts/release-tag.sh "$COMMIT_MESSAGE"
+
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -167,44 +174,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-        run: |
-          set -euo pipefail
-          first_line="${COMMIT_MESSAGE%%$'\n'*}"
-          tag="${first_line#Release }"
-
-          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $tag" >&2
-            exit 1
-          fi
-
-          remote_tag="$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
-          tag_target=''
-          tag_peeled_target=''
-          while IFS=$'\t' read -r target reference; do
-            if [[ "$reference" == "refs/tags/$tag" ]]; then
-              tag_target="$target"
-            elif [[ "$reference" == "refs/tags/$tag^{}" ]]; then
-              tag_peeled_target="$target"
-            fi
-          done <<< "$remote_tag"
-          tag_target="${tag_peeled_target:-$tag_target}"
-          if [[ -n "$tag_target" && "$tag_target" != "$GITHUB_SHA" ]]; then
-            echo "Release tag $tag points to $tag_target, expected tested commit $GITHUB_SHA." >&2
-            exit 1
-          fi
-
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists."
-            exit 0
-          fi
-
-          release_flags=()
-          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
-            release_flags+=(--prerelease)
-          fi
-
-          gh release create "$tag" \
-            "${release_flags[@]}" \
-            --target "$GITHUB_SHA" \
-            --title "$tag" \
-            --generate-notes
+        run: bash .github/scripts/publish-release.sh

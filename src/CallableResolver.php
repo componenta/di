@@ -78,7 +78,7 @@ class CallableResolver implements CallableResolverInterface
             return $callable;
         }
 
-        if (class_exists($callable) || interface_exists($callable)) {
+        if (self::classOrInterfaceExists($callable)) {
             throw InvalidCallableException::forMissingService($callable);
         }
 
@@ -89,8 +89,18 @@ class CallableResolver implements CallableResolverInterface
     {
         [$class, $method] = explode('::', $callable, 2);
 
-        if ($method === '' || (!class_exists($class) && !interface_exists($class))) {
+        if ($method === '') {
             throw InvalidCallableException::forValue($callable);
+        }
+        if (!class_exists($class, false) && !interface_exists($class, false)) {
+            if (!self::classOrInterfaceExists($class)) {
+                throw InvalidCallableException::forValue($callable);
+            }
+            // Discovery can reveal a native static route ahead of the instance service.
+            // Qualified names keep their existing receiver selection.
+            if (!str_contains($method, '::') && is_callable($callable)) {
+                return $callable;
+            }
         }
         if ($this->container->has($class)) {
             $entry = $this->container->get($class);
@@ -140,8 +150,11 @@ class CallableResolver implements CallableResolverInterface
             throw InvalidCallableException::forMethod($objectOrClass, $method);
         }
 
-        if (!class_exists($objectOrClass) && !interface_exists($objectOrClass)) {
+        if (!self::classOrInterfaceExists($objectOrClass)) {
             throw InvalidCallableException::forValue($callable);
+        }
+        if (!str_contains($method, '::') && is_callable($callable)) {
+            return $callable;
         }
         if (!method_exists($objectOrClass, $method)) {
             throw InvalidCallableException::forMethod($objectOrClass, $method);
@@ -151,6 +164,12 @@ class CallableResolver implements CallableResolverInterface
         }
 
         throw InvalidCallableException::forMissingService($objectOrClass);
+    }
+
+    private static function classOrInterfaceExists(string $name): bool
+    {
+        // The interface probe may autoload a class even though it returns false.
+        return class_exists($name) || interface_exists($name) || class_exists($name, false);
     }
 
     /**

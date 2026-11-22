@@ -33,7 +33,7 @@ final class LastSelectionAttribute {}
 final class SelectionTarget
 {
     public function ordered(
-        #[FirstSelectionAttribute, LastSelectionAttribute, MiddleSelectionAttribute]
+        #[FirstSelectionAttribute, LastSelectionAttribute, MiddleSelectionAttribute, FirstSelectionAttribute]
         string $value,
     ): void {}
 
@@ -43,7 +43,7 @@ final class SelectionTarget
     ): void {}
 }
 
-test('capability selection preserves explicit attribute ordering constraints', function (): void {
+test('capability selection applies declaration order to attributes unlocked by a constraint', function (): void {
     $container = container([
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
             new AttributeDefinition(
@@ -72,6 +72,7 @@ test('capability selection preserves explicit attribute ordering constraints', f
         FirstSelectionAttribute::class,
         MiddleSelectionAttribute::class,
         LastSelectionAttribute::class,
+        FirstSelectionAttribute::class,
     ])->and($plan->one(SecondSelectionCapability::class))->toBe($plan->usages[1]);
 });
 

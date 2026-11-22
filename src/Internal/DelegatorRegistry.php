@@ -32,8 +32,11 @@ final class DelegatorRegistry
     private array $callables = [];
     /** @var array<string, int> */
     private array $revisions = [];
-    /** @var array<string, array<string, true>> */
+    /** @var array<array-key, array<string, true>> */
     private array $dependents = [];
+    /** @var array<array-key, int> */
+    private array $dependencyOrders = [];
+    private int $dependencyOrder = 0;
     /** @var array<string, array<string, true>> */
     private array $registeredDependencies = [];
     /** @var array<string, array<string, true>> */
@@ -69,7 +72,7 @@ final class DelegatorRegistry
         foreach ($dependencies as $dependencyId) {
             $this->registeredDependencies[$id][$dependencyId] = true;
             $this->indexedDependencies[$id][$dependencyId] = true;
-            $this->dependents[$dependencyId][$id] = true;
+            $this->linkDependency($dependencyId, $id);
         }
     }
 
@@ -87,10 +90,18 @@ final class DelegatorRegistry
         $this->revisions[$id] = ($this->revisions[$id] ?? 0) + 1;
     }
 
-    /** @return list<string> */
-    public function entryIds(): array
+    /** @param array<array-key, int> $candidates */
+    public function firstDelegatedEntryAmong(array $candidates): ?string
     {
-        return array_map('strval', array_keys($this->raw));
+        $matches = [];
+        foreach ($candidates as $id => $_) {
+            if (isset($this->raw[$id])) {
+                $matches[$id] = true;
+            }
+        }
+        // Keep registration order in diagnostics when several entries conflict.
+        $entry = array_key_first(count($matches) > 1 ? array_intersect_key($this->raw, $matches) : $matches);
+        return $entry === null ? null : (string) $entry;
     }
 
     /** @return list<string> */
@@ -102,6 +113,30 @@ final class DelegatorRegistry
     public function dependsOn(string $id): bool
     {
         return isset($this->dependents[$id]);
+    }
+
+    /** @return non-negative-int */
+    public function dependencyCount(): int
+    {
+        return count($this->dependents);
+    }
+
+    /**
+     * @param array<array-key, int> $candidates
+     * @return list<string>
+     */
+    public function dependenciesAmong(array $candidates): array
+    {
+        $matches = [];
+        foreach ($candidates as $id => $_) {
+            if (isset($this->dependents[$id])) {
+                $matches[$id] = $this->dependencyOrders[$id];
+            }
+        }
+        if (count($matches) > 1) {
+            asort($matches, SORT_NUMERIC);
+        }
+        return array_map('strval', array_keys($matches));
     }
 
     /**
@@ -201,13 +236,19 @@ final class DelegatorRegistry
         foreach (array_diff_key($this->indexedDependencies[$id] ?? [], $dependencies) as $dependency => $_) {
             unset($this->dependents[$dependency][$id]);
             if ($this->dependents[$dependency] === []) {
-                unset($this->dependents[$dependency]);
+                unset($this->dependents[$dependency], $this->dependencyOrders[$dependency]);
             }
         }
         foreach ($dependencies as $dependency => $_) {
-            $this->dependents[$dependency][$id] = true;
+            $this->linkDependency($dependency, $id);
         }
         $this->indexedDependencies[$id] = $dependencies;
+    }
+
+    private function linkDependency(string|int $dependency, string $entry): void
+    {
+        $this->dependencyOrders[$dependency] ??= $this->dependencyOrder++;
+        $this->dependents[$dependency][$entry] = true;
     }
 
     /** @return list<callable> */

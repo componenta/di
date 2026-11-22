@@ -164,7 +164,7 @@ final class CallableExecutor implements CallableExecutorInterface
         $parameters = array_values($reflection->getParameters());
         $plan = $this->parameters->prepare($parameters);
 
-        if ($this->parameters->canCachePlans) {
+        if ($this->parameters->canCachePlans && !$plan->requiresFreshValidation) {
             $this->callablePlans[$key] = $plan;
         }
 

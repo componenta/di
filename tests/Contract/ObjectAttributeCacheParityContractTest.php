@@ -26,7 +26,7 @@ use stdClass;
 use WeakReference;
 
 #[Attribute(Attribute::TARGET_ALL)]
-final class UnusedUncachedMarker {}
+final class CacheControl {}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
@@ -37,7 +37,7 @@ function parityBuilder(bool $uncached): ContainerBuilder
 {
     $builder = new ContainerBuilder();
     if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(UnusedUncachedMarker::class, rules: [new NoOpRule()]));
+        $builder->addAttributeDefinition(new AttributeDefinition(CacheControl::class, rules: [new NoOpRule()]));
     }
     return $builder;
 }
@@ -95,7 +95,7 @@ trait FixtureTrait
     public function traitMethod(): void {}
 }
 
-#[ObserveNativeArgument(self::class, new NativeArgument())]
+#[CacheControl, ObserveNativeArgument(self::class, new NativeArgument())]
 final class FirstFixture extends ParentFixture
 {
     use FixtureTrait {
@@ -115,7 +115,7 @@ final class FirstFixture extends ParentFixture
     }
 }
 
-#[ObserveNativeArgument(self::class, new NativeArgument())]
+#[CacheControl, ObserveNativeArgument(self::class, new NativeArgument())]
 final class SecondFixture extends ParentFixture
 {
     use FixtureTrait;
@@ -234,10 +234,10 @@ abstract class DeferredFixture
     }
 }
 
-#[Lazy]
+#[CacheControl, Lazy]
 final class GhostFixture extends DeferredFixture {}
 
-#[Proxy]
+#[CacheControl, Proxy]
 final class ProxyFixture extends DeferredFixture {}
 
 test('cached and uncached deferred plans release unused runtime closures and payloads', function (bool $uncached, string $class, string $mode): void {

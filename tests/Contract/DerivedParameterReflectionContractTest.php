@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract\DerivedParameterReflection;
 
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\EntryId;
+use Componenta\DI\Container;
+use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
@@ -20,6 +25,16 @@ function declared(#[EntryId('trusted.value')] string $value = 'fallback'): strin
 {
     return $value;
 }
+
+function declaredPair(
+    #[EntryId('trusted.value')] string $value = 'fallback',
+    #[EntryId('next.value')] string $next = 'fallback',
+): string {
+    return $value . ':' . $next;
+}
+
+#[\Attribute(\Attribute::TARGET_PARAMETER)]
+final class BootstrapMarker {}
 
 final class Subject
 {
@@ -116,6 +131,64 @@ test('a retained target with a derived reflector keeps using its current attribu
     $reflection->hideAttributes = true;
     expect($resolver->resolveTargets([$target]))->toBe(['fallback']);
 })->with(['function' => false, 'method' => true]);
+
+test('completed parameter validation retains a consumed attribute hidden by its reflector', function (bool $hide): void {
+    $function = __NAMESPACE__ . '\\declaredPair';
+    $reflection = new DerivedParameter($function, new \stdClass());
+    $reflection->hideAttributes = false;
+    $targets = [$reflection, new ReflectionParameter($function, 1)];
+    /** @var class-string $alias */
+    $alias = __NAMESPACE__ . '\\RevisionMarker_' . bin2hex(random_bytes(6));
+    $container = (new ContainerBuilder())
+        ->addFactory('trusted.value', static function () use ($reflection, $hide): string {
+            $reflection->hideAttributes = $hide;
+            return 'source';
+        })
+        ->addFactory('next.value', static function () use ($alias): string {
+            class_alias(EntryId::class, $alias, autoload: false);
+            return 'next';
+        })
+        ->build();
+    $registry = $container->getAs(AttributeDefinitionRegistry::class, AttributeDefinitionRegistry::class);
+    $registry->definition($alias);
+    $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+
+    if ($hide) {
+        expect(fn() => $resolver->resolve($targets))->toThrow(
+            AttributeCompositionException::class,
+            'changed after parameter resolution completed',
+        );
+        expect($resolver->resolve($targets))->toBe(['fallback', 'next']);
+    } else {
+        expect($resolver->resolve($targets))->toBe(['source', 'next']);
+    }
+})->with(['stable metadata control' => false, 'consumed declaration disappears' => true]);
+
+test('bootstrap validates a used parameter declaration that its reflector later hides', function (bool $hide): void {
+    $reflection = new DerivedParameter(__NAMESPACE__ . '\\declared', new \stdClass());
+    $reflection->hideAttributes = false;
+    $selected = null;
+    $builder = (new ContainerBuilder())
+        ->addFactory('trusted.value', static function () use ($reflection, $hide): string {
+            $reflection->hideAttributes = $hide;
+            return 'source';
+        })
+        ->addAttributeDefinition(static function (Container $container) use ($reflection, &$selected): AttributeDefinition {
+            $resolver = $container->getAs(ParametersResolver::class, ParametersResolver::class);
+            $selected = $resolver->resolve([$reflection]);
+            return new AttributeDefinition(BootstrapMarker::class);
+        });
+
+    if ($hide) {
+        expect(fn() => $builder->build())->toThrow(
+            InvalidConfigurationException::class,
+            'before its required attribute extensions were registered',
+        );
+    } else {
+        expect($builder->build()->get('trusted.value'))->toBe('source');
+    }
+    expect($selected)->toBe(['source']);
+})->with(['stable metadata control' => false, 'used declaration disappears' => true]);
 
 test('parameter metadata releases derived reflectors and their declaring function state', function (bool $method, bool $resolve): void {
     $container = (new ContainerBuilder())->addService('trusted.value', 'source')->build();

@@ -72,11 +72,11 @@ final class DefaultToken
 /** @return array<string,mixed> */
 function signature(
     #[CacheControl] Dependency $dependency,
-    #[ConfigValue('label')] string $source,
-    int $explicit,
-    ?Unbound $nullable = null,
-    object $default = new DefaultToken(),
-    string ...$tail,
+    #[CacheControl, ConfigValue('label')] string $source,
+    #[CacheControl] int $explicit,
+    #[CacheControl] ?Unbound $nullable = null,
+    #[CacheControl] object $default = new DefaultToken(),
+    #[CacheControl] string ...$tail,
 ): array {
     return [
         'dependency' => $dependency->value,
@@ -93,19 +93,19 @@ class MethodOwner
     public function __construct(public readonly string $id) {}
 
     /** @return array{string,string,string,array<array-key,int>} */
-    public function read(Dependency $dependency, string $label = 'native', int ...$values): array
+    public function read(#[CacheControl] Dependency $dependency, string $label = 'native', int ...$values): array
     {
         return [$this->id, $dependency->value, $label, $values];
     }
 
     /** @return array{string,string,string,array<array-key,int>} */
-    public function __invoke(Dependency $dependency, string $label = 'invoke', int ...$values): array
+    public function __invoke(#[CacheControl] Dependency $dependency, string $label = 'invoke', int ...$values): array
     {
         return $this->read($dependency, $label, ...$values);
     }
 
     /** @return array{string,int} */
-    public static function staticRead(Dependency $dependency, int $number = 9): array
+    public static function staticRead(#[CacheControl] Dependency $dependency, int $number = 9): array
     {
         return [$dependency->value, $number];
     }
@@ -116,7 +116,7 @@ final class InheritedOwner extends MethodOwner {}
 final class OverrideOwner extends MethodOwner
 {
     /** @return array{string,string,string,array<array-key,int>} */
-    public function read(Dependency $dependency, string $renamed = 'override', int ...$values): array
+    public function read(#[CacheControl] Dependency $dependency, string $renamed = 'override', int ...$values): array
     {
         return parent::read($dependency, $renamed, ...$values);
     }
@@ -127,7 +127,7 @@ class TypeAncestor {}
 class TypeScope extends TypeAncestor
 {
     /** @return array{class-string,class-string} */
-    public function contextual(self $value, parent $ancestor): array
+    public function contextual(#[CacheControl] self $value, parent $ancestor): array
     {
         return [$value::class, $ancestor::class];
     }
@@ -191,7 +191,7 @@ final class MutableResolution implements ParameterResolverInterface
     }
 }
 
-function customValue(string $custom = 'default'): string
+function customValue(#[CacheControl] string $custom = 'default'): string
 {
     return $custom;
 }

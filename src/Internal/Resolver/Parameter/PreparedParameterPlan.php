@@ -9,8 +9,6 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 /** Immutable prepared execution structure for one ordered parameter list. @internal */
 final readonly class PreparedParameterPlan
 {
-    public bool $empty;
-
     /**
      * @param list<ParameterTarget> $targets
      */
@@ -18,9 +16,8 @@ final readonly class PreparedParameterPlan
         public array $targets,
         public int $resolverRevision,
         private object $owner,
-    ) {
-        $this->empty = $targets === [];
-    }
+        public bool $requiresFreshValidation,
+    ) {}
 
     public function belongsTo(object $owner): bool
     {

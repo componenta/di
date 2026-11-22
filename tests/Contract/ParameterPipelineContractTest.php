@@ -138,7 +138,7 @@ test('prepared parameter plans keep their owner private and are accepted only by
     $reflection = new ReflectionParameter(__NAMESPACE__ . '\\pipelineAuditCallable', 0);
     $issued = $pipeline->prepare([$reflection]);
     $foreign = $other->prepare([$reflection]);
-    $unissued = new PreparedParameterPlan($issued->targets, $issued->resolverRevision, new stdClass());
+    $unissued = new PreparedParameterPlan($issued->targets, $issued->resolverRevision, new stdClass(), false);
 
     expect(get_object_vars($issued))->not->toHaveKey('owner')
         ->and($pipeline->isCurrentPlan($issued))->toBeTrue()

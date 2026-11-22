@@ -38,7 +38,8 @@ final class CompletedAttributeGuard
         AttributePlan $plan,
         ?AttributePhase $phase = null,
     ): void {
-        if ($target->getAttributes() === []) {
+        // A derived reflector can omit a declaration after the plan has been consumed.
+        if ($target->getAttributes() === [] && $plan->usages === []) {
             return;
         }
         $this->completed[] = ['target' => $target, 'plan' => $plan, 'phase' => $phase];

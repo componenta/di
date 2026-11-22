@@ -207,7 +207,7 @@ final class ObjectPipeline
             $name = $class instanceof ReflectionClass
                 ? $class->getName()
                 : ltrim($class, '\\');
-            if ($cacheable && $this->plans->canCachePlans && isset($this->metadata[$name])) {
+            if ($cacheable && isset($this->metadata[$name])) {
                 return $this->metadata[$name];
             }
 
@@ -217,7 +217,7 @@ final class ObjectPipeline
                 : new ReflectionClass($class);
             $name = $reflection->getName();
             $classPlan = $this->plans->build($reflection);
-            $awaitsDiscovery = $this->plans->awaitsDiscovery($classPlan);
+            $requiresFreshValidation = $classPlan->requiresFreshValidation;
             $constructor = $reflection->getConstructor();
             $constructorTargets = $constructor === null
                 ? []
@@ -225,7 +225,7 @@ final class ObjectPipeline
 
             foreach ($constructorTargets as $target) {
                 $plan = $this->plans->build($target->reflection);
-                $awaitsDiscovery = $awaitsDiscovery || $this->plans->awaitsDiscovery($plan);
+                $requiresFreshValidation = $requiresFreshValidation || $plan->requiresFreshValidation;
             }
 
             $attributePlan = $this->attributes->executionPlan($reflection);
@@ -242,7 +242,7 @@ final class ObjectPipeline
                 $constructorTargets,
                 $attributePlan['hasHandlers'],
             );
-            if ($cacheable && !$awaitsDiscovery && !$attributePlan['awaitsDiscovery'] && $this->plans->canCachePlans) {
+            if ($cacheable && !$requiresFreshValidation && !$attributePlan['requiresFreshValidation']) {
                 $this->metadata[$name] = $metadata;
             }
             return $metadata;
@@ -264,7 +264,7 @@ final class ObjectPipeline
         }
 
         $plan = $parameters->prepareTargets($metadata->constructorTargets);
-        if ($cacheable && $parameters->canCachePlans) {
+        if ($cacheable && $parameters->canCachePlans && !$plan->requiresFreshValidation) {
             $this->constructorPlans[$name] = $plan;
         }
 

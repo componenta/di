@@ -33,6 +33,9 @@ final class AliasResolver
     /** @var array<string, string> */
     private array $map;
 
+    /** @var array<array-key, array<array-key, int>> Direct sources and their declaration order. */
+    private array $incoming = [];
+
     /** @param array<string, string> $map Alias to target map. */
     public function __construct(array $map = [])
     {
@@ -42,12 +45,14 @@ final class AliasResolver
             throw new InvalidConfigurationException(self::ATTACHED_WRITE_ERROR);
         }
         $routes = $map === [] ? [] : (new AliasGraphBuilder($map))->aliases;
+        $incoming = self::indexIncoming($routes);
         if (isset($owners[$resolver])) {
             throw new InvalidConfigurationException(self::ATTACHED_WRITE_ERROR);
         }
 
         ++$this->revision;
         $this->map = $routes;
+        $this->incoming = $incoming;
         $this->resolved = [];
     }
 
@@ -56,6 +61,7 @@ final class AliasResolver
     {
         $resolver = new self();
         $resolver->map = $graph->aliases;
+        $resolver->incoming = self::indexIncoming($graph->aliases);
         return $resolver;
     }
 
@@ -109,28 +115,31 @@ final class AliasResolver
         if (isset($owners[$resolver])) {
             throw new InvalidConfigurationException(self::ATTACHED_WRITE_ERROR);
         }
-        self::assertNonEmpty($alias, $target);
-
-        if ($alias === $target) {
-            throw InvalidConfigurationException::forSelfReferencingAlias($alias);
-        }
-
         do {
             $revision = $this->revision;
-            $this->assertNoCycle($alias, $target);
+            $this->validateTarget($alias, $target);
+            $affected = $this->affectedIds($alias);
             // A cyclic destructor can attach this resolver during validation.
             if (isset($owners[$resolver])) {
                 throw new InvalidConfigurationException(self::ATTACHED_WRITE_ERROR);
             }
         } while ($revision !== $this->revision);
 
-        $this->writeRoute($alias, $target);
+        $this->writeRoute($alias, $target, $affected);
         return $this;
     }
 
-    /** Publishes a validated route if the live graph still has the validated revision. */
-    public function publishValidated(string $alias, string $target, int $revision, object $authority): bool
-    {
+    /**
+     * Publishes a validated route if the live graph still has the validated revision.
+     * @param array<array-key, int> $affected
+     */
+    public function publishValidated(
+        string $alias,
+        string $target,
+        int $revision,
+        object $authority,
+        array $affected,
+    ): bool {
         $owners = self::$owners;
         $resolver = $this;
         if (($owners[$resolver] ?? null) !== $authority) {
@@ -139,7 +148,7 @@ final class AliasResolver
         if ($this->revision !== $revision) {
             return false;
         }
-        $this->writeRoute($alias, $target);
+        $this->writeRoute($alias, $target, $affected);
         return true;
     }
 
@@ -166,18 +175,29 @@ final class AliasResolver
         return $revision;
     }
 
-    /** @return array<string, string> Previous canonical ids for aliases whose target changes. */
-    public function changedTargets(self $candidate): array
+    /**
+     * Returns the ID and its incoming alias family in declaration order.
+     * @param positive-int|null $limit
+     * @return ($limit is null ? array<array-key, int> : array<array-key, int>|null)
+     */
+    public function affectedIds(string $id, ?int $limit = null): ?array
     {
-        $changed = [];
-        foreach ($this->map + $candidate->map as $alias => $_) {
-            $alias = (string) $alias;
-            $previous = $this->resolve($alias);
-            if ($candidate->resolve($alias) !== $previous) {
-                $changed[$alias] = $previous;
+        $target = $this->map[$id] ?? null;
+        $affected = [$id => $target === null ? count($this->map) : $this->incoming[$target][$id]];
+        $queue = [$id];
+        for ($index = 0; isset($queue[$index]); ++$index) {
+            foreach ($this->incoming[$queue[$index]] ?? [] as $source => $order) {
+                if ($limit !== null && count($affected) === $limit) {
+                    return null;
+                }
+                $affected[$source] = $order;
+                $queue[] = (string) $source;
             }
         }
-        return $changed;
+        if (count($affected) > 1) {
+            asort($affected, SORT_NUMERIC);
+        }
+        return $affected;
     }
 
     private static function assertNonEmpty(string $alias, string $target): void
@@ -191,21 +211,50 @@ final class AliasResolver
         }
     }
 
-    private function writeRoute(string $alias, string $target): void
+    /**
+     * @param array<string, string> $routes
+     * @return array<array-key, array<array-key, int>>
+     */
+    private static function indexIncoming(array $routes): array
+    {
+        $incoming = [];
+        $order = 0;
+        foreach ($routes as $alias => $target) {
+            $incoming[$target][$alias] = $order++;
+        }
+        return $incoming;
+    }
+
+    /** @param array<array-key, int> $affected */
+    private function writeRoute(string $alias, string $target, array $affected): void
     {
         ++$this->revision;
+        $previous = $this->map[$alias] ?? null;
+        if ($previous !== null && $previous !== $target) {
+            unset($this->incoming[$previous][$alias]);
+            if ($this->incoming[$previous] === []) {
+                unset($this->incoming[$previous]);
+            }
+        }
         $this->map[$alias] = $target;
-        $this->resolved = [];
+        $this->incoming[$target][$alias] = $affected[$alias];
+        foreach ($affected as $id => $_) {
+            unset($this->resolved[$id]);
+        }
     }
 
     /**
-     * Ensures that inserting `$alias -> $target` into the current map does not
-     * create a cycle.
+     * Returns the prospective canonical destination of an alias edge.
      *
      * @throws CircularDependencyException If a cycle would be created.
      */
-    private function assertNoCycle(string $alias, string $target): void
+    public function validateTarget(string $alias, string $target): string
     {
+        self::assertNonEmpty($alias, $target);
+        if ($alias === $target) {
+            throw InvalidConfigurationException::forSelfReferencingAlias($alias);
+        }
+
         $path = [$alias, $target];
         $visited = [$alias => true, $target => true];
         $current = $target;
@@ -221,5 +270,6 @@ final class AliasResolver
             $visited[$next] = true;
             $current = $next;
         }
+        return $current;
     }
 }

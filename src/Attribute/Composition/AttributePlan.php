@@ -14,6 +14,8 @@ final readonly class AttributePlan
     public function __construct(
         public Reflector $target,
         public array $usages,
+        /** @internal Some declarations or user rules must be inspected again. */
+        public bool $requiresFreshValidation = false,
     ) {}
 
     /**

@@ -12,10 +12,14 @@ use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\Rule\ProxyCompositionRule;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use ReflectionClass;
+use ReflectionFunction;
 
 /** Mutable composition-time registry, sealed before the container becomes usable. */
 final class AttributeDefinitionRegistry
 {
+    private const int MINIMUM_SNAPSHOT_SIZE = 64;
+    private const int DECLARATIONS_PER_PENDING_NAME = 4;
+
     /** @var array<class-string, AttributeDefinition> */
     private array $definitions = [];
 
@@ -28,10 +32,13 @@ final class AttributeDefinitionRegistry
     private bool $sealed = false;
     private int $generation = 0;
     private int $discoveryMisses = 0;
+    private int $snapshotMinimum = self::MINIMUM_SNAPSHOT_SIZE;
+    /** @var array{int, list<string>, list<string>}|null */
+    private ?array $checkedDeclarations = null;
     /** @internal */
     public private(set) bool $targetedDiscovery = false;
-    /** User rules may evaluate native arguments or read mutable state. @internal */
-    public private(set) bool $canCachePlans = true;
+    /** @internal An undiscovered declaration may introduce a user rule. */
+    public private(set) bool $hasCustomRules = false;
 
     public function __construct()
     {
@@ -83,6 +90,17 @@ final class AttributeDefinitionRegistry
     /** @internal Observes completed declarations without running autoloaders. */
     public function refreshLoaded(): int
     {
+        if ($this->unavailableAttributes === []) {
+            $this->checkedDeclarations = null;
+            return $this->generation;
+        }
+
+        $pending = count($this->unavailableAttributes);
+        $declarations = $pending >= $this->snapshotMinimum ? $this->declarationSnapshot($pending) : null;
+        if ($declarations !== null && $declarations === $this->checkedDeclarations) {
+            return $this->generation;
+        }
+
         foreach ($this->unavailableAttributes as $attribute => $_) {
             // A later loader can declare a name already checked in a poll.
             if (class_exists($attribute, false) || interface_exists($attribute, false)) {
@@ -90,13 +108,44 @@ final class AttributeDefinitionRegistry
                 ++$this->generation;
             }
         }
+        $this->checkedDeclarations = $this->unavailableAttributes === [] ? null : $declarations;
         return $this->generation;
+    }
+
+    /** @return array{int, list<string>, list<string>}|null */
+    private function declarationSnapshot(int $pending): ?array
+    {
+        // PHP lists linked classes, interfaces and their aliases without autoload.
+        // A user replacement for a disabled builtin cannot supply that guarantee.
+        if ($this->checkedDeclarations === null
+            && (!\function_exists('get_declared_classes')
+                || !\function_exists('get_declared_interfaces')
+                || !new ReflectionFunction('get_declared_classes')->isInternal()
+                || !new ReflectionFunction('get_declared_interfaces')->isInternal())
+        ) {
+            $this->snapshotMinimum = PHP_INT_MAX;
+            return null;
+        }
+
+        $misses = $this->discoveryMisses;
+        $classes = \get_declared_classes();
+        $interfaces = \get_declared_interfaces();
+        $minimum = intdiv(
+            count($classes) + count($interfaces) + self::DECLARATIONS_PER_PENDING_NAME - 1,
+            self::DECLARATIONS_PER_PENDING_NAME,
+        );
+        if ($pending < $minimum) {
+            // Prefer individual probes if enumerating the symbol table is too expensive.
+            $this->snapshotMinimum = max($this->snapshotMinimum, $minimum);
+            return null;
+        }
+        return [$misses, $classes, $interfaces];
     }
 
     /** @internal */
     public function awaitsDiscovery(string $attribute): bool
     {
-        return $this->targetedDiscovery && isset($this->unavailableAttributes[$attribute]);
+        return ($this->targetedDiscovery || $this->hasCustomRules) && isset($this->unavailableAttributes[$attribute]);
     }
 
     /** @param class-string $attribute */
@@ -105,6 +154,12 @@ final class AttributeDefinitionRegistry
         if (!isset($this->unavailableAttributes[$attribute])) {
             $this->unavailableAttributes[$attribute] = true;
             ++$this->discoveryMisses;
+            $offset = str_starts_with($attribute, '\\') ? 1 : 0;
+            if (($attribute[$offset] ?? "\0") === "\0") {
+                // PHP omits empty and NUL-prefixed alias keys from its declaration lists.
+                $this->snapshotMinimum = PHP_INT_MAX;
+                $this->checkedDeclarations = null;
+            }
         }
     }
 
@@ -134,7 +189,8 @@ final class AttributeDefinitionRegistry
         $this->definitions[$attribute] = $definition;
         foreach ($definition->rules as $rule) {
             if (!$rule instanceof ProxyCompositionRule) {
-                $this->canCachePlans = false;
+                $this->hasCustomRules = true;
+                break;
             }
         }
         ++$this->generation;
@@ -179,6 +235,9 @@ final class AttributeDefinitionRegistry
             if (isset($this->unavailableAttributes[$attributeClass])) {
                 unset($this->unavailableAttributes[$attributeClass]);
                 ++$this->generation;
+                if ($this->unavailableAttributes === []) {
+                    $this->checkedDeclarations = null;
+                }
             }
         }
         /** @var array<class-string, AttributeDefinition> $matches */

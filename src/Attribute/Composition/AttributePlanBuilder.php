@@ -18,8 +18,8 @@ use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
+use SplMinHeap;
 use Throwable;
-use WeakMap;
 
 use function Componenta\DI\Internal\is_closure_reflector;
 
@@ -30,8 +30,6 @@ final class AttributePlanBuilder
     private array $namedPlans = [];
     /** @var array<class-string,int> */
     private array $attributeTargetFlags = [];
-    /** @var WeakMap<AttributePlan, true>|null */
-    private ?WeakMap $incompletePlans = null;
     private int $registryRevision = -1;
 
     public function __construct(private readonly AttributeDefinitionRegistry $registry) {}
@@ -47,8 +45,8 @@ final class AttributePlanBuilder
     }
 
     /** @internal */
-    public bool $canCachePlans {
-        get => $this->registry->canCachePlans;
+    public bool $hasCustomRules {
+        get => $this->registry->hasCustomRules;
     }
 
     /**
@@ -83,12 +81,6 @@ final class AttributePlanBuilder
         return $consumed === [];
     }
 
-    /** @internal */
-    public function awaitsDiscovery(AttributePlan $plan): bool
-    {
-        return isset($this->incompletePlans[$plan]);
-    }
-
     /** @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
     public function build(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
@@ -97,12 +89,13 @@ final class AttributePlanBuilder
             $this->synchronizeRegistryRevision();
             $revision = $this->registryRevision;
 
-            $key = $this->canCachePlans ? self::cacheKey($target) : null;
+            $key = self::cacheKey($target);
             if ($key !== null && isset($this->namedPlans[$key])) {
                 return $this->namedPlans[$key];
             }
 
             $awaitsDiscovery = false;
+            $validatedUserRules = false;
             $attributes = $target->getAttributes();
             $usages = $attributes === [] ? [] : $this->discoverUsages($target, $attributes, awaitsDiscovery: $awaitsDiscovery);
             unset($attributes);
@@ -131,16 +124,10 @@ final class AttributePlanBuilder
             break;
         }
 
-        $plan = new AttributePlan($target, $this->ordered($target, $usages));
-        if ($awaitsDiscovery) {
-            $pending = $this->incompletePlans ??= new WeakMap();
-            $pending[$plan] = true;
-            return $plan;
-        }
-        if ($key === null) {
-            // User rules require fresh validation. ReflectionObject retains its
-            // source instance, and closure parameter reflectors retain captured
-            // state; neither target may be retained in a named shared plan.
+        $plan = new AttributePlan($target, $this->ordered($target, $usages), $awaitsDiscovery || $validatedUserRules);
+        if ($key === null || $plan->requiresFreshValidation) {
+            // User rules can read mutable state. ReflectionObject and closure
+            // targets must not be retained by a named shared plan.
             return $plan;
         }
 
@@ -557,35 +544,30 @@ final class AttributePlanBuilder
             }
         }
 
-        /** @var array<int, true> $remaining */
-        $remaining = array_fill_keys(array_keys($usages), true);
+        /** @var SplMinHeap<array{int, int}> $ready */
+        $ready = new SplMinHeap();
+        foreach ($indegree as $index => $incoming) {
+            if ($incoming === 0) {
+                $ready->insert([$usages[$index]->declarationOrder, $index]);
+            }
+        }
+
         $ordered = [];
-
-        while ($remaining !== []) {
-            $next = null;
-            foreach (array_keys($remaining) as $candidate) {
-                if ($indegree[$candidate] !== 0) {
-                    continue;
-                }
-                if ($next === null
-                    || $usages[$candidate]->declarationOrder < $usages[$next]->declarationOrder
-                ) {
-                    $next = $candidate;
-                }
-            }
-
-            if ($next === null) {
-                throw new AttributeCompositionException(sprintf(
-                    'Attribute ordering for %s contains a cycle.',
-                    self::targetName($target),
-                ));
-            }
-
+        while (!$ready->isEmpty()) {
+            [, $next] = $ready->extract();
             $ordered[] = $usages[$next];
-            unset($remaining[$next]);
-            foreach (array_keys($edges[$next] ?? []) as $to) {
-                --$indegree[$to];
+            foreach ($edges[$next] ?? [] as $to => $_) {
+                if (--$indegree[$to] === 0) {
+                    $ready->insert([$usages[$to]->declarationOrder, $to]);
+                }
             }
+        }
+
+        if (count($ordered) !== count($usages)) {
+            throw new AttributeCompositionException(sprintf(
+                'Attribute ordering for %s contains a cycle.',
+                self::targetName($target),
+            ));
         }
 
         return $ordered;
