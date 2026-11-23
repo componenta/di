@@ -9,7 +9,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-test('release publication checks the remote tag and distinguishes drafts from published releases', function (
+test('release publication validates the tested tag and published release state', function (
     string $scenario,
     bool $prerelease,
     bool $published,
@@ -28,6 +28,7 @@ test('release publication checks the remote tag and distinguishes drafts from pu
     $arguments = $directory . '/release-arguments';
     $tag = $prerelease ? 'v6.0.0.RC1' : 'v6.0.0';
     $existingDraft = str_starts_with($scenario, 'draft-present-');
+    $wrongPrerelease = str_ends_with($scenario, '-wrong-prerelease');
     $filesystem = new Filesystem();
     $filesystem->mkdir([$checkout, $bin]);
     $gitEnvironment = ['GIT_CONFIG_NOSYSTEM' => '1', 'GIT_CONFIG_GLOBAL' => '/dev/null'];
@@ -51,6 +52,10 @@ test('release publication checks the remote tag and distinguishes drafts from pu
         if ($existingDraft) {
             $filesystem->dumpFile($release, $tested);
             $filesystem->dumpFile($draft, '');
+        }
+        if ($scenario === 'existing-wrong-prerelease') {
+            $runGit('--git-dir', $bare, 'tag', $tag, $tested);
+            $filesystem->dumpFile($release, $tested);
         }
         if ($scenario === 'draft-present-with-tag') {
             $runGit('--git-dir', $bare, 'tag', $tag, $tested);
@@ -85,15 +90,15 @@ test('release publication checks the remote tag and distinguishes drafts from pu
                 "$REAL_GIT" --git-dir "$ORIGIN" tag --force "$TAG" "$OTHER_COMMIT"
               fi
               [[ -f "$RELEASE_RESULT" ]]
-              if [[ "$#" != 3 ]]; then
-                [[ "$#" == 7 && "$4" == --json && "$5" == isDraft && "$6" == --jq && "$7" == .isDraft ]]
-                if [[ -f "$RELEASE_DRAFT" ]]; then
-                  printf 'true\n'
-                else
-                  printf 'false\n'
-                fi
-              fi
-              exit 0
+              draft=false
+              [[ ! -f "$RELEASE_DRAFT" ]] || draft=true
+              [[ "$#" == 7 && "$4" == --json && "$6" == --jq ]]
+              case "$5" in
+                isDraft) printf '%s\n' "$draft" ;;
+                isDraft,isPrerelease) printf '%s %s\n' "$draft" "$RELEASE_PRERELEASE" ;;
+                *) exit 1 ;;
+              esac
+              exit
             fi
             [[ "$2" == create ]]
             printf '%s\n' "$@" > "$RELEASE_ARGUMENTS"
@@ -102,7 +107,7 @@ test('release publication checks the remote tag and distinguishes drafts from pu
               touch "$RELEASE_DRAFT"
               exit 1
             fi
-            [[ "$SCENARIO" != concurrent-release ]]
+            [[ "$SCENARIO" != concurrent-release && "$SCENARIO" != concurrent-wrong-prerelease ]]
             BASH);
         $filesystem->chmod([$bin . '/git', $bin . '/gh'], 0700);
 
@@ -118,6 +123,7 @@ test('release publication checks the remote tag and distinguishes drafts from pu
             'RELEASE_RESULT' => $release,
             'RELEASE_DRAFT' => $draft,
             'RELEASE_ARGUMENTS' => $arguments,
+            'RELEASE_PRERELEASE' => $prerelease !== $wrongPrerelease ? 'true' : 'false',
         ];
         $publish = ['/bin/bash', dirname(__DIR__, 2) . '/.github/scripts/publish-release.sh'];
         $process = new Process($publish, $checkout, $environment);
@@ -144,6 +150,13 @@ test('release publication checks the remote tag and distinguishes drafts from pu
             $ref = "refs/tags/$tag";
             expect($runGit('--git-dir', $bare, 'for-each-ref', '--format=%(objectname)', $ref))
                 ->toBe($scenario === 'draft-present-no-tag' ? '' : $tested);
+        } elseif ($wrongPrerelease) {
+            $expected = $prerelease ? 'true' : 'false';
+            $actual = $prerelease ? 'false' : 'true';
+            expect($process->getExitCode())->toBe(1)
+                ->and($process->getErrorOutput())->toContain("has prerelease status $actual, expected $expected")
+                ->and($process->getOutput())->not->toContain('already exists')
+                ->and(file_exists($arguments))->toBe($scenario === 'concurrent-wrong-prerelease');
         } else {
             expect($process->getExitCode())->toBe(1)
                 ->and($process->getErrorOutput())->toContain('expected tested commit')
@@ -164,6 +177,11 @@ test('release publication checks the remote tag and distinguishes drafts from pu
     'matching concurrent annotated tag' => ['concurrent-annotated', true, true],
     'tag changed during release lookup' => ['changed-before-create', false, false],
     'concurrent successful publish' => ['concurrent-release', false, true],
+    'concurrent successful prerelease' => ['concurrent-release', true, true],
+    'existing stable tag marked prerelease' => ['existing-wrong-prerelease', false, false],
+    'existing prerelease tag marked stable' => ['existing-wrong-prerelease', true, false],
+    'concurrent stable tag marked prerelease' => ['concurrent-wrong-prerelease', false, false],
+    'concurrent prerelease tag marked stable' => ['concurrent-wrong-prerelease', true, false],
     'tag creation failure' => ['push-failure', false, false],
     'existing draft with no tag' => ['draft-present-no-tag', false, false],
     'existing draft with a tested tag' => ['draft-present-with-tag', false, false],

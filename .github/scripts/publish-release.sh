@@ -33,14 +33,17 @@ verify_remote_tag() {
   require_tested_target "$target"
 }
 
-release_draft_status() {
-  gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null
+release_status() {
+  gh release view "$tag" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | join(" ")' 2>/dev/null
 }
 
 require_published_release() {
   case "$1" in
-    false) return 0 ;;
-    true) printf 'Release %s is still a draft.\n' "$tag" >&2 ;;
+    "false $prerelease") return 0 ;;
+    'true '*) printf 'Release %s is still a draft.\n' "$tag" >&2 ;;
+    'false true'|'false false')
+      printf 'Release %s has prerelease status %s, expected %s.\n' "$tag" "${1#false }" "$prerelease" >&2
+      ;;
     *) printf 'Cannot verify publication status for release %s.\n' "$tag" >&2 ;;
   esac
   return 1
@@ -52,8 +55,8 @@ if [[ -n "$tag_target" ]]; then
 fi
 
 existing_release=false
-if draft_status="$(release_draft_status)"; then
-  require_published_release "$draft_status"
+if status="$(release_status)"; then
+  require_published_release "$status"
   existing_release=true
 fi
 
@@ -82,8 +85,8 @@ if ! gh release create "$tag" \
   --generate-notes
 then
   # A parallel publish of the same tag can complete after the initial lookup.
-  draft_status="$(release_draft_status)"
-  require_published_release "$draft_status"
+  status="$(release_status)"
+  require_published_release "$status"
   printf 'Release %s already exists.\n' "$tag"
 fi
 verify_remote_tag

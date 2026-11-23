@@ -335,7 +335,7 @@ jobs:
           if-no-files-found: error
 
   benchmark:
-    name: v4.0.10 vs v5 benchmark
+    name: v4.0.10 vs selected ref benchmark
     if: github.event_name == 'workflow_dispatch'
     needs:
       - check
@@ -344,7 +344,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout v5
+      - name: Checkout candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Checkout config v3 workspace
@@ -405,7 +405,7 @@ jobs:
           composer config repositories.componenta-reflection
           '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.1"}}}'
 
-      - name: Install v5 dependencies
+      - name: Install candidate dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Install v4.0.10 dependencies
@@ -413,41 +413,45 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Compare runtime and explicit factory paths
+        shell: bash
         env:
           DI_BENCH_ITERATIONS: '100000'
           DI_BUILD_ITERATIONS: '5000'
         run: |
+          candidate_commit="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          candidate_label="$GITHUB_REF_NAME ($candidate_commit)"
+
           echo '=== v4.0.10 runtime ==='
           COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/.benchmark/v4/vendor/autoload.php" \
           COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" \
           php benchmarks/RuntimeBench.php | tee /tmp/runtime-v4.txt
 
-          echo '=== v5 runtime ==='
+          printf '=== %s runtime ===\n' "$candidate_label"
           COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php" \
           COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" \
-          php benchmarks/RuntimeBench.php | tee /tmp/runtime-v5.txt
+          php benchmarks/RuntimeBench.php | tee /tmp/runtime-candidate.txt
 
           echo '=== v4.0.10 explicit factories vs reflection ==='
           COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/.benchmark/v4/vendor/autoload.php" \
           COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/.benchmark/v4/src" \
           php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v4.txt
 
-          echo '=== v5 explicit factories vs reflection ==='
+          printf '=== %s explicit factories vs reflection ===\n' "$candidate_label"
           COMPONENTA_DI_BENCH_AUTOLOAD="$GITHUB_WORKSPACE/vendor/autoload.php" \
           COMPONENTA_DI_BENCH_SOURCE="$GITHUB_WORKSPACE/src" \
-          php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-v5.txt
+          php benchmarks/GeneratedVsReflectionBench.php | tee /tmp/generated-candidate.txt
 
           {
-            echo '## v4.0.10 vs v5 benchmark'
+            printf '## v4.0.10 vs %s benchmark\n' "$candidate_label"
             echo
             echo '### v4.0.10 runtime'
             echo '```text'
             cat /tmp/runtime-v4.txt
             echo '```'
             echo
-            echo '### v5 runtime'
+            printf '### %s runtime\n' "$candidate_label"
             echo '```text'
-            cat /tmp/runtime-v5.txt
+            cat /tmp/runtime-candidate.txt
             echo '```'
             echo
             echo '### v4.0.10 explicit factories vs reflection'
@@ -455,8 +459,8 @@ jobs:
             cat /tmp/generated-v4.txt
             echo '```'
             echo
-            echo '### v5 explicit factories vs reflection'
+            printf '### %s explicit factories vs reflection\n' "$candidate_label"
             echo '```text'
-            cat /tmp/generated-v5.txt
+            cat /tmp/generated-candidate.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
