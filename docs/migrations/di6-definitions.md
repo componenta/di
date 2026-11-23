@@ -306,11 +306,13 @@ Service IDs accept arbitrary bindings, including class names bound to factories 
 
 When `alias()` turns a canonical ID into an alias, it releases the former definition and base value after publishing the route and invalidating the caches. Synchronous destructor failures are reported through `MutationRetirementException`. An active resolution can return its previously selected result and checks the binding revision before writing to the cache.
 
-An external provider may report changed ownership or a replaced return value after publishing the change. The notification refreshes cached delegator chains that depend on those IDs, including transitive dependents. Provider order determines the first owner, and warmed entries outside the affected dependencies keep their identity. Register `$provider` through `addContainer()` before sending notifications.
+When a registered external provider changes ownership or the value it returns for an ID, publish the change and call `notifyExternalEntriesChanged()` with that provider and the affected IDs. This also applies when registering another container changes which IDs the earlier provider supplies. The notification refreshes the cached delegator chains that depend on those IDs, including transitive dependents. Provider order determines the first owner, and warmed entries outside the affected dependencies keep their identity.
 
 ```php
 $container->notifyExternalEntriesChanged($provider, 'reports.decorator');
 ```
+
+`addContainer()` can call the candidate's `has()` during inspection before the candidate is visible to lookups. When the candidate derives ownership from other providers, register those dependencies first so availability stays current during inspection.
 
 `ContainerFactory::create()` supports the existing global attribute discovery. Use `createWithTargetedAttributeDiscovery($config, $dependencies)` to limit active autoloading to attributes declared on the current target. This mode retries missing declarations on the next related lookup and observes declarations loaded between resolution steps. If loading an unrelated name declares a required attribute, load that module explicitly before consuming the dependent declaration.
 

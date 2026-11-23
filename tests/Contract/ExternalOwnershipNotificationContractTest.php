@@ -125,3 +125,33 @@ test('a suspended delegator cannot publish a result from before an external noti
     expect($fiber->getReturn())->toEqual(new Product('old'))
         ->and($di->get('product'))->toEqual(new Product('new'));
 });
+
+test('a provider can report an indirect ownership change after another provider is published', function (bool $ownsWithFeature): void {
+    $di = (new ContainerBuilder())
+        ->addServices(['product' => new Product('base'), 'unrelated' => new Product('other'), 'owner' => decoration('local')])
+        ->addDelegator('product', 'owner')
+        ->addDelegator('unrelated', decoration('unrelated'))
+        ->build();
+    $earlier = new Provider([]);
+    $external = decoration('external');
+    $earlier->inspect = static function (string $id) use ($di, $earlier, $external, $ownsWithFeature): void {
+        if ($id !== 'owner') {
+            return;
+        }
+        if ($di->has('feature') === $ownsWithFeature) {
+            $earlier->entries[$id] = $external;
+        } else {
+            unset($earlier->entries[$id]);
+        }
+    };
+    $di->addContainer($earlier);
+    $before = $di->get('product');
+    $unrelated = $di->get('unrelated');
+    $di->addContainer(new Provider(['feature' => decoration('feature')]));
+
+    $di->notifyExternalEntriesChanged($earlier, 'owner');
+
+    expect($before)->toEqual(new Product($ownsWithFeature ? 'local' : 'external'))
+        ->and($di->get('product'))->toEqual(new Product($ownsWithFeature ? 'external' : 'local'))
+        ->and($di->get('unrelated'))->toBe($unrelated);
+})->with(['earlier provider gains ownership' => true, 'earlier provider loses ownership' => false]);
