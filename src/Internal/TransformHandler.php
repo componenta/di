@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Entry\PropertyValueHandlerScope;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
@@ -23,9 +24,9 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Transform] through the shared semantic-argument callback binder. */
-final readonly class TransformHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+final class TransformHandler extends PropertyValueHandlerScope implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
-    public function __construct(private AttributeCallbackInvoker $callbacks) {}
+    public function __construct(private readonly AttributeCallbackInvoker $callbacks) {}
 
     /** @param (Closure():void)|null $beforeInvocation */
     public function resolveParameter(
@@ -75,6 +76,15 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
 
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
+        $this->handleProperty($attribute, $target, $context, null);
+    }
+
+    protected function handleProperty(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $readArgument,
+    ): void {
         if (!$attribute instanceof Transform || !$target instanceof ReflectionProperty) {
             throw new LogicException('TransformHandler received an unsupported attribute target.');
         }
@@ -89,7 +99,10 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
                 }
 
                 $name = $target->getName();
-                if (!ObjectCreationAccess::tryReadParameter($context, $name, $value)) {
+                $hasValue = $readArgument === null
+                    ? ObjectCreationAccess::tryReadParameter($context, $name, $value)
+                    : $readArgument($name, $value);
+                if (!$hasValue) {
                     throw ResolutionException::forProperty(
                         $target,
                         reason: sprintf('missing context key "%s"', $name),

@@ -10,14 +10,20 @@ use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Transform;
+use Componenta\DI\Internal\AttributeCallbackInvoker;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\TransformHandler;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Reflector;
 use stdClass;
 
@@ -174,6 +180,72 @@ test('a callable receives literal nested references after argument selection', f
     expect($actual)->toBe('set by callable')
         ->and($label)->toBe('set by callable');
 });
+
+test('a creation argument helper cannot rebind the literal later consumed by the constructor', function (bool $cycle): void {
+    $observer = new class ($cycle) implements AttributeHandlerInterface {
+        public function __construct(private readonly bool $cycle) {}
+
+        public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+        {
+            $payload = null;
+            if (!ObjectCreationAccess::tryReadParameter($context, 'payload', $payload)) {
+                throw new LogicException('Expected an explicit constructor argument.');
+            }
+            formatLocalCopy(['payload' => $payload], $this->cycle);
+        }
+    };
+    $container = (new ContainerBuilder())->addAttributeDefinition(new AttributeDefinition(
+        ObserveArguments::class,
+        $observer,
+        phase: AttributePhase::BeforeInstantiation,
+    ))->build();
+    $label = 'original';
+    $identity = new stdClass();
+    $payload = ['label' => &$label, 'identity' => $identity];
+    if ($cycle) {
+        $payload['self'] = &$payload;
+    }
+
+    $entry = fixtureInstance($container->make(Product::class, ['payload' => $payload]), Product::class);
+    expect(observedLabel($entry->payload, $cycle))->toBe('original')
+        ->and($label)->toBe('original')
+        ->and($entry->payload['identity'])->toBe($identity);
+})->with(['nested slot' => false, 'recursive array' => true]);
+
+#[ObserveArguments]
+final class ManualProperty
+{
+    /** @var array<array-key,mixed> */
+    public array $payload;
+}
+
+test('direct property handler calls use a snapshot of the supplied argument', function (bool $transform): void {
+    $observer = new class () implements AttributeHandlerInterface {
+        public AttributeHandlerInterface $manualHandler;
+        public object $manualAttribute;
+
+        public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+        {
+            $this->manualHandler->handle($this->manualAttribute, $context->class->getProperty('payload'), $context);
+        }
+    };
+    [$container, $runtime] = (new ContainerBuilder())
+        ->addService(CasterProviderInterface::class, new LabelCaster())
+        ->addAttributeDefinition(new AttributeDefinition(ObserveArguments::class, $observer))
+        ->assemble();
+    Assert::assertInstanceOf(ParametersResolver::class, $runtime->parameters);
+    $observer->manualHandler = $transform
+        ? new TransformHandler(new AttributeCallbackInvoker($runtime->parameters, $container))
+        : new CastHandler($container);
+    $observer->manualAttribute = $transform ? new Transform(UPDATE_LABEL) : new Cast('format-label');
+    $label = 'original';
+    $identity = new stdClass();
+
+    $entry = fixtureInstance($container->make(ManualProperty::class, ['payload' => ['label' => &$label, 'identity' => $identity]]), ManualProperty::class);
+    expect($entry->payload['label'])->toBe('formatted')
+        ->and($label)->toBe('original')
+        ->and($entry->payload['identity'])->toBe($identity);
+})->with(['transform' => true, 'cast' => false]);
 
 test('a property transform or caster receives literal nested references', function (bool $transform): void {
     $container = new ContainerBuilder()

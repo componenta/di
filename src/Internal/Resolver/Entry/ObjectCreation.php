@@ -146,7 +146,7 @@ final class ObjectCreation
                 $creation = $attempt->context;
                 $this->parametersStore->attach($creation, $parameters);
                 $attempt->initialize($entry);
-                $after = $this->attributes->processTracked($target, AttributePhase::AfterInstantiation, $attempt->context);
+                $after = $this->attributes->processTracked($target, AttributePhase::AfterInstantiation, $attempt);
             } else {
                 $this->attributes->recordBootstrapUse($target, AttributePhase::AfterInstantiation);
                 $after = $this->attributes->skippedAfterPhase($target);
@@ -223,7 +223,7 @@ final class ObjectCreation
         }
         $completed->assertUnchanged();
         $attempt->initialize($entry);
-        $after = $this->attributes->processTracked($metadata->attributeTarget, AttributePhase::AfterInstantiation, $attempt->context);
+        $after = $this->attributes->processTracked($metadata->attributeTarget, AttributePhase::AfterInstantiation, $attempt);
         $completed = $completed->with($after);
         $completed->assertUnchanged();
         $configure?->__invoke($entry);
@@ -273,7 +273,7 @@ final class ObjectCreation
                     $attemptCompleted = $constructorProof === null ? $completed : $completed->with($constructorProof);
                     $attemptCompleted->assertUnchanged();
                     $attempt->initialize($entry);
-                    $after = $this->attributes->processTracked($metadata->attributeTarget, AttributePhase::AfterInstantiation, $attempt->context);
+                    $after = $this->attributes->processTracked($metadata->attributeTarget, AttributePhase::AfterInstantiation, $attempt);
                     $attemptCompleted = $attemptCompleted->with($after);
                     $attemptCompleted->assertUnchanged();
                     $configure?->__invoke($entry);

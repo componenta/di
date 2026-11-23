@@ -34,7 +34,7 @@ abstract class ObjectCreationAccess extends ObjectCreationScope
         return $context->runPhase($phase, $dispatch);
     }
 
-    /** Reads a single supplied input for an invocation, retaining its literal value. */
+    /** Reads a snapshot of one supplied argument. */
     public static function tryReadParameter(ObjectCreationContext $context, string $name, mixed &$value): bool
     {
         return $context->findParameter($name, $value);

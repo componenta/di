@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Entry\PropertyValueHandlerScope;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
@@ -27,7 +28,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Cast] on parameters and properties. */
-final class CastHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+final class CastHandler extends PropertyValueHandlerScope implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
@@ -83,6 +84,15 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
 
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
+        $this->handleProperty($attribute, $target, $context, null);
+    }
+
+    protected function handleProperty(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $readArgument,
+    ): void {
         if (!$attribute instanceof Cast || !$target instanceof ReflectionProperty) {
             throw new LogicException('CastHandler received an unsupported attribute target.');
         }
@@ -102,7 +112,9 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
 
             $name = $target->getName();
             $propertyValue = $attribute->default;
-            $hasValue = ObjectCreationAccess::tryReadParameter($context, $name, $propertyValue);
+            $hasValue = $readArgument === null
+                ? ObjectCreationAccess::tryReadParameter($context, $name, $propertyValue)
+                : $readArgument($name, $propertyValue);
             if (!$hasValue && $propertyValue === DefaultValue::None) {
                 throw ResolutionException::forProperty(
                     $target,

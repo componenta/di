@@ -12,8 +12,11 @@ use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAttempt;
+use Componenta\DI\Internal\Resolver\Entry\PropertyValueHandlerAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
+use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
 use ReflectionMethod;
@@ -134,8 +137,13 @@ final class AttributeExecution
     public function processTracked(
         ReflectionClass $class,
         AttributePhase $phase,
-        ObjectCreationContext $context,
+        ObjectCreationContext|ObjectCreationAttempt $context,
     ): CompletedAttributeGuard {
+        $attempt = null;
+        if ($context instanceof ObjectCreationAttempt) {
+            $attempt = $context;
+            $context = $attempt->context;
+        }
         if ($phase === AttributePhase::Both) {
             throw new InvalidConfigurationException(
                 'Attribute execution requires a concrete runtime phase.',
@@ -153,7 +161,7 @@ final class AttributeExecution
         return ObjectCreationAccess::dispatch(
             $context,
             $phase,
-            fn(): CompletedAttributeGuard => $this->dispatchPhase($class, $phase, $context, $instanceReflection),
+            fn(): CompletedAttributeGuard => $this->dispatchPhase($class, $phase, $context, $instanceReflection, $attempt),
         );
     }
 
@@ -166,6 +174,7 @@ final class AttributeExecution
         AttributePhase $phase,
         ObjectCreationContext $context,
         ?ReflectionObject $instanceReflection,
+        ?ObjectCreationAttempt $attempt,
     ): CompletedAttributeGuard {
         $plan = $this->executionPlan($class);
         $targets = $phase === AttributePhase::BeforeInstantiation
@@ -190,8 +199,8 @@ final class AttributeExecution
                 ObjectCreationAccess::withinProperty(
                     $context,
                     $target,
-                    function () use ($class, $target, $sequence, $context): void {
-                        $this->processTarget($class, $target, $sequence, $context);
+                    function () use ($class, $target, $sequence, $context, $attempt): void {
+                        $this->processTarget($class, $target, $sequence, $context, attempt: $attempt);
                     },
                     $declaration instanceof ReflectionProperty ? $declaration : null,
                 );
@@ -217,6 +226,7 @@ final class AttributeExecution
         ObjectAttributeSequence $sequence,
         ObjectCreationContext $context,
         ?ReflectionObject $instanceReflection = null,
+        ?ObjectCreationAttempt $attempt = null,
     ): void {
         while (($usage = $sequence->next()) !== null && $sequence->target($usage) === $target) {
             $handler = $usage->definition->handler;
@@ -246,7 +256,13 @@ final class AttributeExecution
                     }
                     $handlerTarget = ReflectionSnapshot::target($member, $class::class === ReflectionClass::class ? $class : $context->class);
                 }
-                $handler->handle($attribute, $handlerTarget, $context);
+                if ($attempt !== null && $handlerTarget instanceof ReflectionProperty
+                    && ($handler instanceof CastHandler || $handler instanceof TransformHandler)
+                ) {
+                    PropertyValueHandlerAccess::handle($handler, $attribute, $handlerTarget, $attempt);
+                } else {
+                    $handler->handle($attribute, $handlerTarget, $context);
+                }
                 unset($attribute);
             } catch (ExceptionInterface $e) {
                 throw $e;

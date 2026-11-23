@@ -31,6 +31,8 @@ final class ObjectCreationContext extends ObjectCreationScope
 
     /** @var (Closure(self,array<string|int,mixed>|(Closure():array<string|int,mixed>)|null):ObjectCreationAttempt)|null */
     private static ?Closure $retryAttempt = null;
+    /** @var (Closure(self $context,string $name,mixed &$value):bool)|null */
+    private static ?Closure $readAttemptParameter = null;
 
     private bool $constructorPolicyLocked = false;
     private bool $propertyWritesLocked = false;
@@ -108,6 +110,8 @@ final class ObjectCreationContext extends ObjectCreationScope
             },
             self::$retryAttempt ??= static fn(self $context, array|Closure|null $parameters): ObjectCreationAttempt
                 => self::owned($context->freshAttempt($parameters)),
+            self::$readAttemptParameter ??= static fn(self $context, string $name, mixed &$value): bool
+                => $context->findLiteralParameter($name, $value),
         );
     }
 
@@ -125,6 +129,16 @@ final class ObjectCreationContext extends ObjectCreationScope
     }
 
     protected function findParameter(string $name, mixed &$value): bool
+    {
+        if (!$this->findLiteralParameter($name, $argument)) {
+            return false;
+        }
+
+        $value = is_array($argument) ? ResolutionMetadata::snapshot($argument) : $argument;
+        return true;
+    }
+
+    private function findLiteralParameter(string $name, mixed &$value): bool
     {
         $parameters = $this->readParameterValues();
         if (!array_key_exists($name, $parameters)) {
