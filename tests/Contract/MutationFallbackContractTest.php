@@ -94,7 +94,6 @@ test('parallel fallback drains every worker before waiting for another worker to
     $source = $directory . '/original.php';
     $waiting = $directory . '/waiting.php';
     $writing = $directory . '/writing.php';
-    $runs = $directory . '/runs';
     $reports = $directory . '/reports';
 
     try {
@@ -104,9 +103,12 @@ test('parallel fallback drains every worker before waiting for another worker to
             . 'file_put_contents(__DIR__ . "/ready", "ready"); return ' . $replacementValue . ';');
         $waitingTest = new MutationTest(new Mutation(new SplFileInfo($source, '', ''), 'waiting', 'fixture', 1, 1, '', $waiting));
         $writingTest = new MutationTest(new Mutation(new SplFileInfo($source, '', ''), 'writing', 'fixture', 1, 1, '', $writing));
+        // Each worker has its own marker and appends again if the fallback reruns it.
         $command = [PHP_BINARY, '-n', '-r',
-            'file_put_contents($argv[1], ".", FILE_APPEND); exit((require getenv("PEST_MUTATION_FILE")) === 42 ? 0 : 1);',
-            $runs,
+            '$mutation = getenv("PEST_MUTATION_FILE");'
+            . 'if ($mutation === false || file_put_contents($mutation . ".runs", ".", FILE_APPEND) !== 1) {'
+            . 'throw new RuntimeException("Cannot record mutation worker start");}'
+            . 'exit((require $mutation) === 42 ? 0 : 1);',
         ];
         $fallback = new MutationFallback($command, $directory, timeout: 5.0, reportDirectory: $reports);
 
@@ -117,7 +119,8 @@ test('parallel fallback drains every worker before waiting for another worker to
 
         expect($waitingTest->result())->toBe(MutationTestResult::Untested)
             ->and($writingTest->result())->toBe($expected)
-            ->and(file_get_contents($runs))->toBe('..')
+            ->and(file_get_contents($waiting . '.runs'))->toBe('.')
+            ->and(file_get_contents($writing . '.runs'))->toBe('.')
             ->and(file_get_contents($reports . '/waiting.log'))->toBe('exit=0' . PHP_EOL)
             ->and(file_get_contents($reports . '/writing.log'))->toBe(
                 'exit=' . ($replacementValue === 42 ? 0 : 1) . PHP_EOL . str_repeat('x', 2 * 1024 * 1024),
