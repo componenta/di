@@ -70,3 +70,24 @@ test('failed HTTP validation prevents DTO construction and preserves the validat
         ValidatedInput::$constructed = 0;
     }
 });
+
+test('request mapping to an array skips DTO validation and preserves the input', function (bool $allowsDto): void {
+    $validation = new class () implements ValidationProviderInterface {
+        /** @var list<string> */
+        public array $queried = [];
+
+        public function provide(string $entryId): ValidatorInterface
+        {
+            $this->queried[] = $entryId;
+            return new Validator(['name' => new Required()]);
+        }
+    };
+    $container = container([ConfigKey::SERVICES => [ValidationProviderInterface::class => $validation]]);
+    $request = (new ServerRequest('GET', '/'))->withQueryParams(['name' => '']);
+    $handler = $allowsDto
+        ? static fn(#[MapQueryString] array|ValidatedInput $input): array|ValidatedInput => $input
+        : static fn(#[MapQueryString] array $input): array => $input;
+
+    expect($container->call($handler, [ServerRequestInterface::class => $request]))->toBe(['name' => ''])
+        ->and($validation->queried)->toBe([]);
+})->with(['array' => false, 'array in a union' => true]);
