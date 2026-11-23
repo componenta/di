@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 
 /**
  * Resolves and publishes entries through one attached composite.
@@ -28,14 +29,16 @@ final readonly class AttachedEntryBindings
         private Closure $retire,
     ) {}
 
-    public function can(string $id): bool
+    /** @param Closure():bool $hasSharedValue */
+    public function can(string $id, Closure $hasSharedValue): bool
     {
-        return $this->resolver->can($id);
+        return $this->resolver->can($id, $hasSharedValue);
     }
 
-    public function knows(string $id): bool
+    /** @param Closure():bool $hasSharedValue */
+    public function knows(string $id, Closure $hasSharedValue): bool
     {
-        return $this->resolver->knows($id);
+        return $this->resolver->knows($id, $hasSharedValue);
     }
 
     /** @param array<string|int,mixed>|EntryParameters $params */
@@ -44,9 +47,15 @@ final readonly class AttachedEntryBindings
         return $this->resolver->resolve($id, $params);
     }
 
-    public function tryResolveShared(string $id, mixed &$entry): bool
+    /** @param Closure():bool $hasSharedValue */
+    public function selectShared(string $id, Closure $hasSharedValue): DefinitionBinding|EntryResolverInterface|null
     {
-        return $this->resolver->tryResolveShared($id, $entry);
+        return $this->resolver->select($id, $hasSharedValue);
+    }
+
+    public function resolveSelectedShared(string $id, DefinitionBinding|EntryResolverInterface $selected): mixed
+    {
+        return $this->resolver->resolveSelected($id, $selected, []);
     }
 
     public function prepare(string $id, DefinitionInterface $definition): DefinitionBinding

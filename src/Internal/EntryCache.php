@@ -42,6 +42,7 @@ final class EntryCache
         }
     }
 
+    /** @phpstan-impure */
     public function tryGetBase(string $id, mixed &$value): bool
     {
         if (isset($this->base[$id])) {

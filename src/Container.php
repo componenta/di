@@ -234,12 +234,26 @@ final class Container extends ContainerEntryOperations implements
             // delegator pipeline and may read another id once the source exists.
             $this->cycleGuard->enterShared($entryId, $this->runtimeAuthority);
             try {
-                if (!$this->resolver->tryResolveShared($entryId, $entry)) {
-                    return false;
+                $aliasRevision = $this->aliases->revision;
+                $selected = $this->resolver->selectShared(
+                    $entryId,
+                    fn(): bool => $this->cache->tryGetBase($entryId, $published),
+                );
+                // Capture the revisions of the selected binding before invoking
+                // it. Selection can itself publish a new binding.
+                $baseRevision = $this->cache->baseRevision($entryId);
+                if ($this->aliases->revision === $aliasRevision || $this->aliases->resolve($requestedId) === $entryId) {
+                    $requestedRevision = $this->cache->resolvedRevision($requestedId);
                 }
-                if ($this->cache->baseRevision($entryId) === $baseRevision && EntryLookupRevision::current() === $lookupRevision) {
-                    $this->cache->putBase($entryId, $entry, $this->runtimeAuthority);
-                    $baseRevision = $this->cache->baseRevision($entryId);
+                if (!$this->cache->tryGetBase($entryId, $entry)) {
+                    if ($selected === null) {
+                        return false;
+                    }
+                    $entry = $this->resolver->resolveSelectedShared($entryId, $selected);
+                    if ($this->cache->baseRevision($entryId) === $baseRevision && EntryLookupRevision::current() === $lookupRevision) {
+                        $this->cache->putBase($entryId, $entry, $this->runtimeAuthority);
+                        $baseRevision = $this->cache->baseRevision($entryId);
+                    }
                 }
             } finally {
                 $this->cycleGuard->leaveShared($entryId, $this->runtimeAuthority);
@@ -304,7 +318,11 @@ final class Container extends ContainerEntryOperations implements
             $lookupGuard = $this->lookupGuard ??= new CycleGuard();
             $lookupGuard->enter($localGuard);
             try {
-                return $requireResolvable ? $this->resolver->can($entryId) : $this->resolver->knows($entryId);
+                $hasSharedValue = fn(): bool => $this->cache->tryGetBase($entryId, $published);
+                $available = $requireResolvable
+                    ? $this->resolver->can($entryId, $hasSharedValue)
+                    : $this->resolver->knows($entryId, $hasSharedValue);
+                return $available || $hasSharedValue();
             } finally {
                 $lookupGuard->leave($localGuard);
             }

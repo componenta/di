@@ -86,16 +86,20 @@ final class EntryBindings
         $this->strategies = array_values($strategies);
     }
 
-    public function can(string $id): bool
+    /** @param (Closure():bool)|null $hasSharedValue */
+    public function can(string $id, ?Closure $hasSharedValue = null): bool
     {
-        return isset($this->bindings[$id]) || $this->fallback($id) !== null;
+        return $this->select($id, $hasSharedValue) !== null;
     }
 
-    /** @internal A local configuration failure describes a resolution error for the requested entry. */
-    public function knows(string $id): bool
+    /**
+     * A local configuration failure describes a resolution error for the requested entry.
+     * @param (Closure():bool)|null $hasSharedValue
+     */
+    public function knows(string $id, ?Closure $hasSharedValue = null): bool
     {
         try {
-            return $this->can($id);
+            return $this->can($id, $hasSharedValue);
         } catch (InvalidConfigurationException) {
             return true;
         }
@@ -104,41 +108,57 @@ final class EntryBindings
     /** @param array<string|int, mixed>|EntryParameters $params */
     public function resolve(string $id, array|EntryParameters $params = []): mixed
     {
-        $binding = $this->bindings[$id] ?? null;
-        if ($binding !== null) {
+        $selected = $this->select($id) ?? throw NotFoundException::forService($id);
+        return $this->resolveSelected($id, $selected, $params);
+    }
+
+    /** @param array<string|int, mixed>|EntryParameters $params */
+    public function resolveSelected(
+        string $id,
+        DefinitionBinding|EntryResolverInterface $selected,
+        array|EntryParameters $params,
+    ): mixed {
+        if ($selected instanceof DefinitionBinding) {
             if ($params instanceof EntryParameters) {
-                return ConstructionParameters::resolveDefinition($params, $binding->strategy, $id, $binding->definition);
+                return ConstructionParameters::resolveDefinition($params, $selected->strategy, $id, $selected->definition);
             }
-            return $binding->strategy->resolveDefinition(
+            return $selected->strategy->resolveDefinition(
                 $id,
-                $binding->definition,
+                $selected->definition,
                 ResolutionMetadata::publicParameters($params),
             );
         }
 
-        $fallback = $this->fallback($id) ?? throw NotFoundException::forService($id);
-        return $fallback->resolve($id, ConstructionParameters::from($params));
+        return $selected->resolve($id, ConstructionParameters::from($params));
     }
 
     /**
-     * Resolves a shared entry without caller parameters. False means no selected route.
+     * Selects a route while allowing a newly published shared value to stop probing.
      *
-     * @internal
+     * @param (Closure():bool)|null $hasSharedValue
      */
-    public function tryResolveShared(string $id, mixed &$entry): bool
+    public function select(string $id, ?Closure $hasSharedValue = null): DefinitionBinding|EntryResolverInterface|null
     {
         $binding = $this->bindings[$id] ?? null;
         if ($binding !== null) {
-            $entry = $binding->strategy->resolveDefinition($id, $binding->definition, []);
-            return true;
+            return $binding;
         }
 
-        $fallback = $this->fallback($id);
-        if ($fallback === null) {
-            return false;
+        foreach ($this->fallbacks as $fallback) {
+            $available = $fallback->can($id);
+            // Autoloading and application availability checks can publish entries.
+            if ($hasSharedValue !== null && $hasSharedValue()) {
+                return null;
+            }
+            $binding = $this->bindings[$id] ?? null;
+            if ($binding !== null) {
+                return $binding;
+            }
+            if ($available) {
+                return $fallback;
+            }
         }
-        $entry = $fallback->resolve($id, ConstructionParameters::from([]));
-        return true;
+        return null;
     }
 
     /** Registers a definition in a standalone composition. Attached roots use Container::set(). */
@@ -222,13 +242,4 @@ final class EntryBindings
         unset($this->bindings[$id]);
     }
 
-    private function fallback(string $id): ?EntryResolverInterface
-    {
-        foreach ($this->fallbacks as $fallback) {
-            if ($fallback->can($id)) {
-                return $fallback;
-            }
-        }
-        return null;
-    }
 }
