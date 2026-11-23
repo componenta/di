@@ -298,6 +298,8 @@ A destructor that reenters lookup observes completed publication and invalidatio
 
 A reentrant lookup skips active ownership checks for the same ID in the current execution. A provider's `has()` can read that ID through another provider or a local entry. A same-ID `get()` during external retrieval detects a circular dependency. The recursive search checks providers in registration order and skips retries of the same unsuccessful recursive route. Each explicit lookup by the same running provider can retry its earlier misses, even inside another recursive lookup. Published container changes also allow fresh checks. A search with no external owner falls back to local entries.
 
+After a local miss, `has()` and `get()` follow a new alias target and consider providers registered during the lookup. Returning to the same route without a new binding, provider, or available target class fails with `CircularDependencyException`.
+
 When `addContainer()` checks an existing provider, nested `get()` and `has()` for the same ID skip that provider's active check. A nested registration can confirm ownership for the enclosing check. A confirmation based on reads from the registry expires when another provider is added. If a read bypasses a provider whose ownership is unresolved, dependent factory results and delegator chains stay local to the resolution attempt, including when it spans multiple DI containers.
 
 A DI-managed `#[Lazy]` or `#[Proxy]` initializer that encounters an incomplete external lookup throws `ResolutionException`. With the native proxy factory, the same object can retry initialization on the next access after the ownership check finishes.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI;
 
 use Componenta\DI\Definition\DefinitionInterface;
+use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
@@ -178,7 +179,8 @@ final class Container extends ContainerEntryOperations implements
                     $lookupGuard = $this->lookupGuard ??= new CycleGuard();
                     $lookupGuard->assertInactive($externalGuard);
                     $probes = $this->providerProbes ??= new ExternalLookupProbes();
-                    $external = $this->externalContainers->findOwning(
+                    $registry = $this->externalContainers;
+                    $external = $registry->findOwning(
                         $id,
                         fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
                         $requireResolvable,
@@ -194,6 +196,7 @@ final class Container extends ContainerEntryOperations implements
                             $lookupGuard->leave($externalGuard);
                         }
                     }
+                    $checkedProviderRevision = $registry->revision;
                 }
             }
 
@@ -202,6 +205,7 @@ final class Container extends ContainerEntryOperations implements
             }
 
             $entryId ??= $this->aliases->resolve($id);
+            $aliasRevision = $this->aliases->revision;
             $this->resolvedEntryGuard->enterShared($id);
             try {
                 if ($this->tryResolveAndStore($id, $entryId, $entry)) {
@@ -210,6 +214,16 @@ final class Container extends ContainerEntryOperations implements
             } finally {
                 $this->resolvedEntryGuard->leaveShared($id);
             }
+
+            $checkedProviderRevision = isset($checkedProviderRevision) && !ProtectedServiceIds::contains($entryId)
+                ? $checkedProviderRevision
+                : 0;
+            if (($aliasRevision !== $this->aliases->revision
+                    || ($this->externalContainers->revision ?? 0) > $checkedProviderRevision)
+                && $this->tryResolveAfterMiss($id, $entryId, $requireResolvable, $checkedProviderRevision, $entry)
+            ) {
+                return $entry;
+            }
         } catch (Throwable $e) {
             throw self::entryResolutionFailure($id, $e);
         }
@@ -217,11 +231,97 @@ final class Container extends ContainerEntryOperations implements
         throw NotFoundException::forService($id);
     }
 
+    private function tryResolveAfterMiss(
+        string $id,
+        string $entryId,
+        bool $requireResolvable,
+        int $checkedProviderRevision,
+        mixed &$entry,
+    ): bool {
+        $routes = [];
+        // Only a lookup that selected no value follows a newer publication.
+        while (true) {
+            $currentId = $this->aliases->resolve($id);
+            $localChanged = $currentId !== $entryId;
+            $registry = $this->externalContainers;
+            if ($registry !== null
+                && $registry->revision > $checkedProviderRevision
+                && !ProtectedServiceIds::contains($id)
+                && !ProtectedServiceIds::contains($currentId)
+            ) {
+                $examinedId = $currentId;
+                $baseRevision = $this->cache->baseRevision($examinedId);
+                $declared = class_exists($examinedId, false);
+                $externalGuard = "\0external:" . $id;
+                $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+                $lookupGuard->assertInactive($externalGuard);
+                $probes = $this->providerProbes ??= new ExternalLookupProbes();
+                $external = $registry->findOwning(
+                    $id,
+                    fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                    $requireResolvable,
+                    $probes,
+                    afterRevision: $checkedProviderRevision,
+                );
+                $currentId = $this->aliases->resolve($id);
+                if (!ProtectedServiceIds::contains($currentId)) {
+                    if ($external !== null) {
+                        $lookupGuard->enter($externalGuard);
+                        try {
+                            $entry = $probes->retrieve($external, $id, $requireResolvable);
+                            return true;
+                        } finally {
+                            $lookupGuard->leave($externalGuard);
+                        }
+                    }
+                    $checkedProviderRevision = $registry->revision;
+                }
+                $localChanged = $localChanged
+                    || $currentId !== $examinedId
+                    || $baseRevision !== $this->cache->baseRevision($currentId)
+                    || (!$declared && class_exists($currentId, false));
+            }
+
+            if ($this->cache->tryGetResolved($id, $entry)) {
+                return true;
+            }
+            if (!$localChanged) {
+                return false;
+            }
+
+            $entryId = $currentId;
+            $this->rememberRetriedRoute($id, $entryId, $routes);
+            $this->resolvedEntryGuard->enterShared($id);
+            try {
+                if ($this->tryResolveAndStore($id, $entryId, $entry)) {
+                    return true;
+                }
+            } finally {
+                $this->resolvedEntryGuard->leaveShared($id);
+            }
+        }
+    }
+
     private static function entryResolutionFailure(string $id, Throwable $error): ExceptionInterface
     {
         return $error instanceof ExceptionInterface && !$error instanceof NotFoundExceptionInterface
             ? $error
             : ResolutionException::forService($id, $error);
+    }
+
+    /** @param array<array-key, array{int, int, bool}> $routes */
+    private function rememberRetriedRoute(string $id, string $entryId, array &$routes): void
+    {
+        // A return to an earlier route is useful when its binding or availability changed.
+        $state = [
+            $this->cache->baseRevision($entryId),
+            $this->externalContainers->revision ?? 0,
+            class_exists($entryId, false),
+        ];
+        if (($routes[$entryId] ?? null) === $state) {
+            throw CircularDependencyException::forService([$id, ...array_map(strval(...), array_keys($routes)), $entryId]);
+        }
+        $routes[$entryId] = $state;
     }
 
     private function tryResolveAndStore(string $requestedId, string $entryId, mixed &$entry): bool
@@ -343,6 +443,7 @@ final class Container extends ContainerEntryOperations implements
         int $checkedProviderRevision,
     ): bool {
         $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+        $routes = [];
         while (true) {
             $lookupGuard->enter($localGuard);
             try {
@@ -360,6 +461,7 @@ final class Container extends ContainerEntryOperations implements
                 if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
                     return true;
                 }
+                $this->rememberRetriedRoute($id, $entryId, $routes);
                 continue;
             }
             if ($available || $hasSharedValue()) {
@@ -400,6 +502,7 @@ final class Container extends ContainerEntryOperations implements
             if (!$protected) {
                 $checkedProviderRevision = $registry->revision;
             }
+            $this->rememberRetriedRoute($id, $entryId, $routes);
         }
     }
 
