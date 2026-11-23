@@ -85,11 +85,10 @@ final class VariadicArguments
         ParameterResolutionContext $context,
         string $reason,
     ): ResolutionException {
-        return ResolutionException::forParameter(
+        return ParameterContextAccess::failure(
+            $context,
             $target->reflection,
             reason: $reason,
-            providedParameters: $context->provided,
-            resolvedParameters: $context->resolved,
         );
     }
 

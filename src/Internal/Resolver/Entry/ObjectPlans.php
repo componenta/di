@@ -35,16 +35,14 @@ final class ObjectPlans
      */
     public function metadata(string|ReflectionClass $class): ObjectMetadata
     {
-        $instanceReflection = null;
+        $attributeSource = null;
         if ($class instanceof ReflectionClass) {
-            if ($class::class === ReflectionObject::class) {
-                $instanceReflection = $class;
-                $class = $class->getName();
-            } elseif ($class::class === ReflectionClass::class) {
-                $class = $class->getName();
+            if ($class::class !== ReflectionClass::class) {
+                $attributeSource = $class;
             }
+            $class = $class->getName();
         }
-        $lookupKey = is_string($class) && $instanceReflection === null
+        $lookupKey = $attributeSource === null
             ? strtolower(str_starts_with($class, '\\') ? substr($class, 1) : $class)
             : null;
         $plans = $this->attributes->plans;
@@ -61,7 +59,7 @@ final class ObjectPlans
             }
 
             /** @var ReflectionClass<object> $reflection */
-            $reflection = is_string($class) ? new ReflectionClass($class) : $class;
+            $reflection = new ReflectionClass($class);
             $canonicalKey = $lookupKey === null ? null : strtolower($reflection->getName());
             if ($canonicalKey !== null && $lookupKey !== null && isset($this->metadata[$canonicalKey])) {
                 // Admission of a new alias may have loaded declarations.
@@ -70,9 +68,14 @@ final class ObjectPlans
                 }
                 return $this->metadata[$lookupKey] = $this->metadata[$canonicalKey];
             }
-            $classPlan = $plans->build($reflection);
+            // Derived reflectors supply attribute metadata for the selected class.
+            $attributeTarget = $attributeSource !== null && $attributeSource::class !== ReflectionObject::class
+                && $attributeSource->getName() === $reflection->getName()
+                ? $attributeSource
+                : $reflection;
+            $classPlan = $plans->build($attributeTarget);
             $requiresFreshValidation = $plans->requiresFreshValidation($classPlan);
-            $constructor = $reflection->getConstructor();
+            $constructor = $attributeTarget->getConstructor();
             $constructorTargets = $constructor === null
                 ? []
                 : $this->parameters->targets($constructor->getParameters());
@@ -82,8 +85,8 @@ final class ObjectPlans
                 $requiresFreshValidation = $requiresFreshValidation || $plans->requiresFreshValidation($plan);
             }
 
-            $attributePlan = $this->attributes->metadataState($reflection);
-            if ($plans->refreshAvailability() !== $revision) {
+            $attributePlan = $this->attributes->metadataState($attributeTarget);
+            if ($plans->refreshAvailability() !== $revision || $attributeTarget->getName() !== $reflection->getName()) {
                 // Member discovery can load attributes used by an earlier target.
                 // Only publish metadata assembled from one registry revision.
                 continue;
@@ -95,7 +98,8 @@ final class ObjectPlans
                 $constructor,
                 $constructorTargets,
                 $attributePlan['hasHandlers'],
-                $instanceReflection,
+                $attributeSource,
+                nativeConstructorMetadata: $attributeTarget === $reflection,
             );
             if ($canonicalKey !== null && $lookupKey !== null && !$requiresFreshValidation && !$attributePlan['requiresFreshValidation']) {
                 $this->metadata[$canonicalKey] = $metadata;
@@ -108,14 +112,13 @@ final class ObjectPlans
     public function constructorPlan(ObjectMetadata $metadata): PreparedParameterPlan
     {
         $name = $metadata->class->getName();
-        $cacheable = $metadata->class::class === ReflectionClass::class;
-        $cached = $cacheable ? ($this->constructorPlans[$name] ?? null) : null;
+        $cached = $metadata->nativeConstructorMetadata ? ($this->constructorPlans[$name] ?? null) : null;
         if ($cached !== null && $this->parameters->isCurrentPlan($cached)) {
             return $cached;
         }
 
         $plan = $this->parameters->prepareTargets($metadata->constructorTargets);
-        if ($cacheable && $this->parameters->isSealed && !$plan->requiresFreshValidation) {
+        if ($metadata->nativeConstructorMetadata && $this->parameters->isSealed && !$plan->requiresFreshValidation) {
             $this->constructorPlans[$name] = $plan;
         }
 

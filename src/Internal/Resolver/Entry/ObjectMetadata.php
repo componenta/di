@@ -8,7 +8,6 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionObject;
 
 /**
  * Fully discovered immutable runtime metadata for one object class.
@@ -19,15 +18,15 @@ final class ObjectMetadata
 {
     /** @var ReflectionClass<object> */
     public ReflectionClass $attributeTarget {
-        get => $this->instanceReflection?->getName() === $this->class->getName()
-            ? $this->instanceReflection
+        get => $this->attributeSource?->getName() === $this->class->getName()
+            ? $this->attributeSource
             : $this->class;
     }
 
     /**
      * @param ReflectionClass<object> $class
      * @param list<ParameterTarget> $constructorTargets
-     * @param ReflectionObject<object>|null $instanceReflection
+     * @param ReflectionClass<object>|null $attributeSource
      */
     public function __construct(
         public readonly ReflectionClass $class,
@@ -35,6 +34,7 @@ final class ObjectMetadata
         public readonly ?ReflectionMethod $constructor,
         public readonly array $constructorTargets,
         public readonly bool $hasAttributeHandlers,
-        private readonly ?ReflectionObject $instanceReflection,
+        private readonly ?ReflectionClass $attributeSource,
+        public readonly bool $nativeConstructorMetadata,
     ) {}
 }

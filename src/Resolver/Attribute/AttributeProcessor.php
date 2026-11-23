@@ -19,13 +19,13 @@ final class AttributeProcessor extends ObjectAttributeScope
         parent::__construct(new AttributeExecution(AttributePlanAccess::plans($plans), AttributePlanAccess::bootstrap($plans)));
     }
 
-    /** @param ReflectionClass<object> $class */
+    /** @param ReflectionClass<covariant object> $class */
     public function prepare(ReflectionClass $class): void
     {
         $this->execution->prepare(ReflectionSnapshot::class($class));
     }
 
-    /** @param ReflectionClass<object> $class */
+    /** @param ReflectionClass<covariant object> $class */
     public function hasHandlers(ReflectionClass $class): bool
     {
         return $this->execution->hasHandlers(ReflectionSnapshot::class($class));

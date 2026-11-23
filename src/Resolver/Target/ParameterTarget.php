@@ -78,9 +78,9 @@ final class ParameterTarget extends ParameterTargetScope
         $function = $reflection->getDeclaringFunction();
         $native = $reflection::class === ReflectionParameter::class;
         $nativeOmission = $native ? !$this->variadic && $reflection->isOptional() && $function->isInternal() : null;
-        $nativeClosure = $native && is_closure_reflector($function);
-        $canCacheClassification = $native && !$nativeClosure;
-        $closureMethodSource = $nativeClosure && $function instanceof ReflectionMethod ? WeakReference::create($source) : null;
+        $closure = is_closure_reflector($function);
+        $canCacheClassification = $native && !$closure;
+        $closureMethodSource = $closure && $function instanceof ReflectionMethod ? WeakReference::create($source) : null;
         $this->declaringContext = self::declaringContext($reflection, $function);
         unset($function);
 
@@ -99,7 +99,7 @@ final class ParameterTarget extends ParameterTargetScope
         $this->attributeReflectors = $allAttributes;
         $this->attributesByClass = $attributes;
         $this->attributeClasses = array_keys($classes);
-        parent::__construct(new ParameterDeclaration($reflection, $nativeOmission, $canCacheClassification, !$native || $allAttributes !== [], $closureMethodSource));
+        parent::__construct(new ParameterDeclaration($reflection, $nativeOmission, $canCacheClassification, $allAttributes, $closureMethodSource));
     }
 
     public function hasAttribute(string $attributeClass): bool

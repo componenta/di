@@ -82,6 +82,29 @@ test('external registration sees an earlier owner release a dependency during an
         ->and($di->get('second'))->toBe($other);
 });
 
+test('a later provider registered during lookup preserves a cached delegator owned by the first provider', function (): void {
+    $di = (new ContainerBuilder())
+        ->addService('product', new Product('base'))
+        ->addDelegator('product', 'owner')
+        ->build();
+    $original = decoration('original');
+    $first = new Provider(['owner' => $original]);
+    $di->addContainer($first);
+    $warm = $di->get('product');
+
+    $later = new Provider(['owner' => decoration('later')]);
+    $first->inspect = static function (string $id) use ($di, $first, $later): void {
+        if ($id === 'owner') {
+            $first->inspect = null;
+            $di->addContainer($later);
+        }
+    };
+
+    expect($di->has('owner'))->toBeTrue()
+        ->and($di->get('owner'))->toBe($original)
+        ->and($di->get('product'))->toBe($warm);
+});
+
 test('a suspended delegator cannot publish a result from before an external notification', function (): void {
     $di = (new ContainerBuilder())
         ->addService('product', new Product('base'))

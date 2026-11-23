@@ -17,6 +17,7 @@ use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\ExternalDependencyInspection;
+use Componenta\DI\Internal\ExternalLookupProbes;
 use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Internal\ProtectedServiceIds;
 use Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings;
@@ -43,6 +44,7 @@ final class Container extends ContainerEntryOperations implements
     private ?ExternalContainerRegistry $externalContainers = null;
     private readonly CycleGuard $cycleGuard;
     private ?CycleGuard $lookupGuard = null;
+    private ?ExternalLookupProbes $providerProbes = null;
     private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
     private readonly AttachedEntryBindings $resolver;
@@ -178,6 +180,7 @@ final class Container extends ContainerEntryOperations implements
                             $id,
                             fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
                             $requireResolvable,
+                            $this->providerProbes ??= new ExternalLookupProbes(),
                         );
                         // External has() may retarget aliases before local resolution.
                         $entryId = $this->aliases->resolve($id);
@@ -271,24 +274,18 @@ final class Container extends ContainerEntryOperations implements
                 && !ProtectedServiceIds::contains($id)
                 && !ProtectedServiceIds::contains($entryId)
             ) {
-                $externalGuard = "\0has-external:" . $id;
                 $lookupGuard = $this->lookupGuard ??= new CycleGuard();
-                // A provider checking its parent can still observe local entries.
-                if (!$lookupGuard->contains($externalGuard) && !$lookupGuard->contains($localGuard)) {
-                    $lookupGuard->enter($externalGuard);
-                    try {
-                        $external = $this->externalContainers->findOwning(
-                            $id,
-                            fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
-                            $requireResolvable,
-                        );
-                        // External has() may retarget aliases before local availability checks.
-                        $entryId = $this->aliases->resolve($id);
-                        if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
-                            return true;
-                        }
-                    } finally {
-                        $lookupGuard->leave($externalGuard);
+                if (!$lookupGuard->contains($localGuard)) {
+                    $external = $this->externalContainers->findOwning(
+                        $id,
+                        fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                        $requireResolvable,
+                        $this->providerProbes ??= new ExternalLookupProbes(),
+                    );
+                    // External has() may retarget aliases before local availability checks.
+                    $entryId = $this->aliases->resolve($id);
+                    if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
+                        return true;
                     }
                 }
             }
@@ -347,6 +344,7 @@ final class Container extends ContainerEntryOperations implements
         }
         $this->invalidate($id, $canonical, $retirement);
         $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->invalidate();
         $retirement->release();
     }
 
@@ -440,6 +438,7 @@ final class Container extends ContainerEntryOperations implements
 
         ($this->externalContainers ??= $externalContainers)->register($container, $this->runtimeAuthority);
         $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->invalidate();
         $retirement->release();
     }
 
@@ -459,6 +458,9 @@ final class Container extends ContainerEntryOperations implements
             if ($this->delegators->dependsOn($id) && !$this->isProtectedDependency($id)) {
                 $affected[] = $id;
             }
+        }
+        if ($ids !== []) {
+            $this->providerProbes?->invalidate();
         }
         if ($affected === []) {
             return;
@@ -506,6 +508,7 @@ final class Container extends ContainerEntryOperations implements
             }
         }
         $this->invalidateDeferredDelegators($changedDependencies, $retirement);
+        $this->providerProbes?->invalidate();
         $retirement->release();
     }
 
@@ -537,6 +540,7 @@ final class Container extends ContainerEntryOperations implements
         $this->delegators->register($id, $prepared, $retirement, $this->runtimeAuthority);
         $this->invalidateRequested($id, $canonical, $retirement);
         $this->invalidateDeferredDelegators([$id], $retirement);
+        $this->providerProbes?->invalidate();
         $retirement->release();
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -340,6 +341,11 @@ final class AttributeExecution
      */
     private static function methods(ReflectionClass $class): array
     {
+        if ($class instanceof ReflectionObject && $class->getName() === Closure::class) {
+            // Object phases inspect class declarations. A closure supplies its own invocation metadata.
+            $class = ReflectionSnapshot::forConstruction($class);
+        }
+
         /** @var list<ReflectionMethod> $methods */
         $methods = array_values($class->getMethods());
         for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {

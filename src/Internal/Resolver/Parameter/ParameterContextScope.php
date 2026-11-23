@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Closure;
+use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use ReflectionParameter;
+use Throwable;
 
 /** Reserves the invocation's writer for the resolver that creates it. @internal */
 abstract class ParameterContextScope
@@ -19,4 +22,6 @@ abstract class ParameterContextScope
 
     /** @return array<string|int,mixed> */
     abstract protected function invocationArguments(): array;
+
+    abstract protected function parameterFailure(ReflectionParameter $parameter, ?string $reason, ?Throwable $previous): ResolutionException;
 }

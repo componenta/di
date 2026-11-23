@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal;
 
 use Attribute;
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeSet;
@@ -14,7 +15,6 @@ use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\Rule\ProxyCompositionRule;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
-use LogicException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -81,18 +81,20 @@ final class AttributePlans
         return $this->registry->definition($attribute);
     }
 
-    /** @internal Compares declared semantics without polling availability or running composition rules. */
-    public function hasSameLoadedDeclarations(AttributePlan $plan): bool
-    {
-        $target = $plan->target;
-        if (!$target instanceof ReflectionParameter) {
-            throw new LogicException('Expected a consumed parameter plan.');
-        }
+    /**
+     * Compares declared semantics without polling availability or running composition rules.
+     * @param array<int,ReflectionAttribute<object>>|null $observed
+     */
+    public function hasSameLoadedDeclarations(
+        ReflectionParameter $target,
+        AttributePlan $plan,
+        ?array $observed = null,
+    ): bool {
         $consumed = [];
         foreach ($plan->usages as $usage) {
             $consumed[$usage->declarationOrder] = [$usage->definition, $usage->attributeClass];
         }
-        foreach ($this->discoverUsages($target, $target->getAttributes(), autoload: false) as $usage) {
+        foreach ($this->discoverUsages($target, $observed ?? $target->getAttributes(), autoload: false) as $usage) {
             $index = $usage->declarationOrder;
             if (($consumed[$index] ?? null) !== [$usage->definition, $usage->attributeClass]) {
                 return false;
@@ -102,11 +104,20 @@ final class AttributePlans
         return $consumed === [];
     }
 
-    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    /**
+     * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param array<int,ReflectionAttribute<object>>|null $observed
+     */
     public function build(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        ?array $observed = null,
     ): AttributePlan {
-        $key = self::cacheKey($target);
+        $closure = null;
+        if ($target instanceof Closure) {
+            $closure = $target;
+            $target = ReflectionSnapshot::target($closure);
+        }
+        $key = $observed === null ? self::cacheKey($target) : null;
         while (true) {
             $this->synchronizeRegistryRevision();
             $revision = $this->registryRevision;
@@ -117,8 +128,13 @@ final class AttributePlans
 
             $awaitsDiscovery = false;
             $validatedUserRules = false;
-            $attributes = $target->getAttributes();
-            $usages = $attributes === [] ? [] : $this->discoverUsages($target, $attributes, awaitsDiscovery: $awaitsDiscovery);
+            $attributes = $observed ?? $target->getAttributes();
+            $usages = $attributes === [] ? [] : $this->discoverUsages(
+                $target,
+                $attributes,
+                awaitsDiscovery: $awaitsDiscovery,
+                closure: $closure,
+            );
             unset($attributes);
             // Loading a later attribute may reveal one skipped earlier. Validate
             // a complete revision, before a missing dependency can fail creation.
@@ -145,7 +161,7 @@ final class AttributePlans
             break;
         }
 
-        $plan = new AttributePlan($target, $this->ordering->order($target, $usages));
+        $plan = new AttributePlan($closure ?? $target, $this->ordering->order($target, $usages));
         if ($awaitsDiscovery || $validatedUserRules) {
             $fresh = $this->freshValidation ??= new WeakMap();
             $fresh[$plan] = true;
@@ -162,7 +178,7 @@ final class AttributePlans
 
     /**
      * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     * @param list<ReflectionAttribute<object>> $attributes
+     * @param array<int,ReflectionAttribute<object>> $attributes
      * @return list<AttributeUsage>
      */
     private function discoverUsages(
@@ -170,6 +186,7 @@ final class AttributePlans
         array $attributes,
         bool $autoload = true,
         bool &$awaitsDiscovery = false,
+        ?Closure $closure = null,
     ): array {
         $usages = [];
         foreach ($attributes as $index => $reflectionAttribute) {
@@ -210,7 +227,7 @@ final class AttributePlans
             $usages[] = new AttributeUsage(
                 $reflectionAttribute,
                 $definition,
-                $target,
+                $closure ?? $target,
                 $index,
             );
         }

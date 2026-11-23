@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -33,11 +32,10 @@ final class ArrayResolver implements ParameterResolverInterface
                 return [$target->position, $value];
             }
 
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 reason: sprintf('value provided for "$%s" does not satisfy declared type', $target->name),
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
 
@@ -48,11 +46,10 @@ final class ArrayResolver implements ParameterResolverInterface
                 return [$target->position, $value];
             }
 
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 reason: sprintf('value provided at position %d does not satisfy declared type', $target->position),
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
 

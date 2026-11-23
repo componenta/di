@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Closure;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\ReflectionSnapshot;
 use ReflectionClass;
@@ -14,8 +15,8 @@ use ReflectionProperty;
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
 final class AttributePlan
 {
-    /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
-    private readonly ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
+    /** @var Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    private readonly Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
 
     /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
     public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target {
@@ -23,14 +24,14 @@ final class AttributePlan
     }
 
     /**
-     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param list<AttributeUsage> $usages
      */
     public function __construct(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         public readonly array $usages,
     ) {
-        $this->declaration = ReflectionSnapshot::target($target);
+        $this->declaration = ReflectionSnapshot::planDeclaration($target);
     }
 
     /**

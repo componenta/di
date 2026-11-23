@@ -13,6 +13,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
@@ -22,10 +23,12 @@ use ReflectionProperty;
  * Retains completed metadata only for the current resolution.
  *
  * @internal
+ * @phpstan-type ReflectionTarget ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty
+ * @phpstan-type CompletedPhase array{target:ReflectionTarget,plan:AttributePlan,phase:?AttributePhase,borrowed:bool,observed:array<int,ReflectionAttribute<object>>|null}
  */
 final class CompletedAttributeGuard
 {
-    /** @var list<array{target:ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,plan:AttributePlan,phase:?AttributePhase}> */
+    /** @var list<CompletedPhase> */
     private array $completed = [];
     /** @var (Closure():void)|null */
     private ?Closure $checkParameterSources = null;
@@ -35,17 +38,33 @@ final class CompletedAttributeGuard
         private int $verifiedRevision = -1,
     ) {}
 
-    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    /**
+     * @param ReflectionTarget $target
+     * @param list<ReflectionAttribute<object>>|null $captured
+     */
     public function record(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         AttributePlan $plan,
         ?AttributePhase $phase = null,
+        ?array $captured = null,
     ): void {
+        $borrowed = $captured === null && (
+            ($target instanceof ReflectionClass && $target::class !== ReflectionClass::class)
+            || ($target instanceof ReflectionParameter && $target::class !== ReflectionParameter::class)
+        );
+        $selected = $borrowed ? self::selectedTarget($target, $plan) : $target;
+        $attributes = $captured ?? $selected->getAttributes();
         // A derived reflector can omit a declaration after the plan has been consumed.
-        if ($target->getAttributes() === [] && $plan->usages === []) {
+        if ($attributes === [] && $plan->usages === []) {
             return;
         }
-        $this->completed[] = ['target' => $target, 'plan' => $plan, 'phase' => $phase];
+        $this->completed[] = [
+            'target' => $target,
+            'plan' => $plan,
+            'phase' => $phase,
+            'borrowed' => $borrowed,
+            'observed' => $captured ?? ($borrowed ? $attributes : null),
+        ];
     }
 
     /** Combines completed phases for one attempt without changing a reusable earlier guard. */
@@ -75,9 +94,10 @@ final class CompletedAttributeGuard
     {
         while (($revision = $this->plans->refreshAvailability()) !== $this->verifiedRevision) {
             foreach ($this->completed as $completed) {
-                $current = $this->plans->build($completed['target']);
+                [$target, $observed] = self::proofTarget($completed);
+                $current = $this->plans->build($target, $observed);
                 if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
-                    self::throwChanged($completed['target'], $completed['phase']);
+                    self::throwChanged($target, $completed['phase']);
                 }
             }
             $this->verifiedRevision = $revision;
@@ -91,10 +111,47 @@ final class CompletedAttributeGuard
             return;
         }
         foreach ($this->completed as $completed) {
-            if (!$this->plans->hasSameLoadedDeclarations($completed['plan'])) {
-                self::throwChanged($completed['target'], null);
+            [$target, $observed] = self::proofTarget($completed);
+            if (!$target instanceof ReflectionParameter) {
+                throw new \LogicException('Expected a consumed parameter plan.');
+            }
+            if (!$this->plans->hasSameLoadedDeclarations($target, $completed['plan'], $observed)) {
+                self::throwChanged($target, null);
             }
         }
+    }
+
+    /**
+     * @param CompletedPhase $completed
+     * @return array{ReflectionTarget,array<int,ReflectionAttribute<object>>|null}
+     */
+    private static function proofTarget(array $completed): array
+    {
+        $source = $completed['target'];
+        if (!$completed['borrowed']) {
+            return [$source, $completed['observed']];
+        }
+
+        $target = self::selectedTarget($source, $completed['plan']);
+        return [$target, $target === $source ? null : $completed['observed']];
+    }
+
+    /**
+     * @param ReflectionTarget $source
+     * @return ReflectionTarget
+     */
+    private static function selectedTarget(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $source,
+        AttributePlan $plan,
+    ): ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty {
+        $declaration = $plan->target;
+        if ($source instanceof ReflectionClass && $declaration instanceof ReflectionClass) {
+            return $source->getName() === $declaration->getName() ? $source : $declaration;
+        }
+        if ($source instanceof ReflectionParameter && $declaration instanceof ReflectionParameter) {
+            return ReflectionSnapshot::sameParameter($source, $declaration) ? $source : $declaration;
+        }
+        return $source;
     }
 
     /** @param (Closure():void)|null $checkSources Loaded-only provenance check for the consumed arguments. */

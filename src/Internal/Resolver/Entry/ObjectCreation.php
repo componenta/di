@@ -117,8 +117,9 @@ final class ObjectCreation
         $className = $metadata->class->getName();
         $input = ConstructionParameters::from($params);
         if (!$metadata->hasAttributeHandlers) {
-            $completed = $this->attributes->skippedBeforePhase($metadata->class);
-            $this->attributes->recordBootstrapUse($metadata->class, AttributePhase::BeforeInstantiation);
+            $target = $metadata->attributeTarget;
+            $completed = $this->attributes->skippedBeforePhase($target);
+            $this->attributes->recordBootstrapUse($target, AttributePhase::BeforeInstantiation);
             $parameters = $resolveParameters === null ? $input : ConstructionParameters::from($resolveParameters());
             $entry = ConstructorInvocation::create(
                 $this->parameters,
@@ -134,7 +135,8 @@ final class ObjectCreation
                 $completed = $completed->with($constructorProof);
             }
             $completed->assertUnchanged();
-            if ($this->attributes->hasHandlers($metadata->class)) {
+            $target = $metadata->attributeTarget;
+            if ($this->attributes->hasHandlers($target)) {
                 $attempt = ObjectCreationAccess::begin(
                     $metadata->class,
                     ConstructionParameters::invocationArguments($parameters),
@@ -143,10 +145,10 @@ final class ObjectCreation
                 $creation = $attempt->context;
                 $this->parametersStore->attach($creation, $parameters);
                 $attempt->initialize($entry);
-                $after = $this->attributes->processTracked($metadata->attributeTarget, AttributePhase::AfterInstantiation, $attempt->context);
+                $after = $this->attributes->processTracked($target, AttributePhase::AfterInstantiation, $attempt->context);
             } else {
-                $this->attributes->recordBootstrapUse($metadata->class, AttributePhase::AfterInstantiation);
-                $after = $this->attributes->skippedAfterPhase($metadata->class);
+                $this->attributes->recordBootstrapUse($target, AttributePhase::AfterInstantiation);
+                $after = $this->attributes->skippedAfterPhase($target);
             }
             $completed = $completed->with($after);
             $completed->assertUnchanged();

@@ -65,11 +65,11 @@ test('recursive external availability stops without blocking independent ids or 
         ->and($di->get('recursive'))->toBe('recovered value');
 });
 
-test('an external availability probe can see a local entry while its own lookup is active', function (): void {
+test('an external ownership probe can see other routes for the same id', function (bool $externalRoute): void {
     $di = container();
-    $di->set('local', 'local value');
     $external = new class ($di) implements ContainerInterface {
         private bool $probing = false;
+        public int $queries = 0;
         public ?bool $nestedAvailability = null;
         public mixed $nestedValue = null;
 
@@ -77,7 +77,12 @@ test('an external availability probe can see a local entry while its own lookup 
 
         public function has(string $id): bool
         {
-            if ($id !== 'local' || $this->probing) {
+            if ($id !== 'entry') {
+                return false;
+            }
+
+            ++$this->queries;
+            if ($this->probing) {
                 return false;
             }
             $this->probing = true;
@@ -96,8 +101,16 @@ test('an external availability probe can see a local entry while its own lookup 
         }
     };
     $di->addContainer($external);
+    if ($externalRoute) {
+        $owner = container();
+        $owner->set('entry', 'value');
+        $di->addContainer($owner);
+    } else {
+        $di->set('entry', 'value');
+    }
 
-    expect($di->has('local'))->toBeTrue()
+    expect($di->has('entry'))->toBeTrue()
         ->and($external->nestedAvailability)->toBeTrue()
-        ->and($external->nestedValue)->toBe('local value');
-});
+        ->and($external->nestedValue)->toBe('value')
+        ->and($external->queries)->toBe(1);
+})->with(['local entry' => false, 'second provider' => true]);

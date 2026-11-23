@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Parameter;
 
 use Closure;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ResolutionDiagnostics;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextScope;
+use ReflectionParameter;
+use Throwable;
 
 /** Arguments visible to resolvers during one invocation. */
 final class ParameterResolutionContext extends ParameterContextScope
@@ -51,6 +55,17 @@ final class ParameterResolutionContext extends ParameterContextScope
     protected function invocationArguments(): array
     {
         return $this->suppliedArguments;
+    }
+
+    protected function parameterFailure(ReflectionParameter $parameter, ?string $reason, ?Throwable $previous): ResolutionException
+    {
+        return ResolutionDiagnostics::parameter(
+            $parameter,
+            $reason,
+            ResolutionDiagnostics::argumentTypes($this->suppliedArguments),
+            ResolutionDiagnostics::argumentTypes($this->resolvedArguments),
+            $previous,
+        );
     }
 
     private function resolve(int $position, mixed $value): void

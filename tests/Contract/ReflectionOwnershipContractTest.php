@@ -7,7 +7,9 @@ namespace Componenta\DI\Tests\Contract\ReflectionOwnership;
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -22,7 +24,6 @@ use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
 use Reflector;
-use stdClass;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class ObserveClass {}
@@ -31,6 +32,17 @@ final class ObserveClass {}
 final class Requested {}
 
 final class Unrelated {}
+
+/** @extends ReflectionClass<object> */
+final class ApplicationReflection extends ReflectionClass {}
+
+final class ApplicationParameter extends ReflectionParameter {}
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final class OtherClassAttribute {}
+
+#[OtherClassAttribute]
+final class OtherClassWithHandler {}
 
 #[Attribute(Attribute::TARGET_METHOD)]
 final class ObserveStatic {}
@@ -124,6 +136,84 @@ test('reflectors retained by object handlers cannot retarget an independent cont
     }
 });
 
+test('the context reflection and the input reflector cannot retarget object creation', function (bool $deferred): void {
+    $source = new ApplicationReflection(Requested::class);
+    $handler = new class () implements AttributeHandlerInterface {
+        /** @var class-string|null */
+        public ?string $requested = null;
+
+        public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+        {
+            $reflection = $context->class;
+            new ReflectionMethod(ReflectionClass::class, '__construct')->invoke($reflection, Unrelated::class);
+            $this->requested = $context->class->getName();
+        }
+    };
+    [, $runtime] = new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(ObserveClass::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->assemble();
+
+    $entry = $runtime->objects->create($source, resolveParameters: $deferred
+        ? static function () use ($source): array {
+            $source->__construct(Unrelated::class);
+            return [];
+        }
+        : null);
+
+    expect($entry)->toBeInstanceOf(Requested::class)
+        ->and($handler->requested)->toBe(Requested::class)
+        ->and($source->getName())->toBe($deferred ? Unrelated::class : Requested::class);
+})->with(['immediate arguments' => false, 'deferred arguments' => true]);
+
+test('a published class plan and usage own the declaration from a derived reflector', function (): void {
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(ObserveClass::class));
+    $input = new ApplicationReflection(Requested::class);
+    $plan = new AttributePlanBuilder($registry)->build($input);
+    $published = $plan->target;
+    $usage = $plan->attributes(ObserveClass::class)[0];
+    new ReflectionMethod(ReflectionClass::class, '__construct')->invoke($published, Unrelated::class);
+    new ReflectionMethod(ReflectionClass::class, '__construct')->invoke($usage->target, Unrelated::class);
+
+    expect($input->getName())->toBe(Requested::class)
+        ->and($plan->target->getName())->toBe(Requested::class)
+        ->and($usage->target->getName())->toBe(Requested::class);
+    $input->__construct(Unrelated::class);
+    expect($plan->target->getName())->toBe(Requested::class)
+        ->and($usage->target->getName())->toBe(Requested::class)
+        ->and($usage->newInstance())->toBeInstanceOf(ObserveClass::class);
+});
+
+test('a derived parameter keeps its declaration and default when a reflector is retargeted', function (bool $published): void {
+    [, $runtime] = new ContainerBuilder()->assemble();
+    $input = new ApplicationParameter(__NAMESPACE__ . '\\answer', 0);
+    $target = new ParameterTarget($input);
+    $view = $published ? $target->reflection : $input;
+    $view->__construct(__NAMESPACE__ . '\\otherDefault', 0);
+
+    expect($target->reflection->getDeclaringFunction()->getName())->toBe(__NAMESPACE__ . '\\answer')
+        ->and($target->defaultValue)->toBe(10)
+        ->and($runtime->parameters->resolveTargets([$target]))->toBe([10]);
+})->with(['published snapshot' => true, 'borrowed source' => false]);
+
+test('completed phases verify the selected class if deferred arguments retarget the reflector', function (): void {
+    $handler = new ClassObserver();
+    [, $runtime] = new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(ObserveClass::class))
+        ->addAttributeDefinition(new AttributeDefinition(OtherClassAttribute::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->assemble();
+    $input = new ApplicationReflection(Requested::class);
+
+    $entry = $runtime->objects->create($input, resolveParameters: static function () use ($input): array {
+        $input->__construct(OtherClassWithHandler::class);
+        return [];
+    });
+
+    expect($entry)->toBeInstanceOf(Requested::class)
+        ->and($input->getName())->toBe(OtherClassWithHandler::class)
+        ->and($handler->observed)->toBe([]);
+});
+
 test('a reflection parameter retained by supports cannot change the next call default', function (): void {
     $observer = new ParameterObserver();
     $container = new ContainerBuilder()->addParameterResolver($observer, -1000)->build();
@@ -174,20 +264,18 @@ test('a cached method plan can reconstruct a native property hook', function ():
     expect($builder->build($hook)->target->getName())->toBe('$value::get');
 });
 
-test('a named plan cache does not retain an instance-specific dynamic property', function (): void {
-    $first = (object) ['value' => 'first'];
-    $second = (object) ['value' => 'second'];
+test('attribute plans require a property declaration', function (): void {
+    $object = (object) ['value' => 'dynamic'];
     $builder = new AttributePlanBuilder(new AttributeDefinitionRegistry());
-    $target = $builder->build(new ReflectionProperty($first, 'value'))->target;
-    if (!$target instanceof ReflectionProperty) {
-        throw new LogicException('Expected a property target.');
-    }
-    $target->__construct(HookTarget::class, 'value');
+    $dynamic = new ReflectionProperty($object, 'value');
+    $declared = new ReflectionProperty(HookTarget::class, 'value');
 
-    $current = $builder->build(new ReflectionProperty($second, 'value'))->target;
-    expect($current->getName())->toBe('value')
-        ->and($current instanceof ReflectionProperty ? $current->getDeclaringClass()->getName() : null)
-        ->toBe(stdClass::class);
+    expect(fn() => $builder->build($dynamic))->toThrow(AttributeCompositionException::class, 'declared property')
+        ->and(fn() => new AttributePlan($dynamic, []))->toThrow(AttributeCompositionException::class, 'declared property');
+
+    $target = $builder->build($declared)->target;
+    expect($target)->toBeInstanceOf(ReflectionProperty::class)
+        ->and($target->getName())->toBe('value');
 });
 
 test('an inherited static method reflector preserves the creation class when dispatched to a handler', function (): void {

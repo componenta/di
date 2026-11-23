@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Exception;
 
+use Componenta\DI\Internal\ResolutionDiagnostics;
 use ReflectionParameter;
 use ReflectionProperty;
 use RuntimeException;
@@ -58,31 +59,12 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         array $resolvedParameters = [],
         ?Throwable $previous = null,
     ): self {
-        $context = self::formatFunctionName($parameter);
-        $type = $parameter->getType();
-        $typeName = $type === null ? null : (string) $type;
-        $diagnostic = new ParameterDiagnostic(
-            $parameter->getName(),
-            $parameter->getPosition(),
-            $typeName,
-            $context,
-        );
-
-        return new self(
-            sprintf(
-                'Cannot resolve parameter "$%s" of %s%s',
-                $parameter->getName(),
-                $context,
-                self::buildSuffix($reason, $previous),
-            ),
-            parameter: $diagnostic,
-            parameterName: $diagnostic->name,
-            parameterPosition: $diagnostic->position,
-            parameterType: $diagnostic->type,
-            parameterContext: $diagnostic->context,
-            providedParameterTypes: self::valueTypes($providedParameters),
-            resolvedParameterTypes: self::resolvedValueTypes($resolvedParameters),
-            previous: $previous,
+        return ResolutionDiagnostics::parameter(
+            $parameter,
+            $reason,
+            ResolutionDiagnostics::argumentTypes($providedParameters),
+            ResolutionDiagnostics::argumentTypes($resolvedParameters),
+            $previous,
         );
     }
 
@@ -105,7 +87,7 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
                 'Cannot resolve property "%s::$%s"%s',
                 $class,
                 $property->getName(),
-                self::buildSuffix($reason, $previous),
+                ResolutionDiagnostics::suffix($reason, $previous),
             ),
             property: $diagnostic,
             propertyName: $diagnostic->name,
@@ -148,63 +130,4 @@ final class ResolutionException extends RuntimeException implements ExceptionInt
         );
     }
 
-    private static function buildSuffix(?string $reason, ?Throwable $previous): string
-    {
-        if ($reason !== null && $previous !== null) {
-            return sprintf(': %s (%s: %s).', $reason, $previous::class, $previous->getMessage());
-        }
-
-        if ($reason !== null) {
-            return ': ' . $reason . '.';
-        }
-
-        if ($previous !== null) {
-            return ': ' . $previous->getMessage();
-        }
-
-        return '.';
-    }
-
-    private static function formatFunctionName(ReflectionParameter $parameter): string
-    {
-        $function = $parameter->getDeclaringFunction();
-
-        if ($function->isClosure()) {
-            return 'Closure';
-        }
-
-        $class = $parameter->getDeclaringClass();
-        if ($class !== null) {
-            return sprintf('%s::%s()', $class->getName(), $function->getName());
-        }
-
-        return sprintf('%s()', $function->getName());
-    }
-
-    /**
-     * @param array<string|int, mixed> $values
-     * @return array<string|int, string>
-     */
-    private static function valueTypes(array $values): array
-    {
-        $types = [];
-        foreach ($values as $key => $value) {
-            $types[$key] = get_debug_type($value);
-        }
-        return $types;
-    }
-
-    /**
-     * @param array<int, mixed> $values
-     * @return array<int, string>
-     */
-    private static function resolvedValueTypes(array $values): array
-    {
-        /** @var array<int, string> $types */
-        $types = [];
-        foreach ($values as $position => $value) {
-            $types[$position] = get_debug_type($value);
-        }
-        return $types;
-    }
 }

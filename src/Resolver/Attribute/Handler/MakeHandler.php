@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -67,11 +68,10 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }

@@ -135,6 +135,35 @@ test('a retained target with a derived reflector keeps using its current attribu
     expect($resolver->resolveTargets([$target]))->toBe(['fallback']);
 })->with(['function' => false, 'method' => true]);
 
+test('a derived closure method parameter retains the attributes selected for its own declaration', function (bool $hidden): void {
+    $closure = static fn(#[EntryId('trusted.value')] string $value = 'fallback'): string => $value;
+    $replacement = static fn(#[EntryId('next.value')] string $value = 'replacement'): string => $value;
+    $reflection = new class ([$closure, '__invoke'], 0) extends ReflectionParameter {
+        public bool $hideAttributes = false;
+
+        /** @return array<int, ReflectionAttribute<object>> */
+        public function getAttributes(?string $name = null, int $flags = 0): array
+        {
+            return $this->hideAttributes ? [] : parent::getAttributes($name, $flags);
+        }
+    };
+    $reflection->hideAttributes = $hidden;
+    [, $runtime] = new ContainerBuilder()
+        ->addService('trusted.value', 'source')
+        ->addService('next.value', 'other source')
+        ->assemble();
+    $resolver = $runtime->parameters;
+    $target = $resolver->target($reflection);
+    $arguments = $hidden ? [] : ['source'];
+
+    expect($resolver->resolveTargets([$target]))->toBe($arguments)
+        ->and($closure(...$arguments))->toBe($hidden ? 'fallback' : 'source');
+    $reflection->__construct([$replacement, '__invoke'], 0);
+    $reflection->hideAttributes = !$hidden;
+    expect($target->reflection->getAttributes(EntryId::class)[0]->getArguments())->toBe(['trusted.value'])
+        ->and($resolver->resolveTargets([$target]))->toBe($arguments);
+})->with(['filtered metadata' => true, 'declared metadata' => false]);
+
 test('completed parameter validation retains a consumed attribute hidden by its reflector', function (bool $hide): void {
     $function = __NAMESPACE__ . '\\declaredPair';
     $reflection = new DerivedParameter($function, new \stdClass());

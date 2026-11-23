@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Closure;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
@@ -203,7 +204,7 @@ final class ParameterExecution
                 ));
             }
             if ($declaration->mayHaveAttributes) {
-                $completed->record($reservedTarget->reflection, $reserved);
+                $completed->record($declaration->metadataTarget(), $reserved, captured: $declaration->capturedAttributes);
             }
         }
 
@@ -331,11 +332,7 @@ final class ParameterExecution
                         $target,
                         $context,
                     );
-                    if ($declaration->mayHaveAttributes) {
-                        $reflection = $target->reflection;
-                        $completed->record($reflection, $attributePlan);
-                        $bootstrap?->recordAttributes($reflection, plan: $attributePlan);
-                    }
+                    self::recordParameterAttributes($declaration, $attributePlan, $completed, $bootstrap);
                     if ($bootstrap !== null) {
                         $bootstrap->recordParameter($target, $resolvers, $slots, $slot, $pending);
                     }
@@ -348,11 +345,7 @@ final class ParameterExecution
                 }
             }
             if ($nativeOptional) {
-                if ($declaration->mayHaveAttributes) {
-                    $reflection = $target->reflection;
-                    $completed->record($reflection, $attributePlan);
-                    $bootstrap?->recordAttributes($reflection, plan: $attributePlan);
-                }
+                self::recordParameterAttributes($declaration, $attributePlan, $completed, $bootstrap);
                 if ($bootstrap !== null) {
                     $bootstrap->recordParameter($target, $resolvers, $slots, null, $pending);
                 }
@@ -361,19 +354,32 @@ final class ParameterExecution
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
 
-        throw ResolutionException::forParameter(
+        throw ParameterContextAccess::failure(
+            $context,
             $target->reflection,
-            providedParameters: $context->provided,
-            resolvedParameters: $context->resolved,
         );
+    }
+
+    private static function recordParameterAttributes(
+        ParameterDeclaration $declaration,
+        AttributePlan $plan,
+        CompletedAttributeGuard $completed,
+        ?BootstrapResolutionGuard $bootstrap,
+    ): void {
+        if (!$declaration->mayHaveAttributes) {
+            return;
+        }
+
+        $reflection = $declaration->metadataTarget();
+        $completed->record($reflection, $plan, captured: $declaration->capturedAttributes);
+        $bootstrap?->recordAttributes($reflection, plan: $plan, captured: $declaration->capturedAttributes);
     }
 
     private function __clone() {}

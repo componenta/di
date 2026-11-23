@@ -14,6 +14,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionMethod;
@@ -43,7 +44,7 @@ final class BootstrapResolutionGuard
 {
     private bool $active = true;
 
-    /** @var list<array{target:ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>,declarations:list<class-string>}> */
+    /** @var list<array{target:ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>,declarations:list<class-string>,captured:list<ReflectionAttribute<object>>|null}> */
     private array $attributeUses = [];
 
     /** @var list<ParameterUse> */
@@ -71,16 +72,20 @@ final class BootstrapResolutionGuard
         get => $this->active;
     }
 
-    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
+    /**
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<ReflectionAttribute<object>>|null $captured
+     */
     public function recordAttributes(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         ?AttributePhase $phase = null,
         ?AttributePlan $plan = null,
+        ?array $captured = null,
     ): void {
         if (!$this->active) {
             return;
         }
-        $declared = $target->getAttributes();
+        $declared = $captured ?? $target->getAttributes();
         if ($declared === [] && ($plan === null || $plan->usages === [])) {
             return;
         }
@@ -88,8 +93,9 @@ final class BootstrapResolutionGuard
         $this->attributeUses[] = [
             'target' => $target,
             'phase' => $phase,
-            'usages' => CompletedAttributeGuard::semantics($plan ?? $this->plans->build($target), $phase),
-            'declarations' => array_values(array_map(static fn(\ReflectionAttribute $attribute): string => $attribute->getName(), $declared)),
+            'usages' => CompletedAttributeGuard::semantics($plan ?? $this->plans->build($target, $captured), $phase),
+            'declarations' => array_values(array_map(static fn(ReflectionAttribute $attribute): string => $attribute->getName(), $declared)),
+            'captured' => $captured,
         ];
     }
 
@@ -257,7 +263,7 @@ final class BootstrapResolutionGuard
             $revision = $this->plans->refreshAvailability();
             $parameterChecks = $this->parameterChecks;
             foreach ($this->attributeUses as $use) {
-                $current = CompletedAttributeGuard::semantics($this->plans->build($use['target']), $use['phase']);
+                $current = CompletedAttributeGuard::semantics($this->plans->build($use['target'], $use['captured']), $use['phase']);
                 if ($current !== $use['usages']) {
                     throw new InvalidConfigurationException(sprintf(
                         'DI bootstrap used %s before its required attribute extensions were registered. Register these extensions before factories that resolve this dependency.',
@@ -441,7 +447,8 @@ final class BootstrapResolutionGuard
         if ($owner !== null) {
             return $owner;
         }
-        $reflection = $target->reflection;
+        $declaration = ParameterTargetAccess::declaration($target);
+        $reflection = $declaration->metadataTarget();
         if ($reflection::class !== ReflectionParameter::class) {
             return WeakReference::create($reflection);
         }
@@ -453,7 +460,7 @@ final class BootstrapResolutionGuard
         if (is_closure_reflector($function)) {
             // Native Closure::__invoke reflectors can own the closure's captures.
             // Keep the original snapshot only while the caller's reflector lives.
-            $source = ParameterTargetAccess::declaration($target)->closureMethodSource();
+            $source = $declaration->closureMethodSource();
             if ($source !== null) {
                 $closureMethodTargets[$source] ??= [];
                 $closureMethodTargets[$source][spl_object_id($target)] = $target;

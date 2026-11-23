@@ -53,16 +53,7 @@ final class ObjectCreationContext extends ObjectCreationScope
 
     /** @var array<string|int,mixed> */
     public array $parameters {
-        get {
-            $this->assertParametersReadable();
-            $parameters = $this->parameterValues;
-            if ($parameters instanceof Closure) {
-                $parameters = ResolutionMetadata::invocationSlots($parameters());
-                $this->parameterValues = $parameters;
-            }
-
-            return ResolutionMetadata::snapshot($parameters);
-        }
+        get => ResolutionMetadata::snapshot($this->readParameterValues());
     }
 
     /** @var array<string|int,mixed>|Closure():array<string|int,mixed> */
@@ -118,6 +109,30 @@ final class ObjectCreationContext extends ObjectCreationScope
             self::$retryAttempt ??= static fn(self $context, array|Closure|null $parameters): ObjectCreationAttempt
                 => self::owned($context->freshAttempt($parameters)),
         );
+    }
+
+    /** @return array<string|int,mixed> */
+    private function readParameterValues(): array
+    {
+        $this->assertParametersReadable();
+        $parameters = $this->parameterValues;
+        if ($parameters instanceof Closure) {
+            $parameters = ResolutionMetadata::invocationSlots($parameters());
+            $this->parameterValues = $parameters;
+        }
+
+        return $parameters;
+    }
+
+    protected function findParameter(string $name, mixed &$value): bool
+    {
+        $parameters = $this->readParameterValues();
+        if (!array_key_exists($name, $parameters)) {
+            return false;
+        }
+
+        $value = $parameters[$name];
+        return true;
     }
 
     protected function assertParametersReadable(): void

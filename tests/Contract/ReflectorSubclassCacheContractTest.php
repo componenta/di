@@ -122,10 +122,9 @@ test('custom reflectors and native metadata keep independent attribute plans in 
         $reflector = target($kind, $custom);
         $plan = $plans->build($reflector);
 
-        expect($plan->usages)->toHaveCount($custom ? 0 : 1);
-        if ($custom) {
-            expect($plan->target)->toBe($reflector);
-        }
+        expect($plan->usages)->toHaveCount($custom ? 0 : 1)
+            ->and($plan->target)->not->toBe($reflector)
+            ->and($plan->target->getName())->toBe($reflector->getName());
     }
 })->with(['class', 'method', 'property', 'parameter'])
     ->with(['custom first' => true, 'native first' => false]);

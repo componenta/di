@@ -7,7 +7,7 @@ namespace Componenta\DI\Internal;
 use Closure;
 use Componenta\Caster\CasterNotFoundException;
 use Componenta\Caster\CasterProviderInterface;
-use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
@@ -155,15 +155,14 @@ function validate_parameter_resolution_result(
         || !is_int($result[0])
         || $result[0] !== $target->position
     ) {
-        throw ResolutionException::forParameter(
+        throw ParameterContextAccess::failure(
+            $context,
             $target->reflection,
             reason: sprintf(
                 'resolver "%s" returned an invalid result; expected [position %d, value]',
                 $resolver::class,
                 $target->position,
             ),
-            providedParameters: $context->provided,
-            resolvedParameters: $context->resolved,
         );
     }
 
@@ -176,14 +175,13 @@ function validate_parameter_resolution_result(
     }
 
     if (!$target->accepts($value)) {
-        throw ResolutionException::forParameter(
+        throw ParameterContextAccess::failure(
+            $context,
             $target->reflection,
             reason: sprintf(
                 'resolver "%s" returned a value that does not satisfy the declared type',
                 $resolver::class,
             ),
-            providedParameters: $context->provided,
-            resolvedParameters: $context->resolved,
         );
     }
 

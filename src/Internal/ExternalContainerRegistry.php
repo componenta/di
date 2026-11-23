@@ -56,28 +56,55 @@ final class ExternalContainerRegistry
     }
 
     /** @param Closure(string):bool|null $mayInspect */
-    public function findOwning(string $id, ?Closure $mayInspect = null, bool $requireResolvable = false): ?ContainerInterface
-    {
-        $containers = $this->containers;
-        $inspected = count($containers);
-        while (true) {
-            foreach ($containers as $container) {
-                if ($mayInspect !== null && !$mayInspect($id)) {
+    public function findOwning(
+        string $id,
+        ?Closure $mayInspect = null,
+        bool $requireResolvable = false,
+        ?ExternalLookupProbes $lookupProbes = null,
+    ): ?ContainerInterface {
+        $probes = $lookupProbes?->start($id);
+        $caller = $probes?->begin();
+        try {
+            $containers = $this->containers;
+            $inspected = count($containers);
+            while (true) {
+                foreach ($containers as $providerId => $container) {
+                    if ($mayInspect !== null && !$mayInspect($id)) {
+                        return null;
+                    }
+
+                    $revision = $lookupProbes->revision ?? 0;
+                    if ($probes !== null && !$probes->canProbe($providerId, $caller, $requireResolvable, $revision)) {
+                        continue;
+                    }
+                    $probes?->enterProvider($providerId);
+                    try {
+                        if ($requireResolvable ? AvailableEntryLookup::has($container, $id) : $container->has($id)) {
+                            $probes?->recordOwner($providerId);
+                            return $container;
+                        }
+                        // A repeated recursive miss can reopen the same search tree.
+                        if ($caller !== null) {
+                            $probes?->recordRecursiveMiss($caller, $providerId, $requireResolvable, $revision);
+                        }
+                    } finally {
+                        $probes?->leaveProvider($providerId);
+                    }
+                }
+
+                if ($inspected === count($this->containers)) {
                     return null;
                 }
-                if ($requireResolvable ? AvailableEntryLookup::has($container, $id) : $container->has($id)) {
-                    return $container;
-                }
-            }
 
-            if ($inspected === count($this->containers)) {
-                return null;
+                // Ownership callbacks may append providers, including while a Fiber
+                // is suspended. Visit the new suffix without replaying earlier has().
+                $containers = array_slice($this->containers, $inspected, preserve_keys: true);
+                $inspected += count($containers);
             }
-
-            // Ownership callbacks may append providers, including while a Fiber
-            // is suspended. Visit the new suffix without replaying earlier has().
-            $containers = array_slice($this->containers, $inspected);
-            $inspected += count($containers);
+        } finally {
+            if ($probes !== null) {
+                $lookupProbes?->finish($id, $probes);
+            }
         }
     }
 }

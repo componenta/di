@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Attribute\Handler;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -44,11 +45,10 @@ final class EntryIdHandler implements AttributeHandlerInterface, ParameterAttrib
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }

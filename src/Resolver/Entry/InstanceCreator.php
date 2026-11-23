@@ -29,11 +29,11 @@ final readonly class InstanceCreator
      */
     public function create(ReflectionClass $class, array $params = []): object
     {
-        $class = ReflectionSnapshot::forConstruction($class);
+        $construction = ReflectionSnapshot::forConstruction($class);
         $constructor = $class->getConstructor();
         $entry = ConstructorInvocation::create(
             $this->parameters,
-            $class,
+            $construction,
             $constructor,
             $this->parameters->prepare($constructor?->getParameters() ?? []),
             $params,
@@ -53,7 +53,6 @@ final readonly class InstanceCreator
      */
     public function initialize(object $entry, ReflectionClass $class, array $params = []): void
     {
-        $class = ReflectionSnapshot::forConstruction($class);
         $constructor = $class->getConstructor();
         ConstructorInvocation::initialize(
             $this->parameters,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Closure;
 use Componenta\DI\Internal\ReflectionSnapshot;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -20,8 +21,8 @@ final class AttributeUsage
     /** @var class-string */
     public readonly string $attributeClass;
 
-    /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
-    private readonly ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
+    /** @var Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    private readonly Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
 
     /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
     public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target {
@@ -39,17 +40,17 @@ final class AttributeUsage
 
     /**
      * @param ReflectionAttribute<object> $reflection
-     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      */
     public function __construct(
         ReflectionAttribute $reflection,
         public readonly AttributeDefinition $definition,
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         public readonly int $declarationOrder,
     ) {
         $this->reflection = $reflection;
         $this->attributeClass = $reflection->getName();
-        $this->declaration = ReflectionSnapshot::target($target);
+        $this->declaration = ReflectionSnapshot::planDeclaration($target);
     }
 
     /** Creates an isolated runtime attribute instance for one handler invocation. */

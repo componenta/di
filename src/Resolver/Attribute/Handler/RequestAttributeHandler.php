@@ -62,14 +62,13 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
 
         $request = RequestParameter::get(ParameterContextAccess::provided($context));
         if ($request === null) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 reason: sprintf(
                     'PSR-7 request is required for #[%s]',
                     $this->attributeShortName($attribute),
                 ),
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
 

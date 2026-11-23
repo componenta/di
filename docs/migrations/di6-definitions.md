@@ -235,7 +235,9 @@ When composing an `ObjectPipeline`, pass the same `AttributePlanBuilder` to `Att
 
 Use `ObjectPipeline::create()` to run both object attribute phases and obtain the initialized object. `AttributeProcessor` provides `prepare()` and `hasHandlers()`. The pipeline supplies the `ObjectCreationContext` to handlers for each attempt.
 
-Pass immediate parameters through `$params`, or pass a `resolveParameters` callback and leave `$params` empty. The callback can return an `EntryParameters` instance to preserve the source of forwarded arguments. Supplying both sources raises `InvalidConfigurationException` before creation starts. A native `ReflectionObject` supplies the selected class at entry. Class handlers can inspect the instance's members while its reflector still describes that class.
+Pass immediate parameters through `$params`, or pass a `resolveParameters` callback and leave `$params` empty. The callback can return an `EntryParameters` instance to preserve the source of forwarded arguments. Supplying both sources raises `InvalidConfigurationException` before creation starts. The pipeline captures the class named by an input reflector at entry. A handler's `$context->class` is a detached view of that class. A `ReflectionObject` or a derived reflector can supply attribute metadata while it still describes the selected class.
+
+`AttributePlan::target`, `AttributeUsage::target` and `ParameterTarget::reflection` expose independent native reflectors. Use `$builder->build($closure)` to plan attributes for `Closure::__invoke`. Each read of `target` recreates a `ReflectionMethod` with that closure's signature and attributes. Passing a `ReflectionMethod` for `Closure::__invoke` or a reflection of a dynamic property as a plan target raises `AttributeCompositionException`. For a `ReflectionObject` of a closure, `AttributeProcessor` inspects the methods of the `Closure` class declaration. A derived parameter reflector for `Closure::__invoke` supplies the attribute selection when its `ParameterTarget` is created.
 
 The constructor rejects aliases whose source is a protected DI ID before attaching the resolver. Application aliases may point to protected services. A rejected alias configuration leaves the resolver available for a corrected construction.
 
@@ -292,7 +294,7 @@ A destructor that reenters lookup observes completed publication and invalidatio
 
 `get()` throws the PSR-11 `NotFoundExceptionInterface` when no route exists for the requested ID. A missing dependency inside a selected factory, constructor or delegator is a `ResolutionException` with the original failure in `getPrevious()`. The same classification applies when a selected external container throws `NotFoundExceptionInterface`. Update catch blocks that treated a missing dependency as a missing requested entry. `make()` and exceptions raised after a lazy object has been returned retain their own error boundaries.
 
-A reentrant `has()` for the ID currently checked by an external provider evaluates local availability while that provider's lookup is active.
+A reentrant lookup skips active ownership checks for the same ID in the current execution. The recursive search checks providers in registration order and skips retries of the same unsuccessful recursive route. Each explicit lookup by the same running provider can retry its earlier misses, even inside another recursive lookup. Published container changes also allow fresh checks. A search with no external owner falls back to local entries.
 
 Service IDs accept arbitrary bindings, including class names bound to factories returning a different class. The static result of `get()` is `mixed`, and `FactoryInterface::make()` returns `object`.
 

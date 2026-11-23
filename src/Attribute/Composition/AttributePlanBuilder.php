@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Closure;
+use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributePlanScope;
 use Componenta\DI\Internal\AttributeRegistryAccess;
 use Componenta\DI\Internal\ReflectionSnapshot;
@@ -20,9 +22,16 @@ final class AttributePlanBuilder extends AttributePlanScope
         parent::__construct(AttributeRegistryAccess::plans($registry));
     }
 
-    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
-    public function build(ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target): AttributePlan
-    {
-        return $this->planning->build(ReflectionSnapshot::target($target));
+    /**
+     * Pass the closure itself for its instance-specific invocation method.
+     *
+     * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @throws AttributeCompositionException If a target has no declaration the builder can own or its attributes are invalid.
+     */
+    public function build(
+        Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+    ): AttributePlan {
+        ReflectionSnapshot::assertPlanTarget($target);
+        return $this->planning->build($target instanceof Closure ? $target : ReflectionSnapshot::target($target));
     }
 }

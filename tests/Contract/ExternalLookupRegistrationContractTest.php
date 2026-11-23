@@ -123,3 +123,153 @@ test('a suspended external lookup observes new owners when its ownership callbac
     expect($lookup->getReturn())->toBe($availability ? true : 'external')
         ->and([$first->queries, $owner->queries])->toBe([1, 1]);
 })->with(['get' => false, 'has' => true]);
+
+test('a suspended ownership probe leaves the provider available to another execution', function (): void {
+    $di = container();
+    $owner = new LookupContainer(static function (): bool {
+        if (Fiber::getCurrent() !== null) {
+            Fiber::suspend('inspecting');
+        }
+        return true;
+    });
+    $di->addContainer($owner);
+    $lookup = new Fiber(static fn(): bool => $di->has('entry'));
+
+    expect($lookup->start())->toBe('inspecting')
+        ->and($di->get('entry'))->toBe('external');
+    $lookup->resume();
+
+    expect($lookup->getReturn())->toBeTrue();
+});
+
+test('recursive ownership checks do not enumerate provider permutations', function (int $lookups, int $limit): void {
+    $di = container();
+    $providers = 8;
+    $checks = 0;
+    for ($i = 0; $i < $providers; ++$i) {
+        $di->addContainer(new LookupContainer(static function () use ($di, &$checks, $lookups, $limit): bool {
+            if (++$checks > $limit) {
+                throw new LogicException('Too many ownership checks for one lookup.');
+            }
+            for ($query = 0; $query < $lookups; ++$query) {
+                $di->has('entry');
+            }
+            return false;
+        }));
+    }
+
+    expect($di->has('entry'))->toBeFalse()
+        ->and($checks)->toBeLessThanOrEqual($limit);
+})->with([
+    'one lookup per probe' => [1, 8 ** 3],
+    'repeated lookups per probe' => [2, 8 ** 4],
+]);
+
+test('a nested lookup observes ownership that changes after a deeper lookup', function (): void {
+    $di = container();
+    $available = false;
+    $availability = [];
+    $first = new LookupContainer(static function () use ($di, &$availability): bool {
+        $availability[] = $di->has('entry');
+        return false;
+    });
+    $second = new LookupContainer(static function () use ($di, &$available, &$availability): bool {
+        if (!$available) {
+            $availability[] = $di->has('entry');
+            $available = true;
+        }
+        return false;
+    });
+    $owner = new LookupContainer(static function () use (&$available): bool {
+        return $available;
+    }, 'found');
+    $di->addContainer($first);
+    $di->addContainer($second);
+    $di->addContainer($owner);
+
+    expect($di->has('entry'))->toBeTrue()
+        ->and($availability)->toBe([false, true])
+        ->and($di->get('entry'))->toBe('found');
+});
+
+test('a fresh nested lookup replaces earlier misses when it discovers an owner', function (): void {
+    $di = container();
+    $state = new class () {
+        public bool $available = false;
+        public bool $ownerActive = false;
+        /** @var list<bool> */
+        public array $observed = [];
+    };
+    $observe = static function () use ($di): bool {
+        $di->has('entry');
+        return false;
+    };
+    $observer = new LookupContainer(static function () use ($di, $state): bool {
+        if (!$state->available) {
+            $state->observed[] = $di->has('entry');
+            $state->available = true;
+            $state->observed[] = $di->has('entry');
+        } else {
+            $found = $di->has('entry');
+            if (!$state->ownerActive) {
+                $state->observed[] = $found;
+            }
+        }
+        return false;
+    });
+    $owner = new LookupContainer(static function () use ($di, $state): bool {
+        $state->ownerActive = true;
+        try {
+            $di->has('entry');
+        } finally {
+            $state->ownerActive = false;
+        }
+        return $state->available;
+    });
+    $di->addContainer(new LookupContainer($observe));
+    $di->addContainer(new LookupContainer($observe));
+    $di->addContainer($observer);
+    $di->addContainer($owner);
+
+    expect($di->has('entry'))->toBeTrue()
+        ->and($state->observed[0] ?? null)->toBeFalse();
+    $after = array_slice($state->observed, 1);
+    expect($after)->not->toBeEmpty();
+    expect(in_array(false, $after, true))->toBeFalse();
+});
+
+test('a second availability query observes a new owner inside an outer recheck', function (): void {
+    $di = container();
+    $state = new class () {
+        public bool $ready = false;
+        public bool $owns = false;
+        public mixed $value = null;
+        /** @var list<bool> */
+        public array $observed = [];
+    };
+    $di->addContainer(new LookupContainer(static function () use ($di, $state): bool {
+        $di->has('entry');
+        $state->ready = true;
+        $di->has('entry');
+        return false;
+    }));
+    $di->addContainer(new LookupContainer(static function () use ($di, $state): bool {
+        if ($state->ready && !$state->owns) {
+            $state->observed[] = $di->has('entry');
+            $state->owns = true;
+            $state->observed[] = $di->has('entry');
+            $state->value = $di->get('entry');
+        }
+        return false;
+    }));
+    $di->addContainer(new LookupContainer(static function () use ($di, $state): bool {
+        if (!$state->owns) {
+            $di->has('entry');
+        }
+        return $state->owns;
+    }, 'new owner'));
+
+    expect($di->has('entry'))->toBeTrue()
+        ->and($state->observed)->toBe([false, true])
+        ->and($state->value)->toBe('new owner');
+});

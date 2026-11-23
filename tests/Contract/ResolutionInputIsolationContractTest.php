@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\ResolutionInputIsolation;
 
 use Attribute;
+use Componenta\Caster\CasterInterface;
+use Componenta\Caster\CasterProviderInterface;
+use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -17,6 +21,8 @@ use LogicException;
 use Reflector;
 use stdClass;
 
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
 #[Attribute(Attribute::TARGET_CLASS)]
 final class ObserveArguments {}
 
@@ -25,6 +31,52 @@ final readonly class Product
 {
     /** @param array<array-key,mixed> $payload */
     public function __construct(public array $payload) {}
+}
+
+/**
+ * @param array<array-key,mixed> $payload
+ * @return array<array-key,mixed>
+ */
+function updateLabel(array $payload): array
+{
+    $payload['label'] = 'formatted';
+    return $payload;
+}
+
+define(__NAMESPACE__ . '\\UPDATE_LABEL', updateLabel(...));
+
+final class ProductWithTransformedProperty
+{
+    /** @var array<array-key,mixed> */
+    #[Transform(UPDATE_LABEL)]
+    public array $payload;
+}
+
+final class ProductWithCastProperty
+{
+    /** @var array<array-key,mixed> */
+    #[Cast('format-label')]
+    public array $payload;
+}
+
+final class LabelCaster implements CasterInterface, CasterProviderInterface
+{
+    public string $name { get => 'format-label'; }
+
+    public function provide(string $name): ?CasterInterface
+    {
+        return $name === $this->name ? $this : null;
+    }
+
+    /** @return array<array-key,mixed> */
+    public function cast(mixed $value): array
+    {
+        if (!is_array($value)) {
+            throw new LogicException('Expected a payload array.');
+        }
+
+        return updateLabel($value);
+    }
 }
 
 /** @param array<array-key,mixed> $arguments */
@@ -122,3 +174,19 @@ test('a callable receives literal nested references after argument selection', f
     expect($actual)->toBe('set by callable')
         ->and($label)->toBe('set by callable');
 });
+
+test('a property transform or caster receives literal nested references', function (bool $transform): void {
+    $container = new ContainerBuilder()
+        ->addService(CasterProviderInterface::class, new LabelCaster())
+        ->build();
+    $label = 'original';
+    $class = $transform ? ProductWithTransformedProperty::class : ProductWithCastProperty::class;
+
+    $result = fixtureInstance($container->make($class, ['payload' => ['label' => &$label]]), $class);
+
+    expect($result->payload['label'])->toBe('formatted')
+        ->and($label)->toBe('formatted');
+})->with([
+    'transform' => true,
+    'cast' => false,
+]);

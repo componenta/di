@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -47,11 +48,10 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
-                throw ResolutionException::forParameter(
+                throw ParameterContextAccess::failure(
+                    $context,
                     $target->reflection,
                     reason: 'missing required value for #[Transform]',
-                    providedParameters: $context->provided,
-                    resolvedParameters: $context->resolved,
                 );
             }
         }
@@ -65,11 +65,10 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }
@@ -90,13 +89,12 @@ final readonly class TransformHandler implements AttributeHandlerInterface, Para
                 }
 
                 $name = $target->getName();
-                if (!array_key_exists($name, $context->parameters)) {
+                if (!ObjectCreationAccess::tryReadParameter($context, $name, $value)) {
                     throw ResolutionException::forProperty(
                         $target,
                         reason: sprintf('missing context key "%s"', $name),
                     );
                 }
-                $value = $context->parameters[$name];
                 // Validate the supplied value again after callback dependencies.
                 $beforeInvocation = static fn() => ObjectCreationAccess::recheckParameters($context);
             }

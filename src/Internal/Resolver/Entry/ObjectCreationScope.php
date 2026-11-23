@@ -28,6 +28,8 @@ abstract class ObjectCreationScope
      */
     abstract protected function runPhase(AttributePhase $phase, Closure $dispatch): mixed;
 
+    abstract protected function findParameter(string $name, mixed &$value): bool;
+
     abstract protected function assertParametersReadable(): void;
 
     abstract protected function assertPropertyWritesOpen(): void;

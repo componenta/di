@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AvailableEntryLookup;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
@@ -48,11 +48,10 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
                     return null;
                 }
                 if (count($available) > 1) {
-                    throw ResolutionException::forParameter(
+                    throw ParameterContextAccess::failure(
+                        $context,
                         $target->reflection,
                         reason: 'union autowiring is ambiguous; available services: ' . implode(', ', $available),
-                        providedParameters: $context->provided,
-                        resolvedParameters: $context->resolved,
                     );
                 }
                 $typeName = $available[0];
@@ -60,15 +59,14 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
 
             $value = AvailableEntryLookup::get($this->container, $typeName);
             if ($union && (!$value instanceof $typeName || !$target->accepts($value))) {
-                throw ResolutionException::forParameter(
+                throw ParameterContextAccess::failure(
+                    $context,
                     $target->reflection,
                     reason: sprintf(
                         'selected union service "%s" returned %s, which does not satisfy the selected type',
                         $typeName,
                         get_debug_type($value),
                     ),
-                    providedParameters: $context->provided,
-                    resolvedParameters: $context->resolved,
                 );
             }
 
@@ -78,11 +76,10 @@ final class AutowireByTypeResolver implements ParameterResolverInterface
                 throw $e;
             }
 
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }

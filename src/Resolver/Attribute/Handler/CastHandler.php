@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -53,11 +54,10 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
-                throw ResolutionException::forParameter(
+                throw ParameterContextAccess::failure(
+                    $context,
                     $target->reflection,
                     reason: sprintf('missing required value for #[Cast("%s")]', $attribute->name),
-                    providedParameters: $context->provided,
-                    resolvedParameters: $context->resolved,
                 );
             }
         }
@@ -73,11 +73,10 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }
@@ -102,15 +101,15 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             }
 
             $name = $target->getName();
-            $hasValue = array_key_exists($name, $context->parameters);
-            if (!$hasValue && $attribute->default === DefaultValue::None) {
+            $propertyValue = $attribute->default;
+            $hasValue = ObjectCreationAccess::tryReadParameter($context, $name, $propertyValue);
+            if (!$hasValue && $propertyValue === DefaultValue::None) {
                 throw ResolutionException::forProperty(
                     $target,
                     reason: sprintf('missing context key "%s"', $name),
                 );
             }
 
-            $propertyValue = $hasValue ? $context->parameters[$name] : $attribute->default;
             $caster = $this->caster($attribute->name);
             if ($hasValue) {
                 // Preparing the caster may reveal a source after the value was read.
