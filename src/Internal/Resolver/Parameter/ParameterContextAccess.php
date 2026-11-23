@@ -6,7 +6,6 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Closure;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestPublication;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use ReflectionParameter;
 use Throwable;
@@ -37,21 +36,5 @@ abstract class ParameterContextAccess extends ParameterContextScope
         ?Throwable $previous = null,
     ): ResolutionException {
         return $context->parameterFailure($parameter, $reason, $previous);
-    }
-
-    public static function captureMappedResults(ParameterResolutionContext $context): int
-    {
-        return $context->beginMappedResults();
-    }
-
-    public static function releaseMappedResults(ParameterResolutionContext $context, int $execution): ?MappedRequestPublication
-    {
-        return $context->endMappedResults($execution);
-    }
-
-    /** @param list<Closure():void> $checks */
-    public static function recordMappedResult(ParameterResolutionContext $context, object $result, array $checks): void
-    {
-        $context->keepMappedResultChecks($result, $checks);
     }
 }

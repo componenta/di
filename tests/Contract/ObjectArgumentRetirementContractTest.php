@@ -259,7 +259,7 @@ final class RetirementMapping extends MapQueryString
 
 final readonly class RetirementMappingAdapter implements ParameterAttributeHandlerInterface
 {
-    public function __construct(private RequestAttributeHandler $mapping, private bool $wrapResult) {}
+    public function __construct(private RequestAttributeHandler $mapping, private string $mode) {}
 
     public function resolveParameter(
         object $attribute,
@@ -268,8 +268,13 @@ final readonly class RetirementMappingAdapter implements ParameterAttributeHandl
         AttributePlan $plan,
         ParameterAttributeValue $value,
     ): ParameterAttributeValue {
-        $mapped = $this->mapping->resolveParameter($attribute, $target, $context, $plan, $value);
-        return $this->wrapResult ? ParameterAttributeValue::resolved($mapped->value) : $mapped;
+        $input = match ($this->mode) {
+            'clone-context' => clone $context,
+            'copy-context' => new ParameterResolutionContext($context->provided, $context->resolved),
+            default => $context,
+        };
+        $mapped = $this->mapping->resolveParameter($attribute, $target, $input, $plan, $value);
+        return $this->mode === 'forward' ? $mapped : ParameterAttributeValue::resolved($mapped->value);
     }
 }
 
@@ -345,7 +350,7 @@ test('request mapping checks consumed DTO sources after releasing the mapped inp
     bool $setup,
     bool $related,
     bool $attributeOwned,
-    ?bool $wrapResult,
+    string $mode,
 ): void {
     $suffix = bin2hex(random_bytes(5));
     $alias = __NAMESPACE__ . '\\Source_' . $suffix;
@@ -378,9 +383,9 @@ test('request mapping checks consumed DTO sources after releasing the mapped inp
     }
     $dependencies = new DependencyDefinitions([
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
-            static function (ContainerInterface $container) use ($wrapResult): AttributeDefinition {
+            static function (ContainerInterface $container) use ($mode): AttributeDefinition {
                 $mapper = fixtureInstance($container->get(RequestAttributeHandler::class), RequestAttributeHandler::class);
-                $handler = $wrapResult === null ? $mapper : new RetirementMappingAdapter($mapper, $wrapResult);
+                $handler = $mode === 'stock' ? $mapper : new RetirementMappingAdapter($mapper, $mode);
                 return new AttributeDefinition(RetirementMapping::class, $handler, [ValueProvider::class]);
             },
         ],
@@ -405,4 +410,10 @@ test('request mapping checks consumed DTO sources after releasing the mapped inp
     ->with(['constructor' => false, 'SetUp method' => true])
     ->with(['explicit source' => true, 'unrelated' => false])
     ->with(['mapping frame owns input' => false, 'attribute also owns input' => true])
-    ->with(['stock mapper' => [null], 'forwarding adapter' => false, 'adapter with fresh result state' => true]);
+    ->with([
+        'stock mapper' => 'stock',
+        'forwarding adapter' => 'forward',
+        'adapter with fresh result state' => 'rewrap',
+        'adapter with a cloned context' => 'clone-context',
+        'adapter with a copied context' => 'copy-context',
+    ]);

@@ -12,6 +12,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\AttributePlans;
 use Componenta\DI\Internal\MakeHandlerAccess;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestResultCapture;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Internal\TransformHandler;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
@@ -151,11 +152,11 @@ final readonly class AttributeParameterExecution
                     );
                 } else {
                     $input = $handler instanceof RequestAttributeHandler ? $literalContext ?? $context : $context;
-                    $execution = ParameterContextAccess::captureMappedResults($input);
+                    $execution = MappedRequestResultCapture::begin();
                     try {
                         $value = $handler->resolveParameter($attribute, $target, $input, $plan, $value);
                     } finally {
-                        $mappedResults = ParameterContextAccess::releaseMappedResults($input, $execution);
+                        $mappedResults = MappedRequestResultCapture::end($execution);
                     }
                 }
                 unset($pendingAttributes[$usage->declarationOrder], $attribute);

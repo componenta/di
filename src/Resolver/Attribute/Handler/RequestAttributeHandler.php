@@ -17,6 +17,7 @@ use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestPublication;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestResultCapture;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -76,7 +77,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         $sourceChecks = [];
         $result = $this->extractValue($request, $attribute, $target->reflection, $sourceChecks);
         if ($sourceChecks !== [] && is_object($result)) {
-            ParameterContextAccess::recordMappedResult($context, $result, $sourceChecks);
+            MappedRequestResultCapture::record($result, $sourceChecks);
         }
         return ParameterAttributeValue::resolved($result);
     }
