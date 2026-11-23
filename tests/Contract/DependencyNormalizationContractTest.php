@@ -127,6 +127,27 @@ test('normalization rejects an empty default alias before merging it into the de
         ->toThrow(InvalidConfigurationException::class);
 });
 
+test('normalization owns alias routes supplied through defaults', function (bool $changeInput): void {
+    $source = 'service';
+    $defaults = ['default' => &$source, 'overridden' => &$source];
+    $normalized = DependencyConfiguration::normalize([
+        'aliases' => ['configured' => 'default', 'overridden' => 'explicit'],
+    ], $defaults);
+
+    if ($changeInput) {
+        $source = 'changed input';
+    } else {
+        $copy = $normalized['aliases'] ?? [];
+        $copy['default'] = 'changed copy';
+    }
+
+    expect($normalized['aliases'] ?? null)->toBe([
+        'default' => 'service',
+        'overridden' => 'explicit',
+        'configured' => 'default',
+    ])->and($source)->toBe($changeInput ? 'changed input' : 'service');
+})->with(['caller changes its reference' => true, 'caller changes a normalized copy' => false]);
+
 test('delegator normalization preserves deferred service methods and callable object methods', function (): void {
     $object = new NormalizationDelegator();
     expect(DependencyNormalizer::normalizeDelegatorSpecification(['future-service', 'decorate'], 'entry'))

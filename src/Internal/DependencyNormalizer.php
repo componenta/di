@@ -57,10 +57,8 @@ final class DependencyNormalizer
     {
         $dependencies = self::snapshotSections($dependencies);
         $graph = self::validateShape($dependencies);
-        $aliases = $graph->aliases;
         if ($defaultAliases !== []) {
-            $aliases = array_merge($defaultAliases, $aliases);
-            $graph = new AliasGraphBuilder($aliases);
+            $graph = new AliasGraphBuilder(array_merge($defaultAliases, $graph->aliases));
         }
 
         /** @var list<class-string> $configuredInvokables */
@@ -89,7 +87,7 @@ final class DependencyNormalizer
         $normalized = array_filter([
             ConfigKey::FACTORIES => $factories,
             ConfigKey::INVOKABLES => $invokables,
-            ConfigKey::ALIASES => $aliases,
+            ConfigKey::ALIASES => $graph->aliases,
             ConfigKey::DELEGATORS => $delegators,
             ConfigKey::SERVICES => $services,
             ConfigKey::PARAMETER_RESOLVERS => $parameterResolvers,
