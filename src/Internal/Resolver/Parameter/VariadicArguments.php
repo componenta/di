@@ -39,6 +39,9 @@ final class VariadicArguments
         if (!is_array($value)) {
             throw self::failure($target, $context, 'variadic value must be an array of arguments');
         }
+        if ($value === []) {
+            return $value;
+        }
 
         // Native by-value calls select every argument before type checks can autoload.
         // Detach only the argument slots, preserving nested references and array state.

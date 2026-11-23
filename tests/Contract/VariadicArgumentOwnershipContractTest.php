@@ -164,3 +164,19 @@ test('owning variadic slots preserves nested references object identity and sing
     $native = $callback(...$values);
     expect($container->call($callback, ['values' => $values]))->toBe($native);
 });
+
+test('resolving an explicitly empty variadic collection preserves its next numeric key', function (): void {
+    [, $runtime] = (new ContainerBuilder())->assemble();
+    $parameters = $runtime->parameters;
+    Assert::assertInstanceOf(ParametersResolver::class, $parameters);
+    $callback = static fn(mixed ...$values): array => $values;
+    $target = $parameters->target(new ReflectionParameter($callback, 0));
+    $values = [11 => 'removed'];
+    unset($values[11]);
+
+    [, $result] = $parameters->resolveParameter($target, new ParameterResolutionContext(provided: ['values' => $values]));
+    Assert::assertIsArray($result);
+    $result[] = 'appended';
+
+    expect($result)->toBe([12 => 'appended']);
+});
