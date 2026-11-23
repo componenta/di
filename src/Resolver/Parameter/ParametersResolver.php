@@ -7,6 +7,7 @@ namespace Componenta\DI\Resolver\Parameter;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Internal\AttributePlanAccess;
 use Componenta\DI\Internal\BootstrapResolutionGuard;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionScope;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterPlanBuilder;
@@ -61,7 +62,7 @@ final class ParametersResolver extends ParameterExecutionScope
      */
     public function resolve(array $parameters, array $providedParameters = []): array
     {
-        return $this->execution->resolve($parameters, $providedParameters);
+        return $this->execution->resolve(array_values(ResolutionMetadata::invocationSlots($parameters)), $providedParameters);
     }
 
     /**
@@ -70,7 +71,7 @@ final class ParametersResolver extends ParameterExecutionScope
      */
     public function targets(array $parameters): array
     {
-        return $this->execution->targets($parameters);
+        return $this->execution->targets(array_values(ResolutionMetadata::invocationSlots($parameters)));
     }
 
     /**
@@ -80,7 +81,7 @@ final class ParametersResolver extends ParameterExecutionScope
      */
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
-        return $this->execution->resolveTargets($targets, $providedParameters);
+        return $this->execution->resolveTargets(array_values(ResolutionMetadata::invocationSlots($targets)), $providedParameters);
     }
 
     /** @return array{0:int,1:mixed} */

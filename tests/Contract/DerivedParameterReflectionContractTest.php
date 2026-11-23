@@ -172,6 +172,38 @@ test('a parameter target keeps one declaration when attribute discovery retarget
     }
 })->with(['closure' => false, 'Closure::__invoke' => true]);
 
+test('an earlier reflector cannot rebind a later slot of the selected parameter list', function (bool $resolve): void {
+    [, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'first input')->addService('next.value', 'next input')->assemble();
+    $declaration = __NAMESPACE__ . '\\declaredPair';
+    $next = new ReflectionParameter($declaration, 1);
+    $replacement = new ReflectionParameter(__NAMESPACE__ . '\\replacement', 0);
+    $retargetNext = static function () use (&$next, $replacement): void {
+        $next = $replacement;
+    };
+    $first = new class ($declaration, $retargetNext) extends ReflectionParameter {
+        public function __construct(string $declaration, private readonly \Closure $retargetNext)
+        {
+            parent::__construct($declaration, 0);
+        }
+
+        /** @return array<int,ReflectionAttribute<object>> */
+        public function getAttributes(?string $name = null, int $flags = 0): array
+        {
+            ($this->retargetNext)();
+            return parent::getAttributes($name, $flags);
+        }
+    };
+    $parameters = [$first, &$next];
+
+    if ($resolve) {
+        expect($runtime->parameters->resolve($parameters))->toBe(['first input', 'next input']);
+    } else {
+        expect($runtime->parameters->targets($parameters)[1]->name)->toBe('next');
+    }
+    expect($next)->toBe($replacement)
+        ->and($runtime->parameters->targets($parameters)[1]->name)->toBe('different');
+})->with(['target list' => false, 'batch resolution' => true]);
+
 test('a retained parameter target gives the matching resolver the current attribute selection', function (bool $method, bool $initiallyHidden): void {
     [, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')
         ->addParameterResolver(new AttributeMatchingParameterResolver(

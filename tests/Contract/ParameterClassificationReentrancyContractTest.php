@@ -146,7 +146,7 @@ test('immutable classification tolerates metadata refreshed by nested or interle
     ->with(['cached' => false, 'non-memoized' => true])
     ->with(['nested autoloader call' => false, 'interleaved fiber' => true]);
 
-test('a selected parameter target stays in use if an autoloader rebinds the caller slot', function (): void {
+test('the invocation keeps all selected parameter targets when classification rebinds a caller slot', function (int $position): void {
     [$container, $runtime] = (new ContainerBuilder())->addParameterResolver(new TypeClassifier(), -1000)->assemble();
     $resolver = $runtime->parameters;
     Assert::assertInstanceOf(ParametersResolver::class, $resolver);
@@ -154,30 +154,39 @@ test('a selected parameter target stays in use if an autoloader rebinds the call
     $type = 'UnavailableTargetType_' . $suffix;
     $function = 'target_' . $suffix;
     eval(sprintf(
-        'namespace %s; function %s(%s|string $value = "primary"): mixed { return $value; }',
+        'namespace %s; function %s(%s|string $value = "primary", string $next = "primary next"): mixed { return $value; }',
         __NAMESPACE__,
         $function,
         $type,
     ));
     $primary = new ReflectionFunction(__NAMESPACE__ . '\\' . $function);
-    $alternate = new ReflectionFunction(static fn(string $value = 'alternate'): string => $value);
-    $selected = $resolver->target($primary->getParameters()[0]);
-    $replacement = $resolver->target($alternate->getParameters()[0]);
-    $targets = [&$selected];
-    $loader = static function (string $class) use (&$selected, $replacement, $type): void {
+    $alternate = new ReflectionFunction(static fn(string $value = 'alternate', string $next = 'alternate next'): string => $value . $next);
+    [$first, $next] = $resolver->targets($primary->getParameters());
+    $targets = [&$first, &$next];
+    $replacement = $resolver->target($alternate->getParameters()[$position]);
+    $loads = 0;
+    $loader = static function (string $class) use (&$first, &$next, &$loads, $position, $replacement, $type): void {
         if ($class === __NAMESPACE__ . '\\' . $type) {
-            $selected = $replacement;
+            ++$loads;
+            class_alias(ClassifiedType::class, $class);
+            if ($position === 0) {
+                $first = $replacement;
+            } else {
+                $next = $replacement;
+            }
         }
     };
     spl_autoload_register($loader);
 
     try {
-        expect($resolver->resolveTargets($targets))->toBe(['primary'])
-            ->and($resolver->resolveTargets($targets))->toBe(['alternate']);
+        expect($resolver->resolveTargets($targets))->toBe(['primary', 'primary next'])
+            ->and($targets[$position])->toBe($replacement)
+            ->and($resolver->resolveTargets($targets))->toBe($position === 0 ? ['alternate', 'primary next'] : ['primary', 'alternate next'])
+            ->and($loads)->toBe(1);
     } finally {
         spl_autoload_unregister($loader);
     }
-});
+})->with(['current parameter' => 0, 'later parameter' => 1]);
 
 final class MutatingClassifier implements ParameterResolverInterface
 {
