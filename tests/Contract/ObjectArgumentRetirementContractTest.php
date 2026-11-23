@@ -11,6 +11,7 @@ use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\MapQueryString;
@@ -27,6 +28,7 @@ use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryParametersFactoryInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -34,6 +36,8 @@ use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -253,6 +257,22 @@ final class RetirementMapping extends MapQueryString
     }
 }
 
+final readonly class RetirementMappingAdapter implements ParameterAttributeHandlerInterface
+{
+    public function __construct(private RequestAttributeHandler $mapping, private bool $wrapResult) {}
+
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        $mapped = $this->mapping->resolveParameter($attribute, $target, $context, $plan, $value);
+        return $this->wrapResult ? ParameterAttributeValue::resolved($mapped->value) : $mapped;
+    }
+}
+
 final readonly class StagedInput
 {
     public function __construct(public EntryParameters $parameters) {}
@@ -320,11 +340,12 @@ test('eager return cannot publish a mapped constructor argument whose source was
 })->with(['compatibility' => false, 'targeted' => true])
     ->with(['explicit source' => true, 'unrelated' => false]);
 
-test('the stock request mapper checks consumed DTO sources after releasing the mapped input', function (
+test('request mapping checks consumed DTO sources after releasing the mapped input', function (
     bool $targeted,
     bool $setup,
     bool $related,
     bool $attributeOwned,
+    ?bool $wrapResult,
 ): void {
     $suffix = bin2hex(random_bytes(5));
     $alias = __NAMESPACE__ . '\\Source_' . $suffix;
@@ -357,11 +378,11 @@ test('the stock request mapper checks consumed DTO sources after releasing the m
     }
     $dependencies = new DependencyDefinitions([
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
-            static fn(ContainerInterface $container): AttributeDefinition => new AttributeDefinition(
-                RetirementMapping::class,
-                fixtureInstance($container->get(RequestAttributeHandler::class), RequestAttributeHandler::class),
-                [ValueProvider::class],
-            ),
+            static function (ContainerInterface $container) use ($wrapResult): AttributeDefinition {
+                $mapper = fixtureInstance($container->get(RequestAttributeHandler::class), RequestAttributeHandler::class);
+                $handler = $wrapResult === null ? $mapper : new RetirementMappingAdapter($mapper, $wrapResult);
+                return new AttributeDefinition(RetirementMapping::class, $handler, [ValueProvider::class]);
+            },
         ],
     ]);
     $factory = new ContainerFactory();
@@ -383,4 +404,5 @@ test('the stock request mapper checks consumed DTO sources after releasing the m
 })->with(['compatibility' => false, 'targeted' => true])
     ->with(['constructor' => false, 'SetUp method' => true])
     ->with(['explicit source' => true, 'unrelated' => false])
-    ->with(['mapping frame owns input' => false, 'attribute also owns input' => true]);
+    ->with(['mapping frame owns input' => false, 'attribute also owns input' => true])
+    ->with(['stock mapper' => [null], 'forwarding adapter' => false, 'adapter with fresh result state' => true]);

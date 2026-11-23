@@ -12,7 +12,6 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\AttributePlans;
 use Componenta\DI\Internal\MakeHandlerAccess;
-use Componenta\DI\Internal\Resolver\Parameter\Request\RequestAttributeHandlerAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Internal\TransformHandler;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
@@ -116,6 +115,7 @@ final readonly class AttributeParameterExecution
                 }
                 $beforeConsumption?->__invoke();
                 $processed[$usage->declarationOrder] = $usage;
+                $mappedResults = null;
                 if ($beforeConsumption !== null && ($handler instanceof TransformHandler || $handler instanceof CastHandler)) {
                     $value = $handler->resolveParameter(
                         $attribute,
@@ -149,25 +149,23 @@ final readonly class AttributeParameterExecution
                             return $instance;
                         },
                     );
-                } elseif ($handler instanceof RequestAttributeHandler) {
-                    $value = RequestAttributeHandlerAccess::resolve(
-                        $handler,
-                        $attribute,
-                        $target,
-                        $literalContext ?? $context,
-                        $value,
-                        $mappedSourceChecks,
-                    );
-                    if ($mappedSourceChecks !== []) {
-                        $sourceChecks = [...$sourceChecks, ...$mappedSourceChecks];
-                    }
                 } else {
-                    $value = $handler->resolveParameter($attribute, $target, $context, $plan, $value);
+                    $input = $handler instanceof RequestAttributeHandler ? $literalContext ?? $context : $context;
+                    $execution = ParameterContextAccess::captureMappedResults($input);
+                    try {
+                        $value = $handler->resolveParameter($attribute, $target, $input, $plan, $value);
+                    } finally {
+                        $mappedResults = ParameterContextAccess::releaseMappedResults($input, $execution);
+                    }
                 }
                 unset($pendingAttributes[$usage->declarationOrder], $attribute);
                 $currentRevision = $this->plans->refreshAvailability();
                 foreach ($sourceChecks as $check) {
                     $check();
+                }
+                if ($mappedResults !== null) {
+                    // An adapter can map more than one DTO and return a different result.
+                    $sourceChecks = [...$sourceChecks, ...$mappedResults->finish(is_object($value->value) ? $value->value : null)];
                 }
                 if ($currentRevision !== $revision) {
                     // Keep the resolved source and refresh only the remaining handlers.

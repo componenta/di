@@ -17,7 +17,6 @@ use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestPublication;
-use Componenta\DI\Internal\Resolver\Parameter\Request\RequestAttributeHandlerScope;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -41,7 +40,7 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /** Handles all request-source attributes on parameters. */
-final readonly class RequestAttributeHandler extends RequestAttributeHandlerScope implements ParameterAttributeHandlerInterface
+final readonly class RequestAttributeHandler implements ParameterAttributeHandlerInterface
 {
     /** @param (Closure(Closure,array<string|int,mixed>):mixed)|null $callbacks */
     public function __construct(
@@ -58,21 +57,6 @@ final readonly class RequestAttributeHandler extends RequestAttributeHandlerScop
         AttributePlan $plan,
         ParameterAttributeValue $value,
     ): ParameterAttributeValue {
-        return $this->resolveRequest($attribute, $target, $context, $value, $sourceChecks);
-    }
-
-    /**
-     * @param list<Closure():void>|null $sourceChecks
-     * @param-out list<Closure():void> $sourceChecks
-     */
-    protected function resolveRequest(
-        object $attribute,
-        ParameterTarget $target,
-        ParameterResolutionContext $context,
-        ParameterAttributeValue $value,
-        ?array &$sourceChecks,
-    ): ParameterAttributeValue {
-        $sourceChecks = [];
         if ($value->resolved) {
             return $value;
         }
@@ -89,9 +73,12 @@ final readonly class RequestAttributeHandler extends RequestAttributeHandlerScop
             );
         }
 
-        return ParameterAttributeValue::resolved(
-            $this->extractValue($request, $attribute, $target->reflection, $sourceChecks),
-        );
+        $sourceChecks = [];
+        $result = $this->extractValue($request, $attribute, $target->reflection, $sourceChecks);
+        if ($sourceChecks !== [] && is_object($result)) {
+            ParameterContextAccess::recordMappedResult($context, $result, $sourceChecks);
+        }
+        return ParameterAttributeValue::resolved($result);
     }
 
     /**
