@@ -239,9 +239,12 @@ final class Container extends ContainerEntryOperations implements
                     $entryId,
                     fn(): bool => $this->cache->tryGetBase($entryId, $published),
                 );
-                // Capture the revisions of the selected binding before invoking
-                // it. Selection can itself publish a new binding.
-                $baseRevision = $this->cache->baseRevision($entryId);
+                // Selection may publish a binding or retire the canonical ID by aliasing it.
+                // Only a reachable canonical ID can adopt a new base revision.
+                $selectedBaseRevision = $this->cache->baseRevision($entryId);
+                if ($selectedBaseRevision !== $baseRevision && !$this->aliases->has($entryId)) {
+                    $baseRevision = $selectedBaseRevision;
+                }
                 if ($this->aliases->revision === $aliasRevision || $this->aliases->resolve($requestedId) === $entryId) {
                     $requestedRevision = $this->cache->resolvedRevision($requestedId);
                 }

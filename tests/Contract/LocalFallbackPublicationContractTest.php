@@ -16,6 +16,7 @@ use Componenta\DI\Resolver\Entry\FactoryResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Generator;
 use LogicException;
+use WeakReference;
 
 final readonly class Product
 {
@@ -51,6 +52,10 @@ function installLoader(Container $di, string $scenario, bool $declare, int &$cal
             $di->set($scenario === 'service' ? $requested : 'other', new Product('service'));
         } elseif ($scenario === 'definition') {
             $di->set($requested, Definition::factory(static fn(): Product => new Product('factory')));
+        } elseif ($scenario === 'hide canonical') {
+            $di->alias($requested, 'replacement');
+        } elseif ($scenario === 'retarget alias') {
+            $di->alias('first', 'replacement');
         }
         if ($declare) {
             class_alias(Product::class, $requested, false);
@@ -85,6 +90,36 @@ test('a cold get selects a binding published while checking fallback availabilit
         expect($calls)->toBe(1);
     }
 })->with(['service', 'definition', 'unrelated'])->with([true, false]);
+
+test('a cold fallback product stays shared only while its canonical route remains available', function (bool $hideCanonical): void {
+    $di = new ContainerBuilder()->build();
+    $replacement = new Product('replacement');
+    $di->set('replacement', $replacement);
+    $calls = 0;
+
+    foreach (installLoader($di, $hideCanonical ? 'hide canonical' : 'retarget alias', true, $calls) as $requested) {
+        $di->alias('first', $requested);
+        $di->alias('second', $requested);
+
+        $earlier = $di->get('first');
+        if (!$earlier instanceof Product) {
+            throw new LogicException('Expected the in-flight fallback product.');
+        }
+        $reference = WeakReference::create($earlier);
+        expect($earlier->from)->toBe('reflection');
+        unset($earlier);
+
+        expect($di->get('first'))->toBe($replacement)
+            ->and($calls)->toBe(1);
+        if ($hideCanonical) {
+            expect($reference->get())->toBeNull()
+                ->and($di->get('second'))->toBe($replacement);
+        } else {
+            expect($reference->get())->toBeInstanceOf(Product::class)
+                ->and($di->get('second'))->toBe($reference->get());
+        }
+    }
+})->with(['canonical becomes an alias' => true, 'only requested alias changes' => false]);
 
 test('a cold has considers bindings published during fallback availability checks', function (string $scenario, bool $declare): void {
     $di = (new ContainerBuilder())->build();
