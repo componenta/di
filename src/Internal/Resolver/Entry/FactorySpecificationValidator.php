@@ -166,13 +166,14 @@ final class FactorySpecificationValidator
         ?ReflectionClass $scope,
     ): void {
         $parameter = self::parameterAt($parameters, $position);
-        if ($parameter === null || $parameter->getType() === null) {
+        $type = $parameter?->getType();
+        if ($parameter === null || $type === null) {
             return;
         }
 
         try {
             $valid = ReflectionType::match(
-                $parameter->getType(),
+                $type,
                 $argument,
                 strict: true,
                 scope: $scope,
@@ -192,7 +193,7 @@ final class FactorySpecificationValidator
                 $id,
                 $position + 1,
                 $parameter->getName(),
-                (string) $parameter->getType(),
+                (string) $type,
                 get_debug_type($argument),
             ));
         }
