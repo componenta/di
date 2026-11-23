@@ -113,8 +113,29 @@ final class CompletedAttributeGuard
         } while ($this->parameterClassifications !== [] && $this->recheckParameterClassifications());
     }
 
-    /** Checks consumed constructor declarations at the native invocation boundary. */
-    public function assertLoadedParametersUnchanged(): void
+    /** Checks loaded declarations, and classifications that may have changed during a completed before phase. */
+    public function assertLoadedParametersUnchanged(?self $completedBefore = null): void
+    {
+        do {
+            $this->assertLoadedParameterDeclarationsUnchanged();
+            if ($completedBefore === null) {
+                return;
+            }
+
+            $reclassified = $this->parameterClassifications !== [] && $this->recheckParameterClassifications();
+            // A metadata read or watched classifier can load a constructor policy.
+            $newDeclarations = $completedBefore->plans->refreshLoaded() !== $completedBefore->verifiedRevision;
+            if ($newDeclarations) {
+                $completedBefore->assertUnchanged();
+            }
+            $checked = $reclassified || $newDeclarations;
+            if ($checked) {
+                $this->checkParameterSources?->__invoke();
+            }
+        } while ($checked);
+    }
+
+    private function assertLoadedParameterDeclarationsUnchanged(): void
     {
         if ($this->plans->refreshLoaded() === $this->verifiedRevision) {
             return;
@@ -151,7 +172,7 @@ final class CompletedAttributeGuard
     {
         $this->checkParameterSources?->__invoke();
         while ($this->parameterClassifications !== [] && $this->recheckParameterClassifications()) {
-            $this->assertLoadedParametersUnchanged();
+            $this->assertLoadedParameterDeclarationsUnchanged();
             $this->checkParameterSources?->__invoke();
         }
     }

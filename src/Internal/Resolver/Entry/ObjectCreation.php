@@ -128,7 +128,7 @@ final class ObjectCreation
                 $metadata->constructor,
                 $this->objectPlans->constructorPlan($metadata),
                 ConstructionParameters::invocationArguments($parameters),
-                $completed->assertUnchanged(...),
+                $completed,
                 $constructorProof,
                 ConstructionParameters::provenance($parameters),
             );
@@ -210,7 +210,7 @@ final class ObjectCreation
                 $metadata->constructor,
                 $constructorPlan,
                 ConstructionParameters::invocationArguments($parameters),
-                $completed->assertUnchanged(...),
+                $completed,
                 $constructorProof,
                 ConstructionParameters::provenance($parameters),
             );
@@ -264,7 +264,7 @@ final class ObjectCreation
                             $metadata->constructor,
                             $constructorPlan,
                             ConstructionParameters::invocationArguments($parameters),
-                            $completed->assertUnchanged(...),
+                            $completed,
                             $constructorProof,
                             ConstructionParameters::provenance($parameters),
                         );

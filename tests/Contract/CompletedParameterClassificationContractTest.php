@@ -5,6 +5,16 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\CompletedParameterClassification;
 
 use Attribute;
+use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
+use Componenta\Config\Environment;
+use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeSet;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -107,3 +117,103 @@ test('late attribute classification cannot publish a stale shared service', func
     'unrelated query alias' => [true, true, false, 1000],
     'matching resolver after the selected default' => [false, false, true, 0],
 ]);
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final class BeforePhaseCheck {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class LastArgument {}
+
+final class DeclareSelectorDuringValidation implements AttributeCompositionRuleInterface
+{
+    public bool $loadOnResolution = false;
+    public bool $armed = false;
+
+    public function __construct(private readonly string $name, private readonly string $source) {}
+
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void
+    {
+        if ($this->armed) {
+            Label::load($this->name, $this->source);
+        }
+    }
+}
+
+test('constructor invocation rechecks a watched selector loaded while validating its before phase', function (
+    bool $targeted,
+    string $strategy,
+    bool $related,
+): void {
+    $suffix = bin2hex(random_bytes(5));
+    $class = __NAMESPACE__ . '\\Product_' . $suffix;
+    $observer = __NAMESPACE__ . '\\Observer_' . $suffix;
+    $pending = __NAMESPACE__ . '\\Pending_' . $suffix;
+    $selector = __NAMESPACE__ . '\\Selector_' . $suffix;
+    eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        #[Pending_%s] final class Observer_%s {}
+        %s
+        #[BeforePhaseCheck]
+        final class Product_%s extends Label {
+            public function __construct(#[LabelSource] string $value = 'fallback', #[LastArgument] string $last = '') {
+                ++Label::$constructions;
+                $this->value = $value;
+            }
+        }
+        PHP,
+        __NAMESPACE__,
+        $suffix,
+        $suffix,
+        $strategy === 'eager' ? '' : '#[\\Componenta\\DI\\Attribute\\' . $strategy . ']',
+        $suffix,
+    ));
+    /** @var class-string<LabelSource|LabelMetadata> $selector The validation rule declares this alias. */
+    $rule = new DeclareSelectorDuringValidation($selector, $related ? LabelSource::class : LabelMetadata::class);
+    $dependencies = new DependencyDefinitions([
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [new AttributeDefinition(BeforePhaseCheck::class, rules: [$rule])],
+        ConfigKey::PARAMETER_RESOLVERS => [
+            1000 => new AttributeMatchingParameterResolver(
+                $selector,
+                static fn(ParameterTarget $target): array => [$target->position, 'from source'],
+            ),
+            900 => new AttributeMatchingParameterResolver(
+                LastArgument::class,
+                static function (ParameterTarget $target) use ($rule, $pending): array {
+                    if ($rule->loadOnResolution) {
+                        // A new unrelated declaration makes the before-phase proof run again.
+                        $rule->armed = true;
+                        Label::load($pending, LabelMetadata::class);
+                    }
+                    return [$target->position, 'last'];
+                },
+            ),
+        ],
+    ]);
+    $factory = new ContainerFactory();
+    $config = new Config([], new Environment([]));
+    $container = fixtureInstance(($targeted
+        ? $factory->createWithTargetedAttributeDiscovery($config, $dependencies)
+        : $factory->create($config, $dependencies))->container, Container::class);
+    $container->make($observer);
+    $warm = fixtureInstance($container->make($class), Label::class);
+    expect(new \ReflectionClass($warm)->isUninitializedLazyObject($warm))->toBe($strategy !== 'eager')
+        ->and($warm->value)->toBe('fallback');
+
+    Label::$constructions = 0;
+    $rule->loadOnResolution = true;
+    $get = static fn(): Label => fixtureInstance($container->get($class), Label::class);
+    if ($related) {
+        expect(static fn(): string => $get()->value)->toThrow(AttributeCompositionException::class, 'classification for parameter $value')
+            ->and(Label::$constructions)->toBe(0)
+            ->and(class_exists($selector, false))->toBeTrue();
+    }
+
+    $entry = $get();
+    expect($entry->value)->toBe($related ? 'from source' : 'fallback')
+        ->and(Label::$constructions)->toBe(1)
+        ->and(class_exists($selector, false))->toBeTrue()
+        ->and($get())->toBe($entry);
+})->with(['compatibility' => false, 'targeted' => true])
+    ->with(['eager', 'Lazy', 'Proxy'])
+    ->with(['new resolver selected' => true, 'unrelated alias' => false]);

@@ -65,7 +65,7 @@ final class ConstructorInvocation
      * @template T of object
      * @param ReflectionClass<covariant T> $class
      * @param array<string|int, mixed> $params
-     * @param Closure():void|null $beforeConstructor
+     * @param CompletedAttributeGuard|(Closure():void)|null $beforeConstructor
      * @return T
      */
     public static function create(
@@ -74,13 +74,13 @@ final class ConstructorInvocation
         ?ReflectionMethod $constructor,
         PreparedParameterPlan $plan,
         array $params,
-        ?Closure $beforeConstructor,
+        CompletedAttributeGuard|Closure|null $beforeConstructor,
         ?CompletedAttributeGuard &$proof,
         ?MappedRequestContext $provenance = null,
     ): object {
         if ($constructor === null) {
             $proof = null;
-            $beforeConstructor?->__invoke();
+            self::checkBeforeConstructor($beforeConstructor);
             try {
                 return $class->newInstance();
             } catch (ExceptionInterface $e) {
@@ -103,7 +103,7 @@ final class ConstructorInvocation
 
     /**
      * @param array<string|int, mixed> $params
-     * @param Closure():void|null $beforeConstructor
+     * @param CompletedAttributeGuard|(Closure():void)|null $beforeConstructor
      */
     public static function initialize(
         ParameterExecution $parameters,
@@ -111,7 +111,7 @@ final class ConstructorInvocation
         ?ReflectionMethod $constructor,
         PreparedParameterPlan $plan,
         array $params,
-        ?Closure $beforeConstructor,
+        CompletedAttributeGuard|Closure|null $beforeConstructor,
         ?CompletedAttributeGuard &$proof,
         ?MappedRequestContext $provenance = null,
     ): void {
@@ -133,23 +133,33 @@ final class ConstructorInvocation
 
     /**
      * @param array<string|int, mixed> $params
-     * @param Closure():void|null $beforeConstructor
+     * @param CompletedAttributeGuard|(Closure():void)|null $beforeConstructor
      * @return array<array-key, mixed>
      */
     private static function arguments(
         ParameterExecution $parameters,
         PreparedParameterPlan $plan,
         array $params,
-        ?Closure $beforeConstructor,
+        CompletedAttributeGuard|Closure|null $beforeConstructor,
         ?CompletedAttributeGuard &$proof,
         ?MappedRequestContext $provenance,
     ): array {
         $arguments = $parameters->resolveTracked($plan, $params, $proof, $provenance);
-        $beforeConstructor?->__invoke();
+        self::checkBeforeConstructor($beforeConstructor);
         // Argument resolution and the callback can reveal a new parameter source.
         MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, autoload: false);
-        $proof?->assertLoadedParametersUnchanged();
+        $proof?->assertLoadedParametersUnchanged($beforeConstructor instanceof CompletedAttributeGuard ? $beforeConstructor : null);
 
         return $arguments;
+    }
+
+    /** @param CompletedAttributeGuard|(Closure():void)|null $beforeConstructor */
+    private static function checkBeforeConstructor(CompletedAttributeGuard|Closure|null $beforeConstructor): void
+    {
+        if ($beforeConstructor instanceof CompletedAttributeGuard) {
+            $beforeConstructor->assertUnchanged();
+        } else {
+            $beforeConstructor?->__invoke();
+        }
     }
 }
