@@ -41,11 +41,11 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
                 $files[$file] ??= ['sha256' => hash_file('sha256', $source) ?: null];
                 $duration = $test->duration();
                 $result = $test->result();
-                $startupFailed = $this->workers !== null
+                $workerFailed = $this->workers !== null
                     && $result !== MutationTestResult::None
                     && $result !== MutationTestResult::Uncovered
-                    && !$this->workers->consumeStartup($mutation);
-                if ($startupFailed) {
+                    && !$this->workers->consumeOutcome($test);
+                if ($workerFailed) {
                     $workerFailures[] = $test->getId();
                 }
                 $outcomes[] = [
@@ -54,7 +54,7 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
                     'line' => $mutation->startLine,
                     'end_line' => $mutation->endLine,
                     'mutator' => $mutation->mutator,
-                    'result' => $startupFailed ? 'worker_failure' : $result->value,
+                    'result' => $workerFailed ? 'worker_failure' : $result->value,
                     'diff' => $formatter->format($mutation->diff),
                     'duration_seconds' => $duration > 0 ? $duration : null,
                     'duration_unavailable_reason' => $duration > 0 ? null : match ($result) {
@@ -101,7 +101,7 @@ final readonly class MutationReport implements FinishMutationSuiteSubscriber
             json_encode($report, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         );
         if ($workerFailures !== []) {
-            throw new RuntimeException(sprintf('Mutation worker startup failed for %d replacements. See %s.', count($workerFailures), $this->path));
+            throw new RuntimeException(sprintf('Mutation worker startup or termination failed for %d replacements. See %s.', count($workerFailures), $this->path));
         }
     }
 

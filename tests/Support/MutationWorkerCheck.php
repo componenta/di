@@ -4,23 +4,35 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Support;
 
-use Pest\Mutate\Mutation;
+use Pest\Mutate\MutationTest;
 use Pest\Mutate\Plugins\Mutate;
+use Pest\Mutate\Support\MutationTestResult;
 use PHPUnit\TestRunner\TestResult\Facade as TestResultFacade;
+use ReflectionProperty;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 
-/** Records which workers reached PHPUnit with the requested replacement installed. */
+/** Verifies installed replacements and the termination of mutation workers. */
 final class MutationWorkerCheck
 {
     public const string ENVIRONMENT_KEY = 'COMPONENTA_DI_MUTATION_WORKERS';
+
+    private const string SHUTDOWN_SUFFIX = '.shutdown';
 
     private static ?string $startupRecord = null;
 
     /** @var array<string,int>|null */
     private ?array $ready = null;
 
-    public function __construct(private readonly string $directory) {}
+    private readonly ReflectionProperty $primaryProcess;
+
+    public function __construct(private readonly string $directory)
+    {
+        // Pest's result cannot distinguish a test failure from a signal to its worker.
+        // Fail at startup if this Pest adapter can no longer inspect that worker.
+        $this->primaryProcess = new ReflectionProperty(MutationTest::class, 'process');
+    }
 
     public function start(): void
     {
@@ -55,6 +67,12 @@ final class MutationWorkerCheck
             throw new RuntimeException('Cannot record mutation worker startup.');
         }
         self::$startupRecord = $record;
+        register_shutdown_function(static function () use ($record): void {
+            // Bootstrap and test failures can still reach PHP shutdown.
+            if (self::$startupRecord === $record && !rename($record, $record . self::SHUTDOWN_SUFFIX)) {
+                throw new RuntimeException('Cannot record mutation worker shutdown.');
+            }
+        });
     }
 
     public static function discardEmptyRun(): void
@@ -68,22 +86,46 @@ final class MutationWorkerCheck
         self::$startupRecord = null;
     }
 
-    public function consumeStartup(Mutation $mutation): bool
+    public function consumeOutcome(MutationTest $test): bool
     {
-        $this->ready ??= array_count_values(array_map(
-            static fn(string $name): string => explode('.', $name, 2)[0],
-            scandir($this->directory, SCANDIR_SORT_NONE) ?: [],
-        ));
+        $timedOut = $test->result() === MutationTestResult::Timeout;
+        if (!$timedOut && $this->wasSignaled($test)) {
+            return false;
+        }
+        $mutation = $test->mutation;
         $source = $mutation->file->getRealPath();
         if ($source === false) {
             return false;
         }
+        $this->ready ??= array_count_values(array_map(
+            static fn(string $name): string => explode('.', $name, 2)[0]
+                . (str_ends_with($name, self::SHUTDOWN_SUFFIX) ? self::SHUTDOWN_SUFFIX : ''),
+            scandir($this->directory, SCANDIR_SORT_NONE) ?: [],
+        ));
         $key = self::key($source, $mutation->modifiedSourcePath);
-        if (($this->ready[$key] ?? 0) === 0) {
+        // A timeout can use a startup record so a completed run can use its shutdown record.
+        if (!$timedOut || ($this->ready[$key] ?? 0) === 0) {
+            $key .= self::SHUTDOWN_SUFFIX;
+        }
+        $remaining = $this->ready[$key] ?? 0;
+        if ($remaining === 0) {
             return false;
         }
-        --$this->ready[$key];
+        $this->ready[$key] = $remaining - 1;
         return true;
+    }
+
+    private function wasSignaled(MutationTest $test): bool
+    {
+        // Fallback runs manage their own process and reject unexpected signals there.
+        if (!$this->primaryProcess->isInitialized($test)) {
+            return false;
+        }
+        $process = $this->primaryProcess->getValue($test);
+        if (!$process instanceof Process) {
+            throw new RuntimeException('Cannot inspect the primary mutation worker with this version of Pest.');
+        }
+        return $process->hasBeenSignaled();
     }
 
     private static function key(string $source, string $override): string
