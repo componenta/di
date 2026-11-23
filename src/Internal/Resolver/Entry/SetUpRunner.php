@@ -133,16 +133,14 @@ final class SetUpRunner implements AttributeHandlerInterface
         $first = $method->getParameters()[0] ?? null;
         self::assertCallbackParameters($attribute->params, $first?->getName());
 
-        $input = $this->resolutionParameters->get($context);
-        $parameters = ConstructionParameters::invocationArguments($input);
-        unset($parameters[0]);
+        $input = $this->resolutionParameters->get($context)->without(0);
         if ($first !== null) {
-            unset($parameters[$first->getName()]);
+            $input = $input->without($first->getName());
         }
 
         [$provided, $provenance] = $this->providedParameters(
             $attribute,
-            $parameters,
+            ConstructionParameters::invocationArguments($input),
             $method,
             ConstructionParameters::provenance($input),
         );

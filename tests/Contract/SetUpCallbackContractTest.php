@@ -16,6 +16,7 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Inject;
 use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -32,6 +33,7 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use DateTimeImmutable;
 use Fiber;
 use LogicException;
 use Nyholm\Psr7\ServerRequest;
@@ -386,6 +388,34 @@ test('setup suffix extensions see the constructed instance without reserved ambi
     expect($entry)->toBeInstanceOf(ContextRequestTarget::class)
         ->and($resolver->provided)->toBe([1 => 'ambient suffix position', 'visible' => 'public'])
         ->and($resolver->resolved)->toBe([$entry]);
+});
+
+function setupReservedRequestField(ReservedSetupFieldTarget $DateTimeImmutable, #[EntryId('trusted.clock')] DateTimeImmutable $clock): void
+{
+    $DateTimeImmutable->clock = $clock;
+}
+
+#[FunctionHook(__NAMESPACE__ . '\\setupReservedRequestField')]
+final class ReservedSetupFieldTarget
+{
+    public DateTimeImmutable $clock;
+
+    public function __construct(public string $DateTimeImmutable) {}
+}
+
+test('mapped construction keeps a reserved setup field out of callback suffix provenance', function (): void {
+    $clock = new DateTimeImmutable('2020-01-01T00:00:00+00:00');
+    $container = (new ContainerBuilder())->addService('trusted.clock', $clock)->build();
+    $callback = static fn(#[MapQueryString] ReservedSetupFieldTarget $dto): ReservedSetupFieldTarget => $dto;
+    $request = new ServerRequest('GET', '/callbacks')->withQueryParams([DateTimeImmutable::class => 'constructor input']);
+
+    $entry = $container->call($callback, [ServerRequestInterface::class => $request]);
+    Assert::assertInstanceOf(ReservedSetupFieldTarget::class, $entry);
+    expect($entry->DateTimeImmutable)->toBe('constructor input')->and($entry->clock)->toBe($clock);
+
+    $conflictingRequest = $request->withQueryParams($request->getQueryParams() + ['clock' => 'request input']);
+    expect(fn() => $container->call($callback, [ServerRequestInterface::class => $conflictingRequest]))
+        ->toThrow(RequestParameterSourceConflictException::class, 'key "clock"');
 });
 
 test('classless setup suffix extensions receive public request context without provenance or owner transport keys', function (): void {
