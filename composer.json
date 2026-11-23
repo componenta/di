@@ -67,7 +67,7 @@
     "scripts": {
         "test": "pest",
         "test-platform": "@php -n tests/php85-platform.php",
-        "test-coverage": "pest --coverage --min=80",
+        "test-coverage": "@php -d memory_limit=4G vendor/bin/pest --coverage --min=80",
         "test-mutation": [
             "Composer\\Config::disableProcessTimeout",
             "@php -d opcache.enable_cli=0 tests/mutate.php --mutate --path=src --everything --min=85 --compact"
