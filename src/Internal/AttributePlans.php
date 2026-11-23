@@ -210,11 +210,10 @@ final class AttributePlans
                 }
             }
 
-            // The first allocation can autoload the result class after discovery.
-            // Check names that are now loaded without starting another autoload poll.
-            $planClassLoaded = class_exists(AttributePlan::class, false);
+            // Materialization can autoload the plan or its dependencies. Check
+            // newly loaded names and registry changes before publishing.
             $plan = new AttributePlan($closure ?? $target, $this->ordering->order($target, $usages));
-            if ($planClassLoaded || $revision === $this->registry->refreshLoaded()) {
+            if ($revision === $this->registry->refreshLoaded()) {
                 break;
             }
         }
