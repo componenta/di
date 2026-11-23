@@ -15,6 +15,7 @@ use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use LogicException;
 use Psr\Container\ContainerInterface;
 
 use function Componenta\DI\Tests\Support\container;
@@ -157,6 +158,43 @@ test('extension invocation captures routing before callable inspection can autol
         spl_autoload_unregister($autoload);
     }
 })->with(['parameter resolver' => false, 'attribute definition' => true]);
+
+test('deferred extension discovery starts after preceding extensions are materialized', function (bool $attribute, bool $asPair): void {
+    $owner = __NAMESPACE__ . '\\DeferredFactory_' . bin2hex(random_bytes(5));
+    $preparation = new class () {
+        public bool $configured = false;
+        public int $loads = 0;
+    };
+    $autoload = static function (string $class) use ($owner, $preparation): void {
+        if ($class !== $owner) {
+            return;
+        }
+        if (!$preparation->configured) {
+            throw new LogicException('Extension discovery preceded its configuration.');
+        }
+        ++$preparation->loads;
+        class_alias(StaticExtensionFactory::class, $class, false);
+    };
+
+    spl_autoload_register($autoload);
+    try {
+        $di = extensionContainer($attribute, $asPair ? [$owner, 'first'] : $owner . '::first', [
+            ConfigKey::SERVICES => ['extension.factory' => new ExtensionFactory($attribute, 'configured')],
+            ConfigKey::ATTRIBUTE_DEFINITIONS => [
+                static function () use ($preparation): AttributeDefinition {
+                    $preparation->configured = true;
+                    return new AttributeDefinition(Preparation::class);
+                },
+            ],
+        ]);
+
+        expect($di->call(static fn(#[SelectedValue] string $selected): string => $selected))->toBe('configured:first')
+            ->and($preparation->loads)->toBe(1);
+    } finally {
+        spl_autoload_unregister($autoload);
+    }
+})->with(['parameter resolver' => false, 'attribute definition' => true])
+    ->with(['callable string' => false, 'callable pair' => true]);
 
 test('a later extension selects the current caller route and retains its factory object identity', function (bool $attribute): void {
     $original = new ExtensionFactory($attribute, 'original');

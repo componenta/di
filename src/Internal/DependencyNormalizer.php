@@ -10,7 +10,6 @@ use Componenta\DI\ConfigKey;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Error;
 
 /**
  * Validates configuration shape and canonicalizes ids, aliases and extension lists.
@@ -368,16 +367,11 @@ final class DependencyNormalizer
 
     private static function assertExtensionSpecification(mixed $extension, string $kind): void
     {
-        try {
-            if (is_callable($extension)) {
-                return;
-            }
-        } catch (Error $error) {
-            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
-                throw $error;
-            }
-        }
+        // A deferred specification has a valid shape before its owner is available.
         if ((is_string($extension) && $extension !== '') || self::deferredServiceMethod($extension)) {
+            return;
+        }
+        if (is_public_callable($extension, deferAbstractDispatch: true)) {
             return;
         }
 
