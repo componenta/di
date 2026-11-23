@@ -165,8 +165,13 @@ final readonly class AttributeParameterExecution
                     $check();
                 }
                 if ($mappedResults !== null) {
-                    // An adapter can map more than one DTO and return a different result.
-                    $sourceChecks = [...$sourceChecks, ...$mappedResults->finish(is_object($value->value) ? $value->value : null)];
+                    // Only mapped objects selected by the adapter can reach the callable.
+                    $sourceChecks = [
+                        ...$sourceChecks,
+                        ...$mappedResults->finish(
+                            is_object($value->value) || ($target->variadic && is_array($value->value)) ? $value->value : null,
+                        ),
+                    ];
                 }
                 if ($currentRevision !== $revision) {
                     // Keep the resolved source and refresh only the remaining handlers.

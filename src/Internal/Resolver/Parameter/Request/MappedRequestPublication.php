@@ -23,10 +23,23 @@ final class MappedRequestPublication
         }
     }
 
-    /** @return list<Closure():void> */
-    public function finish(?object $result): array
+    /**
+     * @param object|array<array-key,mixed>|null $result A selected object or variadic collection.
+     * @return list<Closure():void>
+     */
+    public function finish(object|array|null $result): array
     {
-        $checks = $result === null ? [] : ($this->checks[$result] ?? []);
+        if (is_array($result)) {
+            $checks = [];
+            foreach ($result as $entry) {
+                if (is_object($entry) && isset($this->checks[$entry])) {
+                    array_push($checks, ...$this->checks[$entry]);
+                    unset($this->checks[$entry]);
+                }
+            }
+        } else {
+            $checks = $result === null ? [] : ($this->checks[$result] ?? []);
+        }
         $this->isOpen = false;
         $this->checks = null;
         foreach ($checks as $check) {

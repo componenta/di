@@ -417,3 +417,84 @@ test('request mapping checks consumed DTO sources after releasing the mapped inp
         'adapter with a cloned context' => 'clone-context',
         'adapter with a copied context' => 'copy-context',
     ]);
+
+final readonly class VariadicRetirementMappingAdapter implements ParameterAttributeHandlerInterface
+{
+    public function __construct(private RequestAttributeHandler $mapping, private bool $keepMapped) {}
+
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        $withoutLabel = new ParameterResolutionContext([ServerRequestInterface::class => new ServerRequest('GET', '/')]);
+        $safe = $this->mapping->resolveParameter(new MapQueryString(), $target, $withoutLabel, $plan, $value);
+        $mapped = $this->mapping->resolveParameter($attribute, $target, $context, $plan, $value);
+        return ParameterAttributeValue::resolved($this->keepMapped ? [$safe->value, $mapped->value] : [$safe->value]);
+    }
+}
+
+test('request mapping retains DTO source checks for variadic elements returned by an adapter', function (
+    bool $targeted,
+    bool $related,
+    bool $keepMapped,
+): void {
+    $suffix = bin2hex(random_bytes(5));
+    $alias = __NAMESPACE__ . '\\VariadicSource_' . $suffix;
+    $read = eval(sprintf(
+        <<<'PHP_SOURCE'
+        namespace %s;
+        final class VariadicDto_%s extends ClassifiedProduct {
+            public function __construct(#[VariadicSource_%s] string $label = 'fallback') {
+                $this->label = $label;
+                Product::$events[] = $label;
+            }
+        }
+        return static function (#[RetirementMapping(%s, %s, true)] VariadicDto_%s ...$dto): string {
+            Product::$events[] = 'body';
+            return implode(',', array_map(static fn(ClassifiedProduct $entry): string => $entry->label, $dto));
+        };
+        PHP_SOURCE,
+        __NAMESPACE__,
+        $suffix,
+        $suffix,
+        var_export($alias, true),
+        var_export($related ? ExplicitSource::class : OtherLabel::class, true),
+        $suffix,
+    ));
+    if (!$read instanceof Closure) {
+        throw new LogicException('Expected the mapped variadic DTO callable.');
+    }
+    $dependencies = new DependencyDefinitions([
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            static function (ContainerInterface $container) use ($keepMapped): AttributeDefinition {
+                $mapper = fixtureInstance($container->get(RequestAttributeHandler::class), RequestAttributeHandler::class);
+                return new AttributeDefinition(
+                    RetirementMapping::class,
+                    new VariadicRetirementMappingAdapter($mapper, $keepMapped),
+                    [ValueProvider::class],
+                );
+            },
+        ],
+    ]);
+    $factory = new ContainerFactory();
+    $config = new Config([], new Environment([]));
+    $container = fixtureInstance(($targeted
+        ? $factory->createWithTargetedAttributeDiscovery($config, $dependencies)
+        : $factory->create($config, $dependencies))->container, Container::class);
+    $request = new ServerRequest('GET', '/')->withQueryParams(['label' => 'mapped']);
+    $invoke = static fn(): mixed => $container->call($read, [ServerRequestInterface::class => $request]);
+
+    Product::$events = [];
+    if ($related && $keepMapped) {
+        expect($invoke)->toThrow(RequestParameterSourceConflictException::class, 'label')
+            ->and(Product::$events)->toBe(['fallback', 'mapped', 'released mapped input']);
+    } else {
+        expect($invoke())->toBe($keepMapped ? 'fallback,mapped' : 'fallback')
+            ->and(Product::$events)->toBe(['fallback', 'mapped', 'released mapped input', 'body']);
+    }
+})->with(['compatibility' => false, 'targeted' => true])
+    ->with(['explicit source' => true, 'unrelated' => false])
+    ->with(['kept result' => true, 'discarded result' => false]);
