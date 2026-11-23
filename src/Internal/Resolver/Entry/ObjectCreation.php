@@ -16,6 +16,7 @@ use Componenta\DI\Internal\ObjectAttributeAccess;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
@@ -27,6 +28,7 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Entry\SetUp\SetUpValueUnwrapperInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use ReflectionClass;
+use ReflectionMethod;
 
 use function Componenta\DI\Internal\is_entry_class_eligible;
 
@@ -143,6 +145,7 @@ final class ObjectCreation
             $completed = $this->attributes->skippedBeforePhase($target);
             $this->attributes->recordBootstrapUse($target, AttributePhase::BeforeInstantiation);
             $parameters = $resolveParameters === null ? $input : ConstructionParameters::from($resolveParameters());
+            $provenance = ConstructionParameters::provenance($parameters);
             $entry = ConstructorInvocation::create(
                 $this->parameters,
                 $metadata->class,
@@ -151,7 +154,7 @@ final class ObjectCreation
                 ConstructionParameters::invocationArguments($parameters),
                 $completed,
                 $constructorProof,
-                ConstructionParameters::provenance($parameters),
+                $provenance,
             );
             if ($constructorProof !== null) {
                 $completed = $completed->with($constructorProof);
@@ -162,7 +165,7 @@ final class ObjectCreation
                 $attempt = ObjectCreationAccess::begin(
                     $metadata->class,
                     ConstructionParameters::invocationArguments($parameters),
-                    $this->parameterReadGuard($metadata, ConstructionParameters::provenance($parameters) !== null),
+                    $this->parameterReadGuard($metadata, $provenance !== null),
                 );
                 $creation = $attempt->context;
                 $this->parametersStore->attach($creation, $parameters);
@@ -180,10 +183,12 @@ final class ObjectCreation
             if (isset($creation)) {
                 $this->parametersStore->assertSetupSourcesUnchanged($creation);
             }
+            $setupChecks = isset($creation) ? $this->parametersStore->setupSourceChecks($creation) : [];
+            self::recordMappedPublication($entry, $completed, $metadata->constructor, $provenance, $setupChecks);
             $completion = $resolveParameters === null ? null : $completed->withRetirementSourceChecks(
                 $metadata->constructor,
-                ConstructionParameters::provenance($parameters),
-                isset($creation) ? $this->parametersStore->setupSourceChecks($creation) : [],
+                $provenance,
+                $setupChecks,
             );
             return $entry;
         }
@@ -232,6 +237,7 @@ final class ObjectCreation
         CompletedAttributeGuard $completed,
         ?Closure $configure,
         ?Closure $recordCompletion = null,
+        ?object $publishedAs = null,
     ): object {
         $creation = $attempt->context;
         $completed->assertUnchanged();
@@ -265,10 +271,13 @@ final class ObjectCreation
         $constructorProof?->assertParameterSourcesUnchanged();
         $this->parametersStore->assertSetupSourcesUnchanged($creation);
 
+        $provenance = $this->parametersStore->resolvedProvenance($creation);
+        $setupChecks = $this->parametersStore->setupSourceChecks($creation);
+        self::recordMappedPublication($publishedAs ?? $entry, $completed, $metadata->constructor, $provenance, $setupChecks);
         $recordCompletion?->__invoke($completed->withRetirementSourceChecks(
             $metadata->constructor,
-            isset($parameters) ? ConstructionParameters::provenance($parameters) : null,
-            $this->parametersStore->setupSourceChecks($creation),
+            $provenance,
+            $setupChecks,
         ));
         return $entry;
     }
@@ -320,6 +329,13 @@ final class ObjectCreation
                     $constructorProof?->assertParameterSourcesUnchanged();
                     $this->parametersStore->assertSetupSourcesUnchanged($context);
                     EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
+                    self::recordMappedPublication(
+                        $entry,
+                        $attemptCompleted,
+                        $metadata->constructor,
+                        $this->parametersStore->resolvedProvenance($context),
+                        $this->parametersStore->setupSourceChecks($context),
+                    );
                     $succeeded = true;
                 } finally {
                     if (!$succeeded) {
@@ -345,7 +361,7 @@ final class ObjectCreation
     ): object {
         return $this->proxies->makeProxy(
             $metadata->class->getName(),
-            function (object $_proxy) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): object {
+            function (object $proxy) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): object {
                 $lookupRevision = EntryLookupRevision::current();
                 $succeeded = false;
                 try {
@@ -355,6 +371,7 @@ final class ObjectCreation
                         $this->freshAttempt($creation),
                         $completed,
                         $configure,
+                        publishedAs: $proxy,
                     );
                     EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
                     $succeeded = true;
@@ -366,6 +383,19 @@ final class ObjectCreation
                 }
             },
         );
+    }
+
+    /** @param list<Closure():void> $setupChecks */
+    private static function recordMappedPublication(
+        object $entry,
+        CompletedAttributeGuard $completed,
+        ?ReflectionMethod $constructor,
+        ?MappedRequestContext $provenance,
+        array $setupChecks,
+    ): void {
+        if ($provenance?->tracksPublication() === true) {
+            $provenance->recordPublication($entry, $completed->sourceChecksForRelease($constructor, $provenance, $setupChecks));
+        }
     }
 
     /** @param (Closure(): (array<string|int,mixed>|EntryParameters))|null $resolveParameters */

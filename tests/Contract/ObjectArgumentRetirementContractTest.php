@@ -6,12 +6,18 @@ namespace Componenta\DI\Tests\Contract\ObjectArgumentRetirement;
 
 use Attribute;
 use Closure;
+use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\NoConstructor;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Object\ObjectPipeline;
@@ -35,6 +41,7 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use LogicException;
 use Nyholm\Psr7\ServerRequest;
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Reflector;
 
@@ -305,4 +312,62 @@ test('eager return cannot publish a mapped constructor argument whose source was
     }
     expect(Product::$events)->toBe(['mapped', 'released mapped input']);
 })->with(['compatibility' => false, 'targeted' => true])
+    ->with(['explicit source' => true, 'unrelated' => false]);
+
+test('the stock request mapper checks consumed DTO sources after releasing the mapped input', function (bool $targeted, bool $setup, bool $related): void {
+    $suffix = bin2hex(random_bytes(5));
+    $alias = __NAMESPACE__ . '\\Source_' . $suffix;
+    $read = eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        %s final class Dto_%s extends ClassifiedProduct {
+            public function %s(#[Source_%s] string $label) {
+                $this->label = $label;
+                Product::$events[] = $label;
+            }
+        }
+        return static function (#[RetirementMapping(%s, %s)] Dto_%s $dto): string {
+            Product::$events[] = 'body';
+            return $dto->label;
+        };
+        PHP,
+        __NAMESPACE__,
+        $setup ? '#[\\Componenta\\DI\\Attribute\\SetUp("apply")]' : '',
+        $suffix,
+        $setup ? 'apply' : '__construct',
+        $suffix,
+        var_export($alias, true),
+        var_export($related ? ExplicitSource::class : OtherLabel::class, true),
+        $suffix,
+    ));
+    if (!$read instanceof Closure) {
+        throw new LogicException('Expected the mapped DTO callable.');
+    }
+    $dependencies = new DependencyDefinitions([
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            static fn(ContainerInterface $container): AttributeDefinition => new AttributeDefinition(
+                RetirementMapping::class,
+                fixtureInstance($container->get(RequestAttributeHandler::class), RequestAttributeHandler::class),
+                [ValueProvider::class],
+            ),
+        ],
+    ]);
+    $factory = new ContainerFactory();
+    $config = new Config([], new Environment([]));
+    $container = fixtureInstance(($targeted
+        ? $factory->createWithTargetedAttributeDiscovery($config, $dependencies)
+        : $factory->create($config, $dependencies))->container, Container::class);
+    $request = new ServerRequest('GET', '/')->withQueryParams(['label' => 'mapped']);
+    $invoke = static fn(): mixed => $container->call($read, [ServerRequestInterface::class => $request]);
+
+    Product::$events = [];
+    if ($related) {
+        expect($invoke)->toThrow(RequestParameterSourceConflictException::class, 'label')
+            ->and(Product::$events)->toBe(['mapped', 'released mapped input']);
+    } else {
+        expect($invoke())->toBe('mapped')
+            ->and(Product::$events)->toBe(['mapped', 'released mapped input', 'body']);
+    }
+})->with(['compatibility' => false, 'targeted' => true])
+    ->with(['constructor' => false, 'SetUp method' => true])
     ->with(['explicit source' => true, 'unrelated' => false]);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
+use Closure;
+
 /**
  * Transformed field names owned by one HTTP DTO mapping.
  *
@@ -15,7 +17,7 @@ final readonly class MappedRequestContext
     private array $keys;
 
     /** @param array<string|int,mixed> $mappedData */
-    public function __construct(array $mappedData)
+    public function __construct(array $mappedData, private ?MappedRequestPublication $publication = null)
     {
         $keys = [];
         foreach ($mappedData as $key => $_value) {
@@ -31,6 +33,17 @@ final readonly class MappedRequestContext
         return isset($this->keys[$key]);
     }
 
+    public function tracksPublication(): bool
+    {
+        return $this->publication?->isOpen === true;
+    }
+
+    /** @param list<Closure():void> $checks */
+    public function recordPublication(object $entry, array $checks): void
+    {
+        $this->publication?->record($entry, $checks);
+    }
+
     public function without(string|int $key): self
     {
         if (!isset($this->keys[$key])) {
@@ -38,7 +51,7 @@ final readonly class MappedRequestContext
         }
         $keys = $this->keys;
         unset($keys[$key]);
-        return new self($keys);
+        return new self($keys, $this->publication);
     }
 
     /** @param array<string|int,mixed> $overrides */
@@ -49,6 +62,6 @@ final readonly class MappedRequestContext
         }
 
         $keys = array_diff_key($this->keys, $overrides);
-        return count($keys) === count($this->keys) ? $this : new self($keys);
+        return count($keys) === count($this->keys) ? $this : new self($keys, $this->publication);
     }
 }

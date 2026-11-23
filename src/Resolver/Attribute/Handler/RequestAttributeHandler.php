@@ -16,6 +16,7 @@ use Componenta\DI\Internal\Resolver\Entry\ConstructionParameters;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestPublication;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -129,6 +130,26 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         RequestDataExtractorInterface&MapperInterface $mapper,
         ReflectionParameter $parameter,
     ): array|object {
+        $publication = null;
+        try {
+            $result = $this->mapInput($request, $mapper, $parameter, $publication);
+        } finally {
+            // The mapping frame has released the input it owned.
+            $publication?->finish(is_object($result ?? null) ? $result : null);
+        }
+        return $result;
+    }
+
+    /**
+     * @param-out ?MappedRequestPublication $publication
+     * @return array<string|int,mixed>|object
+     */
+    private function mapInput(
+        ServerRequestInterface $request,
+        RequestDataExtractorInterface&MapperInterface $mapper,
+        ReflectionParameter $parameter,
+        ?MappedRequestPublication &$publication,
+    ): array|object {
         $afterMap = $mapper instanceof CallbackMapperInterface ? $mapper->afterMap : null;
         $callbacks = $this->callbacks;
         if ($afterMap !== null && $callbacks === null) {
@@ -161,11 +182,13 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         $this->assertNamedDtoData($typeName, $data, $parameter);
 
         if ($typeName === null) {
+            $publication = null;
             return $data;
         }
 
         MappedRequestParameterSourceGuard::assertNoConflicts($typeName, $data);
-        $provenance = new MappedRequestContext($data);
+        $publication = new MappedRequestPublication();
+        $provenance = new MappedRequestContext($data, $publication);
         $parameters = RequestParameter::with(ResolutionMetadata::publicParameters($data), $request);
 
         return ConstructionParameters::capture($parameters, $provenance)->forwardTo($this->factory, $typeName);

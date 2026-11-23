@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Closure;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use LogicException;
@@ -52,6 +53,12 @@ final class ObjectResolutionParameterStore
         if (isset($this->parameters[$from])) {
             $this->attach($to, $this->parameters[$from]);
         }
+    }
+
+    public function resolvedProvenance(ObjectCreationContext $context): ?MappedRequestContext
+    {
+        $parameters = $this->parameters[$context] ?? null;
+        return $parameters instanceof EntryParameters ? ConstructionParameters::provenance($parameters) : null;
     }
 
     /** @param Closure():void $check */

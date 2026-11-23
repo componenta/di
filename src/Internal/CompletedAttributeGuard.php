@@ -130,6 +130,21 @@ final class CompletedAttributeGuard
     /** @param list<Closure():void> $setupChecks */
     public function withRetirementSourceChecks(?ReflectionMethod $constructor, ?MappedRequestContext $provenance, array $setupChecks): self
     {
+        $checks = $this->sourceChecksForRelease($constructor, $provenance, $setupChecks);
+        if ($checks === []) {
+            return $this;
+        }
+        $completion = clone $this;
+        $completion->retiredSourceChecks = $checks;
+        return $completion;
+    }
+
+    /**
+     * @param list<Closure():void> $setupChecks
+     * @return list<Closure():void>
+     */
+    public function sourceChecksForRelease(?ReflectionMethod $constructor, ?MappedRequestContext $provenance, array $setupChecks): array
+    {
         if ($constructor !== null && $provenance !== null) {
             $selected = [];
             foreach ($this->completed as $completed) {
@@ -148,12 +163,7 @@ final class CompletedAttributeGuard
                 array_unshift($setupChecks, $check);
             }
         }
-        if ($setupChecks === []) {
-            return $this;
-        }
-        $completion = clone $this;
-        $completion->retiredSourceChecks = $setupChecks;
-        return $completion;
+        return $setupChecks;
     }
 
     /** Checks declarations and resolver selections affected by release of owned input. */
