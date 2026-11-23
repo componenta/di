@@ -108,6 +108,82 @@ test('direct plans include metadata discovered while a rule reads native argumen
         ->and($handler->calls)->toBe(0);
 })->with(['cold metadata' => false, 'previously inspected metadata' => true]);
 
+test('direct plans include a declared attribute loaded during cold plan materialization', function (string $mode, string $timing): void {
+    $root = dirname(__DIR__, 2);
+    $script = <<<'PHP'
+        use Componenta\DI\Attribute\Composition\AttributeDefinition;
+        use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+        use Componenta\DI\Attribute\Composition\AttributePlan;
+        use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+        use Componenta\DI\Tests\Support\SubprocessAutoload;
+
+        #[Attribute(Attribute::TARGET_CLASS)] final class MaterializedAttribute {}
+        #[LateMaterializedAttribute] final class MaterializedTarget {}
+
+        require $argv[1];
+        SubprocessAutoload::load($argv[2]);
+        $registry = new AttributeDefinitionRegistry(targetedDiscovery: $argv[3] === 'targeted');
+        $registry->register(new AttributeDefinition(MaterializedAttribute::class));
+        $registry->seal();
+        $builder = new AttributePlanBuilder($registry);
+        if (class_exists(AttributePlan::class, false)) {
+            throw new LogicException('The plan class must start cold.');
+        }
+
+        $loads = 0;
+        $loader = static function (string $class) use (&$loads): void {
+            if ($class === AttributePlan::class) {
+                ++$loads;
+                class_alias(MaterializedAttribute::class, LateMaterializedAttribute::class, false);
+            }
+        };
+        spl_autoload_register($loader, prepend: true);
+        try {
+            if ($argv[4] === 'before') {
+                class_exists(AttributePlan::class);
+            }
+            $target = new ReflectionClass(MaterializedTarget::class);
+            $first = $builder->build($target);
+            $second = $builder->build($target);
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+
+        echo json_encode([
+            'loads' => $loads,
+            'first' => count($first->attributes(MaterializedAttribute::class)),
+            'second' => count($second->attributes(MaterializedAttribute::class)),
+        ], JSON_THROW_ON_ERROR);
+        PHP;
+    $process = proc_open([
+        PHP_BINARY,
+        '-n',
+        '-r',
+        $script,
+        $root . '/tests/Support/SubprocessAutoload.php',
+        $root . '/vendor/autoload.php',
+        $mode,
+        $timing,
+    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($process)) {
+        throw new LogicException('Could not start the cold plan fixture.');
+    }
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    expect(proc_close($process))->toBe(0, $stdout . $stderr)
+        ->and($stderr)->toBe('')
+        ->and(json_decode($stdout, true, flags: JSON_THROW_ON_ERROR))->toBe([
+            'loads' => 1,
+            'first' => 1,
+            'second' => 1,
+        ]);
+})->with(['compatible', 'targeted'])
+    ->with(['during materialization' => 'inside', 'preloaded plan class' => 'before']);
+
 test('the first direct plan rejects constraints introduced by rule-time discovery', function (bool $requires): void {
     $handler = new CountingHandler();
     $registry = new AttributeDefinitionRegistry();

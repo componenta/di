@@ -196,26 +196,29 @@ final class AttributePlans
                 continue;
             }
 
-            if ($usages === []) {
+            if ($usages !== []) {
+                $this->assertCapabilityCardinality($target, $usages);
+                $this->assertInvocationOnlyComposition($target, $usages);
+                $this->assertParameterHandlerComposition($target, $usages);
+                $this->assertDependencies($target, $usages);
+                $validatedUserRules = $this->assertCustomRules($usages);
+
+                // Rules may evaluate native arguments that load another attribute.
+                // Revalidate before publishing, while no handlers have run.
+                if ($validatedUserRules && $revision !== $this->registry->refreshAvailability()) {
+                    continue;
+                }
+            }
+
+            // The first allocation can autoload the result class after discovery.
+            // Check names that are now loaded without starting another autoload poll.
+            $planClassLoaded = class_exists(AttributePlan::class, false);
+            $plan = new AttributePlan($closure ?? $target, $this->ordering->order($target, $usages));
+            if ($planClassLoaded || $revision === $this->registry->refreshLoaded()) {
                 break;
             }
-
-            $this->assertCapabilityCardinality($target, $usages);
-            $this->assertInvocationOnlyComposition($target, $usages);
-            $this->assertParameterHandlerComposition($target, $usages);
-            $this->assertDependencies($target, $usages);
-            $validatedUserRules = $this->assertCustomRules($usages);
-
-            // Rules may evaluate native arguments that load another attribute.
-            // Revalidate the complete metadata before publishing a direct plan;
-            // no runtime handlers have been dispatched during this preparation.
-            if ($validatedUserRules && $revision !== $this->registry->refreshAvailability()) {
-                continue;
-            }
-            break;
         }
 
-        $plan = new AttributePlan($closure ?? $target, $this->ordering->order($target, $usages));
         if ($previous !== null) {
             $declarations = $this->borrowedDeclarations ??= new WeakMap();
             $declarations[$plan] = $previous;
