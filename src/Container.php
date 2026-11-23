@@ -10,7 +10,6 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AliasResolver;
-use Componenta\DI\Internal\AvailableEntryLookup;
 use Componenta\DI\Internal\ContainerEntryOperations;
 use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
@@ -157,7 +156,7 @@ final class Container extends ContainerEntryOperations implements
     {
         try {
             if ($this->externalContainers === null && $this->cache->tryGetResolved($id, $entry)) {
-                $this->providerProbes?->trackLookup();
+                $this->providerProbes?->trackLookup($id);
                 return $entry;
             }
         } catch (Throwable $e) {
@@ -170,7 +169,7 @@ final class Container extends ContainerEntryOperations implements
     protected function getEntry(string $id, bool $requireResolvable): mixed
     {
         try {
-            $this->providerProbes?->trackLookup();
+            $this->providerProbes?->trackLookup($id);
             $entryId = null;
             if ($this->externalContainers !== null) {
                 $entryId = $this->aliases->resolve($id);
@@ -178,18 +177,19 @@ final class Container extends ContainerEntryOperations implements
                     $externalGuard = "\0external:" . $id;
                     $lookupGuard = $this->lookupGuard ??= new CycleGuard();
                     $lookupGuard->assertInactive($externalGuard);
+                    $probes = $this->providerProbes ??= new ExternalLookupProbes();
                     $external = $this->externalContainers->findOwning(
                         $id,
                         fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
                         $requireResolvable,
-                        $this->providerProbes ??= new ExternalLookupProbes(),
+                        $probes,
                     );
                     // External has() may retarget aliases before local resolution.
                     $entryId = $this->aliases->resolve($id);
                     if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
                         $lookupGuard->enter($externalGuard);
                         try {
-                            return $requireResolvable ? AvailableEntryLookup::get($external, $id) : $external->get($id);
+                            return $probes->retrieve($external, $id, $requireResolvable);
                         } finally {
                             $lookupGuard->leave($externalGuard);
                         }
@@ -286,7 +286,7 @@ final class Container extends ContainerEntryOperations implements
     protected function hasEntry(string $id, bool $requireResolvable): bool
     {
         try {
-            $this->providerProbes?->trackLookup();
+            $this->providerProbes?->trackLookup($id);
             $entryId = $this->aliases->resolve($id);
             // A callback may retarget this alias to an existing core service.
             // Its availability is known without entering another lookup cycle.
@@ -487,14 +487,18 @@ final class Container extends ContainerEntryOperations implements
             throw new InvalidConfigurationException('External entry changes require a registered provider.');
         }
         $affected = [];
+        $externalIds = [];
         foreach ($ids as $id) {
             self::assertMutableId($id, 'external entry');
-            if ($this->delegators->dependsOn($id) && !$this->isProtectedDependency($id)) {
-                $affected[] = $id;
+            if (!$this->isProtectedDependency($id)) {
+                $externalIds[] = $id;
+                if ($this->delegators->dependsOn($id)) {
+                    $affected[] = $id;
+                }
             }
         }
-        if ($ids !== []) {
-            $this->providerProbes?->invalidate();
+        if ($externalIds !== []) {
+            $this->providerProbes?->notify($externalIds);
         }
         if ($affected === []) {
             return;

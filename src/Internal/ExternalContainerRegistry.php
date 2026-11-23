@@ -79,7 +79,7 @@ final class ExternalContainerRegistry
                             $skipped = true;
                         } else {
                             if ($confirmed['registryRevision'] !== null) {
-                                $lookupProbes->trackLookup();
+                                $lookupProbes->trackLookup($id);
                             }
                             if ($confirmed['owns']) {
                                 return $mayInspect($id) ? $container : null;
