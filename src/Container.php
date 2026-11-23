@@ -456,52 +456,53 @@ final class Container extends ContainerEntryOperations implements
                 $lookupGuard->leave($localGuard);
             }
             $currentId = $revision === $this->aliases->revision ? $entryId : $this->aliases->resolve($id);
-            if ($currentId !== $entryId) {
-                $entryId = $currentId;
-                if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
+            $localChanged = $currentId !== $entryId;
+            if ($localChanged) {
+                if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($currentId, $base)) {
                     return true;
                 }
-                $this->rememberRetriedRoute($id, $entryId, $routes);
-                continue;
-            }
-            if ($available || $hasSharedValue()) {
+            } elseif ($available || $hasSharedValue()) {
                 return true;
             }
 
             $registry = $this->externalContainers;
-            if ($registry === null || $registry->revision <= $checkedProviderRevision || $this->isProtectedDependency($id)) {
-                return false;
-            }
-
-            // Inspect newly registered providers after releasing the local guard.
-            $baseRevision = $this->cache->baseRevision($entryId);
-            $declared = class_exists($entryId, false);
-            $external = $registry->findOwning(
-                $id,
-                fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
-                $requireResolvable,
-                $this->providerProbes ??= new ExternalLookupProbes(),
-                afterRevision: $checkedProviderRevision,
-            );
-            $currentId = $this->aliases->resolve($id);
-            $protected = ProtectedServiceIds::contains($currentId);
-            if (($external !== null && !$protected)
-                || $this->cache->tryGetResolved($id, $resolved)
-                || $this->cache->tryGetBase($currentId, $base)
+            if ($registry !== null
+                && $registry->revision > $checkedProviderRevision
+                && !ProtectedServiceIds::contains($id)
+                && !ProtectedServiceIds::contains($currentId)
             ) {
-                return true;
-            }
-            if ($currentId === $entryId
-                && $baseRevision === $this->cache->baseRevision($entryId)
-                && ($declared || !class_exists($entryId, false))
-            ) {
+                // Check new providers before running another local fallback.
+                $baseRevision = $this->cache->baseRevision($entryId);
+                $declared = class_exists($entryId, false);
+                $external = $registry->findOwning(
+                    $id,
+                    fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                    $requireResolvable,
+                    $this->providerProbes ??= new ExternalLookupProbes(),
+                    afterRevision: $checkedProviderRevision,
+                );
+                $currentId = $this->aliases->resolve($id);
+                $protected = ProtectedServiceIds::contains($currentId);
+                if (($external !== null && !$protected)
+                    || $this->cache->tryGetResolved($id, $resolved)
+                    || $this->cache->tryGetBase($currentId, $base)
+                ) {
+                    return true;
+                }
+                if ($currentId === $entryId
+                    && $baseRevision === $this->cache->baseRevision($entryId)
+                    && ($declared || !class_exists($entryId, false))
+                ) {
+                    return $available;
+                }
+                if (!$protected) {
+                    $checkedProviderRevision = $registry->revision;
+                }
+            } elseif (!$localChanged) {
                 return false;
             }
 
             $entryId = $currentId;
-            if (!$protected) {
-                $checkedProviderRevision = $registry->revision;
-            }
             $this->rememberRetriedRoute($id, $entryId, $routes);
         }
     }
