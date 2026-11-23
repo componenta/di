@@ -220,6 +220,8 @@ $fresh = $container->make(Service::class, ['id' => 42]);   // object from the co
 $result = $container->call([$controller, 'show'], ['id' => 42]);
 ```
 
+The standard `CallableExecutor` captures the top-level values used for DI arguments after selecting the callable, before classifying and resolving its parameters. Changes to referenced variables during callable selection, such as autoloading the class or resolving a callable service, are visible to that invocation.
+
 When a pipeline has already resolved arguments, pass a PreparedCallable adapter to call() with the final native argument list. This skips further DI injection and attribute processing for that invocation. Named arguments and PHP defaults keep their native behavior; variadic values must already be expanded. The adapter exposes the original callable for intercepting executors. Executor decorators should forward it intact, along with the arguments. Ordinary subsequent calls resolve their arguments normally.
 
 The prepared adapter forwards arguments by value and does not support by-reference parameters. For a native callable that requires references, pass the original callable directly to `CallableInvoker` with an argument array containing those references.

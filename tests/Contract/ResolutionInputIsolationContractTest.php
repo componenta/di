@@ -34,6 +34,7 @@ use PHPUnit\Framework\Assert;
 use ReflectionFunction;
 use Reflector;
 use stdClass;
+use WeakReference;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
 
@@ -85,6 +86,18 @@ final class MagicInputTarget
         $label = $arguments['label'];
         $arguments['label'] = 'native magic';
         return $label;
+    }
+}
+
+/** @method object display(object $value) */
+final class MagicRouteInputTarget
+{
+    /** @param array{value: object} $arguments */
+    public function __call(string $name, array $arguments): object
+    {
+        $value = $arguments['value'];
+        $arguments['value'] = $this;
+        return $value;
     }
 }
 
@@ -420,6 +433,40 @@ test('native and explicit factory argument passing retain their reference behavi
     expect($container->make('argument.factory', $arguments))->toBeInstanceOf(stdClass::class)
         ->and($label)->toBe('explicit factory');
 });
+
+test('callable selection can replace a referenced argument before invocation', function (string $route): void {
+    $container = (new ContainerBuilder())->build();
+    $slot = new stdClass();
+    $original = WeakReference::create($slot);
+    $replacement = new stdClass();
+    $magic = new MagicRouteInputTarget();
+    $releasedWhileSelecting = false;
+    $read = static fn(object $value): object => $value;
+    $container->set('input.callable', Definition::factory(static function () use (
+        &$slot,
+        &$releasedWhileSelecting,
+        $original,
+        $replacement,
+        $magic,
+        $read,
+        $route,
+    ): callable {
+        $slot = $replacement;
+        $releasedWhileSelecting = $original->get() === null;
+
+        return match ($route) {
+            'prepared' => new PreparedCallable($read),
+            'magic' => [$magic, 'display'],
+            default => $read,
+        };
+    }));
+
+    $result = $container->call('input.callable', ['value' => &$slot]);
+
+    expect($result)->toBe($replacement)
+        ->and($releasedWhileSelecting)->toBeTrue()
+        ->and($slot)->toBe($route === 'magic' ? $magic : $replacement);
+})->with(['ordinary', 'prepared', 'magic']);
 
 test('a factory published while selecting the fallback receives the original reference-bearing array', function (): void {
     $container = (new ContainerBuilder())->build();
