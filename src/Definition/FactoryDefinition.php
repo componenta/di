@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Definition;
 
-use Componenta\DI\Internal\ResolutionMetadata;
-
 /**
  * Entry produced by a factory callable.
  *
@@ -24,6 +22,7 @@ final readonly class FactoryDefinition implements DefinitionInterface
 
     public function __construct(callable $value)
     {
-        $this->value = is_array($value) ? ResolutionMetadata::snapshot($value) : $value;
+        // Copy callable slots without invoking an autoloader before the copy.
+        $this->value = is_array($value) ? array_map(static fn(mixed $slot): mixed => $slot, $value) : $value;
     }
 }

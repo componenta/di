@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\Contract\FactoryDefinitionSnapshot;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use LogicException;
 
 final readonly class Product
 {
@@ -59,6 +60,35 @@ test('factory definitions own their callable route before registration', functio
     expect($product->owner)->toBe($original)
         ->and($product)->toEqual(new Product($original, 'create', 'updated business state'));
 });
+
+test('cold factory definition creation retains the supplied route through its own autoloading', function (string $route): void {
+    $root = dirname(__DIR__, 2);
+    $process = proc_open([
+        PHP_BINARY,
+        '-n',
+        $root . '/tests/Fixtures/FactoryDefinitionCold.php',
+        $root . '/vendor/autoload.php',
+        $route,
+    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($process)) {
+        throw new LogicException('Could not start the cold factory definition fixture.');
+    }
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    expect(proc_close($process))->toBe(0, $stdout . $stderr)
+        ->and($stderr)->toBe('')
+        ->and(json_decode($stdout, true, flags: JSON_THROW_ON_ERROR))->toBe([
+            'autoloads' => 1,
+            'caller_rebound' => true,
+            'retained_receiver' => true,
+            'key_order' => [1, 0],
+            'product' => 'create:updated business state',
+        ]);
+})->with(['direct constructor' => 'constructor', 'factory facade' => 'facade']);
 
 test('callable definition admission snapshots routing references while retaining factory object identity', function (
     bool $runtime,

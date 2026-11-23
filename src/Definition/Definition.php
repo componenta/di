@@ -13,6 +13,11 @@ final class Definition
      */
     public static function factory(callable $factory): FactoryDefinition
     {
+        // Autoloading the descriptor may change caller-owned references.
+        if (is_array($factory) && !class_exists(FactoryDefinition::class, false)) {
+            $factory = array_map(static fn(mixed $slot): mixed => $slot, $factory);
+        }
+
         return new FactoryDefinition($factory);
     }
 
