@@ -200,6 +200,8 @@ test('prepared callables reject malformed inputs during construction', function 
     'extra element' => [[StaticOwner::class, 'original', 'extra']],
     'missing function' => [__NAMESPACE__ . '\\missingFunction'],
     'non-invokable object' => [new \stdClass()],
+    'private adapter method array' => [[PreparedCallable::class, 'snapshotCallable']],
+    'private adapter method string' => [PreparedCallable::class . '::snapshotCallable'],
 ]);
 
 test('prepared callable validation preserves autoload failures and permits a fresh attempt', function (

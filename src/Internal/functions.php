@@ -32,6 +32,33 @@ function is_abstract_static_dispatch_error(Error $error, string $source): bool
         && str_starts_with($error->getMessage(), 'Cannot call abstract method ');
 }
 
+/**
+ * Checks callability without granting access from a DI class scope.
+ * @internal
+ * @phpstan-assert-if-true callable $candidate
+ */
+function is_public_callable(mixed $candidate, bool $deferAbstractDispatch = false): bool
+{
+    try {
+        return is_callable($candidate);
+    } catch (Error $error) {
+        if (!$deferAbstractDispatch || !is_abstract_static_dispatch_error($error, __FILE__)) {
+            throw $error;
+        }
+        return false;
+    }
+}
+
+/**
+ * Validates the native callable parameter in application scope.
+ * @internal
+ * @return callable
+ */
+function require_public_callable(callable $callable): mixed
+{
+    return $callable;
+}
+
 /** @internal */
 function is_closure_reflector(ReflectionFunctionAbstract $reflection): bool
 {

@@ -68,3 +68,24 @@ test('callable method classification distinguishes similar combined class and me
         ->and(fn() => $resolver->resolve(CallableCollisionB::class . '::hidden::extra'))
         ->toThrow(InvalidCallableException::class, 'Method "' . CallableCollisionB::class . '::hidden::extra()" does not exist.');
 });
+
+test('callable resolution requires visibility from application scope', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $resolver = new CallableResolver($container);
+    $container->set('internal.specification', [$resolver, 'resolveString']);
+    $container->set('internal.receiver', $resolver);
+
+    $specifications = [
+        [$resolver, 'resolveString'],
+        [$resolver, 'isStaticMethod'],
+        [CallableResolver::class, 'classOrInterfaceExists'],
+        CallableResolver::class . '::classOrInterfaceExists',
+        ['internal.receiver', 'resolveString'],
+        'internal.specification',
+    ];
+
+    foreach ($specifications as $specification) {
+        expect(fn() => $resolver->resolve($specification))->toThrow(InvalidCallableException::class);
+    }
+    expect($resolver->resolve([$resolver, 'resolve']))->toBe([$resolver, 'resolve']);
+});
