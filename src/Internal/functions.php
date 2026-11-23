@@ -268,8 +268,9 @@ function transform_request_mapper_data(
         }
     }
 
-    foreach ($defaults as $key => $value) {
-        if (!array_key_exists($key, $data)) {
+    if ($defaults !== []) {
+        // Keep each result's default graph independent of the mapper and other results.
+        foreach (ResolutionMetadata::snapshot(array_diff_key($defaults, $data)) as $key => $value) {
             $data[$key] = $value;
         }
     }
@@ -285,7 +286,8 @@ function transform_request_mapper_data(
                     get_debug_type($sort),
                 ));
             }
-            $data['orderBy'] = $sortMap[(string) $sort] ?? null;
+            $order = $sortMap[(string) $sort] ?? null;
+            $data['orderBy'] = is_array($order) ? ResolutionMetadata::snapshot($order) : $order;
         }
         unset($data['sort'], $data['order']);
     }

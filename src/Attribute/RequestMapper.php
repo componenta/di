@@ -8,6 +8,7 @@ use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Caster\NullCasterProvider;
 use Componenta\DI\Exception\RequestDataConflictException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 
@@ -40,7 +41,7 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
         array $map = [],
         ?RequestDataConflictPolicy $conflictPolicy = null,
     ) {
-        $this->map = array_replace($this->map, $map);
+        $this->map = ResolutionMetadata::invocationSlots(array_replace($this->map, $map));
         if ($conflictPolicy !== null) {
             $this->conflictPolicy = $conflictPolicy;
         }

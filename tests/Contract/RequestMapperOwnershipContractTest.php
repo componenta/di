@@ -6,7 +6,78 @@ namespace Componenta\DI\Tests\Contract\RequestMapperOwnership;
 
 use Componenta\Caster\CasterNotFoundException;
 use Componenta\DI\Attribute\MapRequest;
+use Componenta\DI\Attribute\RequestDataSource;
 use Componenta\DI\Tests\Support\TestCasterProvider;
+use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
+
+test('request mapper sources and renames own their configured array slots', function (bool $editCopy): void {
+    $source = RequestDataSource::Query;
+    $target = 'renamed';
+    $mapper = new MapRequest(sources: [&$source], map: ['input' => &$target]);
+    $request = new ServerRequest('GET', '/')
+        ->withQueryParams(['input' => 'query'])
+        ->withCookieParams(['input' => 'cookie']);
+
+    if ($editCopy) {
+        $sources = $mapper->sources;
+        $map = $mapper->map;
+        $sources[0] = RequestDataSource::Cookies;
+        $map['input'] = 'local';
+    } else {
+        $source = RequestDataSource::Cookies;
+        $target = 'local';
+    }
+
+    expect($mapper->transform($mapper->extract($request)))->toBe(['renamed' => 'query'])
+        ->and($source)->toBe($editCopy ? RequestDataSource::Query : RequestDataSource::Cookies)
+        ->and($target)->toBe($editCopy ? 'renamed' : 'local');
+})->with(['caller references' => false, 'property copies' => true]);
+
+test('request defaults isolate aliases between calls while preserving the local graph and object identity', function (): void {
+    $object = new \stdClass();
+    $branch = ['label' => 'configured', 'object' => $object];
+    $branch['next'] = &$branch;
+    $mapper = new MapRequest(defaults: [
+        'primary' => ['option' => &$branch],
+        'mirror' => ['option' => &$branch],
+    ]);
+
+    $branch['label'] = 'caller label';
+    $first = $mapper->transform([]);
+    Assert::assertIsArray($first['primary']);
+    Assert::assertIsArray($first['primary']['option']);
+    Assert::assertIsArray($first['primary']['option']['next']);
+    Assert::assertIsArray($first['mirror']);
+    Assert::assertIsArray($first['mirror']['option']);
+    expect($first['primary']['option']['label'])->toBe('configured');
+
+    $first['primary']['option']['next']['label'] = 'first result';
+    $second = $mapper->transform([]);
+
+    Assert::assertIsArray($second['primary']);
+    Assert::assertIsArray($second['primary']['option']);
+    expect($first['mirror']['option']['label'])->toBe('first result')
+        ->and($second['primary']['option']['label'])->toBe('configured')
+        ->and($second['primary']['option']['object'])->toBe($object)
+        ->and($branch['label'])->toBe('caller label');
+});
+
+test('the selected ordering owns an independent copy of its configured arrays', function (): void {
+    $columns = ['name' => 'ASC'];
+    $mapper = new MapRequest(sortMap: ['name' => ['columns' => &$columns]]);
+
+    $columns['name'] = 'caller order';
+    $first = $mapper->transform(['sort' => 'name']);
+    Assert::assertIsArray($first['orderBy']);
+    Assert::assertIsArray($first['orderBy']['columns']);
+    expect($first['orderBy']['columns']['name'])->toBe('ASC');
+
+    $first['orderBy']['columns']['name'] = 'first result';
+
+    expect($mapper->transform(['sort' => 'name']))->toBe(['orderBy' => ['columns' => ['name' => 'ASC']]])
+        ->and($columns)->toBe(['name' => 'caller order']);
+});
 
 test('request transformation leaves caller reference slots intact while preserving object identity and key order', function (): void {
     $original = '  mapped value  ';
