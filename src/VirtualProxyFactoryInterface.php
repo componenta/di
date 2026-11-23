@@ -11,10 +11,10 @@ use ReflectionClass;
 interface VirtualProxyFactoryInterface
 {
     /**
-     * @template T of object
-     * @param class-string<T> $class
-     * @param callable(T $proxy): T $factory
-     * @return T
+     * @template TProxy of object
+     * @param class-string<TProxy> $class
+     * @param callable(TProxy $proxy): object $factory
+     * @return TProxy
      * @throws ExceptionInterface If the proxy cannot be created by DI.
      *
      * The backing factory is deferred. Throwables raised by a caller-supplied

@@ -38,10 +38,10 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
     }
 
     /**
-     * @template T of object
-     * @param class-string<T> $class
-     * @param callable(T): T $factory
-     * @return T
+     * @template TProxy of object
+     * @param class-string<TProxy> $class
+     * @param callable(TProxy): object $factory
+     * @return TProxy
      */
     public function makeProxy(string $class, callable $factory): object
     {
@@ -49,9 +49,9 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
             if (is_array($factory)) {
                 $factory = array_map(static fn(mixed $slot): mixed => $slot, $factory);
             }
-            /** @var ReflectionClass<T> $reflection */
             $reflection = new ReflectionClass($class);
             $this->assertSupportsLazyState($reflection, 'virtual proxy');
+            // @phpstan-ignore argument.type (PHP accepts compatible parent backing objects.)
             return $reflection->newLazyProxy($factory);
         } catch (ExceptionInterface $e) {
             throw $e;

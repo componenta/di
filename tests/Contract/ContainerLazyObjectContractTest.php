@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract;
 
+use Componenta\DI\Container;
+use Componenta\DI\ProxyFactory;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 class ContainerLazyObjectTarget
@@ -15,6 +17,8 @@ class ContainerLazyObjectTarget
         return $this->value;
     }
 }
+
+final class ContainerLazyObjectChild extends ContainerLazyObjectTarget {}
 
 test('container makeLazy defers and performs one public ghost initialization', function (): void {
     $initializations = 0;
@@ -63,3 +67,24 @@ test('container makeProxy defers and reuses one public proxy backing object', fu
     expect($backing->read())->toBe('updated through proxy')
         ->and($factoryCalls)->toBe(1);
 });
+
+test('a parent-backed virtual proxy retains the requested child type', function (bool $useContainer): void {
+    $factory = $useContainer ? (new ContainerBuilder())->build() : new ProxyFactory();
+    $backing = new ContainerLazyObjectTarget('parent backing');
+    $receiver = null;
+    $create = static function (Container|ProxyFactory $factory) use ($backing, &$receiver): ContainerLazyObjectChild {
+        return $factory->makeProxy(
+            ContainerLazyObjectChild::class,
+            static function (ContainerLazyObjectChild $proxy) use ($backing, &$receiver): ContainerLazyObjectTarget {
+                $receiver = $proxy;
+                return $backing;
+            },
+        );
+    };
+
+    $proxy = $create($factory);
+
+    expect($receiver)->toBeNull()
+        ->and($proxy->read())->toBe('parent backing')
+        ->and($receiver)->toBe($proxy);
+})->with(['container' => true, 'native adapter' => false]);
