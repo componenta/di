@@ -15,6 +15,8 @@ use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
+use Componenta\DI\Resolver\Parameter\ArrayResolver;
+use Componenta\DI\Resolver\Parameter\ArrayTypedResolver;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\NullableResolver;
@@ -185,7 +187,7 @@ final class ParameterExecution
         if ($provenance !== null) {
             MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, $diagnosticOwner);
         }
-        [$context, $accept] = ParameterContextAccess::begin(
+        [$context, $accept, $literalContext] = ParameterContextAccess::begin(
             ResolutionMetadata::publicParameters($providedParameters),
             $arguments,
         );
@@ -225,6 +227,7 @@ final class ParameterExecution
                 $completed,
                 allowOmission: true,
                 beforeConsumption: $check,
+                literalContext: $literalContext,
             );
 
             // Dependencies and handlers can load source attributes, including on the current parameter.
@@ -307,6 +310,7 @@ final class ParameterExecution
         CompletedAttributeGuard $completed,
         bool $allowOmission = false,
         ?Closure $beforeConsumption = null,
+        ?ParameterResolutionContext $literalContext = null,
     ): ?array {
         $declaration = ParameterTargetAccess::declaration($target);
         $nativeOptional = $allowOmission && $declaration->isOmittable($target->variadic);
@@ -330,9 +334,18 @@ final class ParameterExecution
                 if ($resolver instanceof AttributeParameterResolver) {
                     // Record the plan actually consumed by the bridge. Fresh
                     // discovery here could load a handler that never executed.
-                    ['result' => $result, 'plan' => $attributePlan] = ParameterAttributeAccess::resolveWithPlan($resolver, $target, $context, $beforeConsumption);
+                    ['result' => $result, 'plan' => $attributePlan] = ParameterAttributeAccess::resolveWithPlan(
+                        $resolver,
+                        $target,
+                        $context,
+                        $beforeConsumption,
+                        $literalContext,
+                    );
                 } else {
-                    $result = $resolver->resolveParameter($target, $context);
+                    $input = $resolver instanceof ArrayResolver || $resolver instanceof ArrayTypedResolver
+                        ? $literalContext ?? $context
+                        : $context;
+                    $result = $resolver->resolveParameter($target, $input);
                 }
                 if ($result === null) {
                     continue;

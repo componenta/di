@@ -19,15 +19,16 @@ final class ParameterResolutionContext extends ParameterContextScope
     private readonly array $suppliedArguments;
     /** @var array<int, mixed> */
     private array $resolvedArguments;
+    private ?self $backing = null;
 
     /** @var array<string|int, mixed> */
     public array $provided {
-        get => ResolutionMetadata::snapshot($this->suppliedArguments);
+        get => ResolutionMetadata::snapshot(($this->backing ?? $this)->suppliedArguments);
     }
 
     /** @var array<int, mixed> */
     public array $resolved {
-        get => ResolutionMetadata::snapshot($this->resolvedArguments);
+        get => ResolutionMetadata::snapshot(($this->backing ?? $this)->resolvedArguments);
     }
 
     /**
@@ -43,27 +44,34 @@ final class ParameterResolutionContext extends ParameterContextScope
     /**
      * @param array<string|int, mixed> $provided
      * @param array<int, mixed> $resolved
-     * @return array{self, Closure(int,mixed):void}
+     * @return array{self, Closure(int,mixed):void, self}
      */
     protected static function startInvocation(array $provided, array $resolved): array
     {
-        $context = new self($provided, $resolved);
-        return [$context, $context->resolve(...)];
+        $literalContext = new self($provided, $resolved);
+        $view = $literalContext;
+        // Resolvers can observe the current arguments without borrowing their references.
+        if ($provided !== []) {
+            $view = new self();
+            $view->backing = $literalContext;
+        }
+        return [$view, $literalContext->resolve(...), $literalContext];
     }
 
     /** @return array<string|int,mixed> */
     protected function invocationArguments(): array
     {
-        return $this->suppliedArguments;
+        return $this->backing === null ? $this->suppliedArguments : $this->provided;
     }
 
     protected function parameterFailure(ReflectionParameter $parameter, ?string $reason, ?Throwable $previous): ResolutionException
     {
+        $source = $this->backing ?? $this;
         return ResolutionDiagnostics::parameter(
             $parameter,
             $reason,
-            ResolutionDiagnostics::argumentTypes($this->suppliedArguments),
-            ResolutionDiagnostics::argumentTypes($this->resolvedArguments),
+            ResolutionDiagnostics::argumentTypes($source->suppliedArguments),
+            ResolutionDiagnostics::argumentTypes($source->resolvedArguments),
             $previous,
         );
     }

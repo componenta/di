@@ -13,6 +13,7 @@ use Componenta\DI\Internal\AttributePlans;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Internal\TransformHandler;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
+use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -52,6 +53,7 @@ final readonly class AttributeParameterExecution
         ParameterTarget $target,
         ParameterResolutionContext $context,
         ?Closure $beforeConsumption = null,
+        ?ParameterResolutionContext $literalContext = null,
     ): array {
         $declaration = ParameterTargetAccess::declaration($target);
         $plan = $declaration->attributePlan($this->plans);
@@ -73,7 +75,9 @@ final readonly class AttributeParameterExecution
             $requiresAuthoritative = $plan->has(AuthoritativeValueProvider::class);
             if ($processed === []) {
                 $authoritative = $requiresAuthoritative;
-                $value = $authoritative ? ParameterAttributeValue::unresolved() : $this->initialValue($target, $context);
+                $value = $authoritative
+                    ? ParameterAttributeValue::unresolved()
+                    : $this->initialValue($target, $literalContext ?? $context);
             } elseif ($authoritative !== $requiresAuthoritative) {
                 throw new AttributeCompositionException(sprintf(
                     'Parameter $%s input policy changed after an attribute handler was already executed. Load its value sources before execution.',
@@ -115,7 +119,8 @@ final readonly class AttributeParameterExecution
                         $beforeConsumption,
                     );
                 } else {
-                    $value = $handler->resolveParameter($attribute, $target, $context, $plan, $value);
+                    $input = $handler instanceof RequestAttributeHandler ? $literalContext ?? $context : $context;
+                    $value = $handler->resolveParameter($attribute, $target, $input, $plan, $value);
                 }
                 unset($pendingAttributes[$usage->declarationOrder], $attribute);
                 if ($this->plans->refreshAvailability() !== $revision) {

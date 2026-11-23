@@ -10,13 +10,13 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use ReflectionParameter;
 use Throwable;
 
-/** Starts a resolution and supplies literal values to the invocation pipeline. @internal */
+/** Starts a resolution and keeps the literal context with the argument owner. @internal */
 abstract class ParameterContextAccess extends ParameterContextScope
 {
     /**
      * @param array<string|int,mixed> $provided
      * @param array<int,mixed> $resolved
-     * @return array{ParameterResolutionContext, Closure(int,mixed):void}
+     * @return array{ParameterResolutionContext, Closure(int,mixed):void, ParameterResolutionContext}
      */
     public static function begin(array $provided, array $resolved): array
     {

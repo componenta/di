@@ -16,7 +16,7 @@ abstract class ParameterContextScope
     /**
      * @param array<string|int,mixed> $provided
      * @param array<int,mixed> $resolved
-     * @return array{ParameterResolutionContext, Closure(int,mixed):void}
+     * @return array{ParameterResolutionContext, Closure(int,mixed):void, ParameterResolutionContext}
      */
     abstract protected static function startInvocation(array $provided, array $resolved): array;
 

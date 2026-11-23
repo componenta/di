@@ -22,7 +22,8 @@ abstract class ParameterAttributeAccess extends ParameterAttributeScope
         ParameterTarget $target,
         ParameterResolutionContext $context,
         ?Closure $beforeConsumption,
+        ?ParameterResolutionContext $literalContext = null,
     ): array {
-        return $resolver->execution->resolveParameterWithPlan($target, $context, $beforeConsumption);
+        return $resolver->execution->resolveParameterWithPlan($target, $context, $beforeConsumption, $literalContext);
     }
 }
