@@ -310,13 +310,19 @@ final class AttributeExecution
             $class = ReflectionSnapshot::class($class);
             $properties = self::properties($class);
             $methods = self::methods($class);
-            if (!$cacheable) {
+            $hasAttributes = static fn(ReflectionClass|ReflectionProperty|ReflectionMethod $target): bool => $target->getAttributes() !== [];
+            if ($cacheable) {
+                $classTargets = $hasAttributes($class) ? [$class] : [];
+                $properties = array_filter($properties, $hasAttributes);
+                $methods = array_filter($methods, $hasAttributes);
+                $before = [...$classTargets, ...$properties, ...$methods];
+                $after = $classTargets === [] || $properties === [] ? $before : [...$properties, ...$classTargets, ...$methods];
+            } else {
                 $properties = self::snapshotNativeMembers($properties);
                 $methods = self::snapshotNativeMembers($methods);
+                $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
+                $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
             }
-            $hasAttributes = static fn(ReflectionClass|ReflectionProperty|ReflectionMethod $target): bool => $target->getAttributes() !== [];
-            $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
-            $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
             $hasHandlers = false;
             $requiresFreshValidation = false;
             foreach ($before as $target) {
