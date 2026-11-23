@@ -6,7 +6,6 @@ namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Closure;
 use Componenta\Config\ContainerValue;
-use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\CallableReflector;
@@ -42,10 +41,6 @@ final class FactorySpecificationValidator
     {
         if ($factory instanceof FactoryDefinition) {
             self::assertKnownCallable($id, $factory->value);
-            return;
-        }
-        if ($factory instanceof ClassDefinition) {
-            self::assertClassDefinition($id, $factory);
             return;
         }
         if ($factory instanceof LazyServiceFactoryInterface) {
@@ -241,9 +236,9 @@ final class FactorySpecificationValidator
         return self::$containerArgument = $class->newInstanceWithoutConstructor();
     }
 
-    private static function assertClassDefinition(string $id, ClassDefinition $definition): void
+    /** @param list<array{method: non-empty-string, params: array<string|int,mixed>}> $methodCalls */
+    public static function assertClassDefinition(string $id, string $className, array $methodCalls): void
     {
-        $className = $definition->value;
         // The interface probe can autoload a class after the first probe failed.
         if (!class_exists($className) && !interface_exists($className) && !class_exists($className, false)) {
             throw new InvalidConfigurationException(sprintf(
@@ -265,7 +260,7 @@ final class FactorySpecificationValidator
         }
 
         $magicCall = $class->hasMethod('__call') && $class->getMethod('__call')->isPublic();
-        foreach ($definition->methodCalls as $index => $call) {
+        foreach ($methodCalls as $index => $call) {
             if (!is_array($call)
                 || !array_key_exists('method', $call)
                 || !is_string($call['method'])

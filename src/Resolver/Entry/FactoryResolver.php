@@ -88,19 +88,28 @@ final class FactoryResolver implements DefinitionResolverInterface
         }
     }
 
-    /** @param array<string|int, mixed> $params */
-    private function classDefinition(ClassDefinition $definition, array $params): object
-    {
-        $class = $definition->value;
+    /**
+     * @param class-string $class
+     * @param array<string|int,mixed> $constructorParams
+     * @param list<array{method: non-empty-string, params: array<string|int,mixed>}> $methodCalls
+     * @param array<string|int,mixed> $params
+     */
+    private function classDefinition(
+        string $class,
+        array $constructorParams,
+        array $methodCalls,
+        bool $autowire,
+        array $params,
+    ): object {
         $reflection = new ReflectionClass($class);
         $constructor = $reflection->getConstructor();
-        $arguments = $this->arguments($constructor, $definition->constructorParams, ResolutionMetadata::publicParameters($params), $definition->autowire);
+        $arguments = $this->arguments($constructor, $constructorParams, ResolutionMetadata::publicParameters($params), $autowire);
         $entry = new $class(...$arguments);
 
-        foreach ($definition->methodCalls as $call) {
+        foreach ($methodCalls as $call) {
             $method = $reflection->hasMethod($call['method']) ? $reflection->getMethod($call['method']) : null;
             $methodParams = $method?->isPublic() === true
-                ? $this->arguments($method, $call['params'], [], $definition->autowire)
+                ? $this->arguments($method, $call['params'], [], $autowire)
                 : $this->resolveDefinitionValue($call['params']);
             if (!is_array($methodParams)) {
                 throw new InvalidConfigurationException('ClassDefinition method parameters must resolve to an array.');
@@ -268,16 +277,19 @@ final class FactoryResolver implements DefinitionResolverInterface
     public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface
     {
         if ($definition instanceof ClassDefinition) {
-            [$constructor, $calls] = ResolutionMetadata::snapshot([$definition->constructorParams, $definition->methodCalls]);
-            $definition = new ClassDefinition(
-                $definition->value,
-                $constructor,
-                $calls,
-                $definition->autowire,
-            );
-            FactorySpecificationValidator::assertValid($id, $definition);
+            $class = $definition->value;
+            $constructorParams = $definition->constructorParams;
+            $methodCalls = $definition->methodCalls;
+            $autowire = $definition->autowire;
+            FactorySpecificationValidator::assertClassDefinition($id, $class, $methodCalls);
             return new PreparedClassDefinition(
-                static fn(self $resolver, array $params): object => $resolver->classDefinition($definition, $params),
+                static fn(self $resolver, array $params): object => $resolver->classDefinition(
+                    $class,
+                    $constructorParams,
+                    $methodCalls,
+                    $autowire,
+                    $params,
+                ),
             );
         }
         $factory = match (true) {

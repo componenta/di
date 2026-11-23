@@ -52,15 +52,18 @@ final class ResolutionMetadata
 
     /**
      * Owns the array graph while retaining application object identity and array order.
+     * Reports whether the detached graph still contains references between arrays.
      * @template T of array<array-key,mixed>
      * @param T $parameters
+     * @param-out bool $containsArrayReferences
      * @return T
      */
-    public static function snapshot(array $parameters): array
+    public static function snapshot(array $parameters, ?bool &$containsArrayReferences = null): array
     {
         $arrays = [];
         /** @var T|null $snapshot Reference cells are replaced without changing the input shape. */
         $snapshot = self::detachReferences($parameters, $arrays);
+        $containsArrayReferences = $arrays !== [];
         return $snapshot ?? $parameters;
     }
 
