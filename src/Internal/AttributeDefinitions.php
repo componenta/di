@@ -66,8 +66,11 @@ final class AttributeDefinitions
         while ($pending !== []) {
             $misses = $this->discoveryMisses;
             foreach ($pending as $attribute => $_) {
-                if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
+                if ((class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false))
+                    && isset($this->unavailableAttributes[$attribute])
+                ) {
                     // The fallback interface probe can autoload a class.
+                    // A nested poll may already have recorded the declaration.
                     unset($this->unavailableAttributes[$attribute]);
                     ++$this->generation;
                 }
