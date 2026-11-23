@@ -19,6 +19,11 @@ abstract class ParameterAttributeAccess extends ParameterAttributeScope
         return $resolver->execution->usesAttributePlans($plans);
     }
 
+    public static function usesAttributeRegistry(AttributeParameterResolver $resolver, AttributePlans $plans): bool
+    {
+        return $resolver->execution->usesAttributeRegistry($plans);
+    }
+
     /**
      * @param (Closure():void)|null $beforeConsumption
      * @return array{result:array{0:int,1:mixed}|null,plan:AttributePlan}

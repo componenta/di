@@ -42,6 +42,11 @@ final class AttributePlans
         $this->ordering = new AttributeOrdering();
     }
 
+    public function sharesRegistryWith(self $other): bool
+    {
+        return $this->registry === $other->registry;
+    }
+
     public function requiresFreshValidation(AttributePlan $plan): bool
     {
         return isset($this->freshValidation[$plan]);

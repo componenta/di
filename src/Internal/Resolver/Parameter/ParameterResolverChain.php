@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\AttributePlans;
+use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
 /** Owns parameter resolver registration and order. @internal */
@@ -23,6 +25,8 @@ final class ParameterResolverChain
         get => $this->ordered ??= $this->sortResolvers();
     }
 
+    public function __construct(private readonly AttributePlans $attributes) {}
+
     public function add(ParameterResolverInterface $resolver, int $priority): void
     {
         if ($this->isSealed) {
@@ -37,6 +41,10 @@ final class ParameterResolverChain
                 'Parameter resolver %s is already registered.',
                 $resolver::class,
             ));
+        }
+
+        if ($resolver instanceof AttributeParameterResolver && !ParameterAttributeAccess::usesAttributeRegistry($resolver, $this->attributes)) {
+            throw new InvalidConfigurationException('Attribute and parameter resolution must use the same attribute definition registry.');
         }
 
         $this->registrations[$id] = ['resolver' => $resolver, 'priority' => $priority];

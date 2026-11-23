@@ -40,6 +40,11 @@ final readonly class AttributeParameterExecution
         return $this->plans === $plans;
     }
 
+    public function usesAttributeRegistry(AttributePlans $plans): bool
+    {
+        return $this->plans->sharesRegistryWith($plans);
+    }
+
     public function supports(ParameterTarget $target): bool
     {
         return $this->hasHandler(ParameterTargetAccess::declaration($target)->attributePlan($this->plans));

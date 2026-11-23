@@ -30,7 +30,7 @@ final class ParametersResolver extends ParameterExecutionScope
         $targetCache = $targets === null ? new ParameterTargets() : ParameterTargetFactoryAccess::targets($targets);
         $attributes = AttributePlanAccess::plans($plans);
         $this->bootstrap = AttributePlanAccess::bootstrap($plans);
-        $this->chain = new ParameterResolverChain();
+        $this->chain = new ParameterResolverChain($attributes);
         $this->plans = new ParameterPlanBuilder($attributes, $targetCache, $this->chain);
         parent::__construct(new ParameterExecution($attributes, $targetCache, $this->chain, $this->plans, $this->bootstrap));
     }
@@ -39,7 +39,10 @@ final class ParametersResolver extends ParameterExecutionScope
         get => $this->chain->isSealed;
     }
 
-    /** Higher priorities run first; equal priorities preserve insertion order. */
+    /**
+     * Higher priorities run first. Equal priorities preserve insertion order.
+     * An AttributeParameterResolver must use this pipeline's attribute definition registry.
+     */
     public function add(ParameterResolverInterface $resolver, int $priority = 0): void
     {
         $this->chain->add($resolver, $priority);

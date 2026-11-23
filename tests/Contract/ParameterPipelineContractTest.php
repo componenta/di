@@ -6,14 +6,17 @@ namespace Componenta\DI\Tests\Contract;
 
 use Componenta\Config\Config;
 use Componenta\Config\Environment;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
+use Componenta\DI\Resolver\Attribute\Handler\EnvHandler;
 use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
+use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
@@ -42,6 +45,8 @@ final class FixedPipelineValue implements ParameterResolverInterface
 
 function pipelineAuditCallable(string $value): void {}
 
+function pipelineAuditEnvironment(#[Env('PIPELINE_LABEL')] string $value = 'default'): void {}
+
 test('the public attribute resolver returns the declared position and preserves supplied value priority', function (): void {
     [$container, $runtime] = (new ContainerBuilder(new Config([], new Environment(['PIPELINE_LABEL' => 'environment']))))->assemble();
     $resolver = new AttributeParameterResolver($runtime->plans);
@@ -54,6 +59,25 @@ test('the public attribute resolver returns the declared position and preserves 
         ->toBe([1, 'environment'])
         ->and($resolver->resolveParameter($target, new ParameterResolutionContext(['value' => 'provided'])))
         ->toBe([1, 'provided']);
+});
+
+test('parameter resolver registration requires one attribute definition registry', function (): void {
+    $registry = new AttributeDefinitionRegistry();
+    $pipeline = new ParametersResolver(new AttributePlanBuilder($registry));
+    $foreign = new AttributeParameterResolver(new AttributePlanBuilder(new AttributeDefinitionRegistry()));
+
+    expect(fn() => $pipeline->add($foreign, 100))
+        ->toThrow(InvalidConfigurationException::class, 'same attribute definition registry');
+
+    $pipeline->add(new AttributeParameterResolver(new AttributePlanBuilder($registry)), 100);
+    $pipeline->add(new DefaultValueResolver());
+    $pipeline->seal();
+    $target = new ReflectionParameter(__NAMESPACE__ . '\pipelineAuditEnvironment', 0);
+    expect($pipeline->resolve([$target]))->toBe(['default']);
+
+    $container = (new ContainerBuilder(new Config([], new Environment(['PIPELINE_LABEL' => 'environment']))))->build();
+    $registry->register(new AttributeDefinition(Env::class, new EnvHandler($container)));
+    expect($pipeline->resolve([$target]))->toBe(['environment']);
 });
 
 test('equal resolver priorities preserve registration order', function (): void {
