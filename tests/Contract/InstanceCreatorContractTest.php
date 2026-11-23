@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract\InstanceCreator;
 
+use Closure;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Entry\InstanceCreator;
@@ -162,4 +163,52 @@ test('standalone construction ignores metadata for another method', function (bo
     }
 
     expect($entry->label)->toBe('constructor:native');
+})->with(['create' => false, 'initialize' => true]);
+
+final class StandaloneInputProduct
+{
+    /** @param array{label: string} $nested */
+    public function __construct(public string $label, array $nested)
+    {
+        $nested['label'] = 'written by the constructor';
+    }
+}
+
+/** @extends ReflectionClass<StandaloneInputProduct> */
+final class StandaloneInputMetadata extends ReflectionClass
+{
+    /** @param Closure():void $onRead */
+    public function __construct(private readonly Closure $onRead)
+    {
+        parent::__construct(StandaloneInputProduct::class);
+    }
+
+    #[\Override]
+    public function getConstructor(): ?ReflectionMethod
+    {
+        ($this->onRead)();
+        return parent::getConstructor();
+    }
+}
+
+test('standalone constructors capture explicit argument slots before reading metadata', function (bool $initialize): void {
+    [, $runtime] = (new ContainerBuilder())->assemble();
+    $creator = new InstanceCreator($runtime->parameters);
+    $label = 'initial argument';
+    $nested = 'initial nested reference';
+    $class = new StandaloneInputMetadata(static function () use (&$label): void {
+        $label = 'changed during metadata discovery';
+    });
+    $arguments = ['label' => &$label, 'nested' => ['label' => &$nested]];
+
+    if ($initialize) {
+        $entry = $class->newInstanceWithoutConstructor();
+        $creator->initialize($entry, $class, $arguments);
+    } else {
+        $entry = $creator->create($class, $arguments);
+    }
+
+    expect($label)->toBe('changed during metadata discovery')
+        ->and($entry->label)->toBe('initial argument')
+        ->and($nested)->toBe('written by the constructor');
 })->with(['create' => false, 'initialize' => true]);

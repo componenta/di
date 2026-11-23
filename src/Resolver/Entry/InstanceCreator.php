@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Internal\ReflectionSnapshot;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\ConstructorInvocation;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
@@ -29,6 +30,10 @@ final readonly class InstanceCreator
      */
     public function create(ReflectionClass $class, array $params = []): object
     {
+        if ($params !== []) {
+            $params = ResolutionMetadata::invocationSlots($params);
+        }
+
         $construction = ReflectionSnapshot::forConstruction($class);
         $constructor = $construction->getConstructor();
         $targets = ConstructorInvocation::targets($this->parameters, $constructor, $class::class === ReflectionClass::class ? null : $class);
@@ -54,6 +59,10 @@ final readonly class InstanceCreator
      */
     public function initialize(object $entry, ReflectionClass $class, array $params = []): void
     {
+        if ($params !== []) {
+            $params = ResolutionMetadata::invocationSlots($params);
+        }
+
         $constructor = ReflectionSnapshot::forConstruction($class)->getConstructor();
         $targets = ConstructorInvocation::targets($this->parameters, $constructor, $class::class === ReflectionClass::class ? null : $class);
         ConstructorInvocation::initialize(
