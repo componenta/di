@@ -204,7 +204,7 @@ test('covered mutations require a valid worker termination', function (string $s
         expect(glob($directory . '/workers/*'))->toHaveCount(1);
 
         $path = $directory . '/report.json';
-        $reporter = new MutationReport($root, $path, workers: $workers);
+        $reporter = new MutationReport($directory, $path, workers: $workers);
         $event = new FinishMutationSuite($suite);
         if ($score === null) {
             expect(fn() => $reporter->notify($event))->toThrow(RuntimeException::class, 'worker startup');
@@ -217,6 +217,7 @@ test('covered mutations require a valid worker termination', function (string $s
         }
         expect($report['complete'])->toBe($score !== null)
             ->and($report['pest_score'])->toBe($score)
+            ->and($report)->toHaveKey('outcomes.0.file', 'source.php')
             ->and($report)->toHaveKey('outcomes.0.result', $outcome)
             ->and($report['worker_failures'] ?? [])->toBe($score === null ? ['primary'] : []);
     } finally {
