@@ -65,6 +65,22 @@ final class AttributeExecutionOrder
         }
     }
 
+    /** @param array<class-string,AttributeUsage|null> $companions */
+    public static function assertCompanionsUnchanged(AttributePlan $plan, array $companions): void
+    {
+        foreach ($companions as $attributeClass => $selected) {
+            $current = $plan->attributes($attributeClass)[0] ?? null;
+            if ($current === $selected || ($current !== null && $selected !== null && self::sameDeclaration($current, $selected))) {
+                continue;
+            }
+            throw new AttributeCompositionException(sprintf(
+                'Attribute companion %s for %s changed after it was selected for construction. Load its attributes before execution.',
+                $attributeClass,
+                describe_attribute_target($plan->target),
+            ));
+        }
+    }
+
     private static function sameDeclaration(AttributeUsage $current, AttributeUsage $previous): bool
     {
         return $current->declarationOrder === $previous->declarationOrder

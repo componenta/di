@@ -69,10 +69,14 @@ final readonly class AttributeParameterExecution
         $authoritative = false;
         $processed = [];
         $pendingAttributes = [];
+        $companions = [];
         while (true) {
             $revision = $this->plans->refreshAvailability();
             $plan = $declaration->attributePlan($this->plans);
             AttributeExecutionOrder::assertPrefix($plan, $processed);
+            if ($companions !== []) {
+                AttributeExecutionOrder::assertCompanionsUnchanged($plan, $companions);
+            }
             $beforeConsumption?->__invoke();
 
             $requiresAuthoritative = $plan->has(AuthoritativeValueProvider::class);
@@ -122,7 +126,12 @@ final readonly class AttributeParameterExecution
                         $context,
                         $plan,
                         $value,
-                        static function (AttributeUsage $companion) use (&$pendingAttributes, &$processed, $handler): object {
+                        static function (string $attributeClass) use ($plan, &$companions, &$pendingAttributes, &$processed, $handler): ?object {
+                            $companion = $plan->attributes($attributeClass)[0] ?? null;
+                            $companions[$attributeClass] = $companion;
+                            if ($companion === null) {
+                                return null;
+                            }
                             if ($companion->definition->handler !== $handler) {
                                 return $companion->newInstance();
                             }

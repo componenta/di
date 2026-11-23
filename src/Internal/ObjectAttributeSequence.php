@@ -35,6 +35,8 @@ final class ObjectAttributeSequence
     private array $owners = [];
     /** @var array<int,array<int,array{AttributeUsage,object}>> */
     private array $pending = [];
+    /** @var array<int,array<class-string,AttributeUsage|null>> */
+    private array $companions = [];
 
     /** @param list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod> $targets */
     public function __construct(
@@ -70,6 +72,7 @@ final class ObjectAttributeSequence
         $owner = $this->owners[spl_object_id($active)];
         $plan = $this->builder->revalidateSelectedDeclarations($this->targets[$owner], $this->plans[$owner]);
         $companion = $plan->attributes($attributeClass)[0] ?? null;
+        $this->companions[$owner][$attributeClass] = $companion;
         if ($companion === null) {
             return null;
         }
@@ -162,6 +165,9 @@ final class ObjectAttributeSequence
             $inactive = [];
             $ordered = $this->withoutInactivePredecessors($ordered, $inactive);
             AttributeExecutionOrder::assertOrderedPrefix($ordered, $this->executed);
+            foreach ($this->companions as $index => $companions) {
+                AttributeExecutionOrder::assertCompanionsUnchanged($plans[$index], $companions);
+            }
             foreach ($inactive as $usage) {
                 if (!$this->materializeInactivePredecessor($usage, $owners[spl_object_id($usage)], $revision)) {
                     continue 2;

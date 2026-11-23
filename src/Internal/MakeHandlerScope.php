@@ -6,7 +6,6 @@ namespace Componenta\DI\Internal;
 
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -24,13 +23,13 @@ abstract class MakeHandlerScope
         ?Closure $findCompanion,
     ): void;
 
-    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    /** @param (Closure(class-string):(?object))|null $findCompanion */
     abstract protected function resolveComposed(
         object $attribute,
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
         ParameterAttributeValue $value,
-        ?Closure $materialize,
+        ?Closure $findCompanion,
     ): ParameterAttributeValue;
 }

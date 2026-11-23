@@ -7,7 +7,6 @@ namespace Componenta\DI\Resolver\Attribute\Handler;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
@@ -50,14 +49,14 @@ final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInte
         return $this->resolveComposed($attribute, $target, $context, $plan, $value, null);
     }
 
-    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    /** @param (Closure(class-string):(?object))|null $findCompanion */
     protected function resolveComposed(
         object $attribute,
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
         ParameterAttributeValue $value,
-        ?Closure $materialize,
+        ?Closure $findCompanion,
     ): ParameterAttributeValue {
         if (!$attribute instanceof Make && !$attribute instanceof Proxy) {
             throw new LogicException('MakeHandler received an unsupported parameter attribute.');
@@ -68,10 +67,10 @@ final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInte
 
         $make = $attribute instanceof Make
             ? $attribute
-            : self::firstAttribute($plan, Make::class, $materialize);
+            : self::firstAttribute($plan, Make::class, $findCompanion);
         $proxy = $attribute instanceof Proxy
             ? $attribute
-            : self::firstAttribute($plan, Proxy::class, $materialize);
+            : self::firstAttribute($plan, Proxy::class, $findCompanion);
         $config = self::configuration(
             $target->name,
             $target->className,
@@ -225,16 +224,14 @@ final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInte
     /**
      * @template T of object
      * @param class-string<T> $attributeClass
-     * @param (Closure(AttributeUsage):object)|null $materialize
+     * @param (Closure(class-string):(?object))|null $findCompanion
      * @return T|null
      */
-    private static function firstAttribute(AttributePlan $plan, string $attributeClass, ?Closure $materialize): ?object
+    private static function firstAttribute(AttributePlan $plan, string $attributeClass, ?Closure $findCompanion): ?object
     {
-        $usage = $plan->attributes($attributeClass)[0] ?? null;
-        if ($usage === null) {
-            return null;
-        }
-        $attribute = $materialize === null ? $usage->newInstance() : $materialize($usage);
+        $attribute = $findCompanion === null
+            ? ($plan->attributes($attributeClass)[0] ?? null)?->newInstance()
+            : $findCompanion($attributeClass);
         return $attribute instanceof $attributeClass ? $attribute : null;
     }
 
