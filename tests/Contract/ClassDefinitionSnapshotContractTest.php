@@ -75,6 +75,34 @@ test('class definition descriptors own constructor arguments and method calls be
         ->and($entry->configured)->toBe($expected);
 })->with(['caller input' => true, 'public views' => false]);
 
+test('cold class definition creation captures nested references before internal autoloading', function (): void {
+    $root = dirname(__DIR__, 2);
+    $process = proc_open([
+        PHP_BINARY,
+        '-n',
+        $root . '/tests/Fixtures/ClassDefinitionCold.php',
+        $root . '/vendor/autoload.php',
+    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($process)) {
+        throw new LogicException('Could not start the cold class definition fixture.');
+    }
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    expect(proc_close($process))->toBe(0, $stdout . $stderr)
+        ->and($stderr)->toBe('')
+        ->and(json_decode($stdout, true, flags: JSON_THROW_ON_ERROR))->toBe([
+            'autoloads' => 1,
+            'caller' => 'rebound',
+            'constructor' => 'selected',
+            'configured_method' => 'selected',
+            'keeps_literal_identity' => true,
+        ]);
+});
+
 test('class definition properties expose readable recursive arrays without sharing their cycles', function (bool $method): void {
     $payload = ['label' => 'configured'];
     $payload['cycle'] = &$payload;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Definition;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\ArraySnapshot;
 
 /**
  * Declarative factory with explicit constructor arguments and ordered method calls.
@@ -24,6 +24,9 @@ use Componenta\DI\Internal\ResolutionMetadata;
  */
 final class ClassDefinition implements DefinitionInterface
 {
+    // Snapshot code is available before the constructor receives the caller's arguments.
+    use ArraySnapshot;
+
     /** @var array<string|int, mixed> */
     private readonly array $arguments;
     /** @var list<array{method: non-empty-string, params: array<string|int,mixed>}> */
@@ -32,12 +35,12 @@ final class ClassDefinition implements DefinitionInterface
 
     /** @var array<string|int, mixed> */
     public array $constructorParams {
-        get => $this->containsArrayReferences ? ResolutionMetadata::snapshot($this->arguments) : $this->arguments;
+        get => $this->containsArrayReferences ? self::snapshot($this->arguments) : $this->arguments;
     }
 
     /** @var list<array{method: non-empty-string, params: array<string|int,mixed>}> */
     public array $methodCalls {
-        get => $this->containsArrayReferences ? ResolutionMetadata::snapshot($this->calls) : $this->calls;
+        get => $this->containsArrayReferences ? self::snapshot($this->calls) : $this->calls;
     }
 
     /**
@@ -54,7 +57,7 @@ final class ClassDefinition implements DefinitionInterface
         array $methodCalls = [],
         public readonly bool $autowire = false,
     ) {
-        [$this->arguments, $this->calls] = ResolutionMetadata::snapshot(
+        [$this->arguments, $this->calls] = self::snapshot(
             [$constructorParams, $methodCalls],
             $containsArrayReferences,
         );
