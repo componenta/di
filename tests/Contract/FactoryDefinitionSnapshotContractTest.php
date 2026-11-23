@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract\FactoryDefinitionSnapshot;
 
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
@@ -30,6 +31,34 @@ final class Factory
         return new Product($this, 'alternate', $this->label);
     }
 }
+
+test('factory definitions own their callable route before registration', function (): void {
+    $original = new Factory('original');
+    $replacement = new Factory('replacement');
+    $owner = $original;
+    $method = 'create';
+    $definition = Definition::factory([1 => &$method, 0 => &$owner]);
+    $route = $definition->value;
+    if (!is_array($route)) {
+        throw new \LogicException('Expected the configured array callable.');
+    }
+    expect(array_keys($route))->toBe([1, 0]);
+    $route[0] = $replacement;
+    $route[1] = 'alternate';
+    expect([$owner, $method])->toBe([$original, 'create']);
+
+    $owner = $replacement;
+    $method = 'alternate';
+    $container = (new ContainerBuilder())->addDefinition('product', $definition)->build();
+    $original->label = 'updated business state';
+    $product = $container->make('product');
+    if (!$product instanceof Product) {
+        throw new \LogicException('Expected a factory product.');
+    }
+
+    expect($product->owner)->toBe($original)
+        ->and($product)->toEqual(new Product($original, 'create', 'updated business state'));
+});
 
 test('callable definition admission snapshots routing references while retaining factory object identity', function (
     bool $runtime,
