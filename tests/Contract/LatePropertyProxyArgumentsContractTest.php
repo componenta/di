@@ -9,6 +9,7 @@ use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -20,6 +21,7 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use PHPUnit\Framework\Assert;
 use ReflectionClass;
+use ReflectionFunction;
 use Reflector;
 use RuntimeException;
 use Throwable;
@@ -140,8 +142,12 @@ function builder(bool $uncached): ContainerBuilder
 }
 
 /** @return array{class:class-string<Owner>,proxy:string,policy:string,holder:string} */
-function fixture(string $strategy = 'eager', string $argument = 'constant', bool $loadSuffix = false): array
-{
+function fixture(
+    string $strategy = 'eager',
+    string $argument = 'constant',
+    bool $loadSuffix = false,
+    bool $make = false,
+): array {
     $suffix = bin2hex(random_bytes(6));
     $class = 'Target_' . $suffix;
     $proxy = 'LateProxy_' . $suffix;
@@ -154,6 +160,7 @@ function fixture(string $strategy = 'eager', string $argument = 'constant', bool
         default => $holder . '::NAME',
     };
     $creation = $strategy === 'eager' ? '' : '#[\Componenta\DI\Attribute\\' . $strategy . ']';
+    $source = $make ? sprintf('#[\\%s(Product::class)]', Make::class) : '';
     // Weak typing makes a valid native object argument observable even though
     // Proxy's final constructor stores only the converted class string.
     eval(sprintf(
@@ -162,7 +169,7 @@ function fixture(string $strategy = 'eager', string $argument = 'constant', bool
         namespace %s;
         %s #[%s]
         final class %s extends Owner {
-            #[%s(%s)] public Product $product;
+            %s #[%s(%s)] public Product $product;
             #[LoadBefore(%s)] public function load(): void {}
             #[%s] public function suffix(): void {}
         }
@@ -171,6 +178,7 @@ function fixture(string $strategy = 'eager', string $argument = 'constant', bool
         $creation,
         $policy,
         $class,
+        $source,
         $proxy,
         $expression,
         var_export(__NAMESPACE__ . '\\' . $proxy, true),
@@ -199,8 +207,9 @@ test('late property Proxy materializes valid native arguments once per phase bef
     bool $uncached,
     bool $preloaded,
     bool $loadSuffix,
+    bool $make,
 ): void {
-    $fixture = fixture($strategy, 'stringable', $loadSuffix);
+    $fixture = fixture($strategy, 'stringable', $loadSuffix, $make);
     if ($preloaded) {
         class_alias(Proxy::class, $fixture['proxy']);
     }
@@ -230,7 +239,42 @@ test('late property Proxy materializes valid native arguments once per phase bef
 })->with(['eager', 'Lazy', 'Proxy'])
     ->with(['cached plans' => false, 'uncached plans' => true])
     ->with(['late alias' => false, 'preloaded control' => true])
-    ->with(['stable argument' => false, 'argument reveals later handler' => true]);
+    ->with(['stable argument' => false, 'argument reveals later handler' => true])
+    ->with(['Proxy alone' => false, 'Make with Proxy' => true]);
+
+test('Make and Proxy on a parameter evaluate the class argument once per invocation', function (bool $closure): void {
+    $name = 'ProxyParameter_' . bin2hex(random_bytes(6));
+    eval(sprintf(
+        <<<'PHP'
+        declare(strict_types=0);
+        namespace %s;
+        function %s(
+            #[\Componenta\DI\Attribute\Make(Product::class), \Componenta\DI\Attribute\Proxy(new StringableArgument(''))]
+            Product $product,
+        ): Product {
+            return $product;
+        }
+        PHP,
+        __NAMESPACE__,
+        $name,
+    ));
+    $name = __NAMESPACE__ . '\\' . $name;
+    $target = $closure ? new ReflectionFunction($name)->getClosure() : $name;
+    $container = builder(false)->build();
+
+    foreach ([1, 2] as $attempt) {
+        Trace::$events = [];
+        $product = $container->call($target);
+        Assert::assertInstanceOf(Product::class, $product);
+        expect(Trace::$events)->toBe(['argument'])
+            ->and(Trace::$arguments)->toHaveCount($attempt)
+            ->and(array_all(Trace::$arguments, static fn(WeakReference $reference): bool => $reference->get() === null))->toBeTrue()
+            ->and(Trace::$products)->toBe($attempt - 1)
+            ->and(new ReflectionClass(Product::class)->isUninitializedLazyObject($product))->toBeTrue()
+            ->and($product->value)->toBe('ready')
+            ->and(Trace::$products)->toBe($attempt);
+    }
+})->with(['named callable' => false, 'closure' => true]);
 
 test('constructor policies revealed by a late property Proxy argument fail before the owner constructor', function (bool $uncached, bool $preloaded): void {
     $fixture = fixture();

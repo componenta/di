@@ -17,6 +17,7 @@ use Componenta\DI\Internal\Resolver\Entry\PropertyValueHandlerAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
+use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use ReflectionClass;
 use ReflectionMethod;
@@ -256,7 +257,15 @@ final class AttributeExecution
                     }
                     $handlerTarget = ReflectionSnapshot::target($member, $class::class === ReflectionClass::class ? $class : $context->class);
                 }
-                if ($attempt !== null && $handlerTarget instanceof ReflectionProperty
+                if ($handler instanceof MakeHandler && $handlerTarget instanceof ReflectionProperty && $context->entry !== null) {
+                    MakeHandlerAccess::handle(
+                        $handler,
+                        $attribute,
+                        $handlerTarget,
+                        $context,
+                        static fn(AttributeUsage $companion): object => $sequence->companionInstance($usage, $companion),
+                    );
+                } elseif ($attempt !== null && $handlerTarget instanceof ReflectionProperty
                     && ($handler instanceof CastHandler || $handler instanceof TransformHandler)
                 ) {
                     PropertyValueHandlerAccess::handle($handler, $attribute, $handlerTarget, $attempt);

@@ -64,6 +64,21 @@ final class ObjectAttributeSequence
         return $this->materialize($usage, $this->owners[spl_object_id($usage)]);
     }
 
+    public function companionInstance(AttributeUsage $active, AttributeUsage $companion): object
+    {
+        $owner = $this->owners[spl_object_id($active)];
+        $attribute = $this->materialize($companion, $owner);
+        $definition = $companion->definition;
+        if ($definition->handler instanceof AttributeHandlerInterface
+            && ($definition->phase === $this->phase || $definition->phase === AttributePhase::Both)
+            && !isset($this->executed[$owner . ':' . $companion->declarationOrder])
+        ) {
+            // A companion may be consumed before its own step in this phase.
+            $this->pending[$owner][$companion->declarationOrder] = [$companion, $attribute];
+        }
+        return $attribute;
+    }
+
     public function retainInstance(AttributeUsage $usage, object $attribute): void
     {
         $this->pending[$this->owners[spl_object_id($usage)]][$usage->declarationOrder] = [$usage, $attribute];

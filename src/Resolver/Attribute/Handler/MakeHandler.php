@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\Internal\EntryLookupRevision;
+use Componenta\DI\Internal\MakeHandlerScope;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
@@ -29,7 +32,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Make] and #[Proxy] on classes, parameters and properties. */
-final class MakeHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(
         private readonly FactoryInterface $factory,
@@ -44,6 +47,18 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         AttributePlan $plan,
         ParameterAttributeValue $value,
     ): ParameterAttributeValue {
+        return $this->resolveComposed($attribute, $target, $context, $plan, $value, null);
+    }
+
+    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    protected function resolveComposed(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+        ?Closure $materialize,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof Make && !$attribute instanceof Proxy) {
             throw new LogicException('MakeHandler received an unsupported parameter attribute.');
         }
@@ -53,10 +68,10 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
         $make = $attribute instanceof Make
             ? $attribute
-            : self::firstAttribute($plan, Make::class);
+            : self::firstAttribute($plan, Make::class, $materialize);
         $proxy = $attribute instanceof Proxy
             ? $attribute
-            : self::firstAttribute($plan, Proxy::class);
+            : self::firstAttribute($plan, Proxy::class, $materialize);
         $config = self::configuration(
             $target->name,
             $target->className,
@@ -79,6 +94,16 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
+        $this->handleComposed($attribute, $target, $context, null);
+    }
+
+    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    protected function handleComposed(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $materialize,
+    ): void {
         if ($attribute instanceof Proxy && $target instanceof ReflectionClass) {
             if ($context->entry !== null) {
                 return;
@@ -111,10 +136,10 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         $plan = $this->plans->build($target);
         $make = $attribute instanceof Make
             ? $attribute
-            : self::firstAttribute($plan, Make::class);
+            : self::firstAttribute($plan, Make::class, $materialize);
         $proxy = $attribute instanceof Proxy
             ? $attribute
-            : self::firstAttribute($plan, Proxy::class);
+            : self::firstAttribute($plan, Proxy::class, $materialize);
 
         $config = self::configuration(
             $target->getName(),
@@ -201,12 +226,16 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
     /**
      * @template T of object
      * @param class-string<T> $attributeClass
+     * @param (Closure(AttributeUsage):object)|null $materialize
      * @return T|null
      */
-    private static function firstAttribute(AttributePlan $plan, string $attributeClass): ?object
+    private static function firstAttribute(AttributePlan $plan, string $attributeClass, ?Closure $materialize): ?object
     {
         $usage = $plan->attributes($attributeClass)[0] ?? null;
-        $attribute = $usage?->newInstance();
+        if ($usage === null) {
+            return null;
+        }
+        $attribute = $materialize === null ? $usage->newInstance() : $materialize($usage);
         return $attribute instanceof $attributeClass ? $attribute : null;
     }
 

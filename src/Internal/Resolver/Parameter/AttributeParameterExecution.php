@@ -6,13 +6,16 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Composition\Capability\AuthoritativeValueProvider;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\AttributePlans;
+use Componenta\DI\Internal\MakeHandlerAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Internal\TransformHandler;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
+use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -93,14 +96,7 @@ final readonly class AttributeParameterExecution
                     continue;
                 }
 
-                $pending = $pendingAttributes[$usage->declarationOrder] ?? null;
-                if ($pending === null) {
-                    $attribute = $usage->newInstance();
-                } else {
-                    AttributeExecutionOrder::assertMaterializedUsage($usage, $pending[0]);
-                    $attribute = $pending[1];
-                    unset($pending);
-                }
+                $attribute = self::materialize($usage, $pendingAttributes);
                 if ($this->plans->refreshAvailability() !== $revision) {
                     // A constructor can reveal a predecessor or a different input
                     // policy. Recompose before dispatch without reconstructing it.
@@ -117,6 +113,24 @@ final readonly class AttributeParameterExecution
                         $plan,
                         $value,
                         $beforeConsumption,
+                    );
+                } elseif ($handler instanceof MakeHandler) {
+                    $value = MakeHandlerAccess::resolve(
+                        $handler,
+                        $attribute,
+                        $target,
+                        $context,
+                        $plan,
+                        $value,
+                        static function (AttributeUsage $companion) use (&$pendingAttributes, &$processed): object {
+                            $instance = self::materialize($companion, $pendingAttributes);
+                            if ($companion->definition->handler instanceof ParameterAttributeHandlerInterface
+                                && !isset($processed[$companion->declarationOrder])
+                            ) {
+                                $pendingAttributes[$companion->declarationOrder] = [$companion, $instance];
+                            }
+                            return $instance;
+                        },
                     );
                 } else {
                     $input = $handler instanceof RequestAttributeHandler ? $literalContext ?? $context : $context;
@@ -135,6 +149,17 @@ final readonly class AttributeParameterExecution
             'result' => $value->resolved ? [$target->position, $value->value] : null,
             'plan' => $plan,
         ];
+    }
+
+    /** @param array<int, array{AttributeUsage, object}> $pendingAttributes */
+    private static function materialize(AttributeUsage $usage, array $pendingAttributes): object
+    {
+        $pending = $pendingAttributes[$usage->declarationOrder] ?? null;
+        if ($pending === null) {
+            return $usage->newInstance();
+        }
+        AttributeExecutionOrder::assertMaterializedUsage($usage, $pending[0]);
+        return $pending[1];
     }
 
     private function hasHandler(AttributePlan $plan): bool

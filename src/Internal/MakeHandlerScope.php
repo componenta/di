@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Internal;
+
+use Closure;
+use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Target\ParameterTarget;
+use Reflector;
+
+/** Composes Make and Proxy with the active attempt's attribute instances. @internal */
+abstract class MakeHandlerScope
+{
+    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    abstract protected function handleComposed(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $materialize,
+    ): void;
+
+    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    abstract protected function resolveComposed(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+        ?Closure $materialize,
+    ): ParameterAttributeValue;
+}
