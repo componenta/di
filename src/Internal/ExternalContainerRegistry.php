@@ -63,6 +63,7 @@ final class ExternalContainerRegistry
         bool $requireResolvable,
         ExternalLookupProbes $lookupProbes,
         bool $forRegistration = false,
+        int $afterRevision = 0,
     ): ?ContainerInterface {
         $probes = $forRegistration ? null : $lookupProbes->start($id);
         $caller = $probes?->begin();
@@ -70,6 +71,10 @@ final class ExternalContainerRegistry
         try {
             $containers = $this->containers;
             $inspected = count($containers);
+            if ($afterRevision !== 0) {
+                // Each membership revision publishes exactly one provider.
+                $containers = array_slice($containers, $afterRevision, preserve_keys: true);
+            }
             while (true) {
                 foreach ($containers as $providerId => $container) {
                     $revision = $lookupProbes->revision;

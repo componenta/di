@@ -301,7 +301,8 @@ final class Container extends ContainerEntryOperations implements
             ) {
                 $lookupGuard = $this->lookupGuard ??= new CycleGuard();
                 if (!$lookupGuard->contains($localGuard)) {
-                    $external = $this->externalContainers->findOwning(
+                    $registry = $this->externalContainers;
+                    $external = $registry->findOwning(
                         $id,
                         fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
                         $requireResolvable,
@@ -312,42 +313,93 @@ final class Container extends ContainerEntryOperations implements
                     if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
                         return true;
                     }
+                    $checkedProviderRevision = $registry->revision;
                 }
             }
             if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
                 return true;
             }
 
-            $lookupGuard = $this->lookupGuard ??= new CycleGuard();
-            $lookupGuard->enter($localGuard);
-            try {
-                while (true) {
-                    $revision = $this->aliases->revision;
-                    $hasSharedValue = fn(): bool => $this->cache->tryGetBase($entryId, $published);
-                    $available = $requireResolvable
-                        ? $this->resolver->can($entryId, $hasSharedValue)
-                        : $this->resolver->knows($entryId, $hasSharedValue);
-                    $currentId = $revision === $this->aliases->revision
-                        ? $entryId
-                        : $this->aliases->resolve($id);
-                    if ($currentId === $entryId) {
-                        return $available || $hasSharedValue();
-                    }
-
-                    // Local fallback discovery can change the alias before returning.
-                    $entryId = $currentId;
-                    if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
-                        return true;
-                    }
-                }
-            } finally {
-                $lookupGuard->leave($localGuard);
-            }
+            return $this->hasUncachedEntry(
+                $id,
+                $entryId,
+                $localGuard,
+                $requireResolvable,
+                isset($checkedProviderRevision) && !ProtectedServiceIds::contains($entryId) ? $checkedProviderRevision : 0,
+            );
         } catch (Throwable $e) {
             if ($requireResolvable) {
                 return false;
             }
             throw self::entryResolutionFailure($id, $e);
+        }
+    }
+
+    private function hasUncachedEntry(
+        string $id,
+        string $entryId,
+        string $localGuard,
+        bool $requireResolvable,
+        int $checkedProviderRevision,
+    ): bool {
+        $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+        while (true) {
+            $lookupGuard->enter($localGuard);
+            try {
+                $revision = $this->aliases->revision;
+                $hasSharedValue = fn(): bool => $this->cache->tryGetBase($entryId, $published);
+                $available = $requireResolvable
+                    ? $this->resolver->can($entryId, $hasSharedValue)
+                    : $this->resolver->knows($entryId, $hasSharedValue);
+            } finally {
+                $lookupGuard->leave($localGuard);
+            }
+            $currentId = $revision === $this->aliases->revision ? $entryId : $this->aliases->resolve($id);
+            if ($currentId !== $entryId) {
+                $entryId = $currentId;
+                if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
+                    return true;
+                }
+                continue;
+            }
+            if ($available || $hasSharedValue()) {
+                return true;
+            }
+
+            $registry = $this->externalContainers;
+            if ($registry === null || $registry->revision <= $checkedProviderRevision || $this->isProtectedDependency($id)) {
+                return false;
+            }
+
+            // Inspect newly registered providers after releasing the local guard.
+            $baseRevision = $this->cache->baseRevision($entryId);
+            $declared = class_exists($entryId, false);
+            $external = $registry->findOwning(
+                $id,
+                fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                $requireResolvable,
+                $this->providerProbes ??= new ExternalLookupProbes(),
+                afterRevision: $checkedProviderRevision,
+            );
+            $currentId = $this->aliases->resolve($id);
+            $protected = ProtectedServiceIds::contains($currentId);
+            if (($external !== null && !$protected)
+                || $this->cache->tryGetResolved($id, $resolved)
+                || $this->cache->tryGetBase($currentId, $base)
+            ) {
+                return true;
+            }
+            if ($currentId === $entryId
+                && $baseRevision === $this->cache->baseRevision($entryId)
+                && ($declared || !class_exists($entryId, false))
+            ) {
+                return false;
+            }
+
+            $entryId = $currentId;
+            if (!$protected) {
+                $checkedProviderRevision = $registry->revision;
+            }
         }
     }
 
