@@ -186,9 +186,15 @@ final class AttributeExecution
                     ));
                 }
                 $completed = $sequence->completed;
-                ObjectCreationAccess::withinProperty($context, $target, function () use ($class, $target, $sequence, $context): void {
-                    $this->processTarget($class, $target, $sequence, $context);
-                });
+                $declaration = $target::class === ReflectionProperty::class ? null : $usage->target;
+                ObjectCreationAccess::withinProperty(
+                    $context,
+                    $target,
+                    function () use ($class, $target, $sequence, $context): void {
+                        $this->processTarget($class, $target, $sequence, $context);
+                    },
+                    $declaration instanceof ReflectionProperty ? $declaration : null,
+                );
                 if ($sequence->completed > $completed) {
                     $completedProperties[$key] = true;
                 }
@@ -228,9 +234,18 @@ final class AttributeExecution
 
                 $sequence->dispatch($usage);
                 // Instance-specific member data is for handlers. The plan uses the captured class.
-                $handlerTarget = $target instanceof ReflectionClass
-                    ? ($instanceReflection?->getName() === $class->getName() ? $instanceReflection : $context->class)
-                    : ReflectionSnapshot::target($target, $class);
+                if ($target instanceof ReflectionClass) {
+                    $handlerTarget = $instanceReflection?->getName() === $class->getName() ? $instanceReflection : $context->class;
+                } else {
+                    $member = $target;
+                    if (ReflectionSnapshot::hasBorrowedMetadata($target)) {
+                        $declaration = $usage->target;
+                        if (!ReflectionSnapshot::sameDeclaration($target, $declaration)) {
+                            $member = $declaration;
+                        }
+                    }
+                    $handlerTarget = ReflectionSnapshot::target($member, $class::class === ReflectionClass::class ? $class : $context->class);
+                }
                 $handler->handle($attribute, $handlerTarget, $context);
                 unset($attribute);
             } catch (ExceptionInterface $e) {
@@ -279,6 +294,10 @@ final class AttributeExecution
             $class = ReflectionSnapshot::class($class);
             $properties = self::properties($class);
             $methods = self::methods($class);
+            if (!$cacheable) {
+                $properties = self::snapshotNativeMembers($properties);
+                $methods = self::snapshotNativeMembers($methods);
+            }
             $hasAttributes = static fn(ReflectionClass|ReflectionProperty|ReflectionMethod $target): bool => $target->getAttributes() !== [];
             $before = array_values(array_filter([$class, ...$properties, ...$methods], $hasAttributes));
             $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
@@ -308,6 +327,24 @@ final class AttributeExecution
             $this->cache[$name] = $plan;
         }
         return $plan;
+    }
+
+    /**
+     * A derived class reflector may return members that it still owns.
+     * @param list<ReflectionProperty|ReflectionMethod> $members
+     * @return list<ReflectionProperty|ReflectionMethod>
+     */
+    private static function snapshotNativeMembers(array $members): array
+    {
+        foreach ($members as $index => $member) {
+            if (!ReflectionSnapshot::hasBorrowedMetadata($member) && $member->getAttributes() !== []) {
+                $snapshot = ReflectionSnapshot::target($member);
+                if ($snapshot instanceof ReflectionProperty || $snapshot instanceof ReflectionMethod) {
+                    $members[$index] = $snapshot;
+                }
+            }
+        }
+        return $members;
     }
 
     /**

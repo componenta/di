@@ -10,6 +10,9 @@ use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\EntryId;
+use Componenta\DI\Attribute\MapQueryString;
+use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
@@ -17,6 +20,7 @@ use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -171,3 +175,53 @@ test('final parameter preparation cannot hide a newly available custom source fr
     expect($blocked)->toBeGreaterThan(0)->and($recovered)->toBeTrue();
 })->with(['setup method' => false, 'setup callback' => true])
     ->with(['cached plans' => false, 'non-memoized plans' => true]);
+
+abstract class ConfigurableLocale
+{
+    /** @var list<string> */
+    public array $settings = [];
+
+    public function __construct(public string $locale) {}
+
+    public function configure(
+        #[EntryId('configured.locale')] string $locale,
+        #[EntryId('configured.region')] string $region,
+    ): void {
+        $this->settings = [$locale, $region];
+    }
+}
+
+define(__NAMESPACE__ . '\\CONFIGURE_LOCALE', static function (
+    ConfigurableLocale $entry,
+    #[EntryId('configured.locale')] string $locale,
+    #[EntryId('configured.region')] string $region,
+): void {
+    $entry->configure($locale, $region);
+});
+
+#[SetUp('configure', ['locale' => 'setup locale'])]
+final class ConfiguredByMethod extends ConfigurableLocale {}
+
+#[SetUp(CONFIGURE_LOCALE, ['locale' => 'setup locale'])]
+final class ConfiguredByCallback extends ConfigurableLocale {}
+
+test('explicit setup arguments replace mapped values while unrelated mapped keys still undergo source checks', function (bool $callback): void {
+    $container = (new ContainerBuilder())->addServices([
+        'configured.locale' => 'service locale',
+        'configured.region' => 'service region',
+    ])->build();
+    $target = $callback
+        ? static fn(#[MapQueryString] ConfiguredByCallback $dto): ConfigurableLocale => $dto
+        : static fn(#[MapQueryString] ConfiguredByMethod $dto): ConfigurableLocale => $dto;
+    $request = (new ServerRequest('GET', '/'))->withQueryParams(['locale' => 'request locale']);
+
+    $dto = $container->call($target, [ServerRequestInterface::class => $request]);
+
+    Assert::assertInstanceOf(ConfigurableLocale::class, $dto);
+    expect($dto->locale)->toBe('request locale')
+        ->and($dto->settings)->toBe(['setup locale', 'service region']);
+
+    $conflict = $request->withQueryParams(['locale' => 'request locale', 'region' => 'request region']);
+    expect(fn() => $container->call($target, [ServerRequestInterface::class => $conflict]))
+        ->toThrow(RequestParameterSourceConflictException::class, 'Mapped request data key "region"');
+})->with(['setup method' => false, 'setup callback' => true]);

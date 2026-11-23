@@ -12,42 +12,43 @@ use ReflectionMethod;
 use ReflectionParameter;
 use WeakReference;
 
-use function Componenta\DI\Internal\is_closure_reflector;
-
 /** Owns a parameter's native declaration and its internal planning state. @internal */
 final class ParameterDeclaration
 {
     private ?AttributePlan $emptyClosurePlan = null;
-    private readonly ReflectionParameter $declaration;
     public private(set) ?ReflectionParameter $borrowedMetadata;
     public readonly bool $mayHaveAttributes;
 
+    /** @var array<int,ReflectionAttribute<object>> */
+    public private(set) array $attributeReflectors;
+    /** @var array<class-string,true> */
+    public private(set) array $attributesByClass;
+    /** @var list<class-string> */
+    public private(set) array $attributeClasses;
+
     /** @var list<ReflectionAttribute<object>>|null */
     public readonly ?array $capturedAttributes;
+    private bool $selectedForResolution = false;
 
-    /**
-     * @param list<ReflectionAttribute<object>> $attributes
-     * @param WeakReference<ReflectionParameter>|null $closureMethodSource
-     */
+    /** @var array<int,ReflectionAttribute<object>>|null */
+    public ?array $resolutionAttributes {
+        get => $this->selectedForResolution ? $this->attributeReflectors : null;
+    }
+
+    /** @param WeakReference<ReflectionParameter>|null $closureMethodSource */
     public function __construct(
-        ReflectionParameter $reflection,
+        private readonly ReflectionParameter $declaration,
+        ?ReflectionParameter $borrowedMetadata,
         private readonly ?bool $nativeOmission,
         public readonly bool $canCacheClassification,
-        array $attributes,
         private readonly ?WeakReference $closureMethodSource,
     ) {
-        if ($reflection::class === ReflectionParameter::class) {
-            $this->declaration = $reflection;
-            $this->borrowedMetadata = null;
-            $this->capturedAttributes = null;
-        } else {
-            $this->declaration = ReflectionSnapshot::parameter($reflection, forPublication: true);
-            $method = $this->declaration->getDeclaringFunction();
-            // The native __invoke reflector does not expose the identity of its closure.
-            $capture = $method instanceof ReflectionMethod && is_closure_reflector($method);
-            $this->borrowedMetadata = $capture ? null : $reflection;
-            $this->capturedAttributes = $capture ? $attributes : null;
-        }
+        // The native __invoke reflector does not expose the identity of its closure.
+        $this->borrowedMetadata = $closureMethodSource === null ? $borrowedMetadata : null;
+        $capture = $closureMethodSource !== null && $borrowedMetadata !== null;
+        $attributes = $capture ? $this->captureClosureMethodAttributes($borrowedMetadata) : $this->readAttributes();
+        $this->selectAttributes($attributes);
+        $this->capturedAttributes = $capture ? array_values($this->attributeReflectors) : null;
         $this->mayHaveAttributes = $this->borrowedMetadata !== null || $attributes !== [];
     }
 
@@ -58,7 +59,11 @@ final class ParameterDeclaration
 
     public function defaultValue(): mixed
     {
-        return $this->metadataTarget()->getDefaultValue();
+        $source = $this->metadataTarget();
+        $value = $source->getDefaultValue();
+        return $source === $this->declaration || ReflectionSnapshot::sameParameter($source, $this->declaration)
+            ? $value
+            : $this->declaration->getDefaultValue();
     }
 
     /** Lets a derived reflector supply live metadata for the same declaration. */
@@ -73,6 +78,12 @@ final class ParameterDeclaration
     public function releaseBorrowedMetadata(): void
     {
         $this->borrowedMetadata = null;
+    }
+
+    public function selectResolutionAttributes(): void
+    {
+        $this->selectAttributes($this->readAttributes());
+        $this->selectedForResolution = true;
     }
 
     public function closureMethodSource(): ?ReflectionParameter
@@ -97,11 +108,62 @@ final class ParameterDeclaration
 
     public function attributePlan(AttributePlans $plans): AttributePlan
     {
+        if ($this->selectedForResolution) {
+            return $plans->build($this->declaration, $this->attributeReflectors);
+        }
         if (!$this->mayHaveAttributes && !$this->canCacheClassification) {
             // Keep an empty closure plan local to the target and its captures.
             $plans->refreshEmptyUncachedTarget();
             return $this->emptyClosurePlan ??= new AttributePlan($this->declaration, []);
         }
         return $plans->build($this->metadataTarget(), $this->capturedAttributes);
+    }
+
+    /** @return array<int,ReflectionAttribute<object>> */
+    private function readAttributes(): array
+    {
+        $source = $this->metadataTarget();
+        $attributes = $source->getAttributes();
+        return $source === $this->declaration || ReflectionSnapshot::sameParameter($source, $this->declaration)
+            ? $attributes
+            : $this->declaration->getAttributes();
+    }
+
+    /** @return list<ReflectionAttribute<object>> */
+    private function captureClosureMethodAttributes(ReflectionParameter $source): array
+    {
+        $attributes = $source->getAttributes();
+        $current = ReflectionSnapshot::parameter($source, forPublication: true);
+        $method = $current->getDeclaringFunction();
+        $original = $this->declaration->getDeclaringFunction();
+        // Scoped closures expose their declaring method but not their closure object.
+        if ($method instanceof ReflectionMethod
+            && $original instanceof ReflectionMethod
+            && $method->getDeclaringClass()->getName() === $original->getDeclaringClass()->getName()
+            && $method->getName() === $original->getName()
+            && $current->getPosition() === $this->declaration->getPosition()
+            && $current->getName() === $this->declaration->getName()
+        ) {
+            return array_values($attributes);
+        }
+
+        return array_values($this->declaration->getAttributes());
+    }
+
+    /** @param array<int,ReflectionAttribute<object>> $attributes */
+    private function selectAttributes(array $attributes): void
+    {
+        $selection = [];
+        $classes = [];
+        foreach ($attributes as $index => $attribute) {
+            /** @var class-string $class */
+            $class = $attribute->getName();
+            $selection[$index] = $attribute;
+            $classes[$class] = true;
+        }
+
+        $this->attributeReflectors = $selection;
+        $this->attributesByClass = $classes;
+        $this->attributeClasses = array_keys($classes);
     }
 }

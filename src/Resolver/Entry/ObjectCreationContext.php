@@ -332,10 +332,10 @@ final class ObjectCreationContext extends ObjectCreationScope
      * @param Closure():void $resolve
      * @throws LogicException If the same property is already being resolved.
      */
-    protected function resolveProperty(ReflectionProperty $property, Closure $resolve): void
+    protected function resolveProperty(ReflectionProperty $property, Closure $resolve, ?ReflectionProperty $declaration): void
     {
         $this->assertPropertyWritesOpen();
-        $key = $this->propertyKey($property);
+        $key = $this->propertyKey($declaration ?? $property);
         if (isset($this->pendingPropertyWrites[$key])) {
             throw new LogicException(sprintf(
                 'Property "%s::$%s" is already being resolved.',
@@ -354,7 +354,10 @@ final class ObjectCreationContext extends ObjectCreationScope
         }
 
         if (array_key_exists('value', $pending)) {
-            $this->writeProperty($property, $pending['value']);
+            $writer = $declaration === null || ReflectionSnapshot::sameDeclaration($property, $declaration)
+                ? $property
+                : $declaration;
+            $this->writeProperty($writer, $pending['value']);
         }
     }
 

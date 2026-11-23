@@ -8,7 +8,6 @@ use Componenta\DI\Internal\ReflectionSnapshot;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterDeclaration;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterTargetScope;
 use Componenta\DI\Resolver\TypeHints;
-use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
@@ -34,14 +33,10 @@ final class ParameterTarget extends ParameterTargetScope
         get => $this->declaration->defaultValue();
     }
 
-    /** @var list<ReflectionAttribute<object>> */
-    private readonly array $attributeReflectors;
-
-    /** @var array<class-string, list<ReflectionAttribute<object>>> */
-    private readonly array $attributesByClass;
-
     /** @var list<class-string> */
-    public readonly array $attributeClasses;
+    public array $attributeClasses {
+        get => $this->declaration->attributeClasses;
+    }
 
     /** @var list<class-string> */
     public readonly array $typeNames;
@@ -64,7 +59,7 @@ final class ParameterTarget extends ParameterTargetScope
     public function __construct(ReflectionParameter $reflection)
     {
         $source = $reflection;
-        $reflection = ReflectionSnapshot::parameter($reflection);
+        $reflection = ReflectionSnapshot::parameter($source, forPublication: true);
         $this->name = $reflection->getName();
         $this->position = $reflection->getPosition();
         $this->type = $reflection->getType();
@@ -76,35 +71,24 @@ final class ParameterTarget extends ParameterTargetScope
         $this->variadic = $reflection->isVariadic();
         $this->byReference = $reflection->isPassedByReference();
         $function = $reflection->getDeclaringFunction();
-        $native = $reflection::class === ReflectionParameter::class;
+        $native = $source::class === ReflectionParameter::class;
         $nativeOmission = $native ? !$this->variadic && $reflection->isOptional() && $function->isInternal() : null;
         $closure = is_closure_reflector($function);
         $canCacheClassification = $native && !$closure;
         $closureMethodSource = $closure && $function instanceof ReflectionMethod ? WeakReference::create($source) : null;
         $this->declaringContext = self::declaringContext($reflection, $function);
-        unset($function);
-
-        $allAttributes = [];
-        $attributes = [];
-        $classes = [];
-
-        foreach ($reflection->getAttributes() as $attribute) {
-            /** @var class-string $class */
-            $class = $attribute->getName();
-            $allAttributes[] = $attribute;
-            $attributes[$class][] = $attribute;
-            $classes[$class] = true;
-        }
-
-        $this->attributeReflectors = $allAttributes;
-        $this->attributesByClass = $attributes;
-        $this->attributeClasses = array_keys($classes);
-        parent::__construct(new ParameterDeclaration($reflection, $nativeOmission, $canCacheClassification, $allAttributes, $closureMethodSource));
+        parent::__construct(new ParameterDeclaration(
+            $reflection,
+            $native ? null : $source,
+            $nativeOmission,
+            $canCacheClassification,
+            $closureMethodSource,
+        ));
     }
 
     public function hasAttribute(string $attributeClass): bool
     {
-        if (isset($this->attributesByClass[$attributeClass])) {
+        if (isset($this->declaration->attributesByClass[$attributeClass])) {
             return true;
         }
 
@@ -139,7 +123,8 @@ final class ParameterTarget extends ParameterTargetScope
     {
         $reflector = null;
         $needsRefresh = false;
-        foreach ($this->attributeReflectors as $attribute) {
+        $attributes = $this->declaration->attributeReflectors;
+        foreach ($attributes as $attribute) {
             $class = $attribute->getName();
             if (!is_attribute_class_loaded($class)) {
                 $needsRefresh = true;
@@ -153,7 +138,7 @@ final class ParameterTarget extends ParameterTargetScope
             // Complete discovery before selecting again in declaration order.
             // Loaded-only checks cannot execute another autoloader.
             $reflector = null;
-            foreach ($this->attributeReflectors as $attribute) {
+            foreach ($attributes as $attribute) {
                 $class = $attribute->getName();
                 if (is_attribute_class_loaded($class) && is_a($class, $attributeClass, true)) {
                     $reflector = $attribute;

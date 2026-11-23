@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\EntryId;
+use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Internal\ObjectAttributeAccess;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Object\ObjectPipeline;
@@ -212,15 +213,16 @@ final class ConstructorClassReflection extends ReflectionClass
 
 final class ConstructorMethodReflection extends ReflectionMethod
 {
-    public function __construct(private readonly object $payload)
+    /** @param class-string $class */
+    public function __construct(private readonly object $payload, string $class = ConstructedProduct::class)
     {
-        parent::__construct(ConstructedProduct::class, '__construct');
+        parent::__construct($class, '__construct');
     }
 
     /** @return list<ReflectionParameter> */
     public function getParameters(): array
     {
-        $parameter = new ParameterReflection([ConstructedProduct::class, '__construct'], 'value');
+        $parameter = new ParameterReflection([$this->getDeclaringClass()->getName(), $this->getName()], 'value');
         $parameter->hideAttributes = true;
         $parameter->payload = $this->payload;
         return [$parameter];
@@ -249,3 +251,122 @@ test('constructor plans keep custom parameter metadata isolated from native cons
         expect($reference->get())->toBeNull();
     }
 })->with(['custom first' => true, 'native first' => false]);
+
+#[Lazy]
+final class LazyConstructedProduct
+{
+    public string $value;
+
+    public function __construct(#[EntryId('reflector.value')] string $value = 'default')
+    {
+        $this->value = 'constructor:' . $value;
+    }
+
+    public function replace(string $value = 'default'): void
+    {
+        $this->value = 'replacement:' . $value;
+    }
+}
+
+/** @extends ReflectionClass<LazyConstructedProduct> */
+final class BorrowedConstructorReflection extends ReflectionClass
+{
+    public function __construct(private readonly ReflectionMethod $constructor)
+    {
+        parent::__construct(LazyConstructedProduct::class);
+    }
+
+    public function getConstructor(): ReflectionMethod
+    {
+        return $this->constructor;
+    }
+}
+
+test('a lazy object invokes its native constructor when a borrowed method reflector is retargeted', function (bool $customParameters, bool $duringArguments): void {
+    [, $runtime] = (new ContainerBuilder())->addService('reflector.value', 'service')->assemble();
+    $constructor = $customParameters
+        ? new ConstructorMethodReflection(new stdClass(), LazyConstructedProduct::class)
+        : new ReflectionMethod(LazyConstructedProduct::class, '__construct');
+    $reflector = new BorrowedConstructorReflection($constructor);
+    $retarget = static fn(): mixed => new ReflectionMethod(ReflectionMethod::class, '__construct')
+        ->invoke($constructor, LazyConstructedProduct::class, 'replace');
+
+    $product = $runtime->objects->create(
+        $reflector,
+        resolveParameters: static function () use ($duringArguments, $retarget): array {
+            if ($duringArguments) {
+                $retarget();
+            }
+            return [];
+        },
+    );
+    Assert::assertInstanceOf(LazyConstructedProduct::class, $product);
+    expect(nativeClass(LazyConstructedProduct::class)->isUninitializedLazyObject($product))->toBeTrue();
+    if (!$duringArguments) {
+        $retarget();
+    }
+
+    expect($product->value)->toBe($customParameters ? 'constructor:default' : 'constructor:service')
+        ->and($constructor->getName())->toBe('replace');
+})->with(['native parameters' => false, 'filtered parameters' => true])
+    ->with(['before access' => false, 'during argument resolution' => true]);
+
+final readonly class SiblingParametersProduct
+{
+    public function __construct(
+        #[EntryId('reflector.value')] public string $first = 'default',
+        #[EntryId('reflector.second')] public string $second = 'default',
+    ) {}
+
+    public function replacement(string $first, string $second = 'replacement'): void {}
+}
+
+/** @extends ReflectionClass<SiblingParametersProduct> */
+final class SiblingParametersReflection extends ReflectionClass
+{
+    public function __construct(private readonly bool $retarget)
+    {
+        parent::__construct(SiblingParametersProduct::class);
+    }
+
+    public function getConstructor(): ReflectionMethod
+    {
+        return new class ($this->retarget) extends ReflectionMethod {
+            public function __construct(private readonly bool $retarget)
+            {
+                parent::__construct(SiblingParametersProduct::class, '__construct');
+            }
+
+            public function getParameters(): array
+            {
+                $parameters = parent::getParameters();
+                $parameters[0] = new class ($this->retarget ? $parameters[1] : null) extends ReflectionParameter {
+                    public function __construct(private readonly ?ReflectionParameter $sibling)
+                    {
+                        parent::__construct([SiblingParametersProduct::class, '__construct'], 'first');
+                    }
+
+                    public function getAttributes(?string $name = null, int $flags = 0): array
+                    {
+                        $this->sibling?->__construct([SiblingParametersProduct::class, 'replacement'], 'second');
+                        return [];
+                    }
+                };
+                return $parameters;
+            }
+        };
+    }
+}
+
+test('constructor metadata validates each borrowed parameter when capturing it', function (bool $retarget): void {
+    [, $runtime] = (new ContainerBuilder())
+        ->addService('reflector.value', 'service')
+        ->addService('reflector.second', 'second service')
+        ->assemble();
+
+    $product = $runtime->objects->create(new SiblingParametersReflection($retarget));
+
+    Assert::assertInstanceOf(SiblingParametersProduct::class, $product);
+    expect($product->first)->toBe('default')
+        ->and($product->second)->toBe('second service');
+})->with(['sibling stays on the constructor' => false, 'sibling is retargeted during capture' => true]);

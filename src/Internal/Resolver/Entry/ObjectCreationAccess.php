@@ -51,8 +51,8 @@ abstract class ObjectCreationAccess extends ObjectCreationScope
     }
 
     /** @param Closure():void $resolve */
-    public static function withinProperty(ObjectCreationContext $context, ReflectionProperty $property, Closure $resolve): void
+    public static function withinProperty(ObjectCreationContext $context, ReflectionProperty $property, Closure $resolve, ?ReflectionProperty $declaration = null): void
     {
-        $context->resolveProperty($property, $resolve);
+        $context->resolveProperty($property, $resolve, $declaration);
     }
 }

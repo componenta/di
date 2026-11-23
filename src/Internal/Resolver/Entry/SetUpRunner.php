@@ -10,6 +10,7 @@ use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -52,8 +53,12 @@ final class SetUpRunner implements AttributeHandlerInterface
             $check = $this->callback($attribute, $target, $context, $entry);
         } else {
             $input = $this->resolutionParameters->get($context);
-            $parameters = $this->providedParameters($attribute, ConstructionParameters::invocationArguments($input), $method);
-            $provenance = ConstructionParameters::provenance($input);
+            [$parameters, $provenance] = $this->providedParameters(
+                $attribute,
+                ConstructionParameters::invocationArguments($input),
+                $method,
+                ConstructionParameters::provenance($input),
+            );
             $name = $method->getName();
             $check = null;
             if ($provenance !== null && method_exists($entry, $name)) {
@@ -75,17 +80,16 @@ final class SetUpRunner implements AttributeHandlerInterface
      * Attribute values override public surrounding object-creation parameters.
      *
      * @param array<string|int,mixed> $context
-     * @return array<string|int,mixed>
+     * @return array{array<string|int,mixed>,?MappedRequestContext}
      */
     private function providedParameters(
         SetUp $attribute,
-        array $context = [],
-        ?ReflectionFunctionAbstract $method = null,
+        array $context,
+        ReflectionFunctionAbstract $method,
+        ?MappedRequestContext $provenance,
     ): array {
-        return array_replace(
-            $context,
-            ResolutionMetadata::publicParameters($this->unwrapParams($attribute->params, $method)),
-        );
+        $overrides = ResolutionMetadata::publicParameters($this->unwrapParams($attribute->params, $method));
+        return [array_replace($context, $overrides), $provenance?->withoutOverrides($overrides)];
     }
 
     /** @param ReflectionClass<object> $class */
@@ -136,9 +140,13 @@ final class SetUpRunner implements AttributeHandlerInterface
             unset($parameters[$first->getName()]);
         }
 
-        $provided = $this->providedParameters($attribute, $parameters, $method);
+        [$provided, $provenance] = $this->providedParameters(
+            $attribute,
+            $parameters,
+            $method,
+            ConstructionParameters::provenance($input),
+        );
         $owner = $class->getName();
-        $provenance = ConstructionParameters::provenance($input);
         $check = $provenance === null ? null : MappedRequestParameterSourceGuard::watchInvocation($method, $provenance, $owner, skipFirst: true);
         $this->callbackInvoker->invoke(
             $attribute->method,

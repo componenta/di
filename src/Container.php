@@ -157,6 +157,7 @@ final class Container extends ContainerEntryOperations implements
     {
         try {
             if ($this->externalContainers === null && $this->cache->tryGetResolved($id, $entry)) {
+                $this->providerProbes?->trackLookup();
                 return $entry;
             }
         } catch (Throwable $e) {
@@ -169,6 +170,7 @@ final class Container extends ContainerEntryOperations implements
     protected function getEntry(string $id, bool $requireResolvable): mixed
     {
         try {
+            $this->providerProbes?->trackLookup();
             $entryId = null;
             if ($this->externalContainers !== null) {
                 $entryId = $this->aliases->resolve($id);
@@ -267,6 +269,7 @@ final class Container extends ContainerEntryOperations implements
     protected function hasEntry(string $id, bool $requireResolvable): bool
     {
         try {
+            $this->providerProbes?->trackLookup();
             $entryId = $this->aliases->resolve($id);
             // A callback may retarget this alias to an existing core service.
             // Its availability is known without entering another lookup cycle.

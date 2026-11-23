@@ -77,8 +77,13 @@ final class ExternalContainerRegistry
                         $confirmed = $probes->confirmedOwnership($providerId, $lookupProbes->confirmationRevision, $revision);
                         if ($confirmed === null || (!$requireResolvable && $container instanceof Container)) {
                             $skipped = true;
-                        } elseif ($confirmed) {
-                            return $mayInspect($id) ? $container : null;
+                        } else {
+                            if ($confirmed['registryRevision'] !== null) {
+                                $lookupProbes->trackLookup();
+                            }
+                            if ($confirmed['owns']) {
+                                return $mayInspect($id) ? $container : null;
+                            }
                         }
                         continue;
                     }
@@ -113,11 +118,8 @@ final class ExternalContainerRegistry
                 $inspected += count($containers);
             }
         } finally {
-            if ($skipped) {
-                EntryLookupRevision::markIncomplete();
-            }
             if ($probes !== null) {
-                $lookupProbes->finish($id, $probes);
+                $lookupProbes->finish($id, $probes, $skipped);
             }
         }
     }

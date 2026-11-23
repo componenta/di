@@ -49,13 +49,15 @@ final class AttributePlans
     /**
      * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param array<int,ReflectionAttribute<object>>|null $captured
+     * @param array<int,ReflectionAttribute<object>>|null $consumed
      */
     public function consumedSource(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         AttributePlan $plan,
         ?array $captured = null,
+        ?array $consumed = null,
     ): AttributeMetadataSource {
-        return new AttributeMetadataSource($target, $plan, $captured, $this->borrowedDeclarations[$plan] ?? null);
+        return new AttributeMetadataSource($target, $plan, $captured, $consumed ?? $this->borrowedDeclarations[$plan] ?? null);
     }
 
     public function refreshAvailability(): int

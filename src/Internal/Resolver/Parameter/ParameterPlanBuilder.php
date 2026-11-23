@@ -45,7 +45,7 @@ final class ParameterPlanBuilder
         foreach ($targets as $target) {
             // Autoload during classification can rebind a caller's reference.
             $selected[] = $target;
-            $this->slotsFor($target, $targetRequiresFreshValidation);
+            $this->slotsFor(ParameterTargetAccess::forResolution($target), $targetRequiresFreshValidation);
             $requiresFreshValidation = $requiresFreshValidation || $targetRequiresFreshValidation;
         }
 

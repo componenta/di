@@ -84,6 +84,10 @@ final class MappedRequestParameterSourceGuard
                     continue;
                 }
             }
+            if (self::hasLiveAttributeMetadata($target)) {
+                $potential[] = $target;
+                continue;
+            }
             $complete = true;
             $source = self::declaredTargetSource($target, $complete, autoload: false);
             if ($source !== null || !$complete) {
@@ -296,6 +300,9 @@ final class MappedRequestParameterSourceGuard
     /** @return class-string|null */
     private static function declaredTargetSource(ParameterTarget $target, bool &$complete, bool $autoload): ?string
     {
+        if (self::hasLiveAttributeMetadata($target)) {
+            $target = ParameterTargetAccess::forResolution($target);
+        }
         foreach ($target->attributeClasses as $attributeClass) {
             if (!$autoload && !is_attribute_class_loaded($attributeClass)) {
                 $complete = false;
@@ -309,6 +316,12 @@ final class MappedRequestParameterSourceGuard
             }
         }
         return null;
+    }
+
+    private static function hasLiveAttributeMetadata(ParameterTarget $target): bool
+    {
+        $declaration = ParameterTargetAccess::declaration($target);
+        return $declaration->borrowedMetadata !== null && $declaration->resolutionAttributes === null;
     }
 
     /**

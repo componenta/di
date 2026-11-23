@@ -191,7 +191,7 @@ final class ParameterExecution
         );
         $beforeConsumption = $provenance === null
             ? $beforeInvocation
-            : ParameterResolutionBoundary::beforeConsumption($plan, $provenance, $diagnosticOwner, $beforeInvocation);
+            : ParameterResolutionBoundary::beforeConsumption($plan->targets, $provenance, $diagnosticOwner, $beforeInvocation);
 
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->refreshAvailability());
         if ($reservedTarget !== null) {
@@ -209,13 +209,22 @@ final class ParameterExecution
         }
 
         $omitted = false;
-        foreach ($plan->targets as $target) {
+        foreach ($plan->targets as $index => $original) {
+            $target = ParameterTargetAccess::forResolution($original);
+            $check = $beforeConsumption;
+            if ($provenance !== null && $target !== $original) {
+                // Validate the chosen declarations for the active parameter and
+                // keep watching the other candidates as their metadata changes.
+                $targets = $plan->targets;
+                $targets[$index] = $target;
+                $check = ParameterResolutionBoundary::beforeConsumption($targets, $provenance, $diagnosticOwner, $beforeInvocation);
+            }
             $result = $this->resolvePreparedParameter(
                 $target,
                 $context,
                 $completed,
                 allowOmission: true,
-                beforeConsumption: $beforeConsumption,
+                beforeConsumption: $check,
             );
 
             // Dependencies and handlers can load source attributes, including on the current parameter.
@@ -276,6 +285,7 @@ final class ParameterExecution
         ParameterResolutionContext $context,
     ): array {
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->refreshAvailability());
+        $target = ParameterTargetAccess::forResolution($target);
         $this->parameterPlans->slotsFor($target);
         $result = $this->resolvePreparedParameter($target, $context, $completed);
         $completed->assertUnchanged();
@@ -377,9 +387,10 @@ final class ParameterExecution
             return;
         }
 
-        $reflection = $declaration->metadataTarget();
-        $completed->record($reflection, $plan, captured: $declaration->capturedAttributes);
-        $bootstrap?->recordAttributes($reflection, plan: $plan, captured: $declaration->capturedAttributes);
+        $reflection = $declaration->borrowedMetadata ?? $declaration->metadataTarget();
+        $consumed = $declaration->resolutionAttributes;
+        $completed->record($reflection, $plan, captured: $declaration->capturedAttributes, consumed: $consumed);
+        $bootstrap?->recordAttributes($reflection, plan: $plan, captured: $declaration->capturedAttributes, consumed: $consumed);
     }
 
     private function __clone() {}

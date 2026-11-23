@@ -40,4 +40,15 @@ final readonly class MappedRequestContext
         unset($keys[$key]);
         return new self($keys);
     }
+
+    /** @param array<string|int,mixed> $overrides */
+    public function withoutOverrides(array $overrides): self
+    {
+        if ($overrides === []) {
+            return $this;
+        }
+
+        $keys = array_diff_key($this->keys, $overrides);
+        return count($keys) === count($this->keys) ? $this : new self($keys);
+    }
 }

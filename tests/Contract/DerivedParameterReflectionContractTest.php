@@ -9,13 +9,20 @@ use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Internal\ResolutionRuntime;
+use Componenta\DI\Internal\Resolver\Entry\ConstructionParameters;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use PHPUnit\Framework\Assert;
 use ReflectionAttribute;
+use ReflectionClass;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
@@ -25,6 +32,11 @@ use WeakReference;
 function declared(#[EntryId('trusted.value')] string $value = 'fallback'): string
 {
     return $value;
+}
+
+function replacement(#[EntryId('next.value')] int $different = 42): int
+{
+    return $different;
 }
 
 function declaredPair(
@@ -134,6 +146,135 @@ test('a retained target with a derived reflector keeps using its current attribu
     $reflection->hideAttributes = true;
     expect($resolver->resolveTargets([$target]))->toBe(['fallback']);
 })->with(['function' => false, 'method' => true]);
+
+test('a parameter target keeps one declaration when attribute discovery retargets the borrower', function (bool $viaInvoke): void {
+    [, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')->assemble();
+    $original = static fn(#[EntryId('trusted.value')] string $label = 'original'): string => $label;
+    $reflection = new class ($viaInvoke ? [$original, '__invoke'] : $original, 0) extends ReflectionParameter {
+        /** @return array<int,ReflectionAttribute<object>> */
+        public function getAttributes(?string $name = null, int $flags = 0): array
+        {
+            parent::__construct(__NAMESPACE__ . '\\replacement', 0);
+            return parent::getAttributes($name, $flags);
+        }
+    };
+
+    $target = $runtime->parameters->target($reflection);
+
+    expect($reflection->getName())->toBe('different')
+        ->and($target->reflection->getName())->toBe('label')
+        ->and($target->name)->toBe('label')
+        ->and((string) $target->type)->toBe('string')
+        ->and($target->firstAttribute(EntryId::class)?->value)->toBe('trusted.value')
+        ->and($runtime->parameters->resolveTargets([$target]))->toBe(['source']);
+    if (!$viaInvoke) {
+        expect($target->defaultValue)->toBe('original');
+    }
+})->with(['closure' => false, 'Closure::__invoke' => true]);
+
+test('a retained parameter target gives the matching resolver the current attribute selection', function (bool $method, bool $initiallyHidden): void {
+    [, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')
+        ->addParameterResolver(new AttributeMatchingParameterResolver(
+            EntryId::class,
+            static fn(ParameterTarget $target, ParameterResolutionContext $context): array => [
+                $target->position,
+                $target->firstAttribute(EntryId::class)?->value,
+            ],
+        ), 1300)
+        ->assemble();
+    $resolver = $runtime->parameters;
+    $reflection = new DerivedParameter(declaration($method), new \stdClass());
+    $reflection->hideAttributes = $initiallyHidden;
+    $target = $resolver->target($reflection);
+    expect($resolver->resolveTargets([$target]))->toBe([$initiallyHidden ? 'fallback' : 'trusted.value']);
+
+    $reflection->hideAttributes = !$initiallyHidden;
+    $expected = $initiallyHidden ? 'trusted.value' : 'fallback';
+
+    expect($resolver->resolveTargets([$target]))->toBe([$expected])
+        ->and($resolver->resolveParameter($target, new ParameterResolutionContext()))->toBe([0, $expected])
+        ->and($resolver->resolve([$reflection]))->toBe([$expected]);
+})->with(['function' => false, 'method' => true])
+    ->with(['initially hidden' => true, 'initially visible' => false]);
+
+test('a parameter resolution applies the attribute selection used to classify its resolvers', function (): void {
+    $reflection = new DerivedParameter(declaration(false), new \stdClass());
+    $reflection->hideAttributes = false;
+    [, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')
+        ->addParameterResolver(new AttributeMatchingParameterResolver(
+            EntryId::class,
+            static function (ParameterTarget $target, ParameterResolutionContext $context) use ($reflection): ?array {
+                $reflection->hideAttributes = true;
+                return null;
+            },
+        ), 1300)
+        ->assemble();
+    $resolver = $runtime->parameters;
+    $target = $resolver->target($reflection);
+
+    expect($resolver->resolveTargets([$target]))->toBe(['source'])
+        ->and($resolver->resolveTargets([$target]))->toBe(['fallback']);
+});
+
+final readonly class MappedDto
+{
+    public function __construct(public string $value) {}
+}
+
+test('deferred mapped values are checked against the current derived constructor sources', function (string $activation): void {
+    $parameter = new class ([MappedDto::class, '__construct'], 0) extends ReflectionParameter {
+        public bool $showSource = false;
+
+        /** @return array<int,ReflectionAttribute<object>> */
+        public function getAttributes(?string $name = null, int $flags = 0): array
+        {
+            return $this->showSource
+                ? new ReflectionParameter(declaration(false), 0)->getAttributes($name, $flags)
+                : [];
+        }
+    };
+    $parameter->showSource = $activation === 'initial';
+    $constructor = new class ($parameter) extends ReflectionMethod {
+        public function __construct(private readonly ReflectionParameter $parameter)
+        {
+            parent::__construct(MappedDto::class, '__construct');
+        }
+
+        /** @return list<ReflectionParameter> */
+        public function getParameters(): array
+        {
+            return [$this->parameter];
+        }
+    };
+    $reflection = new /** @extends ReflectionClass<MappedDto> */ class ($constructor) extends ReflectionClass {
+        public function __construct(private readonly ReflectionMethod $constructor)
+        {
+            parent::__construct(MappedDto::class);
+        }
+
+        public function getConstructor(): ReflectionMethod
+        {
+            return $this->constructor;
+        }
+    };
+    [, $runtime] = (new ContainerBuilder())->addService('trusted.value', 'source')->assemble();
+
+    $create = static fn(): object => $runtime->objects->create($reflection, resolveParameters: static function () use ($parameter, $activation): EntryParameters {
+        if ($activation === 'deferred') {
+            $parameter->showSource = true;
+        }
+        $values = ['value' => 'mapped'];
+        return ConstructionParameters::capture($values, new MappedRequestContext($values));
+    });
+
+    if ($activation === 'absent') {
+        $entry = $create();
+        Assert::assertInstanceOf(MappedDto::class, $entry);
+        expect($entry->value)->toBe('mapped');
+    } else {
+        expect($create)->toThrow(RequestParameterSourceConflictException::class, 'Mapped request data key "value"');
+    }
+})->with(['initial', 'deferred', 'absent']);
 
 test('a derived closure method parameter retains the attributes selected for its own declaration', function (bool $hidden): void {
     $closure = static fn(#[EntryId('trusted.value')] string $value = 'fallback'): string => $value;

@@ -455,6 +455,113 @@ test('external registration refreshes stale owner evidence after a nested member
         ->and($container->get('nested.entry'))->toBe('registered');
 });
 
+test('a provider added during another dependency check can release an already inspected owner', function (bool $introducesFeature): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $original = static fn(Product $entry): Product => new Product($entry->value . ':original');
+    $replacement = static fn(Product $entry): Product => new Product($entry->value . ':replacement');
+    $container = (new ContainerBuilder())->addServices([
+        'entry' => new Product('base'),
+        'trigger' => new Product('trigger'),
+        'owner' => $local,
+        'trigger.owner' => $local,
+    ])->addDelegator('entry', 'owner')->addDelegator('trigger', 'trigger.owner')->build();
+    $addition = new OwnershipContainer([$introducesFeature ? 'feature' : 'unrelated' => true]);
+    $state = new class () {
+        public bool $armed = false;
+        public int $candidateChecks = 0;
+    };
+    $existing = new OwnershipContainer(['owner' => $original], static function (string $id) use ($container, $addition, $state): bool {
+        if ($id === 'trigger.owner' && $state->armed) {
+            $state->armed = false;
+            $container->addContainer($addition);
+        }
+        return $id === 'owner' && !$container->has('feature');
+    });
+    $candidate = new OwnershipContainer(['owner' => $replacement], static function (string $id) use ($state): bool {
+        if ($id !== 'owner') {
+            return false;
+        }
+        ++$state->candidateChecks;
+        return true;
+    });
+    $container->addContainer($existing);
+    $warm = $container->get('entry');
+    $state->armed = true;
+
+    $container->addContainer($candidate);
+
+    $checksDuringRegistration = $state->candidateChecks;
+    expect($container->get('owner'))->toBe($introducesFeature ? $replacement : $original)
+        ->and($warm)->toEqual(new Product('base:original'));
+    if ($introducesFeature) {
+        expect($container->get('entry'))->toEqual(new Product('base:replacement'));
+    } else {
+        expect($container->get('entry'))->toBe($warm);
+    }
+    expect($checksDuringRegistration)->toBe($introducesFeature ? 1 : 0);
+})->with(['registry-dependent owner releases the entry' => true, 'unrelated append preserves ownership' => false]);
+
+test('external registration refreshes a candidate answer that used an earlier registry', function (bool $mounted, ?bool $readByValue, bool $appendInsideProbe): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $replacement = static fn(Product $entry): Product => new Product($entry->value . ':replacement');
+    $builder = (new ContainerBuilder())->addServices([
+        'entry' => new Product('base'),
+        'trigger' => new Product('trigger'),
+        'owner' => $local,
+        'trigger.owner' => $local,
+    ])->addDelegator('entry', 'owner')->addDelegator('trigger', 'trigger.owner');
+    if ($readByValue === true) {
+        $builder->addService('feature', false);
+    }
+    $container = $builder->build();
+    if ($mounted) {
+        $container->addContainer(new OwnershipContainer([]));
+    }
+    if ($readByValue === true) {
+        expect($container->get('feature'))->toBeFalse();
+    }
+    $addition = new OwnershipContainer(['feature' => true]);
+    $state = new class () {
+        public int $candidateChecks = 0;
+    };
+    $candidate = new OwnershipContainer(['owner' => $replacement], static function (string $id) use ($container, $addition, $readByValue, $appendInsideProbe, $state): bool {
+        if ($id === 'trigger.owner' && !$appendInsideProbe) {
+            $container->addContainer($addition);
+        }
+        if ($id !== 'owner') {
+            return false;
+        }
+        ++$state->candidateChecks;
+        $owns = match ($readByValue) {
+            true => $container->get('feature') === true,
+            false => $container->has('feature'),
+            null => false,
+        };
+        if ($appendInsideProbe) {
+            $container->addContainer($addition);
+        }
+        return $owns;
+    });
+    $warm = $container->get('entry');
+
+    $container->addContainer($candidate);
+
+    $checksDuringRegistration = $state->candidateChecks;
+    if ($readByValue !== null) {
+        expect($container->get('owner'))->toBe($replacement)
+            ->and($container->get('entry'))->toEqual(new Product('base:replacement'));
+    } else {
+        expect($container->get('owner'))->toBe($local)
+            ->and($container->get('entry'))->toBe($warm);
+    }
+    expect($checksDuringRegistration)->toBe($readByValue === null ? 1 : 2);
+})->with([
+    'availability before first provider' => [false, false],
+    'cached value before first provider' => [false, true],
+    'availability with a mounted provider' => [true, false],
+    'independent answer' => [false, null],
+])->with(['append during another dependency' => false, 'append after reading inside the same probe' => true]);
+
 test('external registration stops inspecting ownership once nested work registered its candidate', function (string $completion): void {
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
     $selected = static fn(Product $entry): Product => new Product($entry->value . ':selected');

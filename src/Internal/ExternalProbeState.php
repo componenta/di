@@ -73,7 +73,8 @@ final class ExternalProbeState
         }
     }
 
-    public function confirmedOwnership(int $provider, int $revision, int $registryRevision): ?bool
+    /** @return array{owns:bool,revision:int,registryRevision:?int}|null */
+    public function confirmedOwnership(int $provider, int $revision, int $registryRevision): ?array
     {
         $confirmed = $this->confirmedOwnership[$provider] ?? null;
         if ($confirmed === null || $confirmed['revision'] !== $revision
@@ -81,7 +82,7 @@ final class ExternalProbeState
         ) {
             return null;
         }
-        return $confirmed['owns'];
+        return $confirmed;
     }
 
     public function canProbe(int $provider, ?int $caller, bool $requireResolvable, int $revision): bool

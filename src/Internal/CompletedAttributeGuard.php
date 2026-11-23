@@ -41,15 +41,17 @@ final class CompletedAttributeGuard
     /**
      * @param ReflectionTarget $target
      * @param list<ReflectionAttribute<object>>|null $captured
+     * @param array<int,ReflectionAttribute<object>>|null $consumed
      */
     public function record(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         AttributePlan $plan,
         ?AttributePhase $phase = null,
         ?array $captured = null,
+        ?array $consumed = null,
     ): void {
-        $source = $this->plans->consumedSource($target, $plan, $captured);
-        $attributes = $source->attributes();
+        $source = $this->plans->consumedSource($target, $plan, $captured, $consumed);
+        $attributes = $consumed ?? $source->attributes();
         // A derived reflector can omit a declaration after the plan has been consumed.
         if ($attributes === [] && $plan->usages === []) {
             return;

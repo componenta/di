@@ -77,12 +77,14 @@ final class BootstrapResolutionGuard
     /**
      * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param list<ReflectionAttribute<object>>|null $captured
+     * @param array<int,ReflectionAttribute<object>>|null $consumed
      */
     public function recordAttributes(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         ?AttributePhase $phase = null,
         ?AttributePlan $plan = null,
         ?array $captured = null,
+        ?array $consumed = null,
     ): void {
         if (!$this->active) {
             return;
@@ -91,8 +93,8 @@ final class BootstrapResolutionGuard
             return;
         }
         $plan ??= $this->plans->build($target, $captured);
-        $source = $this->plans->consumedSource($target, $plan, $captured);
-        $declared = $source->attributes();
+        $source = $this->plans->consumedSource($target, $plan, $captured, $consumed);
+        $declared = $consumed ?? $source->attributes();
         if ($declared === [] && $plan->usages === []) {
             return;
         }

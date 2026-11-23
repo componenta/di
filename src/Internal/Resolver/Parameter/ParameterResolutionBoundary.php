@@ -7,6 +7,7 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 use Closure;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 
 /**
  * Checks mapped sources again before extensions consume invocation values.
@@ -16,17 +17,18 @@ use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSour
 final class ParameterResolutionBoundary
 {
     /**
+     * @param iterable<ParameterTarget> $targets
      * @param class-string|null $diagnosticOwner
      * @param (Closure():void)|null $beforeInvocation
      * @return (Closure():void)|null
      */
     public static function beforeConsumption(
-        PreparedParameterPlan $plan,
+        iterable $targets,
         MappedRequestContext $provenance,
         ?string $diagnosticOwner,
         ?Closure $beforeInvocation,
     ): ?Closure {
-        $targets = MappedRequestParameterSourceGuard::potentialSourceTargets($plan->targets, $provenance);
+        $targets = MappedRequestParameterSourceGuard::potentialSourceTargets($targets, $provenance);
         if ($targets === []) {
             return $beforeInvocation;
         }

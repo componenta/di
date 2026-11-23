@@ -31,18 +31,19 @@ final readonly class ExternalDependencyInspection
         $mayInspect = $this->mayInspect(...);
         $candidates = [];
         $inspected = [];
+        $membershipEvidence = [];
         $pending = [];
         do {
             $ownershipRevision = $this->currentRegistry()->ownershipRevision ?? 0;
             foreach ($this->delegators->deferredDependencies() as $dependencyId) {
+                $membershipRevision = $this->lookupProbes->membershipRevision;
                 $dependencyRevision = $this->currentRegistry()?->ownershipRevisionFor($dependencyId) ?? 0;
-                $previousRevision = $inspected[$dependencyId] ?? null;
-                if ($previousRevision === $dependencyRevision && !isset($pending[$dependencyId])) {
+                if (($inspected[$dependencyId] ?? null) === $dependencyRevision && !isset($pending[$dependencyId])
+                    && ($membershipEvidence[$dependencyId] ?? $membershipRevision) >= $membershipRevision
+                ) {
                     continue;
                 }
-                if ($previousRevision !== null && $previousRevision !== $dependencyRevision) {
-                    unset($candidates[$dependencyId]);
-                }
+                unset($candidates[$dependencyId], $membershipEvidence[$dependencyId]);
                 $inspected[$dependencyId] = $dependencyRevision;
                 if (!$this->mayInspect($dependencyId)) {
                     $pending[$dependencyId] = true;
@@ -67,16 +68,25 @@ final readonly class ExternalDependencyInspection
                     $pending[$dependencyId] = true;
                     continue;
                 }
-                if ($owner === null && AvailableEntryLookup::has($container, $dependencyId)) {
-                    $candidates[$dependencyId] = true;
+                if ($owner !== null) {
+                    // A later append can change the owner that blocked candidate inspection.
+                    $membershipEvidence[$dependencyId] = $this->lookupProbes->membershipRevision;
+                } else {
+                    $answer = $this->lookupProbes->observeLookup(static fn(): bool => AvailableEntryLookup::has($container, $dependencyId));
+                    if ($answer['result']) {
+                        $candidates[$dependencyId] = true;
+                    } else {
+                        // A miss can hide a new owner after an observed registry changes.
+                        $membershipEvidence[$dependencyId] = $answer['registryRevision'];
+                    }
                 }
                 if ($this->currentRegistry()?->contains($container) === true) {
                     return [];
                 }
             }
 
-            // Keep candidate answers, but prove ownership against the completed
-            // registry. Existing-owner callbacks can publish further containers.
+            // Prove ownership against the completed registry. Existing-owner
+            // callbacks can publish further containers.
             $dependencies = [];
             $protectedCandidates = [];
             $revision = $this->currentRegistry()->revision ?? 0;
@@ -108,7 +118,6 @@ final readonly class ExternalDependencyInspection
                 }
             }
             // A later callback can make a skipped alias externally eligible.
-            // Revisit only its unfinished inspection/proof, never a candidate answer.
             $retryProtected = false;
             foreach ($pending + $protectedCandidates as $dependencyId => $_) {
                 if ($this->mayInspect((string) $dependencyId)) {
@@ -116,11 +125,17 @@ final readonly class ExternalDependencyInspection
                     break;
                 }
             }
-            // Either phase can also introduce new deferred dependency IDs.
+            // Either phase can add dependencies or invalidate evidence from an earlier check.
+            $registry = $this->currentRegistry();
+            $registryRevision = $registry->revision ?? 0;
+            $membershipRevision = $this->lookupProbes->membershipRevision;
         } while ($retryProtected
-            || $revision !== ($this->currentRegistry()->revision ?? 0)
-            || $ownershipRevision !== ($this->currentRegistry()->ownershipRevision ?? 0)
-            || array_diff($this->delegators->deferredDependencies(), array_keys($inspected)) !== []);
+            || $revision !== $registryRevision
+            || $ownershipRevision !== ($registry->ownershipRevision ?? 0)
+            || array_any(
+                $this->delegators->deferredDependencies(),
+                static fn(string $id): bool => !isset($inspected[$id]) || ($membershipEvidence[$id] ?? $membershipRevision) < $membershipRevision,
+            ));
 
         // A later proof may also protect a dependency already selected above.
         return array_values(array_filter($dependencies, $mayInspect));

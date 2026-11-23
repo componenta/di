@@ -25,6 +25,8 @@ use LogicException;
 use PHPUnit\Framework\Assert;
 use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionProperty;
 use Reflector;
 
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_PROPERTY)]
@@ -198,6 +200,113 @@ test('a refreshed slot cannot replace its concrete attribute after native instan
         ->and($handler->seen)->toBe([ReplacementAttribute::class])
         ->and(Product::$constructions)->toBe(1);
 })->with(['native instantiation' => true, 'handler dispatch' => false]);
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_METHOD)]
+final class MarkMember
+{
+    public static ?Closure $onInstantiation = null;
+
+    public function __construct()
+    {
+        self::$onInstantiation?->__invoke();
+    }
+}
+
+final class MemberProduct
+{
+    #[MarkMember]
+    public string $declared = 'original';
+    public string $other = 'untouched';
+
+    #[MarkMember]
+    public function selected(): void {}
+
+    public function replacement(): void {}
+}
+
+final class RecordedProperty extends ReflectionProperty
+{
+    public function setValue(mixed $objectOrValue, mixed $value = null): void
+    {
+        if (!$objectOrValue instanceof MemberProduct || !is_string($value)) {
+            throw new LogicException('Expected a reflected product and a string property value.');
+        }
+        parent::setValue($objectOrValue, 'custom:' . $value);
+    }
+}
+
+final class RecordedMethod extends ReflectionMethod {}
+
+/** @extends ReflectionClass<MemberProduct> */
+final class BorrowedMembers extends ReflectionClass
+{
+    public function __construct(private readonly ReflectionProperty|ReflectionMethod $member)
+    {
+        parent::__construct(MemberProduct::class);
+    }
+
+    /** @return list<ReflectionProperty> */
+    public function getProperties(?int $filter = null): array
+    {
+        return $this->member instanceof ReflectionProperty ? [$this->member] : [];
+    }
+
+    /** @return list<ReflectionMethod> */
+    public function getMethods(?int $filter = null): array
+    {
+        return $this->member instanceof ReflectionMethod ? [$this->member] : [];
+    }
+}
+
+test('a composed member retains its declaration when application code retargets its reflector', function (bool $method, bool $custom, string $when): void {
+    $member = $method
+        ? ($custom ? new RecordedMethod(MemberProduct::class, 'selected') : new ReflectionMethod(MemberProduct::class, 'selected'))
+        : ($custom ? new RecordedProperty(MemberProduct::class, 'declared') : new ReflectionProperty(MemberProduct::class, 'declared'));
+    $replacement = $method ? 'replacement' : 'other';
+    $retarget = static fn() => $member->__construct(MemberProduct::class, $replacement);
+    $handler = new class ($when === 'handler' ? $retarget : null) implements AttributeHandlerInterface {
+        public ?string $seen = null;
+
+        public function __construct(private readonly ?Closure $retarget) {}
+
+        public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+        {
+            if (!$target instanceof ReflectionProperty && !$target instanceof ReflectionMethod) {
+                throw new LogicException('Expected a reflected member.');
+            }
+            $this->seen = $target->getName();
+            if ($target instanceof ReflectionProperty && $context->claimProperty($target)) {
+                $context->writeProperty($target, 'marked');
+            }
+            $this->retarget?->__invoke();
+        }
+    };
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(MarkMember::class, $handler, phase: AttributePhase::AfterInstantiation));
+    $plans = new AttributePlanBuilder($registry);
+    $objects = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), new ProxyFactory());
+    MarkMember::$onInstantiation = $when === 'attribute' ? $retarget : null;
+
+    try {
+        $entry = $objects->create(new BorrowedMembers($member));
+    } finally {
+        MarkMember::$onInstantiation = null;
+    }
+
+    $selected = $method ? 'selected' : 'declared';
+    Assert::assertInstanceOf(MemberProduct::class, $entry);
+    expect($handler->seen)->toBe($selected)
+        ->and($member->getName())->toBe($when === 'never' ? $selected : $replacement)
+        ->and($entry->declared)->toBe($method ? 'original' : ($when === 'never' && $custom ? 'custom:marked' : 'marked'))
+        ->and($entry->other)->toBe('untouched');
+})->with([
+    'native property before handler' => [false, false, 'attribute'],
+    'native method before handler' => [true, false, 'attribute'],
+    'derived property before handler' => [false, true, 'attribute'],
+    'derived method before handler' => [true, true, 'attribute'],
+    'derived writer changed after staging a value' => [false, true, 'handler'],
+    'derived writer stays eligible while its declaration matches' => [false, true, 'never'],
+]);
 
 test('an active object phase refreshes the original declaration after its input is retargeted', function (bool $beforeDispatch): void {
     $registry = new AttributeDefinitionRegistry();

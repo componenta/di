@@ -35,5 +35,5 @@ abstract class ObjectCreationScope
     abstract protected function assertPropertyWritesOpen(): void;
 
     /** @param Closure():void $resolve */
-    abstract protected function resolveProperty(ReflectionProperty $property, Closure $resolve): void;
+    abstract protected function resolveProperty(ReflectionProperty $property, Closure $resolve, ?ReflectionProperty $declaration): void;
 }
