@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Internal\ResolutionMetadata;
 
 /** Immutable unordered view used by custom composition rules. */
 final readonly class AttributeSet
 {
+    /** @var list<AttributeUsage> */
+    public array $attributes;
+
     /** @param list<AttributeUsage> $attributes */
-    public function __construct(public array $attributes) {}
+    public function __construct(array $attributes)
+    {
+        $this->attributes = ResolutionMetadata::snapshot($attributes);
+    }
 
     /**
      * Selector may be an attribute class/interface or a capability class.

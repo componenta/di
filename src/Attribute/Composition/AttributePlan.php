@@ -7,6 +7,7 @@ namespace Componenta\DI\Attribute\Composition;
 use Closure;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\ReflectionSnapshot;
+use Componenta\DI\Internal\ResolutionMetadata;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
@@ -17,6 +18,8 @@ final class AttributePlan
 {
     /** @var Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
     private readonly Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
+    /** @var list<AttributeUsage> */
+    public readonly array $usages;
 
     /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
     public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target {
@@ -29,9 +32,10 @@ final class AttributePlan
      */
     public function __construct(
         Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-        public readonly array $usages,
+        array $usages,
     ) {
         $this->declaration = ReflectionSnapshot::planDeclaration($target);
+        $this->usages = ResolutionMetadata::snapshot($usages);
     }
 
     /**

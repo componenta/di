@@ -8,7 +8,9 @@ use Attribute;
 use Componenta\Config\ConfigKey;
 use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use PHPUnit\Framework\Assert;
 use ReflectionMethod;
@@ -95,3 +97,33 @@ test('attribute family selection preserves interleaved declaration order', funct
         FirstSelectionAttribute::class,
     ]);
 });
+
+test('semantic plans and attribute sets own their usage lists', function (bool $changeOriginal): void {
+    [, $runtime] = \Componenta\DI\Tests\Support\assembledContainer([
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            new AttributeDefinition(FirstSelectionAttribute::class),
+            new AttributeDefinition(MiddleSelectionAttribute::class),
+        ],
+    ]);
+    $target = (new ReflectionMethod(SelectionTarget::class, 'repeated'))->getParameters()[0];
+    [$first, $middle] = $runtime->plans->build($target)->usages;
+    $slot = $first;
+    $usages = [&$slot];
+    $plan = new AttributePlan($target, $usages);
+    $set = new AttributeSet($usages);
+
+    if ($changeOriginal) {
+        $slot = $middle;
+    } else {
+        $planUsages = $plan->usages;
+        $planUsages[0] = $middle;
+        expect($set->one(FirstSelectionAttribute::class))->toBe($first);
+
+        $setUsages = $set->attributes;
+        $setUsages[0] = $middle;
+        expect($slot)->toBe($first);
+    }
+
+    expect($plan->attributes(FirstSelectionAttribute::class))->toBe([$first])
+        ->and($set->one(FirstSelectionAttribute::class))->toBe($first);
+})->with(['caller input' => true, 'public views' => false]);
