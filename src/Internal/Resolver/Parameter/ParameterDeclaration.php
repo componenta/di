@@ -6,8 +6,11 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Internal\AttributePlans;
+use Componenta\DI\Internal\BootstrapResolutionGuard;
+use Componenta\DI\Internal\CompletedAttributeGuard;
 use Componenta\DI\Internal\ReflectionSnapshot;
 use ReflectionAttribute;
+use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use ReflectionParameter;
 use WeakReference;
@@ -35,6 +38,11 @@ final class ParameterDeclaration
         get => $this->selectedForResolution ? $this->attributeReflectors : null;
     }
 
+    /** @var class-string|null */
+    public ?string $metadataDeclaringClassName {
+        get => $this->metadataTarget()->getDeclaringClass()?->getName();
+    }
+
     /** @param WeakReference<ReflectionParameter>|null $closureMethodSource */
     public function __construct(
         private readonly ReflectionParameter $declaration,
@@ -57,6 +65,17 @@ final class ParameterDeclaration
         return ReflectionSnapshot::parameter($this->declaration);
     }
 
+    public function declaringFunction(): ReflectionFunctionAbstract
+    {
+        return $this->declaration->getDeclaringFunction();
+    }
+
+    /** @phpstan-impure The caller may reinitialize its borrowed reflector between checks. */
+    public function matchesDeclaration(ReflectionParameter $source): bool
+    {
+        return ReflectionSnapshot::sameParameter($source, $this->declaration);
+    }
+
     public function defaultValue(): mixed
     {
         $source = $this->metadataTarget();
@@ -64,15 +83,6 @@ final class ParameterDeclaration
         return $source === $this->declaration || ReflectionSnapshot::sameParameter($source, $this->declaration)
             ? $value
             : $this->declaration->getDefaultValue();
-    }
-
-    /** Lets a derived reflector supply live metadata for the same declaration. */
-    public function metadataTarget(): ReflectionParameter
-    {
-        $source = $this->borrowedMetadata;
-        return $source !== null && ReflectionSnapshot::sameParameter($source, $this->declaration)
-            ? $source
-            : $this->declaration;
     }
 
     public function releaseBorrowedMetadata(): void
@@ -117,6 +127,35 @@ final class ParameterDeclaration
             return $this->emptyClosurePlan ??= new AttributePlan($this->declaration, []);
         }
         return $plans->build($this->metadataTarget(), $this->capturedAttributes);
+    }
+
+    public function recordReservedAttributes(CompletedAttributeGuard $completed, AttributePlan $plan): void
+    {
+        if ($this->mayHaveAttributes) {
+            $completed->record($this->metadataTarget(), $plan, captured: $this->capturedAttributes);
+        }
+    }
+
+    public function recordConsumedAttributes(
+        CompletedAttributeGuard $completed,
+        AttributePlan $plan,
+        ?BootstrapResolutionGuard $bootstrap,
+    ): void {
+        if (!$this->mayHaveAttributes) {
+            return;
+        }
+
+        $source = $this->borrowedMetadata ?? $this->declaration;
+        $consumed = $this->resolutionAttributes;
+        $completed->record($source, $plan, captured: $this->capturedAttributes, consumed: $consumed);
+        $bootstrap?->recordAttributes($source, plan: $plan, captured: $this->capturedAttributes, consumed: $consumed);
+    }
+
+    /** Lets a derived reflector supply live metadata for the same declaration. */
+    private function metadataTarget(): ReflectionParameter
+    {
+        $source = $this->borrowedMetadata;
+        return $source !== null && $this->matchesDeclaration($source) ? $source : $this->declaration;
     }
 
     /** @return array<int,ReflectionAttribute<object>> */

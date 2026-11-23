@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Closure;
-use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
@@ -205,9 +204,7 @@ final class ParameterExecution
                     $reservedTarget->name,
                 ));
             }
-            if ($declaration->mayHaveAttributes) {
-                $completed->record($declaration->metadataTarget(), $reserved, captured: $declaration->capturedAttributes);
-            }
+            $declaration->recordReservedAttributes($completed, $reserved);
         }
 
         $omitted = false;
@@ -360,7 +357,7 @@ final class ParameterExecution
                 break;
             }
             if ($winner !== null || $nativeOptional) {
-                self::recordParameterAttributes($declaration, $attributePlan, $completed, $bootstrap);
+                $declaration->recordConsumedAttributes($completed, $attributePlan, $bootstrap);
                 if ($bootstrap !== null) {
                     $bootstrap->recordParameter($target, $resolvers, $slots, $winner, $pending);
                 } elseif ($pending !== []) {
@@ -394,22 +391,6 @@ final class ParameterExecution
             $context,
             $target->reflection,
         );
-    }
-
-    private static function recordParameterAttributes(
-        ParameterDeclaration $declaration,
-        AttributePlan $plan,
-        CompletedAttributeGuard $completed,
-        ?BootstrapResolutionGuard $bootstrap,
-    ): void {
-        if (!$declaration->mayHaveAttributes) {
-            return;
-        }
-
-        $reflection = $declaration->borrowedMetadata ?? $declaration->metadataTarget();
-        $consumed = $declaration->resolutionAttributes;
-        $completed->record($reflection, $plan, captured: $declaration->capturedAttributes, consumed: $consumed);
-        $bootstrap?->recordAttributes($reflection, plan: $plan, captured: $declaration->capturedAttributes, consumed: $consumed);
     }
 
     private function __clone() {}

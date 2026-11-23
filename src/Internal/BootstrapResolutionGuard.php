@@ -463,7 +463,7 @@ final class BootstrapResolutionGuard
             $declaration = ParameterTargetAccess::declaration($target);
             $reference = WeakReference::create($borrowed);
         }
-        $function = $declaration->metadataTarget()->getDeclaringFunction();
+        $function = $declaration->declaringFunction();
         if ($borrowed === null && $function instanceof ReflectionFunction && $function->isClosure()) {
             return [WeakReference::create($function->getClosure()), null];
         }
@@ -496,10 +496,10 @@ final class BootstrapResolutionGuard
         if ($target === null || $source === null) {
             return $target;
         }
-        $declaration = ParameterTargetAccess::declaration($target)->metadataTarget();
-        if (ReflectionSnapshot::sameParameter($source, $declaration)) {
+        $declaration = ParameterTargetAccess::declaration($target);
+        if ($declaration->matchesDeclaration($source)) {
             $live = $this->targets->create($source);
-            if (ReflectionSnapshot::sameParameter($source, $declaration)) {
+            if ($declaration->matchesDeclaration($source)) {
                 return $live;
             }
         }

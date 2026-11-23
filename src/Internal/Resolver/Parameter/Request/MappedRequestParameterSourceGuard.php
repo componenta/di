@@ -126,7 +126,7 @@ final class MappedRequestParameterSourceGuard
                     if ($provenance->contains($key)) {
                         // Diagnostic metadata may execute custom reflector code.
                         // Do not run it for a target with no conflicting key.
-                        $class = $diagnosticOwner ?? ParameterTargetAccess::declaration($target)->metadataTarget()->getDeclaringClass()?->getName();
+                        $class = $diagnosticOwner ?? ParameterTargetAccess::declaration($target)->metadataDeclaringClassName;
                         if ($class === null) {
                             break;
                         }
