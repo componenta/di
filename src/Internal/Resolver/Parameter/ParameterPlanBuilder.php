@@ -10,6 +10,7 @@ use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AttributePlans;
+use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use stdClass;
@@ -97,7 +98,7 @@ final class ParameterPlanBuilder
      * @param list<int> $slots
      * @param list<string> $pending
      * @param (Closure():void)|null $beforeRejection
-     * @return Closure():bool Whether a new name was checked.
+     * @return Closure(bool=):bool Whether a new name was checked.
      */
     public function watchCompletedSelection(
         ParameterTarget $target,
@@ -112,11 +113,18 @@ final class ParameterPlanBuilder
             $slots = array_values(array_filter($slots, static fn(int $slot): bool => $slot <= $winner));
         }
 
-        return function () use ($target, $resolvers, $slots, &$pending, $beforeRejection): bool {
+        return function (bool $checkedDeclarations = false) use ($target, $resolvers, $slots, &$pending, $beforeRejection): bool {
             if (!array_any($pending, is_attribute_class_loaded(...))) {
                 return false;
             }
             $remaining = array_filter($pending, static fn(string $name): bool => !is_attribute_class_loaded($name));
+            if ($checkedDeclarations) {
+                // The terminal proof has already checked this pipeline's
+                // attribute plans without reopening unrelated autoloaders.
+                $resolvers = array_filter($resolvers, fn(ParameterResolverInterface $resolver): bool => !$resolver instanceof AttributeParameterResolver
+                    || !ParameterAttributeAccess::usesAttributePlans($resolver, $this->attributes));
+                $slots = array_values(array_filter($slots, static fn(int $slot): bool => isset($resolvers[$slot])));
+            }
             [$current, $queries] = $this->targets->observeAttributeQueries(
                 $target,
                 fn(ParameterTarget $observed): array => $this->classify($observed, $resolvers),
@@ -239,7 +247,7 @@ final class ParameterPlanBuilder
     }
 
     /**
-     * @param list<ParameterResolverInterface>|null $resolvers
+     * @param array<int,ParameterResolverInterface>|null $resolvers
      * @return list<int>
      */
     private function classify(ParameterTarget $target, ?array $resolvers = null): array

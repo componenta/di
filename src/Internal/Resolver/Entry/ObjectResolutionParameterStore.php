@@ -64,8 +64,14 @@ final class ObjectResolutionParameterStore
 
     public function assertSetupSourcesUnchanged(ObjectCreationContext $context): void
     {
-        foreach ($this->setupSourceChecks[$context] ?? [] as $check) {
+        foreach ($this->setupSourceChecks($context) as $check) {
             $check();
         }
+    }
+
+    /** @return list<Closure():void> */
+    public function setupSourceChecks(ObjectCreationContext $context): array
+    {
+        return $this->setupSourceChecks[$context] ?? [];
     }
 }

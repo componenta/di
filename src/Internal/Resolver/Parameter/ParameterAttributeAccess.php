@@ -6,6 +6,7 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Internal\AttributePlans;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -13,6 +14,11 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 /** Executes parameter handlers and reports the plan consumed by their resolver. @internal */
 abstract class ParameterAttributeAccess extends ParameterAttributeScope
 {
+    public static function usesAttributePlans(AttributeParameterResolver $resolver, AttributePlans $plans): bool
+    {
+        return $resolver->execution->usesAttributePlans($plans);
+    }
+
     /**
      * @param (Closure():void)|null $beforeConsumption
      * @return array{result:array{0:int,1:mixed}|null,plan:AttributePlan}

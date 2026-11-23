@@ -10,6 +10,8 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
@@ -30,10 +32,12 @@ final class CompletedAttributeGuard
 {
     /** @var list<CompletedPhase> */
     private array $completed = [];
-    /** @var list<Closure():bool> */
+    /** @var list<Closure(bool=):bool> */
     private array $parameterClassifications = [];
     /** @var (Closure():void)|null */
     private ?Closure $checkParameterSources = null;
+    /** @var list<Closure():void> */
+    private array $retiredSourceChecks = [];
 
     public function __construct(
         private readonly AttributePlans $plans,
@@ -66,7 +70,7 @@ final class CompletedAttributeGuard
         ];
     }
 
-    /** @param Closure():bool $check Returns true if a newly available name was checked. */
+    /** @param Closure(bool=):bool $check Returns true if a newly available name was checked. */
     public function recordParameterClassification(Closure $check): void
     {
         $this->parameterClassifications[] = $check;
@@ -123,12 +127,53 @@ final class CompletedAttributeGuard
         return true;
     }
 
-    /** Checks declarations loaded while the eager creation frame released its input. */
+    /** @param list<Closure():void> $setupChecks */
+    public function withRetirementSourceChecks(?ReflectionMethod $constructor, ?MappedRequestContext $provenance, array $setupChecks): self
+    {
+        if ($constructor !== null && $provenance !== null) {
+            $selected = [];
+            foreach ($this->completed as $completed) {
+                $target = $completed['source']->target;
+                if ($target instanceof ReflectionParameter) {
+                    $selected[$target->getPosition()] = $completed['observed'];
+                }
+            }
+            $check = MappedRequestParameterSourceGuard::watchInvocation(
+                $constructor,
+                $provenance,
+                $constructor->getDeclaringClass()->getName(),
+                selectedDeclarations: $selected,
+            );
+            if ($check !== null) {
+                array_unshift($setupChecks, $check);
+            }
+        }
+        if ($setupChecks === []) {
+            return $this;
+        }
+        $completion = clone $this;
+        $completion->retiredSourceChecks = $setupChecks;
+        return $completion;
+    }
+
+    /** Checks declarations and resolver selections affected by release of owned input. */
     public function assertLoadedAfterArgumentRetirement(): void
     {
-        if ($this->plans->refreshLoaded() === $this->verifiedRevision) {
-            return;
-        }
+        $verifiedRevision = $this->verifiedRevision;
+        do {
+            foreach ($this->retiredSourceChecks as $check) {
+                $check();
+            }
+            $revision = $this->plans->refreshLoaded();
+            if ($revision !== $verifiedRevision) {
+                $this->assertCapturedDeclarationsUnchanged();
+                $verifiedRevision = $revision;
+            }
+        } while ($this->parameterClassifications !== [] && $this->recheckParameterClassifications(checkedDeclarations: true));
+    }
+
+    private function assertCapturedDeclarationsUnchanged(): void
+    {
         foreach ($this->completed as $completed) {
             $target = $completed['source']->target;
             $phase = $completed['phase'];
@@ -181,11 +226,11 @@ final class CompletedAttributeGuard
         }
     }
 
-    private function recheckParameterClassifications(): bool
+    private function recheckParameterClassifications(bool $checkedDeclarations = false): bool
     {
         $checked = false;
         foreach ($this->parameterClassifications as $check) {
-            $checked = $check() || $checked;
+            $checked = $check($checkedDeclarations) || $checked;
         }
         return $checked;
     }

@@ -34,6 +34,11 @@ final readonly class AttributeParameterExecution
 {
     public function __construct(private AttributePlans $plans) {}
 
+    public function usesAttributePlans(AttributePlans $plans): bool
+    {
+        return $this->plans === $plans;
+    }
+
     public function supports(ParameterTarget $target): bool
     {
         return $this->hasHandler(ParameterTargetAccess::declaration($target)->attributePlan($this->plans));

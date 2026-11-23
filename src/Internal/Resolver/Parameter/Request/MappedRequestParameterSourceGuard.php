@@ -10,6 +10,7 @@ use Componenta\DI\Internal\Resolver\Parameter\ParameterTargetAccess;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionParameter;
@@ -151,6 +152,7 @@ final class MappedRequestParameterSourceGuard
      * Retains only unresolved declarations whose parameter keys were mapped.
      *
      * @param class-string $owner
+     * @param array<int,array<int,ReflectionAttribute<object>>>|null $selectedDeclarations
      * @return (Closure():void)|null
      */
     public static function watchInvocation(
@@ -158,10 +160,16 @@ final class MappedRequestParameterSourceGuard
         MappedRequestContext $provenance,
         string $owner,
         bool $skipFirst = false,
+        ?array $selectedDeclarations = null,
     ): ?Closure {
         $checks = [];
         foreach ($callable->getParameters() as $parameter) {
-            if (($skipFirst && $parameter->getPosition() === 0) || ($attributes = $parameter->getAttributes()) === []) {
+            $position = $parameter->getPosition();
+            if ($skipFirst && $position === 0) {
+                continue;
+            }
+            $attributes = $selectedDeclarations === null ? $parameter->getAttributes() : ($selectedDeclarations[$position] ?? []);
+            if ($attributes === []) {
                 continue;
             }
             $name = $parameter->getName();

@@ -180,7 +180,11 @@ final class ObjectCreation
             if (isset($creation)) {
                 $this->parametersStore->assertSetupSourcesUnchanged($creation);
             }
-            $completion = $resolveParameters === null ? null : $completed;
+            $completion = $resolveParameters === null ? null : $completed->withRetirementSourceChecks(
+                $metadata->constructor,
+                ConstructionParameters::provenance($parameters),
+                isset($creation) ? $this->parametersStore->setupSourceChecks($creation) : [],
+            );
             return $entry;
         }
 
@@ -206,19 +210,20 @@ final class ObjectCreation
             ? $this->objectPlans->constructorPlan($metadata)
             : $this->parameters->prepareTargets([]);
 
-        $eagerCompletion = null;
-        $entry = match ($creation->strategy) {
-            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $attempt, $completed, $configure, $eagerCompletion),
+        $completion = null;
+        $recordCompletion = $resolveParameters === null ? null : static function (CompletedAttributeGuard $proof) use (&$completion): void {
+            $completion = $proof;
+        };
+        return match ($creation->strategy) {
+            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $attempt, $completed, $configure, $recordCompletion),
             CreationStrategy::Lazy => $this->lazy($metadata, $constructorPlan, $attempt, $completed, $configure, $resolveParameters),
             CreationStrategy::Proxy => $this->proxy($metadata, $constructorPlan, $attempt, $completed, $configure, $resolveParameters),
         };
-        $completion = $resolveParameters === null ? null : $eagerCompletion;
-        return $entry;
     }
 
     /**
      * @param Closure(object):void|null $configure
-     * @param-out CompletedAttributeGuard $completion
+     * @param (Closure(CompletedAttributeGuard):void)|null $recordCompletion
      */
     private function eager(
         ObjectMetadata $metadata,
@@ -226,7 +231,7 @@ final class ObjectCreation
         ObjectCreationAttempt $attempt,
         CompletedAttributeGuard $completed,
         ?Closure $configure,
-        ?CompletedAttributeGuard &$completion = null,
+        ?Closure $recordCompletion = null,
     ): object {
         $creation = $attempt->context;
         $completed->assertUnchanged();
@@ -260,7 +265,11 @@ final class ObjectCreation
         $constructorProof?->assertParameterSourcesUnchanged();
         $this->parametersStore->assertSetupSourcesUnchanged($creation);
 
-        $completion = $completed;
+        $recordCompletion?->__invoke($completed->withRetirementSourceChecks(
+            $metadata->constructor,
+            isset($parameters) ? ConstructionParameters::provenance($parameters) : null,
+            $this->parametersStore->setupSourceChecks($creation),
+        ));
         return $entry;
     }
 

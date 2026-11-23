@@ -5,20 +5,37 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\ObjectArgumentRetirement;
 
 use Attribute;
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Exception\RequestParameterSourceConflictException;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactory;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\NoConstructorHandler;
+use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
+use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Entry\EntryParametersFactoryInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ArrayResolver;
+use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
+use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
+use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
+use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use Componenta\DI\Tests\Support\TestCasterProvider;
 use LogicException;
+use Nyholm\Psr7\ServerRequest;
+use Psr\Http\Message\ServerRequestInterface;
 use Reflector;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
@@ -123,3 +140,169 @@ test('eager creation checks attributes revealed while releasing arguments owned 
 })->with(['compatibility' => false, 'targeted' => true])
     ->with(['no active handlers' => false, 'with after-phase handler' => true])
     ->with(['related', 'unrelated', 'retained']);
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class Label {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class OtherLabel {}
+
+abstract class ClassifiedProduct
+{
+    public string $label;
+}
+
+test('eager creation rechecks a resolver observation after releasing its supplied arguments', function (bool $targeted, bool $queryAlias, bool $related): void {
+    $suffix = bin2hex(random_bytes(5));
+    $class = __NAMESPACE__ . '\\Classified_' . $suffix;
+    $observer = __NAMESPACE__ . '\\Observer_' . $suffix;
+    $pending = __NAMESPACE__ . '\\Pending_' . $suffix;
+    $alias = __NAMESPACE__ . '\\Alias_' . $suffix;
+    eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        #[Pending_%s] final class Observer_%s {}
+        final class Classified_%s extends ClassifiedProduct {
+            public function __construct(#[%s] string $label = 'fallback') {
+                $this->label = $label;
+                Product::$events[] = $label;
+            }
+        }
+        PHP,
+        __NAMESPACE__,
+        $suffix,
+        $suffix,
+        $suffix,
+        $queryAlias ? 'Label' : 'Alias_' . $suffix,
+    ));
+    if (!is_a($class, ClassifiedProduct::class, true) || !class_exists($observer, false)) {
+        throw new LogicException('Expected the parameter retirement fixtures.');
+    }
+    $plans = new AttributePlanBuilder(new AttributeDefinitionRegistry($targeted));
+    $parameters = new ParametersResolver($plans);
+    $parameters->add(new AttributeMatchingParameterResolver(
+        $queryAlias ? $alias : Label::class,
+        static fn(ParameterTarget $target): array => [$target->position, 'selected'],
+    ), 100);
+    $parameters->add(new AttributeParameterResolver($plans), 50);
+    $parameters->add(new DefaultValueResolver());
+    $parameters->seal();
+    $pipeline = new ObjectPipeline(new AttributeProcessor($plans), $parameters, new ProxyFactory());
+    $pipeline->prepare($observer);
+    expect(fixtureInstance($pipeline->create($class), ClassifiedProduct::class)->label)->toBe('fallback');
+
+    $unrelatedLoads = new class () {
+        public int $count = 0;
+    };
+    $loader = static function (string $name) use ($alias, $pending, $unrelatedLoads): void {
+        if ($name === $pending && class_exists($alias, false)) {
+            ++$unrelatedLoads->count;
+        }
+    };
+    Product::$events = [];
+    spl_autoload_register($loader, prepend: true);
+    try {
+        $make = static fn(): ClassifiedProduct => fixtureInstance($pipeline->create(
+            $class,
+            resolveParameters: static fn(): array => ['owned' => new Argument('released', $alias, $related ? Label::class : OtherLabel::class)],
+        ), ClassifiedProduct::class);
+        if ($related) {
+            expect($make)->toThrow(AttributeCompositionException::class, 'classification for parameter $label');
+        } else {
+            expect($make()->label)->toBe('fallback');
+        }
+        expect(Product::$events)->toBe(['fallback', 'released'])
+            ->and($unrelatedLoads->count)->toBe(0)
+            ->and(fixtureInstance($pipeline->create($class), ClassifiedProduct::class)->label)->toBe($related ? 'selected' : 'fallback');
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['compatibility' => false, 'targeted' => true])
+    ->with(['watched query' => true, 'declared alias' => false])
+    ->with(['matching' => true, 'unrelated' => false]);
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class ExplicitSource implements ParameterSourceAttributeInterface {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class RetirementMapping extends MapQueryString
+{
+    /** @param class-string $declaration */
+    public function __construct(private readonly string $alias, private readonly string $declaration)
+    {
+        parent::__construct();
+    }
+
+    #[\Override]
+    public function transform(array $data): array
+    {
+        return [...parent::transform($data), 'owned' => new Argument('released mapped input', $this->alias, $this->declaration)];
+    }
+}
+
+final readonly class StagedInput
+{
+    public function __construct(public EntryParameters $parameters) {}
+}
+
+test('eager return cannot publish a mapped constructor argument whose source was revealed by input retirement', function (bool $targeted, bool $related): void {
+    $suffix = bin2hex(random_bytes(5));
+    $class = __NAMESPACE__ . '\\Mapped_' . $suffix;
+    $alias = __NAMESPACE__ . '\\Source_' . $suffix;
+    $stage = eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        final class Mapped_%s extends ClassifiedProduct {
+            public function __construct(#[Source_%s] string $label) {
+                $this->label = $label;
+                Product::$events[] = $label;
+            }
+        }
+        return static fn(#[RetirementMapping(%s, %s)] StagedInput $input): StagedInput => $input;
+        PHP,
+        __NAMESPACE__,
+        $suffix,
+        $suffix,
+        var_export($alias, true),
+        var_export($related ? ExplicitSource::class : OtherLabel::class, true),
+    ));
+    if (!$stage instanceof Closure || !is_a($class, ClassifiedProduct::class, true)) {
+        throw new LogicException('Expected the mapped retirement fixtures.');
+    }
+    $capture = new class () implements EntryParametersFactoryInterface {
+        public function make(string $entry, array $params = []): object
+        {
+            throw new LogicException('Expected a forwarded mapped parameter bag.');
+        }
+
+        public function makeEntry(string $entry, EntryParameters $parameters): object
+        {
+            return new StagedInput($parameters);
+        }
+    };
+    $mapping = new ContainerBuilder()->addAttributeDefinition(new AttributeDefinition(
+        RetirementMapping::class,
+        new RequestAttributeHandler($capture, new TestCasterProvider()),
+        [ValueProvider::class],
+    ))->build();
+    $request = new ServerRequest('GET', '/')->withQueryParams(['label' => 'mapped']);
+    $plans = new AttributePlanBuilder(new AttributeDefinitionRegistry($targeted));
+    $parameters = new ParametersResolver($plans);
+    $parameters->add(new ArrayResolver());
+    $parameters->seal();
+    $pipeline = new ObjectPipeline(new AttributeProcessor($plans), $parameters, new ProxyFactory());
+    $resolve = static fn(): EntryParameters => fixtureInstance(
+        $mapping->call($stage, [ServerRequestInterface::class => $request]),
+        StagedInput::class,
+    )->parameters;
+    $make = static fn(): ClassifiedProduct => fixtureInstance($pipeline->create($class, resolveParameters: $resolve), ClassifiedProduct::class);
+
+    Product::$events = [];
+    if ($related) {
+        expect($make)->toThrow(RequestParameterSourceConflictException::class, 'label');
+    } else {
+        expect($make()->label)->toBe('mapped');
+    }
+    expect(Product::$events)->toBe(['mapped', 'released mapped input']);
+})->with(['compatibility' => false, 'targeted' => true])
+    ->with(['explicit source' => true, 'unrelated' => false]);
