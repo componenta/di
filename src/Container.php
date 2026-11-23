@@ -321,11 +321,25 @@ final class Container extends ContainerEntryOperations implements
             $lookupGuard = $this->lookupGuard ??= new CycleGuard();
             $lookupGuard->enter($localGuard);
             try {
-                $hasSharedValue = fn(): bool => $this->cache->tryGetBase($entryId, $published);
-                $available = $requireResolvable
-                    ? $this->resolver->can($entryId, $hasSharedValue)
-                    : $this->resolver->knows($entryId, $hasSharedValue);
-                return $available || $hasSharedValue();
+                while (true) {
+                    $revision = $this->aliases->revision;
+                    $hasSharedValue = fn(): bool => $this->cache->tryGetBase($entryId, $published);
+                    $available = $requireResolvable
+                        ? $this->resolver->can($entryId, $hasSharedValue)
+                        : $this->resolver->knows($entryId, $hasSharedValue);
+                    $currentId = $revision === $this->aliases->revision
+                        ? $entryId
+                        : $this->aliases->resolve($id);
+                    if ($currentId === $entryId) {
+                        return $available || $hasSharedValue();
+                    }
+
+                    // Local fallback discovery can change the alias before returning.
+                    $entryId = $currentId;
+                    if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
+                        return true;
+                    }
+                }
             } finally {
                 $lookupGuard->leave($localGuard);
             }
