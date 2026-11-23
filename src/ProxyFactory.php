@@ -22,6 +22,10 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
     public function makeLazy(string $class, callable $initializer): object
     {
         try {
+            // Keep the supplied receiver and method through target autoloading.
+            if (is_array($initializer)) {
+                $initializer = array_map(static fn(mixed $slot): mixed => $slot, $initializer);
+            }
             /** @var ReflectionClass<T> $reflection */
             $reflection = new ReflectionClass($class);
             $this->assertSupportsLazyState($reflection, 'lazy ghost');
@@ -42,6 +46,9 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
     public function makeProxy(string $class, callable $factory): object
     {
         try {
+            if (is_array($factory)) {
+                $factory = array_map(static fn(mixed $slot): mixed => $slot, $factory);
+            }
             /** @var ReflectionClass<T> $reflection */
             $reflection = new ReflectionClass($class);
             $this->assertSupportsLazyState($reflection, 'virtual proxy');

@@ -421,6 +421,74 @@ test('supported lazy callbacks keep deferred exception identity and can retry in
         ->and($reflection->isUninitializedLazyObject($target))->toBeFalse();
 })->with(['factory' => false, 'container' => true])->with(['ghost' => false, 'proxy' => true]);
 
+test('lazy allocation retains the supplied callable route through target autoloading', function (
+    bool $container,
+    bool $proxy,
+    bool $rebindDuringAutoload,
+): void {
+    $factory = $container ? new ContainerBuilder()->build() : new ProxyFactory();
+    $original = new class () {
+        public int $calls = 0;
+        public string $value = 'original';
+
+        public function initialize(NativeLazyEligibilityPromoted $target): void
+        {
+            ++$this->calls;
+            $target->value = $this->value;
+        }
+
+        public function build(NativeLazyEligibilityPromoted $target): NativeLazyEligibilityPromoted
+        {
+            ++$this->calls;
+            return new NativeLazyEligibilityPromoted($this->value);
+        }
+
+        public function unexpected(NativeLazyEligibilityPromoted $target): never
+        {
+            throw new LogicException('The caller rebound the supplied method during allocation.');
+        }
+    };
+    $receiver = $original;
+    $replacement = clone $original;
+    $replacement->value = 'replacement';
+    $method = $proxy ? 'build' : 'initialize';
+    $callback = [&$receiver, &$method];
+    $rebind = static function () use (&$receiver, &$method, $replacement): void {
+        $receiver = $replacement;
+        $method = 'unexpected';
+    };
+    /** @var class-string<NativeLazyEligibilityPromoted> $class */
+    $class = __NAMESPACE__ . '\\DeferredLazyCallbackTarget_' . bin2hex(random_bytes(5));
+    $loader = static function (string $name) use ($class, $rebindDuringAutoload, $rebind): void {
+        if ($name === $class) {
+            if ($rebindDuringAutoload) {
+                $rebind();
+            }
+            class_alias(NativeLazyEligibilityPromoted::class, $class, false);
+        }
+    };
+    spl_autoload_register($loader);
+    try {
+        $target = $proxy ? $factory->makeProxy($class, $callback) : $factory->makeLazy($class, $callback);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+    if (!$rebindDuringAutoload) {
+        $rebind();
+    }
+
+    $original->value = 'updated business state';
+    $reflection = new ReflectionClass($class);
+    expect($reflection->isUninitializedLazyObject($target))->toBeTrue()
+        ->and($original->calls)->toBe(0)
+        ->and($replacement->calls)->toBe(0)
+        ->and($target->read())->toBe('updated business state')
+        ->and($original->calls)->toBe(1)
+        ->and($replacement->calls)->toBe(0);
+})->with(['factory' => false, 'container' => true])
+    ->with(['ghost' => false, 'proxy' => true])
+    ->with(['rebind during autoload' => true, 'rebind after allocation' => false]);
+
 test('propertyless diagnostics release callback captures while their exception remains retained', function (bool $container, bool $proxy): void {
     $setting = ini_set('zend.exception_ignore_args', '1');
     if ($setting === false) {
