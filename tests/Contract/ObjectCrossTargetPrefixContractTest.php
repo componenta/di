@@ -198,3 +198,29 @@ test('a refreshed slot cannot replace its concrete attribute after native instan
         ->and($handler->seen)->toBe([ReplacementAttribute::class])
         ->and(Product::$constructions)->toBe(1);
 })->with(['native instantiation' => true, 'handler dispatch' => false]);
+
+test('an active object phase refreshes the original declaration after its input is retargeted', function (bool $beforeDispatch): void {
+    $registry = new AttributeDefinitionRegistry();
+    $plans = new AttributePlanBuilder($registry);
+    $objects = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), new ProxyFactory());
+    $reflection = new SwitchingReflection(ReflectedProduct::class);
+    $refresh = static function () use ($reflection, $registry): void {
+        if ($reflection->getName() === ReflectedProduct::class) {
+            $reflection->__construct(ReplacementMetadata::class);
+            $registry->register(new AttributeDefinition(RefreshMarker::class));
+        }
+    };
+    $handler = new RecordConcreteAttribute($beforeDispatch ? null : $refresh);
+    $registry->register(new AttributeDefinition(SharedAttribute::class, $handler, phase: AttributePhase::BeforeInstantiation));
+    Product::$constructions = 0;
+    OriginalAttribute::$onInstantiation = $beforeDispatch ? $refresh : null;
+
+    try {
+        expect($objects->create($reflection))->toBeInstanceOf(ReflectedProduct::class)
+            ->and($reflection->getName())->toBe(ReplacementMetadata::class)
+            ->and($handler->seen)->toBe([OriginalAttribute::class])
+            ->and(Product::$constructions)->toBe(1);
+    } finally {
+        OriginalAttribute::$onInstantiation = null;
+    }
+})->with(['native instantiation' => true, 'handler dispatch' => false]);

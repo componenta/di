@@ -22,6 +22,7 @@ final readonly class ExternalDependencyInspection
         private DelegatorRegistry $delegators,
         private Closure $registry,
         private Closure $mayInspect,
+        private ExternalLookupProbes $lookupProbes,
     ) {}
 
     /** @return list<string> */
@@ -50,7 +51,13 @@ final readonly class ExternalDependencyInspection
                 unset($pending[$dependencyId]);
                 do {
                     $revision = $this->currentRegistry()->revision ?? 0;
-                    $owner = $this->currentRegistry()?->findOwning($dependencyId, $mayInspect, requireResolvable: true);
+                    $owner = $this->currentRegistry()?->findOwning(
+                        $dependencyId,
+                        $mayInspect,
+                        requireResolvable: true,
+                        lookupProbes: $this->lookupProbes,
+                        forRegistration: true,
+                    );
                     if ($this->currentRegistry()?->contains($container) === true) {
                         return [];
                     }
@@ -82,7 +89,13 @@ final readonly class ExternalDependencyInspection
                     $protectedCandidates[$dependencyId] = true;
                     continue;
                 }
-                $owner = $this->currentRegistry()?->findOwning($dependencyId, $mayInspect, requireResolvable: true);
+                $owner = $this->currentRegistry()?->findOwning(
+                    $dependencyId,
+                    $mayInspect,
+                    requireResolvable: true,
+                    lookupProbes: $this->lookupProbes,
+                    forRegistration: true,
+                );
                 if ($this->currentRegistry()?->contains($container) === true) {
                     return [];
                 }

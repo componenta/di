@@ -34,6 +34,8 @@ final class AttributePlans
     private readonly AttributeOrdering $ordering;
     /** @var WeakMap<AttributePlan,true>|null */
     private ?WeakMap $freshValidation = null;
+    /** @var WeakMap<AttributePlan,array<int,ReflectionAttribute<object>>>|null */
+    private ?WeakMap $borrowedDeclarations = null;
     public function __construct(private readonly AttributeDefinitions $registry)
     {
         $this->ordering = new AttributeOrdering();
@@ -42,6 +44,18 @@ final class AttributePlans
     public function requiresFreshValidation(AttributePlan $plan): bool
     {
         return isset($this->freshValidation[$plan]);
+    }
+
+    /**
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param array<int,ReflectionAttribute<object>>|null $captured
+     */
+    public function consumedSource(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        AttributePlan $plan,
+        ?array $captured = null,
+    ): AttributeMetadataSource {
+        return new AttributeMetadataSource($target, $plan, $captured, $this->borrowedDeclarations[$plan] ?? null);
     }
 
     public function refreshAvailability(): int
@@ -111,6 +125,7 @@ final class AttributePlans
     public function build(
         Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         ?array $observed = null,
+        ?AttributePlan $previousPlan = null,
     ): AttributePlan {
         $closure = null;
         if ($target instanceof Closure) {
@@ -118,6 +133,15 @@ final class AttributePlans
             $target = ReflectionSnapshot::target($closure);
         }
         $key = $observed === null ? self::cacheKey($target) : null;
+        $metadata = null;
+        $previous = null;
+        if ($key === null && ReflectionSnapshot::hasBorrowedMetadata($target)) {
+            $metadata = new AttributeMetadataSource($target, $previousPlan);
+            $target = $metadata->target;
+            if ($previousPlan !== null) {
+                $previous = $this->borrowedDeclarations[$previousPlan] ?? null;
+            }
+        }
         while (true) {
             $this->synchronizeRegistryRevision();
             $revision = $this->registryRevision;
@@ -128,7 +152,10 @@ final class AttributePlans
 
             $awaitsDiscovery = false;
             $validatedUserRules = false;
-            $attributes = $observed ?? $target->getAttributes();
+            $attributes = $observed ?? $metadata?->attributeOverride($previous) ?? $target->getAttributes();
+            if ($metadata !== null) {
+                $previous = $attributes;
+            }
             $usages = $attributes === [] ? [] : $this->discoverUsages(
                 $target,
                 $attributes,
@@ -162,6 +189,10 @@ final class AttributePlans
         }
 
         $plan = new AttributePlan($closure ?? $target, $this->ordering->order($target, $usages));
+        if ($previous !== null) {
+            $declarations = $this->borrowedDeclarations ??= new WeakMap();
+            $declarations[$plan] = $previous;
+        }
         if ($awaitsDiscovery || $validatedUserRules) {
             $fresh = $this->freshValidation ??= new WeakMap();
             $fresh[$plan] = true;

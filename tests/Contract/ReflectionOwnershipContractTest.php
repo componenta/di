@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract\ReflectionOwnership;
 
 use Attribute;
+use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
+use Componenta\DI\Attribute\Composition\AttributeSet;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -184,6 +188,32 @@ test('a published class plan and usage own the declaration from a derived reflec
         ->and($usage->newInstance())->toBeInstanceOf(ObserveClass::class);
 });
 
+test('a class plan retains its declaration when a rule retargets the input reflector', function (bool $derived, bool $revised): void {
+    $input = $derived ? new ApplicationReflection(Requested::class) : new ReflectionClass(Requested::class);
+    $registry = new AttributeDefinitionRegistry();
+    $rule = new class ($input, $revised ? $registry : null) implements AttributeCompositionRuleInterface {
+        /** @param ReflectionClass<covariant object> $input */
+        public function __construct(private readonly ReflectionClass $input, private ?AttributeDefinitionRegistry $registry) {}
+
+        public function validate(AttributeUsage $attribute, AttributeSet $set): void
+        {
+            new ReflectionMethod(ReflectionClass::class, '__construct')->invoke($this->input, OtherClassWithHandler::class);
+            $this->registry?->register(new AttributeDefinition(ObserveStatic::class));
+            $this->registry = null;
+        }
+    };
+    $registry->register(new AttributeDefinition(ObserveClass::class, rules: [$rule]));
+    $registry->register(new AttributeDefinition(OtherClassAttribute::class));
+
+    $plan = new AttributePlanBuilder($registry)->build($input);
+
+    expect($input->getName())->toBe(OtherClassWithHandler::class)
+        ->and($plan->target->getName())->toBe(Requested::class)
+        ->and($plan->usages[0]->target->getName())->toBe(Requested::class)
+        ->and($plan->usages[0]->newInstance())->toBeInstanceOf(ObserveClass::class);
+})->with(['native source' => false, 'derived source' => true])
+    ->with(['stable definition registry' => false, 'revised definition registry' => true]);
+
 test('a derived parameter keeps its declaration and default when a reflector is retargeted', function (bool $published): void {
     [, $runtime] = new ContainerBuilder()->assemble();
     $input = new ApplicationParameter(__NAMESPACE__ . '\\answer', 0);
@@ -213,6 +243,31 @@ test('completed phases verify the selected class if deferred arguments retarget 
         ->and($input->getName())->toBe(OtherClassWithHandler::class)
         ->and($handler->observed)->toBe([]);
 });
+
+test('bootstrap verifies the class its object phase actually used', function (bool $retarget): void {
+    $runtime = new ResolutionRuntime();
+    $input = new ApplicationReflection(Requested::class);
+    $handler = new ClassObserver();
+    $created = null;
+    new ContainerBuilder()
+        ->addAttributeDefinition(new AttributeDefinition(ObserveClass::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->addAttributeDefinition(new AttributeDefinition(OtherClassAttribute::class, $handler, phase: AttributePhase::BeforeInstantiation))
+        ->addAttributeDefinition(static function () use ($runtime, $input, $retarget, &$created): AttributeDefinition {
+            $created = $runtime->objects->create($input, resolveParameters: static function () use ($input, $retarget): array {
+                if ($retarget) {
+                    $input->__construct(OtherClassWithHandler::class);
+                }
+                return [];
+            });
+            return new AttributeDefinition(ObserveStatic::class);
+        })
+        ->assemble($runtime);
+
+    expect($created)->toBeInstanceOf(Requested::class)
+        ->and($input->getName())->toBe($retarget ? OtherClassWithHandler::class : Requested::class)
+        ->and(array_map(static fn(ReflectionClass $class): string => $class->getName(), $handler->observed))
+        ->toBe([Requested::class, Requested::class]);
+})->with(['stable input' => false, 'retargeted input' => true]);
 
 test('a reflection parameter retained by supports cannot change the next call default', function (): void {
     $observer = new ParameterObserver();

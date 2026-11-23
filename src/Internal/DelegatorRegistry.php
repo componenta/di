@@ -196,8 +196,12 @@ final class DelegatorRegistry
     }
 
     /** @throws DelegatorException */
-    public function apply(string $id, mixed $entry, ContainerInterface $container, ?object $authority = null): mixed
-    {
+    public function apply(
+        string $id,
+        mixed $entry,
+        ContainerInterface $container,
+        ?object $authority = null,
+    ): mixed {
         if (!isset($this->raw[$id])) {
             return $entry;
         }
@@ -206,12 +210,13 @@ final class DelegatorRegistry
         $callables = $this->callables[$id] ?? null;
         if ($callables === null) {
             $revision = $this->revisions[$id] ?? 0;
+            $lookupVersion = EntryLookupRevision::current();
             $lookup = $this->lookup !== null && isset($this->refinableDependencies[$id])
                 ? new CallableDependencyLookup($this->lookup)
                 : null;
             $resolver = $lookup === null ? $this->callableResolver : new CallableResolver($lookup);
             $callables = $this->resolveChain($id, $resolver);
-            if (($this->revisions[$id] ?? 0) === $revision) {
+            if (($this->revisions[$id] ?? 0) === $revision && EntryLookupRevision::current() === $lookupVersion) {
                 if ($lookup !== null) {
                     $dependencies = $lookup->dependencies;
                     // Exact string bindings can override the currently selected callable.

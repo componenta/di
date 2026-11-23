@@ -11,6 +11,7 @@ use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\AttributeExecution;
 use Componenta\DI\Internal\CompletedAttributeGuard;
+use Componenta\DI\Internal\EntryLookupRevision;
 use Componenta\DI\Internal\ObjectAttributeAccess;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
@@ -248,6 +249,7 @@ final class ObjectCreation
         return $this->proxies->makeLazy(
             $metadata->class->getName(),
             function (object $entry) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): void {
+                $lookupRevision = EntryLookupRevision::current();
                 $attempt = $this->freshAttempt($creation);
                 $context = $attempt->context;
                 $succeeded = false;
@@ -278,6 +280,7 @@ final class ObjectCreation
                     $attemptCompleted->assertUnchanged();
                     $constructorProof?->assertParameterSourcesUnchanged();
                     $this->parametersStore->assertSetupSourcesUnchanged($context);
+                    EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
                     $succeeded = true;
                 } finally {
                     if (!$succeeded) {
@@ -304,6 +307,7 @@ final class ObjectCreation
         return $this->proxies->makeProxy(
             $metadata->class->getName(),
             function (object $_proxy) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): object {
+                $lookupRevision = EntryLookupRevision::current();
                 $succeeded = false;
                 try {
                     $entry = $this->eager(
@@ -313,6 +317,7 @@ final class ObjectCreation
                         $completed,
                         $configure,
                     );
+                    EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
                     $succeeded = true;
                     return $entry;
                 } finally {

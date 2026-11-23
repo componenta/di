@@ -19,7 +19,7 @@ final class ParameterDeclaration
 {
     private ?AttributePlan $emptyClosurePlan = null;
     private readonly ReflectionParameter $declaration;
-    private readonly ?ReflectionParameter $metadataSource;
+    public private(set) ?ReflectionParameter $borrowedMetadata;
     public readonly bool $mayHaveAttributes;
 
     /** @var list<ReflectionAttribute<object>>|null */
@@ -38,17 +38,17 @@ final class ParameterDeclaration
     ) {
         if ($reflection::class === ReflectionParameter::class) {
             $this->declaration = $reflection;
-            $this->metadataSource = null;
+            $this->borrowedMetadata = null;
             $this->capturedAttributes = null;
         } else {
             $this->declaration = ReflectionSnapshot::parameter($reflection, forPublication: true);
             $method = $this->declaration->getDeclaringFunction();
             // The native __invoke reflector does not expose the identity of its closure.
             $capture = $method instanceof ReflectionMethod && is_closure_reflector($method);
-            $this->metadataSource = $capture ? null : $reflection;
+            $this->borrowedMetadata = $capture ? null : $reflection;
             $this->capturedAttributes = $capture ? $attributes : null;
         }
-        $this->mayHaveAttributes = $this->metadataSource !== null || $attributes !== [];
+        $this->mayHaveAttributes = $this->borrowedMetadata !== null || $attributes !== [];
     }
 
     public function snapshot(): ReflectionParameter
@@ -64,10 +64,15 @@ final class ParameterDeclaration
     /** Lets a derived reflector supply live metadata for the same declaration. */
     public function metadataTarget(): ReflectionParameter
     {
-        $source = $this->metadataSource;
+        $source = $this->borrowedMetadata;
         return $source !== null && ReflectionSnapshot::sameParameter($source, $this->declaration)
             ? $source
             : $this->declaration;
+    }
+
+    public function releaseBorrowedMetadata(): void
+    {
+        $this->borrowedMetadata = null;
     }
 
     public function closureMethodSource(): ?ReflectionParameter

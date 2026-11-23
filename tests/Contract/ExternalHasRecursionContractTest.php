@@ -65,7 +65,7 @@ test('recursive external availability stops without blocking independent ids or 
         ->and($di->get('recursive'))->toBe('recovered value');
 });
 
-test('an external ownership probe can see other routes for the same id', function (bool $externalRoute): void {
+test('an external ownership probe can see other routes for the same id', function (bool $externalRoute, bool $read): void {
     $di = container();
     $external = new class ($di) implements ContainerInterface {
         private bool $probing = false;
@@ -109,8 +109,33 @@ test('an external ownership probe can see other routes for the same id', functio
         $di->set('entry', 'value');
     }
 
-    expect($di->has('entry'))->toBeTrue()
+    expect($read ? $di->get('entry') : $di->has('entry'))->toBe($read ? 'value' : true)
         ->and($external->nestedAvailability)->toBeTrue()
         ->and($external->nestedValue)->toBe('value')
         ->and($external->queries)->toBe(1);
-})->with(['local entry' => false, 'second provider' => true]);
+})->with(['local entry' => false, 'second provider' => true])
+    ->with(['availability query' => false, 'entry read' => true]);
+
+test('recursive external retrieval is rejected before probing ownership again', function (): void {
+    $di = container();
+    $provider = new class ($di) implements ContainerInterface {
+        public int $probes = 0;
+
+        public function __construct(private readonly Container $parent) {}
+
+        public function has(string $id): bool
+        {
+            ++$this->probes;
+            return true;
+        }
+
+        public function get(string $id): mixed
+        {
+            return $this->parent->get($id);
+        }
+    };
+    $di->addContainer($provider);
+
+    expect(fn() => $di->get('entry'))->toThrow(\Componenta\DI\Exception\CircularDependencyException::class)
+        ->and($provider->probes)->toBe(1);
+});

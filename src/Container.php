@@ -15,6 +15,7 @@ use Componenta\DI\Internal\ContainerEntryOperations;
 use Componenta\DI\Internal\CycleGuard;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
+use Componenta\DI\Internal\EntryLookupRevision;
 use Componenta\DI\Internal\ExternalContainerRegistry;
 use Componenta\DI\Internal\ExternalDependencyInspection;
 use Componenta\DI\Internal\ExternalLookupProbes;
@@ -174,21 +175,22 @@ final class Container extends ContainerEntryOperations implements
                 if (!ProtectedServiceIds::contains($id) && !ProtectedServiceIds::contains($entryId)) {
                     $externalGuard = "\0external:" . $id;
                     $lookupGuard = $this->lookupGuard ??= new CycleGuard();
-                    $lookupGuard->enter($externalGuard);
-                    try {
-                        $external = $this->externalContainers->findOwning(
-                            $id,
-                            fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
-                            $requireResolvable,
-                            $this->providerProbes ??= new ExternalLookupProbes(),
-                        );
-                        // External has() may retarget aliases before local resolution.
-                        $entryId = $this->aliases->resolve($id);
-                        if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
+                    $lookupGuard->assertInactive($externalGuard);
+                    $external = $this->externalContainers->findOwning(
+                        $id,
+                        fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                        $requireResolvable,
+                        $this->providerProbes ??= new ExternalLookupProbes(),
+                    );
+                    // External has() may retarget aliases before local resolution.
+                    $entryId = $this->aliases->resolve($id);
+                    if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
+                        $lookupGuard->enter($externalGuard);
+                        try {
                             return $requireResolvable ? AvailableEntryLookup::get($external, $id) : $external->get($id);
+                        } finally {
+                            $lookupGuard->leave($externalGuard);
                         }
-                    } finally {
-                        $lookupGuard->leave($externalGuard);
                     }
                 }
             }
@@ -224,6 +226,7 @@ final class Container extends ContainerEntryOperations implements
     {
         $requestedRevision = $this->cache->resolvedRevision($requestedId);
         $baseRevision = $this->cache->baseRevision($entryId);
+        $lookupRevision = EntryLookupRevision::current();
         if (!$this->cache->tryGetBase($entryId, $entry)) {
             // Aliases share source creation, but each requested id owns its
             // delegator pipeline and may read another id once the source exists.
@@ -232,7 +235,7 @@ final class Container extends ContainerEntryOperations implements
                 if (!$this->resolver->tryResolveShared($entryId, $entry)) {
                     return false;
                 }
-                if ($this->cache->baseRevision($entryId) === $baseRevision) {
+                if ($this->cache->baseRevision($entryId) === $baseRevision && EntryLookupRevision::current() === $lookupRevision) {
                     $this->cache->putBase($entryId, $entry, $this->runtimeAuthority);
                     $baseRevision = $this->cache->baseRevision($entryId);
                 }
@@ -244,8 +247,10 @@ final class Container extends ContainerEntryOperations implements
         $entry = $this->delegators->apply($requestedId, $entry, $this, $this->runtimeAuthority);
         // A factory or delegator may mutate bindings, including while suspended.
         // Its in-flight result must not repopulate an invalidated shared entry.
+        // A nested lookup can also have selected a temporary route around an active provider.
         if ($this->cache->resolvedRevision($requestedId) === $requestedRevision
             && $this->cache->baseRevision($entryId) === $baseRevision
+            && EntryLookupRevision::current() === $lookupRevision
         ) {
             $this->cache->putResolved($requestedId, $entryId, $entry, $this->runtimeAuthority);
         }
@@ -422,6 +427,7 @@ final class Container extends ContainerEntryOperations implements
                 $this->delegators,
                 fn(): ?ExternalContainerRegistry => $this->externalContainers,
                 fn(string $id): bool => !$this->isProtectedDependency($id),
+                $this->providerProbes ??= new ExternalLookupProbes(),
             )->takenOverBy($container);
         } catch (ExceptionInterface $e) {
             throw $e;
@@ -438,7 +444,7 @@ final class Container extends ContainerEntryOperations implements
 
         ($this->externalContainers ??= $externalContainers)->register($container, $this->runtimeAuthority);
         $this->invalidateDeferredDelegators($affected, $retirement);
-        $this->providerProbes?->invalidate();
+        $this->providerProbes?->invalidate(appending: true);
         $retirement->release();
     }
 

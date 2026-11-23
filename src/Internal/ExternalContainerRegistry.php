@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal;
 
 use Closure;
+use Componenta\DI\Container;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -55,31 +56,41 @@ final class ExternalContainerRegistry
         return $this->ownershipChanges[$id] ?? 0;
     }
 
-    /** @param Closure(string):bool|null $mayInspect */
+    /** @param Closure(string):bool $mayInspect */
     public function findOwning(
         string $id,
-        ?Closure $mayInspect = null,
-        bool $requireResolvable = false,
-        ?ExternalLookupProbes $lookupProbes = null,
+        Closure $mayInspect,
+        bool $requireResolvable,
+        ExternalLookupProbes $lookupProbes,
+        bool $forRegistration = false,
     ): ?ContainerInterface {
-        $probes = $lookupProbes?->start($id);
+        $probes = $forRegistration ? null : $lookupProbes->start($id);
         $caller = $probes?->begin();
+        $skipped = false;
         try {
             $containers = $this->containers;
             $inspected = count($containers);
             while (true) {
                 foreach ($containers as $providerId => $container) {
-                    if ($mayInspect !== null && !$mayInspect($id)) {
-                        return null;
-                    }
-
-                    $revision = $lookupProbes->revision ?? 0;
+                    $revision = $lookupProbes->revision;
                     if ($probes !== null && !$probes->canProbe($providerId, $caller, $requireResolvable, $revision)) {
+                        $confirmed = $probes->confirmedOwnership($providerId, $lookupProbes->confirmationRevision, $revision);
+                        if ($confirmed === null || (!$requireResolvable && $container instanceof Container)) {
+                            $skipped = true;
+                        } elseif ($confirmed) {
+                            return $mayInspect($id) ? $container : null;
+                        }
                         continue;
+                    }
+                    if (!$mayInspect($id)) {
+                        return null;
                     }
                     $probes?->enterProvider($providerId);
                     try {
-                        if ($requireResolvable ? AvailableEntryLookup::has($container, $id) : $container->has($id)) {
+                        $owns = $forRegistration
+                            ? $lookupProbes->inspect($container, $id)
+                            : ($requireResolvable ? AvailableEntryLookup::has($container, $id) : $container->has($id));
+                        if ($owns) {
                             $probes?->recordOwner($providerId);
                             return $container;
                         }
@@ -102,8 +113,11 @@ final class ExternalContainerRegistry
                 $inspected += count($containers);
             }
         } finally {
+            if ($skipped) {
+                EntryLookupRevision::markIncomplete();
+            }
             if ($probes !== null) {
-                $lookupProbes?->finish($id, $probes);
+                $lookupProbes->finish($id, $probes);
             }
         }
     }

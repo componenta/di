@@ -55,7 +55,10 @@ final class ReflectionSnapshot
         return self::parameterFunction($parameter)->getParameters()[self::parameterPosition($parameter)];
     }
 
-    /** Checks whether a borrowed parameter reflector still supplies metadata for its owned declaration. */
+    /**
+     * Checks whether a borrowed parameter reflector still supplies metadata for its owned declaration.
+     * @phpstan-impure
+     */
     public static function sameParameter(ReflectionParameter $source, ReflectionParameter $declaration): bool
     {
         if (self::parameterPosition($source) !== $declaration->getPosition()) {
@@ -81,6 +84,40 @@ final class ReflectionSnapshot
         return true;
     }
 
+    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $source */
+    public static function hasBorrowedMetadata(ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $source): bool
+    {
+        return match ($source::class) {
+            ReflectionClass::class, ReflectionMethod::class, ReflectionParameter::class, ReflectionProperty::class => false,
+            default => true,
+        };
+    }
+
+    /**
+     * A caller-owned reflector can change its declaration between metadata reads.
+     * @phpstan-impure
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $source
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration
+     */
+    public static function sameDeclaration(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $source,
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration,
+    ): bool {
+        if ($source instanceof ReflectionClass && $declaration instanceof ReflectionClass) {
+            return $source->getName() === $declaration->getName();
+        }
+        if ($source instanceof ReflectionParameter && $declaration instanceof ReflectionParameter) {
+            return self::sameParameter($source, $declaration);
+        }
+        if (($source instanceof ReflectionMethod && $declaration instanceof ReflectionMethod)
+            || ($source instanceof ReflectionProperty && $declaration instanceof ReflectionProperty && self::isDeclaredProperty($source))
+        ) {
+            [$owner, $name] = self::memberDeclaration($source);
+            return $name === $declaration->getName() && $owner->getName() === $declaration->getDeclaringClass()->getName();
+        }
+        return false;
+    }
+
     /**
      * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      */
@@ -100,7 +137,7 @@ final class ReflectionSnapshot
 
     /**
      * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     * @return Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty
+     * @return ($target is Closure ? Closure : ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty)
      */
     public static function planDeclaration(
         Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
@@ -141,7 +178,7 @@ final class ReflectionSnapshot
                 return $owner->getProperty($property)->getHook(PropertyHookType::from($hook))
                     ?? throw new LogicException('Expected the reflected property hook.');
             }
-            if ($target->isStatic() && !$target->isPrivate() && $lookupClass?->isSubclassOf($owner->getName()) && $lookupClass->hasMethod($name)) {
+            if ($lookupClass !== null && $target->isStatic() && !$target->isPrivate() && $lookupClass->isSubclassOf($owner->getName()) && $lookupClass->hasMethod($name)) {
                 $method = $lookupClass->getMethod($name);
                 if ($method->getDeclaringClass()->getName() === $owner->getName()) {
                     return $method;

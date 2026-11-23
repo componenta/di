@@ -51,6 +51,16 @@ final class CycleGuard
             : isset($this->fiberStacks[$execution][$id]);
     }
 
+    /** Checks for a cycle without adding another step to the resolution stack. */
+    public function assertInactive(string $id): void
+    {
+        $execution = Fiber::getCurrent();
+        $stack = $execution === null ? $this->resolving : ($this->fiberStacks[$execution] ?? []);
+        if (isset($stack[$id])) {
+            throw CircularDependencyException::forService([...array_map('strval', array_keys($stack)), $id]);
+        }
+    }
+
     /**
      * Marks `$id` as in-flight.
      *

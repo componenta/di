@@ -27,6 +27,7 @@ use Componenta\DI\Resolver\Target\ParameterTarget;
 use LogicException;
 use PHPUnit\Framework\Assert;
 use ReflectionMethod;
+use ReflectionParameter;
 use stdClass;
 use WeakReference;
 
@@ -231,6 +232,37 @@ test('bootstrap rechecks the original live native closure-method declaration aft
     }))->toThrow(InvalidConfigurationException::class, LabelResolver::class);
     expect($target->name ?? $parameter?->getName())->toBe($witness === 'retargeted' ? 'anchor' : 'label');
 })->with(['live target' => 'target', 'live reflection parameter' => 'parameter', 'retargeted reflection parameter' => 'retargeted']);
+
+final class ApplicationParameter extends ReflectionParameter {}
+
+function proofLabel(#[LabelPolicy] string $label = 'fallback'): string
+{
+    return $label;
+}
+
+test('bootstrap rechecks the original parameter after its derived reflector was retargeted', function (bool $closure, bool $related): void {
+    $alias = __NAMESPACE__ . '\\ReleasedNamedAlias_' . bin2hex(random_bytes(5));
+    $declaration = $closure ? static fn(#[LabelPolicy] string $label = 'fallback'): string => $label : __NAMESPACE__ . '\\proofLabel';
+    $parameter = new ApplicationParameter($declaration, 0);
+    $runtime = new ResolutionRuntime();
+    $runtime->parameters->add(new LabelResolver($alias), 100);
+    $runtime->parameters->add(new DefaultValueResolver());
+    expect($runtime->parameters->resolve([$parameter]))->toBe(['fallback']);
+    $runtime->parameters->seal();
+
+    $finish = static fn() => $runtime->bootstrapGuard->finish(static function () use ($alias, $parameter, $related): void {
+        $parameter->__construct(__NAMESPACE__ . '\\liveAnchor', 0);
+        class_alias($related ? LabelPolicy::class : Metadata::class, $alias);
+    });
+
+    if ($related) {
+        expect($finish)->toThrow(InvalidConfigurationException::class, LabelResolver::class);
+    } else {
+        $finish();
+    }
+    expect($parameter->getName())->toBe('anchor');
+})->with(['named function' => false, 'closure' => true])
+    ->with(['alias matches original parameter' => true, 'alias only matches replacement' => false]);
 
 test('bootstrap releases temporary native closure-method captures before accepting a live classification', function (): void {
     $alias = __NAMESPACE__ . '\\ReleasedClosureAlias_' . bin2hex(random_bytes(5));

@@ -31,4 +31,11 @@ abstract class ParameterTargetAccess extends ParameterTargetScope
         $target->attributeObserver = $observer;
         return $target;
     }
+
+    public static function withoutBorrowedMetadata(ParameterTarget $target): ParameterTarget
+    {
+        $snapshot = clone $target;
+        $snapshot->declaration->releaseBorrowedMetadata();
+        return $snapshot;
+    }
 }

@@ -228,8 +228,8 @@ final class AttributeExecution
 
                 $sequence->dispatch($usage);
                 // Instance-specific member data is for handlers. The plan uses the captured class.
-                $handlerTarget = $target instanceof ReflectionClass && $instanceReflection?->getName() === $class->getName()
-                    ? $instanceReflection
+                $handlerTarget = $target instanceof ReflectionClass
+                    ? ($instanceReflection?->getName() === $class->getName() ? $instanceReflection : $context->class)
                     : ReflectionSnapshot::target($target, $class);
                 $handler->handle($attribute, $handlerTarget, $context);
                 unset($attribute);

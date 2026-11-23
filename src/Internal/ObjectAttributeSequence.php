@@ -109,13 +109,14 @@ final class ObjectAttributeSequence
 
     private function refresh(): void
     {
+        $previousPlans = $this->plans;
         while (!$this->isCurrent()) {
             $revision = $this->builder->refreshAvailability();
             $plans = [];
             $ordered = [];
             $owners = [];
             foreach ($this->targets as $index => $target) {
-                $plan = $this->builder->build($target);
+                $plan = $this->builder->build($target, previousPlan: $previousPlans[$index] ?? null);
                 $plans[] = $plan;
                 foreach ($plan->usages as $usage) {
                     $definition = $usage->definition;
@@ -127,6 +128,7 @@ final class ObjectAttributeSequence
                     }
                 }
             }
+            $previousPlans = $plans;
             if ($revision !== $this->builder->refreshAvailability()) {
                 continue;
             }

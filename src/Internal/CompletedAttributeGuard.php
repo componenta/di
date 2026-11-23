@@ -23,8 +23,8 @@ use ReflectionProperty;
  * Retains completed metadata only for the current resolution.
  *
  * @internal
- * @phpstan-type ReflectionTarget ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty
- * @phpstan-type CompletedPhase array{target:ReflectionTarget,plan:AttributePlan,phase:?AttributePhase,borrowed:bool,observed:array<int,ReflectionAttribute<object>>|null}
+ * @phpstan-import-type ReflectionTarget from AttributeMetadataSource
+ * @phpstan-type CompletedPhase array{source:AttributeMetadataSource,plan:AttributePlan,phase:?AttributePhase,observed:array<int,ReflectionAttribute<object>>}
  */
 final class CompletedAttributeGuard
 {
@@ -48,22 +48,17 @@ final class CompletedAttributeGuard
         ?AttributePhase $phase = null,
         ?array $captured = null,
     ): void {
-        $borrowed = $captured === null && (
-            ($target instanceof ReflectionClass && $target::class !== ReflectionClass::class)
-            || ($target instanceof ReflectionParameter && $target::class !== ReflectionParameter::class)
-        );
-        $selected = $borrowed ? self::selectedTarget($target, $plan) : $target;
-        $attributes = $captured ?? $selected->getAttributes();
+        $source = $this->plans->consumedSource($target, $plan, $captured);
+        $attributes = $source->attributes();
         // A derived reflector can omit a declaration after the plan has been consumed.
         if ($attributes === [] && $plan->usages === []) {
             return;
         }
         $this->completed[] = [
-            'target' => $target,
+            'source' => $source,
             'plan' => $plan,
             'phase' => $phase,
-            'borrowed' => $borrowed,
-            'observed' => $captured ?? ($borrowed ? $attributes : null),
+            'observed' => $attributes,
         ];
     }
 
@@ -94,8 +89,9 @@ final class CompletedAttributeGuard
     {
         while (($revision = $this->plans->refreshAvailability()) !== $this->verifiedRevision) {
             foreach ($this->completed as $completed) {
-                [$target, $observed] = self::proofTarget($completed);
-                $current = $this->plans->build($target, $observed);
+                $source = $completed['source'];
+                $target = $source->target;
+                $current = $this->plans->build($target, $source->attributeOverride($completed['observed']));
                 if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
                     self::throwChanged($target, $completed['phase']);
                 }
@@ -111,47 +107,15 @@ final class CompletedAttributeGuard
             return;
         }
         foreach ($this->completed as $completed) {
-            [$target, $observed] = self::proofTarget($completed);
+            $source = $completed['source'];
+            $target = $source->target;
             if (!$target instanceof ReflectionParameter) {
                 throw new \LogicException('Expected a consumed parameter plan.');
             }
-            if (!$this->plans->hasSameLoadedDeclarations($target, $completed['plan'], $observed)) {
+            if (!$this->plans->hasSameLoadedDeclarations($target, $completed['plan'], $source->attributeOverride($completed['observed']))) {
                 self::throwChanged($target, null);
             }
         }
-    }
-
-    /**
-     * @param CompletedPhase $completed
-     * @return array{ReflectionTarget,array<int,ReflectionAttribute<object>>|null}
-     */
-    private static function proofTarget(array $completed): array
-    {
-        $source = $completed['target'];
-        if (!$completed['borrowed']) {
-            return [$source, $completed['observed']];
-        }
-
-        $target = self::selectedTarget($source, $completed['plan']);
-        return [$target, $target === $source ? null : $completed['observed']];
-    }
-
-    /**
-     * @param ReflectionTarget $source
-     * @return ReflectionTarget
-     */
-    private static function selectedTarget(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $source,
-        AttributePlan $plan,
-    ): ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty {
-        $declaration = $plan->target;
-        if ($source instanceof ReflectionClass && $declaration instanceof ReflectionClass) {
-            return $source->getName() === $declaration->getName() ? $source : $declaration;
-        }
-        if ($source instanceof ReflectionParameter && $declaration instanceof ReflectionParameter) {
-            return ReflectionSnapshot::sameParameter($source, $declaration) ? $source : $declaration;
-        }
-        return $source;
     }
 
     /** @param (Closure():void)|null $checkSources Loaded-only provenance check for the consumed arguments. */

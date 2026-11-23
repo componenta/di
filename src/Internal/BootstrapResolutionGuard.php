@@ -29,8 +29,10 @@ use WeakReference;
  * @internal
  * @phpstan-type Selection array{classified:array<int,bool>,winner:?ParameterResolverInterface}
  * @phpstan-type ParameterUse array{target:ParameterTarget,selection:Selection,pending:list<string>}
+ * @phpstan-type ReleasedTarget ParameterTarget|WeakReference<Closure|ParameterTarget>
  * @phpstan-type ReleasedUse array{
- *     target:ParameterTarget|WeakReference<Closure|ReflectionParameter|ParameterTarget>,
+ *     target:ReleasedTarget,
+ *     borrowed:?WeakReference<ReflectionParameter>,
  *     position:int,
  *     selection:Selection,
  *     pending:list<string>,
@@ -44,7 +46,7 @@ final class BootstrapResolutionGuard
 {
     private bool $active = true;
 
-    /** @var list<array{target:ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>,declarations:list<class-string>,captured:list<ReflectionAttribute<object>>|null}> */
+    /** @var list<array{source:AttributeMetadataSource,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>,observed:array<int,ReflectionAttribute<object>>}> */
     private array $attributeUses = [];
 
     /** @var list<ParameterUse> */
@@ -85,17 +87,21 @@ final class BootstrapResolutionGuard
         if (!$this->active) {
             return;
         }
-        $declared = $captured ?? $target->getAttributes();
-        if ($declared === [] && ($plan === null || $plan->usages === [])) {
+        if ($plan === null && !ReflectionSnapshot::hasBorrowedMetadata($target) && ($captured ?? $target->getAttributes()) === []) {
+            return;
+        }
+        $plan ??= $this->plans->build($target, $captured);
+        $source = $this->plans->consumedSource($target, $plan, $captured);
+        $declared = $source->attributes();
+        if ($declared === [] && $plan->usages === []) {
             return;
         }
 
         $this->attributeUses[] = [
-            'target' => $target,
+            'source' => $source,
             'phase' => $phase,
-            'usages' => CompletedAttributeGuard::semantics($plan ?? $this->plans->build($target, $captured), $phase),
-            'declarations' => array_values(array_map(static fn(ReflectionAttribute $attribute): string => $attribute->getName(), $declared)),
-            'captured' => $captured,
+            'usages' => CompletedAttributeGuard::semantics($plan, $phase),
+            'observed' => $declared,
         ];
     }
 
@@ -179,10 +185,10 @@ final class BootstrapResolutionGuard
             ?? throw new InvalidConfigurationException('Seal the parameter resolvers before publishing the container.');
         $this->sealedResolvers = null;
         $this->finalResolvers = $resolvers;
-        /** @var WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureMethodTargets */
-        $closureMethodTargets = new WeakMap();
+        /** @var WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureTargets */
+        $closureTargets = new WeakMap();
         try {
-            $this->verifyCompletedUses($resolvers, $closureMethodTargets);
+            $this->verifyCompletedUses($resolvers, $closureTargets);
         } finally {
             $this->active = false;
             try {
@@ -193,14 +199,14 @@ final class BootstrapResolutionGuard
         }
 
         $releaseConfiguration();
-        $this->assertReleasedMetadataUnchanged($closureMethodTargets);
+        $this->assertReleasedMetadataUnchanged($closureTargets);
     }
 
     /**
      * Checks declarations that became available while proof-owned references were released.
-     * @param WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureMethodTargets
+     * @param WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureTargets
      */
-    private function assertReleasedMetadataUnchanged(WeakMap $closureMethodTargets): void
+    private function assertReleasedMetadataUnchanged(WeakMap $closureTargets): void
     {
         $pending = $this->pendingDeclarations;
         $parameterUses = $this->releasedUses;
@@ -214,7 +220,7 @@ final class BootstrapResolutionGuard
                     continue;
                 }
                 $progress = true;
-                $target = $this->restoreTarget($use['target'], $use['position']);
+                $target = $this->restoreTarget($use['target'], $use['position'], $use['borrowed']);
                 if ($target !== null) {
                     $parameterUses[$index]['pending'] = $this->assertParameterUse($target, $use['selection'], $this->finalResolvers ?? [], $use['pending']);
                 } elseif ($use['requiredAttributes'] !== []) {
@@ -226,11 +232,11 @@ final class BootstrapResolutionGuard
                 }
                 unset($target);
             }
-            if (!$progress && count($closureMethodTargets) !== 0) {
+            if (!$progress && count($closureTargets) !== 0) {
                 // A caller can retarget its reflector during configuration release.
                 // Verify again after those original snapshots are no longer needed.
-                foreach ($closureMethodTargets as $source => $snapshots) {
-                    unset($closureMethodTargets[$source], $source, $snapshots);
+                foreach ($closureTargets as $source => $snapshots) {
+                    unset($closureTargets[$source], $source, $snapshots);
                 }
                 $progress = true;
             }
@@ -255,19 +261,22 @@ final class BootstrapResolutionGuard
 
     /**
      * @param list<ParameterResolverInterface> $resolvers
-     * @param WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureMethodTargets
+     * @param WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureTargets
      */
-    private function verifyCompletedUses(array $resolvers, WeakMap $closureMethodTargets): void
+    private function verifyCompletedUses(array $resolvers, WeakMap $closureTargets): void
     {
         do {
             $revision = $this->plans->refreshAvailability();
             $parameterChecks = $this->parameterChecks;
             foreach ($this->attributeUses as $use) {
-                $current = CompletedAttributeGuard::semantics($this->plans->build($use['target'], $use['captured']), $use['phase']);
+                $source = $use['source'];
+                $target = $source->target;
+                $plan = $this->plans->build($target, $source->attributeOverride($use['observed']));
+                $current = CompletedAttributeGuard::semantics($plan, $use['phase']);
                 if ($current !== $use['usages']) {
                     throw new InvalidConfigurationException(sprintf(
                         'DI bootstrap used %s before its required attribute extensions were registered. Register these extensions before factories that resolve this dependency.',
-                        self::targetName($use['target']),
+                        self::targetName($target),
                     ));
                 }
             }
@@ -284,15 +293,17 @@ final class BootstrapResolutionGuard
             || $parameterChecks !== $this->parameterChecks
             || array_any($this->parameterUses, static fn(array $use): bool => self::declarationsChanged($use['pending'])));
 
-        // The checkpoint holds only declaration names and diagnostics so that
-        // the final scope can release closure reflectors before checking it.
+        // Capture the declarations needed after configuration and proof-owned
+        // references have been released.
         foreach ($this->attributeUses as $use) {
-            foreach ($use['declarations'] as $attribute) {
+            foreach ($use['observed'] as $declaration) {
+                /** @var class-string $attribute */
+                $attribute = $declaration->getName();
                 if (!class_exists($attribute, false) && !interface_exists($attribute, false)) {
                     $this->pendingDeclarations[] = [
                         'attribute' => $attribute,
                         'phase' => $use['phase'],
-                        'property' => $use['target'] instanceof ReflectionProperty,
+                        'property' => $use['source']->target instanceof ReflectionProperty,
                     ];
                 }
             }
@@ -302,12 +313,13 @@ final class BootstrapResolutionGuard
             if ($pending === []) {
                 continue;
             }
-            $reference = $this->detachTarget($use['target'], $closureMethodTargets);
+            [$reference, $borrowed] = $this->detachTarget($use['target'], $closureTargets);
             $requiredAttributes = $reference instanceof WeakReference
                 ? self::unmatchedAttributeNames($use['selection'], $resolvers)
                 : [];
             $this->releasedUses[] = [
                 'target' => $reference,
+                'borrowed' => $borrowed,
                 'position' => $use['target']->position,
                 'selection' => $use['selection'],
                 'pending' => $pending,
@@ -438,51 +450,64 @@ final class BootstrapResolutionGuard
     }
 
     /**
-     * @param WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureMethodTargets
-     * @return ParameterTarget|WeakReference<Closure|ReflectionParameter|ParameterTarget>
+     * @param WeakMap<ReflectionParameter,array<int,ParameterTarget>> $closureTargets
+     * @return array{ReleasedTarget,?WeakReference<ReflectionParameter>}
      */
-    private function detachTarget(ParameterTarget $target, WeakMap $closureMethodTargets): ParameterTarget|WeakReference
+    private function detachTarget(ParameterTarget $target, WeakMap $closureTargets): array
     {
         $owner = $this->closureOwners[$target] ?? null;
         if ($owner !== null) {
-            return $owner;
+            return [$owner, null];
         }
         $declaration = ParameterTargetAccess::declaration($target);
-        $reflection = $declaration->metadataTarget();
-        if ($reflection::class !== ReflectionParameter::class) {
-            return WeakReference::create($reflection);
+        $borrowed = $declaration->borrowedMetadata;
+        $reference = null;
+        if ($borrowed !== null) {
+            $target = ParameterTargetAccess::withoutBorrowedMetadata($target);
+            $declaration = ParameterTargetAccess::declaration($target);
+            $reference = WeakReference::create($borrowed);
         }
-        $function = $reflection->getDeclaringFunction();
-        if ($function instanceof ReflectionFunction && $function->isClosure()) {
-            return WeakReference::create($function->getClosure());
+        $function = $declaration->metadataTarget()->getDeclaringFunction();
+        if ($borrowed === null && $function instanceof ReflectionFunction && $function->isClosure()) {
+            return [WeakReference::create($function->getClosure()), null];
         }
 
         if (is_closure_reflector($function)) {
-            // Native Closure::__invoke reflectors can own the closure's captures.
+            // An instance-specific snapshot can own the closure's captures.
             // Keep the original snapshot only while the caller's reflector lives.
-            $source = $declaration->closureMethodSource();
+            $source = $borrowed ?? $declaration->closureMethodSource();
             if ($source !== null) {
-                $closureMethodTargets[$source] ??= [];
-                $closureMethodTargets[$source][spl_object_id($target)] = $target;
+                $closureTargets[$source] ??= [];
+                $closureTargets[$source][spl_object_id($target)] = $target;
             }
-            return WeakReference::create($target);
+            return [WeakReference::create($target), $reference];
         }
 
-        return $target;
+        return [$target, $reference];
     }
 
-    /** @param ParameterTarget|WeakReference<Closure|ReflectionParameter|ParameterTarget> $reference */
-    private function restoreTarget(ParameterTarget|WeakReference $reference, int $position): ?ParameterTarget
+    /**
+     * @param ReleasedTarget $reference
+     * @param WeakReference<ReflectionParameter>|null $borrowed
+     */
+    private function restoreTarget(ParameterTarget|WeakReference $reference, int $position, ?WeakReference $borrowed): ?ParameterTarget
     {
-        if ($reference instanceof ParameterTarget) {
-            return $reference;
+        $target = $reference instanceof ParameterTarget ? $reference : $reference->get();
+        if ($target instanceof Closure) {
+            return $this->targets->create(new ReflectionParameter($target, $position));
         }
-        return match (true) {
-            ($target = $reference->get()) instanceof Closure => $this->targets->create(new ReflectionParameter($target, $position)),
-            $target instanceof ParameterTarget => $target,
-            $target instanceof ReflectionParameter => $this->targets->create($target),
-            default => null,
-        };
+        $source = $borrowed?->get();
+        if ($target === null || $source === null) {
+            return $target;
+        }
+        $declaration = ParameterTargetAccess::declaration($target)->metadataTarget();
+        if (ReflectionSnapshot::sameParameter($source, $declaration)) {
+            $live = $this->targets->create($source);
+            if (ReflectionSnapshot::sameParameter($source, $declaration)) {
+                return $live;
+            }
+        }
+        return $target;
     }
 
     /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */

@@ -10,6 +10,7 @@ use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\EntryLookupRevision;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
@@ -219,6 +220,7 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         return $this->proxyFactory->makeProxy(
             $config['proxyClass'],
             function (object $_proxy) use ($config): object {
+                $lookupRevision = EntryLookupRevision::current();
                 $backing = $this->factory->make($config['entry'], $config['params']);
                 $proxyClass = $config['proxyClass'];
                 if (!$backing instanceof $proxyClass) {
@@ -231,6 +233,7 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
                     throw ResolutionException::forService($config['entry'], $cause);
                 }
+                EntryLookupRevision::assertCompleteSince($lookupRevision, $config['entry']);
                 return $backing;
             },
         );
