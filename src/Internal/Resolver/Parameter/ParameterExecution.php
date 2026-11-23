@@ -314,17 +314,16 @@ final class ParameterExecution
         do {
             $revision = $this->parameterPlans->revision;
             $attributePlan = $declaration->attributePlan($this->plans);
-            $pending = $bootstrap === null ? [] : BootstrapResolutionGuard::unavailableDeclarations($target);
             // Discovery can make a source available after the outer plan was
             // accepted. Classify and record one revision before executing work.
             $slots = $this->parameterPlans->slotsFor($target);
         } while ($revision !== $this->parameterPlans->revision);
-        if ($bootstrap !== null) {
-            $pending = [...$pending, ...$this->parameterPlans->pendingQueries($target)];
-        }
+        $pending = $declaration->mayHaveAttributes ? $this->parameterPlans->pendingAttributes($target) : [];
 
         try {
             $resolvers = $this->chain->resolvers;
+            $winner = null;
+            $result = null;
             foreach ($slots as $slot) {
                 $beforeConsumption?->__invoke();
                 $resolver = $resolvers[$slot];
@@ -335,31 +334,38 @@ final class ParameterExecution
                 } else {
                     $result = $resolver->resolveParameter($target, $context);
                 }
-                if ($result !== null) {
-                    $result = \Componenta\DI\Internal\validate_parameter_resolution_result(
-                        $result,
-                        $resolver,
-                        $target,
-                        $context,
-                    );
-                    self::recordParameterAttributes($declaration, $attributePlan, $completed, $bootstrap);
-                    if ($bootstrap !== null) {
-                        $bootstrap->recordParameter($target, $resolvers, $slots, $slot, $pending);
-                    }
-                    // Native defaults may depend on omission (e.g. array_keys()).
-                    // Keep explicit and extension-provided values, but let PHP
-                    // supply defaults instead of synthesizing argument values.
-                    return $nativeOptional && ($resolver instanceof DefaultValueResolver || $resolver instanceof NullableResolver)
-                        ? null
-                        : $result;
+                if ($result === null) {
+                    continue;
                 }
+                $result = \Componenta\DI\Internal\validate_parameter_resolution_result(
+                    $result,
+                    $resolver,
+                    $target,
+                    $context,
+                );
+                $winner = $slot;
+                break;
             }
-            if ($nativeOptional) {
+            if ($winner !== null || $nativeOptional) {
                 self::recordParameterAttributes($declaration, $attributePlan, $completed, $bootstrap);
                 if ($bootstrap !== null) {
-                    $bootstrap->recordParameter($target, $resolvers, $slots, null, $pending);
+                    $bootstrap->recordParameter($target, $resolvers, $slots, $winner, $pending);
+                } elseif ($pending !== []) {
+                    $completed->recordParameterClassification(
+                        $this->parameterPlans->watchCompletedSelection($target, $resolvers, $slots, $winner, $pending, $beforeConsumption),
+                    );
                 }
-                return null;
+                // Native defaults may depend on omission (e.g. array_keys()).
+                // Keep explicit and extension-provided values, but let PHP
+                // supply defaults instead of synthesizing argument values.
+                if ($nativeOptional
+                    && ($winner === null
+                        || $resolvers[$winner] instanceof DefaultValueResolver
+                        || $resolvers[$winner] instanceof NullableResolver)
+                ) {
+                    return null;
+                }
+                return $result;
             }
         } catch (ExceptionInterface $e) {
             throw $e;

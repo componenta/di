@@ -30,6 +30,8 @@ final class CompletedAttributeGuard
 {
     /** @var list<CompletedPhase> */
     private array $completed = [];
+    /** @var list<Closure():bool> */
+    private array $parameterClassifications = [];
     /** @var (Closure():void)|null */
     private ?Closure $checkParameterSources = null;
 
@@ -64,21 +66,28 @@ final class CompletedAttributeGuard
         ];
     }
 
+    /** @param Closure():bool $check Returns true if a newly available name was checked. */
+    public function recordParameterClassification(Closure $check): void
+    {
+        $this->parameterClassifications[] = $check;
+    }
+
     /** Combines completed phases for one attempt without changing a reusable earlier guard. */
     public function with(self $other): self
     {
         if ($this->plans !== $other->plans) {
             throw new \LogicException('Completed attribute guards must belong to the same plan builder.');
         }
-        if ($other->completed === []) {
+        if ($other->completed === [] && $other->parameterClassifications === []) {
             return $this;
         }
-        if ($this->completed === []) {
+        if ($this->completed === [] && $this->parameterClassifications === []) {
             return $other;
         }
 
         $combined = clone $this;
         $combined->completed = [...$this->completed, ...$other->completed];
+        $combined->parameterClassifications = [...$this->parameterClassifications, ...$other->parameterClassifications];
         // Combining proofs of the same generation does not invalidate them.
         // The next assertion still polls and validates both if it changes.
         $combined->verifiedRevision = $this->verifiedRevision === $other->verifiedRevision
@@ -89,17 +98,19 @@ final class CompletedAttributeGuard
 
     public function assertUnchanged(): void
     {
-        while (($revision = $this->plans->refreshAvailability()) !== $this->verifiedRevision) {
-            foreach ($this->completed as $completed) {
-                $source = $completed['source'];
-                $target = $source->target;
-                $current = $this->plans->build($target, $source->attributeOverride($completed['observed']));
-                if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
-                    self::throwChanged($target, $completed['phase']);
+        do {
+            while (($revision = $this->plans->refreshAvailability()) !== $this->verifiedRevision) {
+                foreach ($this->completed as $completed) {
+                    $source = $completed['source'];
+                    $target = $source->target;
+                    $current = $this->plans->build($target, $source->attributeOverride($completed['observed']));
+                    if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
+                        self::throwChanged($target, $completed['phase']);
+                    }
                 }
+                $this->verifiedRevision = $revision;
             }
-            $this->verifiedRevision = $revision;
-        }
+        } while ($this->parameterClassifications !== [] && $this->recheckParameterClassifications());
     }
 
     /** Checks consumed constructor declarations at the native invocation boundary. */
@@ -120,16 +131,29 @@ final class CompletedAttributeGuard
         }
     }
 
+    private function recheckParameterClassifications(): bool
+    {
+        $checked = false;
+        foreach ($this->parameterClassifications as $check) {
+            $checked = $check() || $checked;
+        }
+        return $checked;
+    }
+
     /** @param (Closure():void)|null $checkSources Loaded-only provenance check for the consumed arguments. */
     public function retainCompletedParameters(?Closure $checkSources): ?self
     {
         $this->checkParameterSources = $checkSources;
-        return $this->completed === [] && $checkSources === null ? null : $this;
+        return $this->completed === [] && $this->parameterClassifications === [] && $checkSources === null ? null : $this;
     }
 
     public function assertParameterSourcesUnchanged(): void
     {
         $this->checkParameterSources?->__invoke();
+        while ($this->parameterClassifications !== [] && $this->recheckParameterClassifications()) {
+            $this->assertLoadedParametersUnchanged();
+            $this->checkParameterSources?->__invoke();
+        }
     }
 
     /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */

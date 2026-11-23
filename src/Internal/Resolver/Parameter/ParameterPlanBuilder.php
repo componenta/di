@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
+use Closure;
+use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AttributePlans;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use stdClass;
 use Throwable;
@@ -21,7 +24,7 @@ final class ParameterPlanBuilder
     /** @var WeakMap<ParameterTarget,list<int>>|null */
     private ?WeakMap $preparedSlots = null;
     /** @var WeakMap<ParameterTarget,list<string>>|null */
-    private ?WeakMap $pendingAttributeQueries = null;
+    private ?WeakMap $pendingAttributes = null;
 
     private int $attributeRevision = -1;
     private readonly object $owner;
@@ -81,15 +84,61 @@ final class ParameterPlanBuilder
     }
 
     /** @return list<string> */
-    public function pendingQueries(ParameterTarget $target): array
+    public function pendingAttributes(ParameterTarget $target): array
     {
-        return $this->pendingAttributeQueries[$target] ?? [];
+        return $this->pendingAttributes[$target] ?? [];
+    }
+
+    /**
+     * Rechecks a consumed resolver prefix when its recorded names become available.
+     *
+     * @param list<ParameterResolverInterface> $resolvers
+     * @param list<int> $slots
+     * @param list<string> $pending
+     * @param (Closure():void)|null $beforeRejection
+     * @return Closure():bool Whether a new name was checked.
+     */
+    public function watchCompletedSelection(
+        ParameterTarget $target,
+        array $resolvers,
+        array $slots,
+        ?int $winner,
+        array $pending,
+        ?Closure $beforeRejection,
+    ): Closure {
+        if ($winner !== null) {
+            $resolvers = array_slice($resolvers, 0, $winner + 1);
+            $slots = array_values(array_filter($slots, static fn(int $slot): bool => $slot <= $winner));
+        }
+
+        return function () use ($target, $resolvers, $slots, &$pending, $beforeRejection): bool {
+            if (!array_any($pending, is_attribute_class_loaded(...))) {
+                return false;
+            }
+            $remaining = array_filter($pending, static fn(string $name): bool => !is_attribute_class_loaded($name));
+            [$current, $queries] = $this->targets->observeAttributeQueries(
+                $target,
+                fn(ParameterTarget $observed): array => $this->classify($observed, $resolvers),
+            );
+            if ($current !== $slots) {
+                // Preserve a more specific invocation-boundary diagnostic.
+                $beforeRejection?->__invoke();
+                throw new AttributeCompositionException(sprintf(
+                    'Attribute classification for parameter $%s of %s changed after resolution completed. Load its attributes before execution.',
+                    $target->name,
+                    $target->declaringContext,
+                ));
+            }
+
+            $pending = [...$remaining, ...$queries];
+            return true;
+        };
     }
 
     public function clearClassifications(): void
     {
         $this->preparedSlots = null;
-        $this->pendingAttributeQueries = null;
+        $this->pendingAttributes = null;
     }
 
     public function chainChanged(): void
@@ -112,8 +161,8 @@ final class ParameterPlanBuilder
         if ($cacheable) {
             $cache = $this->preparedSlots ??= new WeakMap();
             if (isset($cache[$target])) {
-                if (!isset($this->pendingAttributeQueries[$target])
-                    || !array_any($this->pendingAttributeQueries[$target], is_attribute_class_loaded(...))
+                if (!isset($this->pendingAttributes[$target])
+                    || !array_any($this->pendingAttributes[$target], is_attribute_class_loaded(...))
                 ) {
                     return $cache[$target];
                 }
@@ -135,17 +184,19 @@ final class ParameterPlanBuilder
                 $queries = [];
                 $resolverSlots = $this->classify($target);
             } else {
+                $unavailable = array_filter($target->attributeClasses, static fn(string $name): bool => !is_attribute_class_loaded($name));
                 [$resolverSlots, $queries] = $this->targets->observeAttributeQueries($target, $this->classify(...));
+                $queries = [...$unavailable, ...$queries];
             }
             // Autoload can reveal a handler while a resolver is being classified.
             $this->synchronizeRevision();
         } while ($revision !== $this->revision || ($queries !== [] && array_any($queries, is_attribute_class_loaded(...))));
 
         if ($queries !== []) {
-            $pending = $this->pendingAttributeQueries ??= new WeakMap();
+            $pending = $this->pendingAttributes ??= new WeakMap();
             $pending[$target] = $queries;
-        } elseif (isset($this->pendingAttributeQueries[$target])) {
-            unset($this->pendingAttributeQueries[$target]);
+        } elseif (isset($this->pendingAttributes[$target])) {
+            unset($this->pendingAttributes[$target]);
         }
 
         // Late or mutable metadata can introduce a user rule on a later argument.
@@ -171,14 +222,17 @@ final class ParameterPlanBuilder
         $this->clearClassifications();
     }
 
-    /** @return list<int> */
-    private function classify(ParameterTarget $target): array
+    /**
+     * @param list<ParameterResolverInterface>|null $resolvers
+     * @return list<int>
+     */
+    private function classify(ParameterTarget $target, ?array $resolvers = null): array
     {
         $slots = [];
         $chainRevision = $this->chain->revision;
 
         try {
-            foreach ($this->chain->resolvers as $slot => $resolver) {
+            foreach ($resolvers ?? $this->chain->resolvers as $slot => $resolver) {
                 if ($resolver->supports($target)) {
                     $slots[] = $slot;
                 }

@@ -107,12 +107,6 @@ final class BootstrapResolutionGuard
         ];
     }
 
-    /** @return list<class-string> */
-    public static function unavailableDeclarations(ParameterTarget $target): array
-    {
-        return array_values(array_filter($target->attributeClasses, self::isUnavailable(...)));
-    }
-
     /** @param list<ParameterTarget> $targets */
     public function recordClosureOwner(array $targets, Closure $closure): void
     {
