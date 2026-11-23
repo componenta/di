@@ -46,6 +46,8 @@ final class ParameterTarget extends ParameterTargetScope
 
     /** @var ReflectionClass<object>|null */
     private readonly ?ReflectionClass $declaringClass;
+    /** @var list<class-string>|null */
+    private ?array $unionCandidates = null;
 
     public readonly string $name;
     public readonly int $position;
@@ -179,7 +181,7 @@ final class ParameterTarget extends ParameterTargetScope
     /** @return list<class-string> */
     public function unionCandidates(): array
     {
-        return TypeHints::simpleUnionClassNames($this->type, $this->declaringClass);
+        return $this->unionCandidates ??= TypeHints::simpleUnionClassNames($this->type, $this->declaringClass);
     }
 
     private static function declaringContext(ReflectionParameter $parameter, ReflectionFunctionAbstract $function): string
