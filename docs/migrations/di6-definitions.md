@@ -320,6 +320,8 @@ $container->notifyExternalEntriesChanged($provider, 'reports.decorator');
 
 `ContainerFactory::create()` supports the existing global attribute discovery. Use `createWithTargetedAttributeDiscovery($config, $dependencies)` to limit active autoloading to attributes declared on the current target. This mode retries missing declarations on the next related lookup and observes declarations loaded between resolution steps. If loading an unrelated name declares a required attribute, load that module explicitly before consuming the dependent declaration.
 
+Targeted discovery reuses complete cached attribute plans and unaffected parameter classifications when an unrelated declaration becomes available. New attribute definitions and capability policies invalidate those plans. Resolutions in progress recheck the policies and handlers affected by late discovery.
+
 Bootstrap records both the selected parameter resolver and the classification of the preceding resolvers. It checks newly loaded declarations on the original named parameters and live callbacks after releasing its temporary references. A borrowed reflector can supply metadata while it still represents that declaration. For a callback whose reflector is gone, the semantic attribute check uses the recorded declaration names. A suspended attempt verifies its original resolver selection even if it resumes after the factory returns.
 
 Constructor argument policies and the provenance of mapped request values are checked through final configuration. Lazy objects and proxies run those checks at initialization. An incompatible change fails the attempt before caching the result or completing initialization.

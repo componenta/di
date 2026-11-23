@@ -95,14 +95,15 @@ test('resuming a concurrent poll of an already observed declaration does not inv
         expect($fiber->start())->toBe('autoload ready to yield');
         class_alias(Marker::class, $alias, false);
 
+        $expectedClassifications = $targeted ? 1 : 2;
         expect($di->make(Product::class))->toEqual(new Product())
-            ->and($counter->calls)->toBe(2);
+            ->and($counter->calls)->toBe($expectedClassifications);
         $fiber->resume();
 
         expect($fiber->getReturn())->toBeTrue()
             ->and($di->get(Product::class))->toBe($initial)
             ->and($di->make(Product::class))->toEqual(new Product())
-            ->and($counter->calls)->toBe(2)
+            ->and($counter->calls)->toBe($expectedClassifications)
             ->and($loads)->toBe(1)
             ->and($unrelated->make(Product::class))->toEqual(new Product())
             ->and($another->calls)->toBe(1);

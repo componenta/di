@@ -27,6 +27,7 @@ final class ParameterPlanBuilder
     private ?WeakMap $pendingAttributes = null;
 
     private int $attributeRevision = -1;
+    private int $attributeCacheRevision = -1;
     private readonly object $owner;
     public private(set) int $revision = 0;
 
@@ -219,7 +220,22 @@ final class ParameterPlanBuilder
 
         $this->attributeRevision = $attributeRevision;
         ++$this->revision;
-        $this->clearClassifications();
+
+        $cacheRevision = $this->attributes->cacheRevision;
+        if ($cacheRevision !== $this->attributeCacheRevision) {
+            $this->attributeCacheRevision = $cacheRevision;
+            $this->clearClassifications();
+            return;
+        }
+
+        // Retry incomplete classifications when the active plan is refreshed.
+        // Their loaders can reveal an attribute even if its name is still missing.
+        if ($this->preparedSlots !== null && $this->pendingAttributes !== null) {
+            foreach ($this->pendingAttributes as $target => $_) {
+                unset($this->preparedSlots[$target]);
+            }
+        }
+        $this->pendingAttributes = null;
     }
 
     /**

@@ -39,6 +39,7 @@ final class AttributeExecution
     /**
      * @var array<class-string,array{
      *     revision:int,
+     *     cacheRevision:int,
      *     hasHandlers:bool,
      *     requiresFreshValidation:bool,
      *     before:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>,
@@ -299,6 +300,7 @@ final class AttributeExecution
      * @param ReflectionClass<covariant object> $class
      * @return array{
      *     revision:int,
+     *     cacheRevision:int,
      *     hasHandlers:bool,
      *     requiresFreshValidation:bool,
      *     before:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>,
@@ -312,8 +314,14 @@ final class AttributeExecution
         do {
             $revision = $this->plans->refreshAvailability();
             $cached = $this->cache[$name] ?? null;
-            if ($cacheable && $cached !== null && $cached['revision'] === $revision) {
-                return $cached;
+            if ($cacheable && $cached !== null) {
+                if ($cached['revision'] === $revision) {
+                    return $cached;
+                }
+                if ($cached['cacheRevision'] === $this->plans->cacheRevision) {
+                    $cached['revision'] = $revision;
+                    return $this->cache[$name] = $cached;
+                }
             }
 
             $class = ReflectionSnapshot::class($class);
@@ -349,6 +357,7 @@ final class AttributeExecution
 
         $plan = [
             'revision' => $revision,
+            'cacheRevision' => $this->plans->cacheRevision,
             'hasHandlers' => $hasHandlers,
             'requiresFreshValidation' => $requiresFreshValidation,
             'before' => $before,

@@ -34,6 +34,7 @@ final class AttributeDefinitions
 
     private bool $sealed = false;
     private int $generation = 0;
+    private int $schemaGeneration = 0;
     private int $discoveryMisses = 0;
     private int $snapshotMinimum = self::MINIMUM_SNAPSHOT_SIZE;
     /** @var array{int, list<string>, list<string>}|null */
@@ -50,6 +51,12 @@ final class AttributeDefinitions
 
     public int $revision {
         get => $this->generation;
+    }
+
+    // Targeted plans with unavailable declarations are never cached. Keep
+    // compatible discovery's rebuilds, which can invoke additional autoloaders.
+    public int $cacheRevision {
+        get => $this->targetedDiscovery ? $this->schemaGeneration : $this->generation;
     }
 
     /** Probes availability and returns the current registry revision. */
@@ -192,6 +199,7 @@ final class AttributeDefinitions
                 break;
             }
         }
+        ++$this->schemaGeneration;
         ++$this->generation;
     }
 
@@ -208,6 +216,7 @@ final class AttributeDefinitions
         }
         if ($existing === null) {
             $this->policies[$capability] = $policy;
+            ++$this->schemaGeneration;
             ++$this->generation;
         }
     }

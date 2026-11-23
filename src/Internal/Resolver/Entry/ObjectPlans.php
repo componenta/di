@@ -12,7 +12,7 @@ use ReflectionClass;
 use ReflectionObject;
 
 /**
- * Builds and caches class metadata and constructor parameter plans at one registry revision.
+ * Builds class metadata at one registry revision and caches stable plans.
  *
  * @internal
  */
@@ -22,7 +22,8 @@ final class ObjectPlans
     private array $metadata = [];
     /** @var array<class-string,PreparedParameterPlan> */
     private array $constructorPlans = [];
-    private int $metadataRevision = -1;
+    private int $availabilityRevision = -1;
+    private int $metadataCacheRevision = -1;
 
     public function __construct(
         private readonly ParameterExecution $parameters,
@@ -48,10 +49,14 @@ final class ObjectPlans
         $plans = $this->attributes->plans;
         while (true) {
             $revision = $plans->refreshAvailability();
-            if ($revision !== $this->metadataRevision) {
-                $this->metadata = [];
-                $this->constructorPlans = [];
-                $this->metadataRevision = $revision;
+            if ($this->availabilityRevision !== $revision) {
+                $cacheRevision = $plans->cacheRevision;
+                if ($this->metadataCacheRevision !== $cacheRevision) {
+                    $this->metadata = [];
+                    $this->constructorPlans = [];
+                    $this->metadataCacheRevision = $cacheRevision;
+                }
+                $this->availabilityRevision = $revision;
             }
 
             if ($lookupKey !== null && isset($this->metadata[$lookupKey])) {

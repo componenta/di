@@ -30,7 +30,8 @@ final class AttributePlans
     private array $namedPlans = [];
     /** @var array<class-string,int> */
     private array $attributeTargetFlags = [];
-    private int $registryRevision = -1;
+    private int $availabilityRevision = -1;
+    private int $namedPlansRevision = -1;
     private readonly AttributeOrdering $ordering;
     /** @var WeakMap<AttributePlan,true>|null */
     private ?WeakMap $freshValidation = null;
@@ -65,6 +66,10 @@ final class AttributePlans
         return $this->registry->refreshAvailability();
     }
 
+    public int $cacheRevision {
+        get => $this->registry->cacheRevision;
+    }
+
     /** @internal */
     public function refreshLoaded(): int
     {
@@ -75,8 +80,7 @@ final class AttributePlans
     public function refreshEmptyUncachedTarget(): void
     {
         do {
-            $this->synchronizeRegistryRevision();
-            $revision = $this->registryRevision;
+            $revision = $this->synchronizeNamedPlans();
         } while ($revision !== $this->registry->refreshAvailability());
     }
 
@@ -145,8 +149,7 @@ final class AttributePlans
             }
         }
         while (true) {
-            $this->synchronizeRegistryRevision();
-            $revision = $this->registryRevision;
+            $revision = $this->synchronizeNamedPlans();
 
             if ($key !== null && isset($this->namedPlans[$key])) {
                 return $this->namedPlans[$key];
@@ -269,15 +272,21 @@ final class AttributePlans
         return $usages;
     }
 
-    private function synchronizeRegistryRevision(): void
+    private function synchronizeNamedPlans(): int
     {
         $revision = $this->registry->refreshAvailability();
-        if ($this->registryRevision === $revision) {
-            return;
+        if ($this->availabilityRevision === $revision) {
+            return $revision;
         }
 
-        $this->namedPlans = [];
-        $this->registryRevision = $revision;
+        $cacheRevision = $this->registry->cacheRevision;
+        if ($this->namedPlansRevision !== $cacheRevision) {
+            $this->namedPlans = [];
+            $this->namedPlansRevision = $cacheRevision;
+        }
+        $this->availabilityRevision = $revision;
+
+        return $revision;
     }
 
     /**
