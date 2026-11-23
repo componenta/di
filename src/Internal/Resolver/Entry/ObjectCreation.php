@@ -137,9 +137,11 @@ final class ObjectCreation
         if ($resolveParameters !== null && $params !== []) {
             throw new InvalidConfigurationException('Supply one source of construction parameters.');
         }
+        // Metadata discovery may run autoloaders. Capture supplied slots first.
+        $input = $params === [] ? null : ConstructionParameters::from($params);
         $metadata = $this->objectPlans->metadata($class);
         $className = $metadata->class->getName();
-        $input = ConstructionParameters::from($params);
+        $input ??= ConstructionParameters::from([]);
         if (!$metadata->hasAttributeHandlers) {
             $target = $metadata->attributeTarget;
             $completed = $this->attributes->skippedBeforePhase($target);

@@ -62,6 +62,7 @@ final class ParametersResolver extends ParameterExecutionScope
      */
     public function resolve(array $parameters, array $providedParameters = []): array
     {
+        $providedParameters = ResolutionMetadata::invocationSlots($providedParameters);
         return $this->execution->resolve(array_values(ResolutionMetadata::invocationSlots($parameters)), $providedParameters);
     }
 
@@ -81,6 +82,7 @@ final class ParametersResolver extends ParameterExecutionScope
      */
     public function resolveTargets(array $targets, array $providedParameters = []): array
     {
+        $providedParameters = ResolutionMetadata::invocationSlots($providedParameters);
         return $this->execution->resolveTargets(array_values(ResolutionMetadata::invocationSlots($targets)), $providedParameters);
     }
 

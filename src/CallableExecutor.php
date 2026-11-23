@@ -45,10 +45,7 @@ final class CallableExecutor implements CallableExecutorInterface
             if (is_array($resolved)) {
                 $resolved = self::snapshotCallable($resolved);
             }
-            $plan = $resolved instanceof PreparedCallable ? null : $this->plan($resolved);
-            $arguments = $plan === null
-                ? ResolutionMetadata::publicParameters($params)
-                : $this->parameters->resolvePrepared($plan, $params);
+            $arguments = $this->resolveArguments($resolved, $params);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -90,12 +87,14 @@ final class CallableExecutor implements CallableExecutorInterface
     }
 
     /**
-     * null denotes a native callable whose concrete signature is unavailable
-     * because PHP dispatches it through magic method handling. An empty plan
-     * denotes a reflected callable that genuinely takes no arguments.
+     * @param array<string|int,mixed> $params
+     * @return array<string|int,mixed>
      */
-    private function plan(callable $callable): ?PreparedParameterPlan
+    private function resolveArguments(callable $callable, array $params): array
     {
+        if ($callable instanceof PreparedCallable) {
+            return ResolutionMetadata::publicParameters($params);
+        }
         if (is_array($callable) && $callable[0] instanceof Closure
             && strcasecmp((string) $callable[1], '__invoke') === 0
         ) {
@@ -117,18 +116,22 @@ final class CallableExecutor implements CallableExecutorInterface
             // per invocation; stable named/method callables remain cacheable.
             $reflection = new ReflectionFunction($callable);
             if (is_magic_closure_trampoline($reflection)) {
-                return null;
+                return ResolutionMetadata::publicParameters($params);
             }
+            $params = ResolutionMetadata::invocationSlots($params);
             /** @var list<ReflectionParameter> $parameters */
             $parameters = array_values($reflection->getParameters());
-            return $this->parameters->prepare($parameters, $callable);
+            $plan = $this->parameters->prepare($parameters, $callable);
+            return $this->parameters->resolvePrepared($plan, $params);
         }
 
         $key = self::cacheKey($callable);
-        if (isset($this->callablePlans[$key])) {
-            $cached = $this->callablePlans[$key];
+        $cached = $this->callablePlans[$key] ?? null;
+        if ($cached !== null) {
+            // Plan availability can itself invoke autoloaders.
+            $params = ResolutionMetadata::invocationSlots($params);
             if ($this->parameters->isCurrentPlan($cached)) {
-                return $cached;
+                return $this->parameters->resolvePrepared($cached, $params);
             }
             unset($this->callablePlans[$key]);
         }
@@ -136,7 +139,10 @@ final class CallableExecutor implements CallableExecutorInterface
         $reflection = CallableReflector::reflect($callable);
         if ($reflection === null) {
             // Magic-dispatched names can vary on every call and have no signature to cache.
-            return null;
+            return ResolutionMetadata::publicParameters($params);
+        }
+        if ($cached === null) {
+            $params = ResolutionMetadata::invocationSlots($params);
         }
 
         /** @var list<ReflectionParameter> $parameters */
@@ -147,7 +153,7 @@ final class CallableExecutor implements CallableExecutorInterface
             $this->callablePlans[$key] = $plan;
         }
 
-        return $plan;
+        return $this->parameters->resolvePrepared($plan, $params);
     }
 
     private static function cacheKey(callable $callable): string

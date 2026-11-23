@@ -9,10 +9,15 @@ use Componenta\Caster\CasterInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Transform;
+use Componenta\DI\CallableInvoker;
+use Componenta\DI\Definition\ClassDefinition;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
 use Componenta\DI\Internal\TransformHandler;
+use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
@@ -21,9 +26,12 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Fixtures\ColdCallableInput;
+use Componenta\DI\Tests\Fixtures\ColdConstructorInput;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use PHPUnit\Framework\Assert;
+use ReflectionFunction;
 use Reflector;
 use stdClass;
 
@@ -37,6 +45,47 @@ final readonly class Product
 {
     /** @param array<array-key,mixed> $payload */
     public function __construct(public array $payload) {}
+}
+
+final readonly class ProductWithInputMetadata
+{
+    /** @param array{label: string} $nested */
+    public function __construct(#[ColdConstructorInput] public string $label, public stdClass $owner, array $nested)
+    {
+        $nested['label'] = 'native constructor';
+    }
+}
+
+final readonly class ConfiguredProduct
+{
+    public function __construct(public object $dependency, public string $label) {}
+}
+
+#[Lazy]
+final class DeferredInputProduct
+{
+    public function __construct(public string $label) {}
+}
+
+/**
+ * @param array{label: string} $nested
+ * @return array{string, stdClass}
+ */
+function callWithInputMetadata(#[ColdCallableInput] string $label, stdClass $owner, array $nested): array
+{
+    $nested['label'] = 'native callable';
+    return [$label, $owner];
+}
+
+final class MagicInputTarget
+{
+    /** @param array{label: string} $arguments */
+    public function __call(string $name, array $arguments): string
+    {
+        $label = $arguments['label'];
+        $arguments['label'] = 'native magic';
+        return $label;
+    }
 }
 
 /**
@@ -179,6 +228,221 @@ test('a callable receives literal nested references after argument selection', f
 
     expect($actual)->toBe('set by callable')
         ->and($label)->toBe('set by callable');
+});
+
+test('a cold metadata lookup preserves the initial values of supplied argument slots', function (bool $constructor): void {
+    $container = (new ContainerBuilder())->build();
+    $attribute = $constructor ? ColdConstructorInput::class : ColdCallableInput::class;
+    expect(class_exists($attribute, false))->toBeFalse();
+    $label = 'original';
+    $nested = 'original nested';
+    $owner = new stdClass();
+    $loads = 0;
+    $load = static function (string $name) use ($attribute, &$label, &$loads): void {
+        if ($name === $attribute) {
+            ++$loads;
+            $label = 'changed during autoload';
+        }
+    };
+    $invoke = static function (array $arguments) use ($container, $constructor): mixed {
+        if ($constructor) {
+            $product = fixtureInstance($container->make(ProductWithInputMetadata::class, $arguments), ProductWithInputMetadata::class);
+            return [$product->label, $product->owner];
+        }
+        return $container->call(__NAMESPACE__ . '\\callWithInputMetadata', $arguments);
+    };
+    $arguments = ['label' => &$label, 'owner' => $owner, 'nested' => ['label' => &$nested]];
+    spl_autoload_register($load, prepend: true);
+    try {
+        $cold = $invoke($arguments);
+        $afterLoad = $label;
+        $afterInvocation = $nested;
+        $label = 'original';
+        $warm = $invoke($arguments);
+
+        expect($cold)->toBe(['original', $owner])
+            ->and($warm)->toBe($cold)
+            ->and($loads)->toBe(1)
+            ->and($afterLoad)->toBe('changed during autoload')
+            ->and($afterInvocation)->toBe($constructor ? 'native constructor' : 'native callable');
+    } finally {
+        spl_autoload_unregister($load);
+    }
+})->with(['make' => true, 'call' => false]);
+
+test('class definitions keep supplied slot values while resolving earlier configured dependencies', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $dependency = __NAMESPACE__ . '\\ConfiguredDependency_' . bin2hex(random_bytes(5));
+    $definition = ClassDefinition::create(ConfiguredProduct::class)->constructor([
+        'dependency' => Definition::reference($dependency),
+    ]);
+    $container->set('configured.product', $definition);
+    $label = 'original';
+    $loads = 0;
+    $load = static function (string $name) use ($dependency, &$loads, &$label): void {
+        if ($name === $dependency) {
+            ++$loads;
+            $label = 'changed during dependency discovery';
+            class_alias(MagicInputTarget::class, $dependency);
+        }
+    };
+    $arguments = ['label' => &$label];
+    spl_autoload_register($load);
+    try {
+        $cold = fixtureInstance($container->make('configured.product', $arguments), ConfiguredProduct::class);
+        $afterLoad = $label;
+        $label = 'original';
+        $warm = fixtureInstance($container->make('configured.product', $arguments), ConfiguredProduct::class);
+
+        expect($cold->label)->toBe('original')
+            ->and($warm->label)->toBe($cold->label)
+            ->and($cold->dependency)->toBe($container->get($dependency))
+            ->and($warm->dependency)->toBe($cold->dependency)
+            ->and($warm)->not->toBe($cold)
+            ->and($loads)->toBe(1)
+            ->and($afterLoad)->toBe('changed during dependency discovery');
+    } finally {
+        spl_autoload_unregister($load);
+    }
+});
+
+test('the public parameter resolver selects supplied values before classifying arguments', function (bool $targets): void {
+    $type = __NAMESPACE__ . '\\ParameterDependency_' . bin2hex(random_bytes(5));
+    [, $runtime] = (new ContainerBuilder())->addParameterResolver(new class ($type) implements ParameterResolverInterface {
+        public function __construct(private readonly string $type) {}
+
+        public function supports(ParameterTarget $target): bool
+        {
+            return $target->name === 'label' && class_exists($this->type);
+        }
+
+        public function resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): ?array
+        {
+            return null;
+        }
+    }, 10_000)->assemble();
+    $reflection = new ReflectionFunction(static fn(string $label): string => $label);
+    $parameters = $reflection->getParameters();
+    $declaredTargets = $runtime->parameters->targets($parameters);
+    $label = 'original';
+    $loads = 0;
+    $load = static function (string $name) use ($type, &$label, &$loads): void {
+        if ($name === $type) {
+            class_alias(MagicInputTarget::class, $type);
+            $label = 'changed during classification';
+            ++$loads;
+        }
+    };
+    $invoke = static fn(array $arguments): array => $targets
+        ? $runtime->parameters->resolveTargets($declaredTargets, $arguments)
+        : $runtime->parameters->resolve($parameters, $arguments);
+    $arguments = ['label' => &$label];
+
+    spl_autoload_register($load);
+    try {
+        $cold = $invoke($arguments);
+        $afterLoad = $label;
+        $label = 'original';
+
+        expect($cold)->toBe(['original'])
+            ->and($invoke($arguments))->toBe($cold)
+            ->and($loads)->toBe(1)
+            ->and($afterLoad)->toBe('changed during classification');
+    } finally {
+        spl_autoload_unregister($load);
+    }
+})->with(['targets' => true, 'reflectors' => false]);
+
+test('the object pipeline captures immediate values before metadata and runs a deferred supplier on demand', function (): void {
+    [, $runtime] = (new ContainerBuilder())->assemble();
+    /** @var class-string<ConfiguredProduct> $immediate */
+    $immediate = __NAMESPACE__ . '\\ImmediateInput_' . bin2hex(random_bytes(5));
+    /** @var class-string<DeferredInputProduct> $deferred */
+    $deferred = __NAMESPACE__ . '\\DeferredInput_' . bin2hex(random_bytes(5));
+    $label = 'original';
+    $events = [];
+    $load = static function (string $class) use ($immediate, $deferred, &$label, &$events): void {
+        if ($class === $immediate) {
+            class_alias(ConfiguredProduct::class, $immediate);
+            $label = 'changed during metadata lookup';
+            $events[] = 'immediate metadata';
+        } elseif ($class === $deferred) {
+            class_alias(DeferredInputProduct::class, $deferred);
+            $events[] = 'deferred metadata';
+        }
+    };
+    spl_autoload_register($load);
+    try {
+        $owner = new stdClass();
+        $arguments = ['dependency' => $owner, 'label' => &$label];
+        $cold = fixtureInstance($runtime->objects->create($immediate, $arguments), ConfiguredProduct::class);
+        $afterLoad = $label;
+        $label = 'original';
+        $warm = fixtureInstance($runtime->objects->create($immediate, $arguments), ConfiguredProduct::class);
+        expect($cold->label)->toBe('original')
+            ->and($warm->label)->toBe($cold->label)
+            ->and($cold->dependency)->toBe($owner)
+            ->and($afterLoad)->toBe('changed during metadata lookup');
+
+        $lazy = fixtureInstance($runtime->objects->create(
+            $deferred,
+            resolveParameters: static function () use (&$events, &$label): array {
+                $events[] = 'supplier';
+                return ['label' => $label];
+            },
+        ), DeferredInputProduct::class);
+        expect($events)->toBe(['immediate metadata', 'deferred metadata']);
+        $label = 'at initialization';
+        expect($lazy->label)->toBe('at initialization')
+            ->and($events)->toBe(['immediate metadata', 'deferred metadata', 'supplier']);
+    } finally {
+        spl_autoload_unregister($load);
+    }
+});
+
+test('native and explicit factory argument passing retain their reference behavior', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $container->set('argument.factory', Definition::factory(static function (mixed $context, array $params): stdClass {
+        $params['label'] = 'explicit factory';
+        return new stdClass();
+    }));
+    $label = 'original';
+    $arguments = ['label' => &$label];
+
+    expect($container->call(new PreparedCallable(static fn(string $label): string => $label), $arguments))->toBe('original')
+        ->and($label)->toBe('original')
+        ->and($container->call([new MagicInputTarget(), 'dispatch'], $arguments))->toBe('original')
+        ->and($label)->toBe('native magic');
+    (new CallableInvoker())->call(static function (string &$label): void {
+        $label = 'native invocation';
+    }, $arguments);
+    expect($label)->toBe('native invocation');
+    expect($container->make('argument.factory', $arguments))->toBeInstanceOf(stdClass::class)
+        ->and($label)->toBe('explicit factory');
+});
+
+test('a factory published while selecting the fallback receives the original reference-bearing array', function (): void {
+    $container = (new ContainerBuilder())->build();
+    $id = __NAMESPACE__ . '\\LateFactory_' . bin2hex(random_bytes(5));
+    $label = 'original';
+    $load = static function (string $name) use ($container, $id, &$label): void {
+        if ($name === $id) {
+            $container->set($id, Definition::factory(static function (mixed $context, array $params): Product {
+                $before = $params['label'];
+                $params['label'] = 'explicit factory';
+                return new Product(['label' => $before]);
+            }));
+            $label = 'changed during fallback discovery';
+        }
+    };
+    spl_autoload_register($load);
+    try {
+        $product = fixtureInstance($container->make($id, ['label' => &$label]), Product::class);
+        expect($product->payload)->toBe(['label' => 'changed during fallback discovery'])
+            ->and($label)->toBe('explicit factory');
+    } finally {
+        spl_autoload_unregister($load);
+    }
 });
 
 test('a creation argument helper cannot rebind the literal later consumed by the constructor', function (bool $cycle): void {

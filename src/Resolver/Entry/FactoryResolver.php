@@ -101,9 +101,10 @@ final class FactoryResolver implements DefinitionResolverInterface
         bool $autowire,
         array $params,
     ): object {
+        $runtime = ResolutionMetadata::invocationSlots(ResolutionMetadata::publicParameters($params));
         $reflection = new ReflectionClass($class);
         $constructor = $reflection->getConstructor();
-        $arguments = $this->arguments($constructor, $constructorParams, ResolutionMetadata::publicParameters($params), $autowire);
+        $arguments = $this->arguments($constructor, $constructorParams, $runtime, $autowire);
         $entry = new $class(...$arguments);
 
         foreach ($methodCalls as $call) {
