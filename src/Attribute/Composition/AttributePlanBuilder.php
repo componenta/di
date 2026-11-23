@@ -24,6 +24,7 @@ final class AttributePlanBuilder extends AttributePlanScope
 
     /**
      * Pass the closure itself for its instance-specific invocation method.
+     * Derived reflectors supply native ReflectionAttribute declarations.
      *
      * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @throws AttributeCompositionException If a target has no declaration the builder can own or its attributes are invalid.

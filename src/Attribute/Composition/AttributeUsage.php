@@ -48,6 +48,7 @@ final class AttributeUsage
         Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         public readonly int $declarationOrder,
     ) {
+        ReflectionSnapshot::assertNativeAttribute($reflection);
         $this->reflection = $reflection;
         $this->attributeClass = $reflection->getName();
         $this->declaration = ReflectionSnapshot::planDeclaration($target);

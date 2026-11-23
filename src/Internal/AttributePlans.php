@@ -223,6 +223,7 @@ final class AttributePlans
     ): array {
         $usages = [];
         foreach ($attributes as $index => $reflectionAttribute) {
+            ReflectionSnapshot::assertNativeAttribute($reflectionAttribute);
             /** @var class-string $attributeClass */
             $attributeClass = $reflectionAttribute->getName();
             $definition = $autoload ? $this->registry->definition($attributeClass) : $this->loadedDefinition($attributeClass);

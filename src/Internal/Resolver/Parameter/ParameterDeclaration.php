@@ -199,6 +199,7 @@ final class ParameterDeclaration
         $selection = [];
         $classes = [];
         foreach ($attributes as $index => $attribute) {
+            ReflectionSnapshot::assertNativeAttribute($attribute);
             /** @var class-string $class */
             $class = $attribute->getName();
             $selection[$index] = $attribute;

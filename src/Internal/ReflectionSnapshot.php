@@ -8,6 +8,7 @@ use Closure;
 use Componenta\DI\Exception\AttributeCompositionException;
 use LogicException;
 use PropertyHookType;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
@@ -21,6 +22,17 @@ use Reflector;
 final class ReflectionSnapshot
 {
     private function __construct() {}
+
+    /** @param ReflectionAttribute<object> $attribute */
+    public static function assertNativeAttribute(ReflectionAttribute $attribute): void
+    {
+        if ($attribute::class !== ReflectionAttribute::class) {
+            throw new AttributeCompositionException(sprintf(
+                'Attribute plans require native ReflectionAttribute declarations. Received %s.',
+                $attribute::class,
+            ));
+        }
+    }
 
     /**
      * @template T of object
