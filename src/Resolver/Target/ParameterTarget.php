@@ -160,7 +160,10 @@ final class ParameterTarget extends ParameterTargetScope
         return $instance;
     }
 
-    /** Records a missing attribute name during the current supports() check without invoking an autoloader. */
+    /**
+     * Records a missing attribute name without invoking an autoloader.
+     * Applies during supports() for a parameter with declared attributes.
+     */
     public function watchAttributeAvailability(string $attributeClass): void
     {
         if ($attributeClass !== '' && $this->attributeClasses !== []) {

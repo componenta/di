@@ -315,7 +315,7 @@ Make classes and aliases that affect custom parameter classification available b
 
 For a resolver whose applicability is one attribute match, register `AttributeMatchingParameterResolver($attribute, $resolve)` with its normal priority. It selects parameters using `ParameterTarget::hasAttribute()`. The callback receives the target and resolution context and returns `[$target->position, $value]` or `null` to continue the chain. Bootstrap can recheck this predicate with already loaded declarations after a temporary target has been released.
 
-When a custom `supports()` predicate reads native reflection directly, call `$target->watchAttributeAvailability($name)` before checking a class, interface or alias that may be declared later. This method records the missing name without invoking an autoloader. The next resolution of an affected cached target checks classification again once the name becomes available.
+For a parameter with declared attributes, a custom `supports()` predicate that reads native reflection can call `$target->watchAttributeAvailability($name)` before checking a class, interface or alias that may be declared later. The method records the missing name during classification without invoking an autoloader. The next resolution of an affected cached target checks classification again once the name becomes available.
 
 The container snapshots each `[owner, method]` extension factory specification when that extension starts materializing, before callable inspection or owner lookup. Rebinding caller references cannot redirect that invocation; changes made before a later extension starts remain visible. Factory objects keep their identity and current application state.
 
