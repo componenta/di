@@ -225,7 +225,8 @@ test('a retained parameter target gives the matching resolver the current attrib
 
     expect($resolver->resolveTargets([$target]))->toBe([$expected])
         ->and($resolver->resolveParameter($target, new ParameterResolutionContext()))->toBe([0, $expected])
-        ->and($resolver->resolve([$reflection]))->toBe([$expected]);
+        ->and($resolver->resolve([$reflection]))->toBe([$expected])
+        ->and($target->hasAttribute(EntryId::class))->toBe(!$initiallyHidden);
 })->with(['function' => false, 'method' => true])
     ->with(['initially hidden' => true, 'initially visible' => false]);
 

@@ -169,7 +169,6 @@ final class ParameterTarget extends ParameterTargetScope
     public function __clone()
     {
         $this->attributeObserver = null;
-        $this->declaration = clone $this->declaration;
     }
 
     public function accepts(mixed $value): bool

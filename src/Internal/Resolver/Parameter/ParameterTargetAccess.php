@@ -38,15 +38,11 @@ abstract class ParameterTargetAccess extends ParameterTargetScope
             return $target;
         }
 
-        $snapshot = clone $target;
-        $snapshot->declaration->selectResolutionAttributes();
-        return $snapshot;
+        return $target->withDeclaration($target->declaration->withResolutionAttributes());
     }
 
     public static function withoutBorrowedMetadata(ParameterTarget $target): ParameterTarget
     {
-        $snapshot = clone $target;
-        $snapshot->declaration->releaseBorrowedMetadata();
-        return $snapshot;
+        return $target->withDeclaration($target->declaration->withoutBorrowedMetadata());
     }
 }

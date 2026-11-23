@@ -8,6 +8,13 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 abstract class ParameterTargetScope
 {
     protected ?ParameterAttributeObservation $attributeObserver = null;
-    protected function __construct(protected readonly ParameterDeclaration $declaration) {}
 
+    protected function __construct(protected private(set) ParameterDeclaration $declaration) {}
+
+    protected function withDeclaration(ParameterDeclaration $declaration): static
+    {
+        $snapshot = clone $this;
+        $snapshot->declaration = $declaration;
+        return $snapshot;
+    }
 }

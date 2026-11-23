@@ -85,15 +85,19 @@ final class ParameterDeclaration
             : $this->declaration->getDefaultValue();
     }
 
-    public function releaseBorrowedMetadata(): void
+    public function withoutBorrowedMetadata(): self
     {
-        $this->borrowedMetadata = null;
+        $snapshot = clone $this;
+        $snapshot->borrowedMetadata = null;
+        return $snapshot;
     }
 
-    public function selectResolutionAttributes(): void
+    public function withResolutionAttributes(): self
     {
-        $this->selectAttributes($this->readAttributes());
-        $this->selectedForResolution = true;
+        $snapshot = clone $this;
+        $snapshot->selectAttributes($snapshot->readAttributes());
+        $snapshot->selectedForResolution = true;
+        return $snapshot;
     }
 
     public function closureMethodSource(): ?ReflectionParameter
