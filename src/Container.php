@@ -360,18 +360,22 @@ final class Container extends ContainerEntryOperations implements
         }
 
         $retirement = new MutationRetirement($canonical);
+        // A nested alias can retire this binding before its validation completes.
+        if ($this->aliases->has($canonical)) {
+            return;
+        }
+
         // Registration and helper autoloading may retarget deferred dependencies.
         $affected = $this->deferredDependenciesResolvingTo($canonical);
-        // During admission a nested alias may hide the originally selected owner.
-        if (!$this->aliases->has($canonical)) {
-            if ($binding !== null) {
-                $this->resolver->publish($binding, $retirement);
-                $this->cache->removeBase($canonical, $retirement, $this->runtimeAuthority);
-            } else {
-                $this->cache->replaceBase($canonical, $entry, $retirement, $this->runtimeAuthority);
-            }
+        // Invalidate the requested pipeline only if it still reads the selected binding.
+        $affectedId = $this->aliases->resolve($id) === $canonical ? $id : $canonical;
+        if ($binding !== null) {
+            $this->resolver->publish($binding, $retirement);
+            $this->cache->removeBase($canonical, $retirement, $this->runtimeAuthority);
+        } else {
+            $this->cache->replaceBase($canonical, $entry, $retirement, $this->runtimeAuthority);
         }
-        $this->invalidate($id, $canonical, $retirement);
+        $this->invalidate($affectedId, $canonical, $retirement);
         $this->invalidateDeferredDelegators($affected, $retirement);
         $this->providerProbes?->invalidate();
         $retirement->release();
@@ -600,7 +604,7 @@ final class Container extends ContainerEntryOperations implements
     private function deferredDependenciesResolvingTo(string $canonical): array
     {
         $dependencyCount = $this->delegators->dependencyCount;
-        if ($dependencyCount === 0 || $this->aliases->has($canonical)) {
+        if ($dependencyCount === 0) {
             return [];
         }
 
