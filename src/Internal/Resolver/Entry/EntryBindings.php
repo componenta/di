@@ -108,12 +108,15 @@ final class EntryBindings
     /** @param array<string|int, mixed>|EntryParameters $params */
     public function resolve(string $id, array|EntryParameters $params = []): mixed
     {
-        if (is_array($params) && $params !== [] && !isset($this->bindings[$id])) {
-            // Fallback availability can autoload metadata before its resolver runs.
-            // Forward the same captured arguments while retaining native factory values.
-            $params = ConstructionParameters::from($params);
+        $selected = $this->bindings[$id] ?? null;
+        if ($selected === null) {
+            if (is_array($params) && $params !== []) {
+                // Fallback availability can autoload metadata before its resolver runs.
+                // Forward the same captured arguments while retaining native factory values.
+                $params = ConstructionParameters::from($params);
+            }
+            $selected = $this->select($id) ?? throw NotFoundException::forService($id);
         }
-        $selected = $this->select($id) ?? throw NotFoundException::forService($id);
         return $this->resolveSelected($id, $selected, $params);
     }
 

@@ -184,7 +184,7 @@ final class ParameterExecution
         $this->parameterPlans->assertOwned($plan);
         $plan = $this->parameterPlans->refresh($plan);
         if ($provenance !== null) {
-            MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, $diagnosticOwner);
+            MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->sourceCandidates(), $provenance, $diagnosticOwner);
         }
         [$context, $accept, $literalContext] = ParameterContextAccess::begin(
             ResolutionMetadata::publicParameters($providedParameters),
@@ -192,7 +192,7 @@ final class ParameterExecution
         );
         $beforeConsumption = $provenance === null
             ? $beforeInvocation
-            : ParameterResolutionBoundary::beforeConsumption($plan->targets, $provenance, $diagnosticOwner, $beforeInvocation);
+            : ParameterResolutionBoundary::beforeConsumption($plan->sourceCandidates(), $provenance, $diagnosticOwner, $beforeInvocation);
 
         $completed = new CompletedAttributeGuard($this->plans, $this->plans->refreshAvailability());
         if ($reservedTarget !== null) {
@@ -232,7 +232,7 @@ final class ParameterExecution
             if ($current !== $plan) {
                 $plan = $current;
                 if ($provenance !== null) {
-                    MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, $diagnosticOwner);
+                    MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->sourceCandidates(), $provenance, $diagnosticOwner);
                 }
                 $completed->assertUnchanged();
             }
