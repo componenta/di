@@ -352,7 +352,7 @@ final class BootstrapResolutionGuard
         foreach ($use['requiredAttributes'] as $required) {
             $loaded = is_attribute_class_loaded($required);
             foreach ($use['declaredAttributes'] as $declared) {
-                if ($declared === $required
+                if (strcasecmp($declared, $required) === 0
                     || ($loaded && is_attribute_class_loaded($declared) && is_a($declared, $required, true))
                 ) {
                     throw new InvalidConfigurationException(sprintf(

@@ -90,7 +90,7 @@ final class ParameterTarget extends ParameterTargetScope
 
     public function hasAttribute(string $attributeClass): bool
     {
-        if (isset($this->declaration->attributesByClass[$attributeClass])) {
+        if (isset($this->declaration->attributesByClass[strtolower($attributeClass)])) {
             return true;
         }
 

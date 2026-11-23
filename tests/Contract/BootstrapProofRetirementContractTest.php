@@ -340,8 +340,12 @@ test('bootstrap checks attribute matching after a temporary factory closure is r
     $alias = __NAMESPACE__ . '\\ReleasedLabel_' . $suffix;
     $trigger = __NAMESPACE__ . '\\UnrelatedLabel_' . $suffix;
     $missing = 'MissingRetirementMarker_' . $suffix;
-    $declared = $scenario === 'late declaration' ? $alias : LabelPolicy::class;
-    $required = $scenario === 'late declaration' ? LabelPolicy::class : $alias;
+    $declared = in_array($scenario, ['late declaration', 'differently cased declaration'], true) ? $alias : LabelPolicy::class;
+    $required = match ($scenario) {
+        'late declaration' => LabelPolicy::class,
+        'differently cased declaration' => strtolower($declared),
+        default => $alias,
+    };
     $state = new class () {
         public int $factories = 0;
         public int $releases = 0;
@@ -430,7 +434,7 @@ test('bootstrap checks attribute matching after a temporary factory closure is r
             $shared = $di->get(ReleasedLabel::class);
             Assert::assertInstanceOf(ReleasedLabel::class, $shared);
             expect($shared->value)->toBe(match ($scenario) {
-                'early alias' => 'classified',
+                'early alias', 'differently cased declaration' => 'classified',
                 'explicit input' => 'provided',
                 default => 'fallback',
             })->and($di->get(ReleasedLabel::class))->toBe($shared);
@@ -441,9 +445,9 @@ test('bootstrap checks attribute matching after a temporary factory closure is r
     expect($state->factories)->toBe(1)
         ->and($state->capture?->get())->toBeNull()
         ->and($state->releases)->toBe(1)
-        ->and($state->values)->toBe($scenario === 'early alias' ? 1 : 0);
+        ->and($state->values)->toBe(in_array($scenario, ['early alias', 'differently cased declaration'], true) ? 1 : 0);
     if ($scenario !== 'later live check') {
         expect($state->autoloadsAfterRelease)->toBe(0);
     }
-})->with(['matching alias', 'late declaration', 'unrelated alias', 'ignored query', 'explicit input', 'early alias', 'later live check'])
+})->with(['matching alias', 'late declaration', 'unrelated alias', 'ignored query', 'explicit input', 'early alias', 'later live check', 'differently cased declaration'])
     ->with(['compatibility discovery' => false, 'targeted discovery' => true]);

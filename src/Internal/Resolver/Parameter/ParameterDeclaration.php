@@ -24,7 +24,7 @@ final class ParameterDeclaration
 
     /** @var array<int,ReflectionAttribute<object>> */
     public private(set) array $attributeReflectors;
-    /** @var array<class-string,true> */
+    /** @var array<string,true> Lowercase declaration names for exact lookup. */
     public private(set) array $attributesByClass;
     /** @var list<class-string> */
     public private(set) array $attributeClasses;
@@ -206,7 +206,7 @@ final class ParameterDeclaration
         }
 
         $this->attributeReflectors = $selection;
-        $this->attributesByClass = $classes;
+        $this->attributesByClass = array_change_key_case($classes);
         $this->attributeClasses = array_keys($classes);
     }
 }

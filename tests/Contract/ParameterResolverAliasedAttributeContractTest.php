@@ -13,6 +13,7 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterTargets;
+use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
@@ -182,6 +183,62 @@ test('a warm classification observes aliases consulted by parameter attribute lo
 })->with(['global discovery' => false, 'targeted discovery' => true])
     ->with(['presence lookup' => 'presence', 'instance lookup' => 'instance', 'native reflection' => 'native'])
     ->with(['matching alias' => true, 'unrelated alias' => false, 'unavailable alias' => [null]]);
+
+test('exact parameter attribute names match case-insensitively before and after declaration', function (bool $targeted): void {
+    $declared = nextAlias();
+    $query = strtolower($declared);
+    $qualifiedQuery = '\\' . $query;
+    $function = 'caseLookup_' . bin2hex(random_bytes(5));
+    $callable = __NAMESPACE__ . '\\' . $function;
+    eval(sprintf('namespace %s; function %s(#[\\%s] string $label = "fallback"): string { return $label; }', __NAMESPACE__, $function, $declared));
+    $parameter = new ReflectionParameter($callable, 0);
+    $target = new ParameterTarget($parameter);
+    $autoloads = 0;
+    $loader = static function (string $class) use ($declared, &$autoloads): void {
+        if (strcasecmp($class, $declared) === 0) {
+            ++$autoloads;
+        }
+    };
+    spl_autoload_register($loader);
+    try {
+        expect($parameter->getAttributes($query))->toHaveCount(1)
+            ->and($target->attributeClasses)->toBe([$declared])
+            ->and($target->hasAttribute($declared))->toBeTrue()
+            ->and($target->hasAttribute($query))->toBeTrue()
+            ->and($autoloads)->toBe(0)
+            ->and($parameter->getAttributes($qualifiedQuery))->toBe([])
+            ->and($target->hasAttribute($qualifiedQuery))->toBeFalse();
+
+        $factory = new ContainerFactory();
+        $config = new Config([], new Environment([]));
+        $definitions = new DependencyDefinitions([ConfigKey::PARAMETER_RESOLVERS => [1000 => new AttributeMatchingParameterResolver(
+            $query,
+            static fn(ParameterTarget $parameter, ParameterResolutionContext $context): array => [$parameter->position, 'declared'],
+        )]]);
+        $build = static fn(): mixed => ($targeted
+            ? $factory->createWithTargetedAttributeDiscovery($config, $definitions)
+            : $factory->create($config, $definitions))->container;
+        $container = $build();
+        Assert::assertInstanceOf(Container::class, $container);
+
+        expect($container->call($callable))->toBe('declared')
+            ->and($container->call($callable))->toBe('declared');
+
+        class_alias(Label::class, $declared);
+        $fresh = $build();
+        Assert::assertInstanceOf(Container::class, $fresh);
+        expect($container->call($callable))->toBe('declared')
+            ->and($fresh->call($callable))->toBe('declared')
+            ->and($parameter->getAttributes($qualifiedQuery))->toBe([])
+            ->and($parameter->getAttributes($qualifiedQuery, ReflectionAttribute::IS_INSTANCEOF))->toHaveCount(1)
+            ->and($target->hasAttribute($qualifiedQuery))->toBeTrue()
+            ->and($target->hasAttribute(Label::class))->toBeTrue()
+            ->and($target->hasAttribute(OtherLabel::class))->toBeFalse()
+            ->and($target->attributeClasses)->toBe([$declared]);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['compatibility discovery' => false, 'targeted discovery' => true]);
 
 test('native reflection can watch an interface alias', function (): void {
     $query = nextAlias();
