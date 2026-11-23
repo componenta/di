@@ -5,15 +5,23 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Contract;
 
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
+use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Container;
 use Componenta\DI\Internal\ResolutionRuntime;
+use Componenta\DI\Object\ObjectPipeline;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use ReflectionClass;
+use Reflector;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
 
@@ -63,6 +71,57 @@ it('does not activate an unregistered Proxy beside Make', function (bool $proper
     expect(new ReflectionClass(SelectedMakeProduct::class)->isUninitializedLazyObject($product))->toBeFalse()
         ->and(SelectedMakeProduct::$constructions)->toBe(1);
 })->with(['property' => true, 'parameter' => false]);
+
+final class ObservedMakeOptions
+{
+    /** @var list<string> */
+    public static array $retired = [];
+    public string $state = 'declared';
+
+    public function __destruct()
+    {
+        self::$retired[] = $this->state;
+    }
+}
+
+final readonly class ObservedMakeProduct
+{
+    public function __construct(public ObservedMakeOptions $options) {}
+}
+
+final class ObservedMakeOwner
+{
+    #[Proxy(ObservedMakeProduct::class), Make(ObservedMakeProduct::class, ['options' => new ObservedMakeOptions()])]
+    public ObservedMakeProduct $product;
+}
+
+test('a custom Make handler receives its own arguments alongside the built-in Proxy', function (bool $customFirst): void {
+    ObservedMakeOptions::$retired = [];
+    $di = new ContainerBuilder()->build();
+    $registry = new AttributeDefinitionRegistry();
+    $plans = new AttributePlanBuilder($registry);
+    $registry->register(new AttributeDefinition(
+        Proxy::class,
+        new MakeHandler($di, $di, $plans),
+        before: $customFirst ? [] : [Make::class],
+        after: $customFirst ? [Make::class] : [],
+    ));
+    $registry->register(new AttributeDefinition(Make::class, new class () implements AttributeHandlerInterface {
+        public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+        {
+            $options = $attribute instanceof Make ? ($attribute->params['options'] ?? null) : null;
+            if (!$options instanceof ObservedMakeOptions) {
+                throw new LogicException('Expected the custom handler options.');
+            }
+            $options->state = 'custom handler';
+        }
+    }));
+    $pipeline = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), $di);
+
+    $owner = fixtureInstance($pipeline->create(ObservedMakeOwner::class), ObservedMakeOwner::class);
+    expect($owner->product->options->state)->toBe('declared')
+        ->and(ObservedMakeOptions::$retired)->toBe(['custom handler']);
+})->with(['custom handler after Proxy' => false, 'custom handler before Proxy' => true]);
 
 final class InferredMixedProxyProperty
 {

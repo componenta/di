@@ -66,11 +66,15 @@ final class ObjectAttributeSequence
 
     public function companionInstance(AttributeUsage $active, AttributeUsage $companion): object
     {
+        $definition = $companion->definition;
+        if ($definition->handler !== $active->definition->handler) {
+            // A different handler owns a separate attribute instance and its arguments.
+            return $companion->newInstance();
+        }
+
         $owner = $this->owners[spl_object_id($active)];
         $attribute = $this->materialize($companion, $owner);
-        $definition = $companion->definition;
-        if ($definition->handler instanceof AttributeHandlerInterface
-            && ($definition->phase === $this->phase || $definition->phase === AttributePhase::Both)
+        if (($definition->phase === $this->phase || $definition->phase === AttributePhase::Both)
             && !isset($this->executed[$owner . ':' . $companion->declarationOrder])
         ) {
             // A companion may be consumed before its own step in this phase.

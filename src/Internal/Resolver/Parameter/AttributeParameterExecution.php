@@ -122,11 +122,12 @@ final readonly class AttributeParameterExecution
                         $context,
                         $plan,
                         $value,
-                        static function (AttributeUsage $companion) use (&$pendingAttributes, &$processed): object {
+                        static function (AttributeUsage $companion) use (&$pendingAttributes, &$processed, $handler): object {
+                            if ($companion->definition->handler !== $handler) {
+                                return $companion->newInstance();
+                            }
                             $instance = self::materialize($companion, $pendingAttributes);
-                            if ($companion->definition->handler instanceof ParameterAttributeHandlerInterface
-                                && !isset($processed[$companion->declarationOrder])
-                            ) {
+                            if (!isset($processed[$companion->declarationOrder])) {
                                 $pendingAttributes[$companion->declarationOrder] = [$companion, $instance];
                             }
                             return $instance;
