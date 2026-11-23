@@ -12,13 +12,16 @@ use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\MapServerParams;
 use Componenta\DI\Attribute\MapUploadedFiles;
 use Componenta\DI\Attribute\RequestDataSource;
+use Componenta\DI\Exception\RequestDataConflictException;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Error;
 use InvalidArgumentException;
 use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Stream;
 use Nyholm\Psr7\UploadedFile;
+use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
 
 final class SelectedCookieSources extends MapCookies
@@ -149,3 +152,32 @@ test('FirstWins ignores later recursive array values from request sources', func
         ->and($value['owner'])->toBe($expected)
         ->and($value['self']['owner'])->toBe($expected);
 })->with(['query first' => true, 'payload first' => false]);
+
+test('Reject reports uncomparable recursive arrays as conflicts and accepts a retry with one shared value', function (): void {
+    $payload = ['tag' => 'mapped'];
+    $payload['self'] = &$payload;
+    $query = ['tag' => 'mapped'];
+    $query['self'] = &$query;
+    $request = (new ServerRequest('POST', '/'))
+        ->withParsedBody(['value' => $payload])
+        ->withQueryParams(['value' => $query]);
+    $container = (new ContainerBuilder())->build();
+    $target = static fn(#[MapRequest(sources: [RequestDataSource::Payload, RequestDataSource::Query])] array $data): array => $data;
+
+    try {
+        $container->call($target, [ServerRequestInterface::class => $request]);
+        Assert::fail('The request mapping must report a conflicting source.');
+    } catch (RequestDataConflictException $error) {
+        expect($error->key)->toBe('value')
+            ->and($error->existingSource)->toBe('parsed body')
+            ->and($error->incomingSource)->toBe('query string')
+            ->and($error->getPrevious())->toBeInstanceOf(Error::class);
+    }
+
+    $sameValueRequest = $request->withQueryParams(['value' => $payload]);
+    $result = $container->call($target, [ServerRequestInterface::class => $sameValueRequest]);
+    if (!is_array($result) || !is_array($result['value']) || !is_array($result['value']['self'])) {
+        throw new \LogicException('Expected the shared recursive request value.');
+    }
+    expect($result['value']['self']['tag'])->toBe('mapped');
+});
