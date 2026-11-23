@@ -14,13 +14,16 @@ use Componenta\DI\Container;
 use Componenta\DI\Internal\ResolutionRuntime;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\AttributePhase;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\MakeHandler;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionProperty;
 use Reflector;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
@@ -71,6 +74,119 @@ it('does not activate an unregistered Proxy beside Make', function (bool $proper
     expect(new ReflectionClass(SelectedMakeProduct::class)->isUninitializedLazyObject($product))->toBeFalse()
         ->and(SelectedMakeProduct::$constructions)->toBe(1);
 })->with(['property' => true, 'parameter' => false]);
+
+test('property Make uses the active composition when its handler is reused across registries', function (bool $targeted): void {
+    $di = new ContainerBuilder()->build();
+    $registry = new AttributeDefinitionRegistry($targeted);
+    $plans = new AttributePlanBuilder($registry);
+    $handler = new MakeHandler($di, $di, $plans);
+    $make = new AttributeDefinition(Make::class, $handler);
+    $registry->register($make);
+    $registry->register(new AttributeDefinition(
+        Proxy::class,
+        $handler,
+        after: [Make::class],
+        phase: AttributePhase::Both,
+    ));
+    $withProxy = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), $di);
+
+    $other = new AttributeDefinitionRegistry($targeted);
+    $other->register($make);
+    $otherPlans = new AttributePlanBuilder($other);
+    $withoutProxy = new ObjectPipeline(new AttributeProcessor($otherPlans), new ParametersResolver($otherPlans), $di);
+    $product = new ReflectionClass(SelectedMakeProduct::class);
+
+    foreach ([[$withProxy, true], [$withoutProxy, false], [$withProxy, true]] as [$pipeline, $expectedProxy]) {
+        $owner = fixtureInstance($pipeline->create(SelectedMakeProperty::class), SelectedMakeProperty::class);
+        expect($product->isUninitializedLazyObject($owner->value))->toBe($expectedProxy)
+            ->and($owner->value->value)->toBe('ready');
+    }
+})->with(['compatibility' => false, 'targeted' => true]);
+
+final class RetargetingMakeArgument
+{
+    public static ?ReflectionProperty $source = null;
+
+    public function __construct()
+    {
+        self::$source?->__construct(OtherMakeOwner::class, 'other');
+    }
+}
+
+final readonly class RetargetedMakeProduct
+{
+    public function __construct(public RetargetingMakeArgument $argument, public string $value = 'ready') {}
+}
+
+final class RetargetedMakeOwner
+{
+    #[Make(RetargetedMakeProduct::class, ['argument' => new RetargetingMakeArgument()]), Proxy]
+    public RetargetedMakeProduct $product;
+}
+
+final class OtherMakeOwner
+{
+    public RetargetedMakeProduct $other;
+}
+
+final class MakeOnlyPropertyReflection extends ReflectionProperty
+{
+    /** @return list<ReflectionAttribute<object>> */
+    #[\Override]
+    public function getAttributes(?string $name = null, int $flags = 0): array
+    {
+        return array_values(array_filter(
+            parent::getAttributes($name, $flags),
+            static fn(ReflectionAttribute $attribute): bool => $attribute->getName() !== Proxy::class,
+        ));
+    }
+}
+
+/** @extends ReflectionClass<RetargetedMakeOwner> */
+final class BorrowedMakeOwnerReflection extends ReflectionClass
+{
+    public function __construct(private readonly MakeOnlyPropertyReflection $property)
+    {
+        parent::__construct(RetargetedMakeOwner::class);
+    }
+
+    /** @return list<ReflectionProperty> */
+    #[\Override]
+    public function getProperties(?int $filter = null): array
+    {
+        return array_map(fn(ReflectionProperty $property): ReflectionProperty => $this->property, parent::getProperties($filter));
+    }
+}
+
+test('property Make preserves the selected native declarations when its argument retargets a borrowed reflector', function (bool $targeted): void {
+    $di = new ContainerBuilder()->build();
+    $registry = new AttributeDefinitionRegistry($targeted);
+    $plans = new AttributePlanBuilder($registry);
+    $handler = new MakeHandler($di, $di, $plans);
+    $registry->register(new AttributeDefinition(Make::class, $handler));
+    $registry->register(new AttributeDefinition(
+        Proxy::class,
+        $handler,
+        after: [Make::class],
+        phase: AttributePhase::Both,
+    ));
+    $pipeline = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), $di);
+    $product = new ReflectionClass(RetargetedMakeProduct::class);
+    $native = fixtureInstance($pipeline->create(RetargetedMakeOwner::class), RetargetedMakeOwner::class);
+    expect($product->isUninitializedLazyObject($native->product))->toBeTrue();
+
+    $borrowed = new MakeOnlyPropertyReflection(RetargetedMakeOwner::class, 'product');
+    RetargetingMakeArgument::$source = $borrowed;
+    try {
+        $owner = fixtureInstance($pipeline->create(new BorrowedMakeOwnerReflection($borrowed)), RetargetedMakeOwner::class);
+    } finally {
+        RetargetingMakeArgument::$source = null;
+    }
+
+    expect($borrowed->getName())->toBe('other')
+        ->and($product->isUninitializedLazyObject($owner->product))->toBeFalse()
+        ->and($owner->product->value)->toBe('ready');
+})->with(['compatibility' => false, 'targeted' => true]);
 
 final class ObservedMakeOptions
 {

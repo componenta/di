@@ -61,6 +61,20 @@ final class AttributePlans
         return new AttributeMetadataSource($target, $plan, $captured, $consumed ?? $this->borrowedDeclarations[$plan] ?? null);
     }
 
+    /**
+     * Rechecks availability against the declarations already selected for this execution.
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     */
+    public function revalidateSelectedDeclarations(
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        AttributePlan $plan,
+    ): AttributePlan {
+        $selected = $this->borrowedDeclarations[$plan] ?? null;
+        return $selected === null
+            ? $this->build($target)
+            : $this->build($plan->target, $selected);
+    }
+
     public function refreshAvailability(): int
     {
         return $this->registry->refreshAvailability();

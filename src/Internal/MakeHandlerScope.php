@@ -16,12 +16,12 @@ use Reflector;
 /** Composes Make and Proxy with the active attempt's attribute instances. @internal */
 abstract class MakeHandlerScope
 {
-    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    /** @param (Closure(class-string):(?object))|null $findCompanion */
     abstract protected function handleComposed(
         object $attribute,
         Reflector $target,
         ObjectCreationContext $context,
-        ?Closure $materialize,
+        ?Closure $findCompanion,
     ): void;
 
     /** @param (Closure(AttributeUsage):object)|null $materialize */

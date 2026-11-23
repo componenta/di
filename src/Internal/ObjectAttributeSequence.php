@@ -64,15 +64,22 @@ final class ObjectAttributeSequence
         return $this->materialize($usage, $this->owners[spl_object_id($usage)]);
     }
 
-    public function companionInstance(AttributeUsage $active, AttributeUsage $companion): object
+    /** @param class-string $attributeClass */
+    public function companionInstance(AttributeUsage $active, string $attributeClass): ?object
     {
+        $owner = $this->owners[spl_object_id($active)];
+        $plan = $this->builder->revalidateSelectedDeclarations($this->targets[$owner], $this->plans[$owner]);
+        $companion = $plan->attributes($attributeClass)[0] ?? null;
+        if ($companion === null) {
+            return null;
+        }
+
         $definition = $companion->definition;
         if ($definition->handler !== $active->definition->handler) {
             // A different handler owns a separate attribute instance and its arguments.
             return $companion->newInstance();
         }
 
-        $owner = $this->owners[spl_object_id($active)];
         $attribute = $this->materialize($companion, $owner);
         if (($definition->phase === $this->phase || $definition->phase === AttributePhase::Both)
             && !isset($this->executed[$owner . ':' . $companion->declarationOrder])

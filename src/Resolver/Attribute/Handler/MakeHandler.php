@@ -97,12 +97,12 @@ final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInte
         $this->handleComposed($attribute, $target, $context, null);
     }
 
-    /** @param (Closure(AttributeUsage):object)|null $materialize */
+    /** @param (Closure(class-string):(?object))|null $findCompanion */
     protected function handleComposed(
         object $attribute,
         Reflector $target,
         ObjectCreationContext $context,
-        ?Closure $materialize,
+        ?Closure $findCompanion,
     ): void {
         if ($attribute instanceof Proxy && $target instanceof ReflectionClass) {
             if ($context->entry !== null) {
@@ -133,19 +133,18 @@ final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInte
             return;
         }
 
-        $plan = $this->plans->build($target);
-        $make = $attribute instanceof Make
-            ? $attribute
-            : self::firstAttribute($plan, Make::class, $materialize);
-        $proxy = $attribute instanceof Proxy
-            ? $attribute
-            : self::firstAttribute($plan, Proxy::class, $materialize);
+        $companionClass = $attribute instanceof Make ? Proxy::class : Make::class;
+        $companion = $findCompanion === null
+            ? self::firstAttribute($this->plans->build($target), $companionClass, null)
+            : $findCompanion($companionClass);
+        $make = $attribute instanceof Make ? $attribute : $companion;
+        $proxy = $attribute instanceof Proxy ? $attribute : $companion;
 
         $config = self::configuration(
             $target->getName(),
             TypeHints::classOf($target->getType(), $target->getDeclaringClass()),
-            $make,
-            $proxy,
+            $make instanceof Make ? $make : null,
+            $proxy instanceof Proxy ? $proxy : null,
         );
 
         try {

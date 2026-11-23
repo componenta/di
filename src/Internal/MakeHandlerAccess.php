@@ -16,15 +16,15 @@ use Reflector;
 /** Connects an execution's materializer to the built-in Make handler. @internal */
 abstract class MakeHandlerAccess extends MakeHandlerScope
 {
-    /** @param Closure(AttributeUsage):object $materialize */
+    /** @param Closure(class-string):(?object) $findCompanion */
     public static function handle(
         MakeHandlerScope $handler,
         object $attribute,
         Reflector $target,
         ObjectCreationContext $context,
-        Closure $materialize,
+        Closure $findCompanion,
     ): void {
-        $handler->handleComposed($attribute, $target, $context, $materialize);
+        $handler->handleComposed($attribute, $target, $context, $findCompanion);
     }
 
     /** @param Closure(AttributeUsage):object $materialize */

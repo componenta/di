@@ -264,7 +264,7 @@ final class AttributeExecution
                         $attribute,
                         $handlerTarget,
                         $context,
-                        static fn(AttributeUsage $companion): object => $sequence->companionInstance($usage, $companion),
+                        static fn(string $attributeClass): ?object => $sequence->companionInstance($usage, $attributeClass),
                     );
                 } elseif ($attempt !== null && $handlerTarget instanceof ReflectionProperty
                     && ($handler instanceof CastHandler || $handler instanceof TransformHandler)
