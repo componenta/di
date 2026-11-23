@@ -1,6 +1,6 @@
 # Миграция расширений определений на DI 6
 
-**Статус: разработка следующей major-версии, релиза ещё нет.** Руководство описывает API определений и мутаций, реализованный в ветке разработки DI 6. Эти изменения не входят в выпущенный пакет 5.0.6. Соответствующая спецификация — [Владение определениями и освобождение после мутаций](../plans/definition-owner-lifecycle.ru.md). [English version](di6-definitions.md).
+**Статус: разработка следующей major-версии, релиза ещё нет.** Руководство описывает API определений и мутаций, реализованный в ветке разработки DI 6. Эти изменения не входят в выпущенный пакет 5.0.6. Соответствующая спецификация — [Владение определениями и освобождение после мутаций](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/definition-owner-lifecycle.ru.md). [English version](di6-definitions.md).
 
 ## Кому нужно менять код
 
@@ -233,6 +233,8 @@ $container = new Container(
 
 При прямой сборке `ObjectPipeline` передайте один `AttributePlanBuilder` в `AttributeProcessor` и `ParametersResolver`. Передайте эти два компонента и фабрику прокси в конвейер. Конвейер владеет хранилищем параметров. Материализовать отложенные аргументы и менять состояние может только выполнение, которому принадлежит фаза. Повторный запуск обработчиков завершённой фазы отклоняется. Рефлектор унаследованного статического метода в обработчике сохраняет класс создаваемого объекта.
 
+При регистрации `AttributeParameterResolver` через `ParametersResolver::add()` создайте оба резолвера с одним `AttributeDefinitionRegistry`. Классификация параметров обновляется по ревизиям этого реестра. Резолвер с другим реестром отклоняется при добавлении.
+
 Используйте `ObjectPipeline::create()` для выполнения обеих фаз атрибутов и получения инициализированного объекта. `AttributeProcessor` предоставляет `prepare()` и `hasHandlers()`. Конвейер передаёт обработчикам `ObjectCreationContext` каждой попытки создания.
 
 Передайте готовые аргументы через `$params` либо укажите callback `resolveParameters` и оставьте `$params` пустым. Callback может вернуть `EntryParameters` с сохранённым происхождением аргументов. Передача двух источников вызывает `InvalidConfigurationException` до начала создания. Конвейер фиксирует класс входного рефлектора при вызове. Свойство `$context->class` возвращает независимый рефлектор выбранного класса. `ReflectionObject` и наследники рефлектора могут предоставлять метаданные атрибутов, пока описывают выбранный класс.
@@ -334,8 +336,8 @@ Bootstrap сохраняет выбранный резолвер парамет�
 
 Руководство сопровождают исполняемые контрактные проверки:
 
-- [Допуск пользовательских стратегий и дескрипторы активных вызовов](../../tests/Contract/CentralDefinitionStrategyContractTest.php).
-- [Прямое использование встроенных стратегий и отложенные владельцы](../../tests/Contract/DefinitionStrategyDirectUseContractTest.php).
-- [Композиция снимков и полномочия присоединённого корня](../../tests/Contract/DefinitionSnapshotCompositionContractTest.php).
-- [Освобождение после публичных мутаций](../../tests/Contract/MutationRetirementContractTest.php) и [границы нативного освобождения](../../tests/Contract/MutationRetirementBoundaryContractTest.php).
-- [Момент проверки при нормализации](../../tests/Contract/DependencyNormalizationContractTest.php).
+- [Допуск пользовательских стратегий и дескрипторы активных вызовов](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/CentralDefinitionStrategyContractTest.php).
+- [Прямое использование встроенных стратегий и отложенные владельцы](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/DefinitionStrategyDirectUseContractTest.php).
+- [Композиция снимков и полномочия присоединённого корня](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/DefinitionSnapshotCompositionContractTest.php).
+- [Освобождение после публичных мутаций](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/MutationRetirementContractTest.php) и [границы нативного освобождения](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/MutationRetirementBoundaryContractTest.php).
+- [Момент проверки при нормализации](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/DependencyNormalizationContractTest.php).

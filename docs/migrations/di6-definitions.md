@@ -1,6 +1,6 @@
 # Migrating definition extensions to DI 6
 
-**Status: next-major development, unreleased.** This guide describes the definition and mutation APIs implemented on the DI 6 development branch. These changes are not part of the released 5.0.6 package. The corresponding design is [Definition ownership and mutation retirement](../plans/definition-owner-lifecycle.md). [Русская версия](di6-definitions.ru.md).
+**Status: next-major development, unreleased.** This guide describes the definition and mutation APIs implemented on the DI 6 development branch. These changes are not part of the released 5.0.6 package. The corresponding design is [Definition ownership and mutation retirement](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/definition-owner-lifecycle.md). [Русская версия](di6-definitions.ru.md).
 
 ## Who needs to change code
 
@@ -233,6 +233,8 @@ $container = new Container(
 
 When composing an `ObjectPipeline`, pass the same `AttributePlanBuilder` to `AttributeProcessor` and `ParametersResolver`, then pass those two components and a proxy factory to the pipeline. The pipeline owns its parameter store. Only the execution running the phase can materialize deferred arguments or change its state. A completed phase cannot dispatch its handlers again. A detached reflector received by an object handler preserves the creation class of inherited static methods.
 
+When registering an `AttributeParameterResolver` with `ParametersResolver::add()`, build both from the same `AttributeDefinitionRegistry`. Parameter classification follows revisions of that registry. A resolver with a different registry is rejected when added.
+
 Use `ObjectPipeline::create()` to run both object attribute phases and obtain the initialized object. `AttributeProcessor` provides `prepare()` and `hasHandlers()`. The pipeline supplies the `ObjectCreationContext` to handlers for each attempt.
 
 Pass immediate parameters through `$params`, or pass a `resolveParameters` callback and leave `$params` empty. The callback can return an `EntryParameters` instance to preserve the source of forwarded arguments. Supplying both sources raises `InvalidConfigurationException` before creation starts. The pipeline captures the class named by an input reflector at entry. A handler's `$context->class` is a detached view of that class. A `ReflectionObject` or a derived reflector can supply attribute metadata while it still describes the selected class.
@@ -334,8 +336,8 @@ Search extensions for the removed interface, old resolver constructor arguments,
 
 Executable contract coverage accompanies this guide:
 
-- [Custom strategy admission and in-flight descriptors](../../tests/Contract/CentralDefinitionStrategyContractTest.php).
-- [Direct built-in strategy use and deferred owners](../../tests/Contract/DefinitionStrategyDirectUseContractTest.php).
-- [Snapshot composition and attachment authority](../../tests/Contract/DefinitionSnapshotCompositionContractTest.php).
-- [Public mutation retirement](../../tests/Contract/MutationRetirementContractTest.php) and [native release boundaries](../../tests/Contract/MutationRetirementBoundaryContractTest.php).
-- [Normalization timing](../../tests/Contract/DependencyNormalizationContractTest.php).
+- [Custom strategy admission and in-flight descriptors](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/CentralDefinitionStrategyContractTest.php).
+- [Direct built-in strategy use and deferred owners](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/DefinitionStrategyDirectUseContractTest.php).
+- [Snapshot composition and attachment authority](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/DefinitionSnapshotCompositionContractTest.php).
+- [Public mutation retirement](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/MutationRetirementContractTest.php) and [native release boundaries](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/MutationRetirementBoundaryContractTest.php).
+- [Normalization timing](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/tests/Contract/DependencyNormalizationContractTest.php).
