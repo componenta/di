@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Componenta\DI\Internal\AttributeExecution;
-use Componenta\DI\Internal\ReflectionSnapshot;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterTargetAccess;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
@@ -77,31 +76,11 @@ final class ObjectPlans
             $classPlan = $plans->build($attributeTarget);
             $requiresFreshValidation = $plans->requiresFreshValidation($classPlan);
             $constructor = $reflection->getConstructor();
-            $constructorParameters = $constructor?->getParameters() ?? [];
-            $borrowedParameters = [];
-            // Invocation owns the native method. Borrowed methods supply metadata for that declaration.
-            if ($constructor !== null && $attributeTarget !== $reflection) {
-                $borrowed = $attributeTarget->getConstructor();
-                if ($borrowed !== null && ReflectionSnapshot::sameDeclaration($borrowed, $constructor)) {
-                    $parameters = $borrowed->getParameters();
-                    if (ReflectionSnapshot::sameDeclaration($borrowed, $constructor)) {
-                        $borrowedParameters = $parameters;
-                    }
-                }
-            }
-            if ($borrowedParameters === []) {
-                $constructorTargets = $this->parameters->targets($constructorParameters);
-            } else {
-                $constructorTargets = [];
-                foreach ($constructorParameters as $position => $parameter) {
-                    // Reading one parameter can retarget a later borrowed reflector.
-                    $candidate = $borrowedParameters[$position] ?? null;
-                    if ($candidate !== null && ReflectionSnapshot::sameParameter($candidate, $parameter)) {
-                        $parameter = $candidate;
-                    }
-                    $constructorTargets[] = $this->parameters->target($parameter);
-                }
-            }
+            $constructorTargets = ConstructorInvocation::targets(
+                $this->parameters,
+                $constructor,
+                $attributeTarget === $reflection ? null : $attributeTarget,
+            );
 
             foreach ($constructorTargets as $target) {
                 $plan = ParameterTargetAccess::declaration($target)->attributePlan($plans);

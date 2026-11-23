@@ -8,21 +8,59 @@ use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\CompletedAttributeGuard;
+use Componenta\DI\Internal\ReflectionSnapshot;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
+use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 use ReflectionMethod;
 use Throwable;
 
 /**
- * Runs one native constructor step and leaves its proof to the caller that owns the remaining lifecycle.
+ * Builds and runs one native constructor step and leaves its proof to the caller that owns the remaining lifecycle.
  *
  * @internal
  */
 final class ConstructorInvocation
 {
+    /**
+     * @param ReflectionClass<covariant object>|null $metadataSource
+     * @return list<ParameterTarget>
+     */
+    public static function targets(
+        ParameterExecution $parameters,
+        ?ReflectionMethod $constructor,
+        ?ReflectionClass $metadataSource,
+    ): array {
+        if ($constructor === null) {
+            return [];
+        }
+
+        $native = $constructor->getParameters();
+        $borrowed = $metadataSource?->getConstructor();
+        if ($borrowed === null || !ReflectionSnapshot::sameDeclaration($borrowed, $constructor)) {
+            return $parameters->targets($native);
+        }
+
+        $candidates = $borrowed->getParameters();
+        if ($candidates === [] || !ReflectionSnapshot::sameDeclaration($borrowed, $constructor)) {
+            return $parameters->targets($native);
+        }
+
+        $targets = [];
+        foreach ($native as $position => $parameter) {
+            // Reading one parameter can retarget a later borrowed reflector.
+            $candidate = $candidates[$position] ?? null;
+            if ($candidate !== null && ReflectionSnapshot::sameParameter($candidate, $parameter)) {
+                $parameter = $candidate;
+            }
+            $targets[] = $parameters->target($parameter);
+        }
+        return $targets;
+    }
+
     /**
      * @template T of object
      * @param ReflectionClass<covariant T> $class
