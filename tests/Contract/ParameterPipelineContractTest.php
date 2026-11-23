@@ -27,6 +27,7 @@ use Error;
 use ReflectionFunction;
 use ReflectionParameter;
 use stdClass;
+use Symfony\Component\Process\Process;
 
 final class FixedPipelineValue implements ParameterResolverInterface
 {
@@ -79,6 +80,33 @@ test('parameter resolver registration requires one attribute definition registry
     $registry->register(new AttributeDefinition(Env::class, new EnvHandler($container)));
     expect($pipeline->resolve([$target]))->toBe(['environment']);
 });
+
+test('cold resolver registration respects a seal or a prior registration published by discovery', function (
+    string $scenario,
+    ?string $failure,
+    string $result,
+): void {
+    $root = dirname(__DIR__, 2);
+    $process = new Process([
+        PHP_BINARY,
+        '-n',
+        $root . '/tests/Fixtures/ParameterResolverRegistrationCold.php',
+        $root . '/vendor/autoload.php',
+        $scenario,
+    ]);
+    $process->mustRun();
+
+    expect($process->getErrorOutput())->toBe('')
+        ->and(json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR))->toBe([
+            'loads' => 1,
+            'failure' => $failure,
+            'result' => [$result],
+        ]);
+})->with([
+    'pipeline sealed during loading' => ['seal', 'Parameter resolver pipeline is sealed and cannot be changed.', 'fallback'],
+    'resolver added during loading' => ['register', 'Parameter resolver ' . AttributeParameterResolver::class . ' is already registered.', 'attribute'],
+    'registration without a concurrent change' => ['control', null, 'attribute'],
+]);
 
 test('equal resolver priorities preserve registration order', function (): void {
     $pipeline = new ParametersResolver(new AttributePlanBuilder(new AttributeDefinitionRegistry()));

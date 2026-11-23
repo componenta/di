@@ -29,22 +29,16 @@ final class ParameterResolverChain
 
     public function add(ParameterResolverInterface $resolver, int $priority): void
     {
-        if ($this->isSealed) {
-            throw new InvalidConfigurationException(
-                'Parameter resolver pipeline is sealed and cannot be changed.',
-            );
-        }
-
         $id = spl_object_id($resolver);
-        if (isset($this->registrations[$id])) {
-            throw new InvalidConfigurationException(sprintf(
-                'Parameter resolver %s is already registered.',
-                $resolver::class,
-            ));
-        }
+        $this->assertCanAdd($resolver, $id);
 
-        if ($resolver instanceof AttributeParameterResolver && !ParameterAttributeAccess::usesAttributeRegistry($resolver, $this->attributes)) {
-            throw new InvalidConfigurationException('Attribute and parameter resolution must use the same attribute definition registry.');
+        if ($resolver instanceof AttributeParameterResolver) {
+            $sharedRegistry = ParameterAttributeAccess::usesAttributeRegistry($resolver, $this->attributes);
+            // Loading the attribute bridge can seal the chain or add this resolver.
+            $this->assertCanAdd($resolver, $id);
+            if (!$sharedRegistry) {
+                throw new InvalidConfigurationException('Attribute and parameter resolution must use the same attribute definition registry.');
+            }
         }
 
         $this->registrations[$id] = ['resolver' => $resolver, 'priority' => $priority];
@@ -55,6 +49,22 @@ final class ParameterResolverChain
     public function seal(): void
     {
         $this->isSealed = true;
+    }
+
+    private function assertCanAdd(ParameterResolverInterface $resolver, int $id): void
+    {
+        if ($this->isSealed) {
+            throw new InvalidConfigurationException(
+                'Parameter resolver pipeline is sealed and cannot be changed.',
+            );
+        }
+
+        if (isset($this->registrations[$id])) {
+            throw new InvalidConfigurationException(sprintf(
+                'Parameter resolver %s is already registered.',
+                $resolver::class,
+            ));
+        }
     }
 
     /** @return list<ParameterResolverInterface> */
