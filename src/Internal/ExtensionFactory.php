@@ -8,7 +8,6 @@ use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
-use Error;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -71,9 +70,9 @@ final class ExtensionFactory
         } elseif (is_string($spec)) {
             $extension = AvailableEntryLookup::has($container, $spec)
                 ? AvailableEntryLookup::get($container, $spec)
-                : (is_callable($spec) ? $spec($container) : $container->get($spec));
+                : (is_public_callable($spec) ? $spec($container) : $container->get($spec));
         } elseif (is_array($spec)
-            && !self::isNativeExtensionCallable($spec)
+            && !is_public_callable($spec, deferAbstractDispatch: true)
             && array_keys($spec) === [0, 1]
             && is_string($spec[0])
             && $spec[0] !== ''
@@ -82,7 +81,7 @@ final class ExtensionFactory
             && AvailableEntryLookup::has($container, $spec[0])
         ) {
             $factory = [AvailableEntryLookup::get($container, $spec[0]), $spec[1]];
-            if (!is_callable($factory)) {
+            if (!is_public_callable($factory)) {
                 throw new InvalidConfigurationException(sprintf(
                     'Extension service method "%s::%s" is not callable.',
                     $spec[0],
@@ -91,7 +90,7 @@ final class ExtensionFactory
             }
             $invoke = str_contains($spec[1], '::') ? Closure::fromCallable($factory) : $factory;
             $extension = $invoke($container);
-        } elseif (is_callable($spec)) {
+        } elseif (is_public_callable($spec)) {
             // Native qualified ancestor pairs require capture before direct invocation.
             // Retain the original array until invocation completes, including static receivers.
             $invoke = is_array($spec) && str_contains($spec[1], '::') ? Closure::fromCallable($spec) : $spec;
@@ -111,18 +110,5 @@ final class ExtensionFactory
         }
 
         return $extension;
-    }
-
-    /** @param array<mixed> $spec */
-    private static function isNativeExtensionCallable(array $spec): bool
-    {
-        try {
-            return is_callable($spec);
-        } catch (Error $error) {
-            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
-                throw $error;
-            }
-            return false;
-        }
     }
 }
