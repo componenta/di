@@ -12,6 +12,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Internal\AttributeExecutionOrder;
 use Componenta\DI\Internal\AttributePlans;
 use Componenta\DI\Internal\MakeHandlerAccess;
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestAttributeHandlerAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Internal\TransformHandler;
 use Componenta\DI\Resolver\Attribute\Handler\CastHandler;
@@ -75,6 +76,7 @@ final readonly class AttributeParameterExecution
         $processed = [];
         $pendingAttributes = [];
         $companions = [];
+        $sourceChecks = [];
         while (true) {
             $revision = $this->plans->refreshAvailability();
             $plan = $declaration->attributePlan($this->plans);
@@ -147,12 +149,27 @@ final readonly class AttributeParameterExecution
                             return $instance;
                         },
                     );
+                } elseif ($handler instanceof RequestAttributeHandler) {
+                    $value = RequestAttributeHandlerAccess::resolve(
+                        $handler,
+                        $attribute,
+                        $target,
+                        $literalContext ?? $context,
+                        $value,
+                        $mappedSourceChecks,
+                    );
+                    if ($mappedSourceChecks !== []) {
+                        $sourceChecks = [...$sourceChecks, ...$mappedSourceChecks];
+                    }
                 } else {
-                    $input = $handler instanceof RequestAttributeHandler ? $literalContext ?? $context : $context;
-                    $value = $handler->resolveParameter($attribute, $target, $input, $plan, $value);
+                    $value = $handler->resolveParameter($attribute, $target, $context, $plan, $value);
                 }
                 unset($pendingAttributes[$usage->declarationOrder], $attribute);
-                if ($this->plans->refreshAvailability() !== $revision) {
+                $currentRevision = $this->plans->refreshAvailability();
+                foreach ($sourceChecks as $check) {
+                    $check();
+                }
+                if ($currentRevision !== $revision) {
                     // Keep the resolved source and refresh only the remaining handlers.
                     continue 2;
                 }

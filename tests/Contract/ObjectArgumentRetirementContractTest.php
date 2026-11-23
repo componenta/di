@@ -234,8 +234,10 @@ final class ExplicitSource implements ParameterSourceAttributeInterface {}
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class RetirementMapping extends MapQueryString
 {
+    private ?Argument $owned = null;
+
     /** @param class-string $declaration */
-    public function __construct(private readonly string $alias, private readonly string $declaration)
+    public function __construct(private readonly string $alias, private readonly string $declaration, private readonly bool $retainInAttribute = false)
     {
         parent::__construct();
     }
@@ -243,7 +245,11 @@ final class RetirementMapping extends MapQueryString
     #[\Override]
     public function transform(array $data): array
     {
-        return [...parent::transform($data), 'owned' => new Argument('released mapped input', $this->alias, $this->declaration)];
+        $argument = new Argument('released mapped input', $this->alias, $this->declaration);
+        if ($this->retainInAttribute) {
+            $this->owned = $argument;
+        }
+        return [...parent::transform($data), 'owned' => $this->owned ?? $argument];
     }
 }
 
@@ -314,7 +320,12 @@ test('eager return cannot publish a mapped constructor argument whose source was
 })->with(['compatibility' => false, 'targeted' => true])
     ->with(['explicit source' => true, 'unrelated' => false]);
 
-test('the stock request mapper checks consumed DTO sources after releasing the mapped input', function (bool $targeted, bool $setup, bool $related): void {
+test('the stock request mapper checks consumed DTO sources after releasing the mapped input', function (
+    bool $targeted,
+    bool $setup,
+    bool $related,
+    bool $attributeOwned,
+): void {
     $suffix = bin2hex(random_bytes(5));
     $alias = __NAMESPACE__ . '\\Source_' . $suffix;
     $read = eval(sprintf(
@@ -326,7 +337,7 @@ test('the stock request mapper checks consumed DTO sources after releasing the m
                 Product::$events[] = $label;
             }
         }
-        return static function (#[RetirementMapping(%s, %s)] Dto_%s $dto): string {
+        return static function (#[RetirementMapping(%s, %s, %s)] Dto_%s $dto): string {
             Product::$events[] = 'body';
             return $dto->label;
         };
@@ -338,6 +349,7 @@ test('the stock request mapper checks consumed DTO sources after releasing the m
         $suffix,
         var_export($alias, true),
         var_export($related ? ExplicitSource::class : OtherLabel::class, true),
+        var_export($attributeOwned, true),
         $suffix,
     ));
     if (!$read instanceof Closure) {
@@ -370,4 +382,5 @@ test('the stock request mapper checks consumed DTO sources after releasing the m
     }
 })->with(['compatibility' => false, 'targeted' => true])
     ->with(['constructor' => false, 'SetUp method' => true])
-    ->with(['explicit source' => true, 'unrelated' => false]);
+    ->with(['explicit source' => true, 'unrelated' => false])
+    ->with(['mapping frame owns input' => false, 'attribute also owns input' => true]);

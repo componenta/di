@@ -23,7 +23,8 @@ final class MappedRequestPublication
         }
     }
 
-    public function finish(?object $result): void
+    /** @return list<Closure():void> */
+    public function finish(?object $result): array
     {
         $checks = $result === null ? [] : ($this->checks[$result] ?? []);
         $this->isOpen = false;
@@ -31,5 +32,6 @@ final class MappedRequestPublication
         foreach ($checks as $check) {
             $check();
         }
+        return $checks;
     }
 }

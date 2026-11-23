@@ -17,6 +17,7 @@ use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestParameterSourceGuard;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestPublication;
+use Componenta\DI\Internal\Resolver\Parameter\Request\RequestAttributeHandlerScope;
 use Componenta\DI\Internal\Resolver\Parameter\Request\RequestParameter;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
@@ -40,7 +41,7 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /** Handles all request-source attributes on parameters. */
-final readonly class RequestAttributeHandler implements ParameterAttributeHandlerInterface
+final readonly class RequestAttributeHandler extends RequestAttributeHandlerScope implements ParameterAttributeHandlerInterface
 {
     /** @param (Closure(Closure,array<string|int,mixed>):mixed)|null $callbacks */
     public function __construct(
@@ -57,6 +58,21 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         AttributePlan $plan,
         ParameterAttributeValue $value,
     ): ParameterAttributeValue {
+        return $this->resolveRequest($attribute, $target, $context, $value, $sourceChecks);
+    }
+
+    /**
+     * @param list<Closure():void>|null $sourceChecks
+     * @param-out list<Closure():void> $sourceChecks
+     */
+    protected function resolveRequest(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        ParameterAttributeValue $value,
+        ?array &$sourceChecks,
+    ): ParameterAttributeValue {
+        $sourceChecks = [];
         if ($value->resolved) {
             return $value;
         }
@@ -74,17 +90,22 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         }
 
         return ParameterAttributeValue::resolved(
-            $this->extractValue($request, $attribute, $target->reflection),
+            $this->extractValue($request, $attribute, $target->reflection, $sourceChecks),
         );
     }
 
+    /**
+     * @param list<Closure():void> $sourceChecks
+     * @param-out list<Closure():void> $sourceChecks
+     */
     private function extractValue(
         ServerRequestInterface $request,
         object $attribute,
         ReflectionParameter $parameter,
+        array &$sourceChecks,
     ): mixed {
         if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {
-            return $this->processMapping($request, $attribute, $parameter);
+            return $this->processMapping($request, $attribute, $parameter, $sourceChecks);
         }
 
         if ($attribute instanceof ExtractorInterface) {
@@ -124,18 +145,23 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         return $position === false ? $class : substr($class, $position + 1);
     }
 
-    /** @return array<string|int,mixed>|object */
+    /**
+     * @param list<Closure():void> $sourceChecks
+     * @param-out list<Closure():void> $sourceChecks
+     * @return array<string|int,mixed>|object
+     */
     private function processMapping(
         ServerRequestInterface $request,
         RequestDataExtractorInterface&MapperInterface $mapper,
         ReflectionParameter $parameter,
+        array &$sourceChecks,
     ): array|object {
         $publication = null;
         try {
             $result = $this->mapInput($request, $mapper, $parameter, $publication);
         } finally {
             // The mapping frame has released the input it owned.
-            $publication?->finish(is_object($result ?? null) ? $result : null);
+            $sourceChecks = $publication?->finish(is_object($result ?? null) ? $result : null) ?? [];
         }
         return $result;
     }
