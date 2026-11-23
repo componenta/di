@@ -371,6 +371,7 @@ final class ObjectCreationContext extends ObjectCreationScope
 
         $pending = $this->pendingPropertyWrites[$this->propertyKey($property)] ?? [];
         if (array_key_exists('value', $pending)) {
+            $this->assertPropertyWritesOpen();
             return $pending['value'];
         }
 

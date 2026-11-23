@@ -7,6 +7,7 @@ namespace Componenta\DI\Tests\Contract;
 use Attribute;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\ObjectAttributeAccess;
 use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
@@ -100,6 +101,45 @@ test('another fiber cannot change a staged property while its handler is suspend
     $fiber->resume();
 
     expect(fixtureInstance($fiber->getReturn(), CreationContextProperties::class)->value)->toBe(2);
+});
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final class StagedPropertyExtension {}
+
+final class StagedPropertyProduct
+{
+    #[StagedPropertyExtension]
+    public \stdClass $value;
+
+    public int $committed = 7;
+}
+
+test('only the owning execution can read an uncommitted property value', function (): void {
+    $retained = new SuspendedContext();
+    $property = new ReflectionProperty(StagedPropertyProduct::class, 'value');
+    $handler = new CreationContextObserver(static function (ObjectCreationContext $context) use ($retained, $property): void {
+        $retained->observed = $context;
+        $pending = (object) ['label' => 'owner'];
+        expect($context->claimProperty($property))->toBeTrue();
+        $context->writeProperty($property, $pending);
+        expect($context->readProperty($property))->toBe($pending);
+        Fiber::suspend('staged');
+    });
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(StagedPropertyExtension::class, $handler, [ValueProvider::class]))
+        ->build();
+    $owner = new Fiber(static fn(): object => $container->make(StagedPropertyProduct::class));
+    expect($owner->start())->toBe('staged');
+    $context = $retained->observed ?? throw new LogicException('Expected a suspended property handler.');
+    $read = static fn(): mixed => $context->readProperty($property);
+
+    expect($property->isInitialized($context->entry))->toBeFalse()
+        ->and($context->readProperty(new ReflectionProperty(StagedPropertyProduct::class, 'committed')))->toBe(7)
+        ->and(static fn() => new Fiber($read)->start())->toThrow(LogicException::class, 'another execution');
+    $owner->resume();
+
+    $entry = fixtureInstance($owner->getReturn(), StagedPropertyProduct::class);
+    expect($read())->toBe($entry->value)->and($entry->value->label)->toBe('owner');
 });
 
 test('object handlers materialize public parameters once and share them with the constructor', function (bool $deferred): void {
