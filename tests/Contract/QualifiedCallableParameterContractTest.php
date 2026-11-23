@@ -201,7 +201,27 @@ class MagicAncestor
     }
 }
 
-final class MagicChild extends MagicAncestor {}
+final class MagicChild extends MagicAncestor
+{
+    public static function childMethod(string $value = 'child default'): string
+    {
+        return $value;
+    }
+}
+
+test('qualified ancestor magic keeps arguments when the called class has a same-named concrete method', function (bool $captured): void {
+    allowingQualifiedCallable(static function () use ($captured): void {
+        $qualified = nativeCallable([new MagicChild(), MagicAncestor::class . '::childMethod']);
+        $callable = $captured ? Closure::fromCallable($qualified) : $qualified;
+        $arguments = ['positional', 42];
+        $expected = ['static', 'childMethod', $arguments];
+        $container = builder(false)->build();
+
+        expect(call_user_func_array($callable, $arguments))->toBe($expected)
+            ->and($container->call($callable, $arguments))->toBe($expected)
+            ->and($container->call(MagicChild::childMethod(...), ['value' => 'resolved']))->toBe('resolved');
+    });
+})->with(['qualified pair' => false, 'native closure' => true]);
 
 test('qualified magic routes preserve native arguments without using an inaccessible method signature', function (bool $uncached, bool $object, string $method): void {
     allowingQualifiedCallable(static function () use ($uncached, $object, $method): void {

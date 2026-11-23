@@ -60,31 +60,16 @@ function is_magic_closure_trampoline(ReflectionFunctionAbstract $reflection): bo
 
     $name = $reflection->getName();
     $scope = $reflection->getClosureScopeClass();
-    if ($scope !== null && $scope->hasMethod($name)) {
-        $method = $scope->getMethod($name);
-        if ($method->isInternal()
-            && $method->getDeclaringClass()->getName() === $scope->getName()
-        ) {
-            return false;
-        }
-    }
-
-    $bound = $reflection->getClosureThis();
-    if ($bound !== null) {
-        $candidate = [$bound, $name];
-    } else {
-        $class = $reflection->getClosureCalledClass() ?? $scope;
-        if ($class === null) {
-            return false;
-        }
-        $candidate = [$class->getName(), $name];
-    }
-
-    if (!is_callable($candidate)) {
+    if ($scope === null) {
         return false;
     }
+    if (!$scope->hasMethod($name)) {
+        return true;
+    }
 
-    return CallableReflector::reflect($candidate) === null;
+    // The called class may declare a different method with the trampoline's name.
+    $method = $scope->getMethod($name);
+    return !$method->isInternal() || $method->getDeclaringClass()->getName() !== $scope->getName();
 }
 
 /**
