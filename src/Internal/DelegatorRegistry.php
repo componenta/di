@@ -26,7 +26,7 @@ use Throwable;
  */
 final class DelegatorRegistry
 {
-    /** @var array<string, list<mixed>> */
+    /** @var array<string, list<PreparedDelegator>> */
     private array $raw = [];
     /** @var array<string, list<callable>> */
     private array $callables = [];
@@ -57,7 +57,7 @@ final class DelegatorRegistry
     public function prepare(string $id, mixed $delegator): array
     {
         $delegator = DependencyNormalizer::normalizeDelegatorSpecification($delegator, $id);
-        return ['delegator' => $delegator, 'dependencies' => self::dependencyIds($delegator)];
+        return ['delegator' => $delegator, 'dependencies' => $this->dependencyIds($delegator)];
     }
 
     /** @param PreparedDelegator $prepared */
@@ -66,7 +66,7 @@ final class DelegatorRegistry
         RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $this->invalidateChain($id, $retirement);
         $delegator = $prepared['delegator'];
-        $this->raw[$id][] = $delegator;
+        $this->raw[$id][] = $prepared;
         $dependencies = $prepared['dependencies'];
         // An opaque string always keeps its exact ID. Only a provisional
         // method owner can disappear from the dependency index at resolution.
@@ -93,7 +93,7 @@ final class DelegatorRegistry
             $retirement->retain($this->callables[$id]);
             // A cold selection must be invalidated across callback reentry,
             // including when its next owner differs from the warmed route.
-            if ($this->lookup !== null && isset($this->refinableDependencies[$id])) {
+            if (isset($this->refinableDependencies[$id])) {
                 $this->indexDependencies($id, $this->registeredDependencies[$id] ?? []);
             }
         }
@@ -211,26 +211,30 @@ final class DelegatorRegistry
         if ($callables === null) {
             $revision = $this->revisions[$id] ?? 0;
             $lookupVersion = EntryLookupRevision::current();
-            $lookup = $this->lookup !== null && isset($this->refinableDependencies[$id])
+            $refine = isset($this->refinableDependencies[$id]);
+            $lookup = $this->lookup !== null && $refine
                 ? new CallableDependencyLookup($this->lookup)
                 : null;
+            $standaloneDependencies = $this->lookup === null && $refine ? [] : null;
             $resolver = $lookup === null ? $this->callableResolver : new CallableResolver($lookup);
-            $callables = $this->resolveChain($id, $resolver);
+            $callables = $this->resolveChain($id, $resolver, $standaloneDependencies);
             if (($this->revisions[$id] ?? 0) === $revision && EntryLookupRevision::current() === $lookupVersion) {
                 if ($lookup !== null) {
                     $dependencies = $lookup->dependencies;
                     // Exact string bindings can override the currently selected callable.
-                    foreach ($this->raw[$id] as $specification) {
+                    foreach ($this->raw[$id] as ['delegator' => $specification]) {
                         if (is_string($specification)) {
                             $dependencies[$specification] = true;
                         }
                     }
                     $this->indexDependencies($id, $dependencies);
-                    if (count($callables) === 1 && $callables[0] === $this->raw[$id][0]) {
+                    if (count($callables) === 1 && $callables[0] === $this->raw[$id][0]['delegator']) {
                         // A native callable with its original route stays available.
                         $this->registeredDependencies[$id] = $dependencies;
                         unset($this->refinableDependencies[$id]);
                     }
+                } elseif ($standaloneDependencies !== null) {
+                    $this->indexDependencies($id, $standaloneDependencies);
                 }
                 $this->callables[$id] = $callables;
             }
@@ -274,13 +278,30 @@ final class DelegatorRegistry
         $this->dependents[$dependency][$entry] = true;
     }
 
-    /** @return list<callable> */
-    private function resolveChain(string $id, CallableResolverInterface $resolver): array
-    {
+    /**
+     * @param array<string,true>|null $standaloneDependencies
+     * @return list<callable>
+     */
+    private function resolveChain(
+        string $id,
+        CallableResolverInterface $resolver,
+        ?array &$standaloneDependencies,
+    ): array {
         $callables = [];
-        foreach ($this->raw[$id] as $delegator) {
+        foreach ($this->raw[$id] as ['delegator' => $delegator, 'dependencies' => $dependencies]) {
             try {
-                $callables[] = self::normalize($delegator, $resolver);
+                if ($delegator instanceof Closure || (!is_string($delegator) && self::isNativeCallable($delegator))) {
+                    $callables[] = $delegator;
+                    continue;
+                }
+                $callables[] = $resolver->resolve($delegator);
+                // The supplied executor can use the owner while resolving
+                // even when it returns a native callable.
+                if ($standaloneDependencies !== null) {
+                    foreach ($dependencies as $dependencyId) {
+                        $standaloneDependencies[$dependencyId] = true;
+                    }
+                }
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -290,22 +311,8 @@ final class DelegatorRegistry
         return $callables;
     }
 
-    private static function normalize(mixed $delegator, CallableResolverInterface $resolver): callable
-    {
-        if ($delegator instanceof Closure) {
-            return $delegator;
-        }
-        if (is_string($delegator)) {
-            return $resolver->resolve($delegator);
-        }
-        if (self::isNativeCallable($delegator)) {
-            return $delegator;
-        }
-        return $resolver->resolve($delegator);
-    }
-
     /** @return list<string> */
-    private static function dependencyIds(mixed $delegator): array
+    private function dependencyIds(mixed $delegator): array
     {
         if (is_string($delegator)) {
             if ($delegator === '') {
@@ -317,23 +324,20 @@ final class DelegatorRegistry
                 $nativeOwner = substr($delegator, 0, (int) strrpos($delegator, '::'));
                 // Engine aliases can contain delimiters. A loaded native callable
                 // bypasses container owner lookup, including the first prefix.
-                if ((class_exists($nativeOwner, false) || interface_exists($nativeOwner, false))
-                    && self::isNativeCallable($delegator)
-                ) {
-                    return array_map('strval', array_keys($ids));
-                }
+                $nativeRoute = (class_exists($nativeOwner, false) || interface_exists($nativeOwner, false))
+                    && self::isNativeCallable($delegator);
 
                 [$owner, $method] = explode('::', $delegator, 2);
                 if ($owner !== '' && $method !== '') {
                     // The interface probe can autoload a class after the first probe failed.
                     // Qualified method shorthand resolves through the service receiver.
-                    $isNativeStatic = (class_exists($owner) || interface_exists($owner) || class_exists($owner, false))
+                    $isNativeStatic = $nativeRoute || ((class_exists($owner) || interface_exists($owner) || class_exists($owner, false))
                         && !str_contains($method, '::')
-                        && self::isNativeCallable([$owner, $method]);
-                    if (!$isNativeStatic) {
-                        // A class may be autoloaded only after registration. Track
-                        // its owner conservatively so a later non-static method
-                        // resolved through the container is invalidated correctly.
+                        && self::isNativeCallable([$owner, $method]));
+                    if (!$isNativeStatic || $this->lookup === null) {
+                        // An unresolved class can later require a service lookup.
+                        // A supplied standalone executor can also use that service
+                        // when a native static route is already available.
                         $ids[$owner] = true;
                     }
                 }

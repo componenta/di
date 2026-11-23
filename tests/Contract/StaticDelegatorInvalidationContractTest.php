@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Contract\StaticDelegatorInvalidation;
 
+use Componenta\DI\CallableExecutorInterface;
+use Componenta\DI\Container;
+use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 
@@ -181,6 +185,78 @@ test('late native method arrays retain shared results unless a delegate consumes
     'independent second delegate' => 'independent',
     'second delegate uses the owner' => 'uses-owner',
 ]);
+
+test('standalone native method pairs leave an unused owner independent while custom resolution keeps its dependencies', function (
+    ?string $custom,
+    bool $loaded,
+): void {
+    LateRouteDecorator::$calls = 0;
+    $owner = __NAMESPACE__ . '\\StandaloneLateMethodOwner_' . bin2hex(random_bytes(5));
+    $executor = new class ($owner) implements CallableExecutorInterface {
+        public Container $container;
+        public int $resolutions = 0;
+
+        public function __construct(private readonly string $owner) {}
+
+        public function call(mixed $callable, array $params = []): mixed
+        {
+            throw new LogicException('The delegator invokes the resolved callable directly.');
+        }
+
+        public function resolve(mixed $callable): callable
+        {
+            ++$this->resolutions;
+            $service = $this->container->get($this->owner);
+            if (!$service instanceof InstanceDecorator) {
+                throw new LogicException('Expected the current decorator service.');
+            }
+            return $service->decorate(...);
+        }
+    };
+    $container = new Container(new class () implements EntryResolverInterface {
+        public function can(string $id): bool
+        {
+            return false;
+        }
+
+        public function resolve(string $id, EntryParameters $params): mixed
+        {
+            throw new LogicException('The test uses registered services.');
+        }
+    }, $executor, services: ['product' => new Product('base')]);
+    $executor->container = $container;
+    $container->set($owner, new InstanceDecorator(':first'));
+    if ($loaded) {
+        class_alias(LateRouteDecorator::class, $owner);
+    }
+    $container->delegator('product', [$owner, 'fromClass']);
+    if ($custom !== null) {
+        $container->delegator('product', $custom === 'array' ? [$owner, 'custom'] : $owner . '::fromClass');
+    }
+    if (!$loaded) {
+        class_alias(LateRouteDecorator::class, $owner);
+    }
+
+    $first = $container->get('product');
+    $container->set($owner, new InstanceDecorator(':replacement'));
+    $current = $container->get('product');
+
+    if ($custom === null) {
+        expect($first)->toEqual(new Product('base:static'))
+            ->and($current)->toBe($first)
+            ->and(LateRouteDecorator::$calls)->toBe(1)
+            ->and($executor->resolutions)->toBe(0);
+    } else {
+        expect($first)->toEqual(new Product('base:static:first'))
+            ->and($current)->toEqual(new Product('base:static:replacement'))
+            ->and(LateRouteDecorator::$calls)->toBe(2)
+            ->and($executor->resolutions)->toBe(2);
+    }
+})->with([
+    'only a late native pair' => null,
+    'custom array resolves the same owner' => 'array',
+    'custom string resolves the same owner' => 'string',
+])->with(['loaded at registration' => true, 'loaded before first lookup' => false]);
 
 test('native static alias strings do not depend on an unused delimiter prefix', function (string $method): void {
     StaticDecorator::$calls = 0;
