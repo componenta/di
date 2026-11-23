@@ -113,6 +113,38 @@ final class CompletedAttributeGuard
         } while ($this->parameterClassifications !== [] && $this->recheckParameterClassifications());
     }
 
+    /** Revalidates a completed phase after a metadata read has revealed new declarations. */
+    public function revalidateLoadedChanges(): bool
+    {
+        if ($this->plans->refreshLoaded() === $this->verifiedRevision) {
+            return false;
+        }
+        $this->assertUnchanged();
+        return true;
+    }
+
+    /** Checks declarations loaded while the eager creation frame released its input. */
+    public function assertLoadedAfterArgumentRetirement(): void
+    {
+        if ($this->plans->refreshLoaded() === $this->verifiedRevision) {
+            return;
+        }
+        foreach ($this->completed as $completed) {
+            $target = $completed['source']->target;
+            $phase = $completed['phase'];
+            $property = $target instanceof ReflectionProperty;
+            $included = $phase === null ? null : static fn(AttributeUsage $usage): bool => self::appliesToPhase(
+                $usage->definition,
+                $usage->attributeClass,
+                $phase,
+                $property,
+            );
+            if (!$this->plans->hasSameLoadedDeclarations($target, $completed['plan'], $completed['observed'], $included)) {
+                self::throwChanged($target, $phase);
+            }
+        }
+    }
+
     /** Checks loaded declarations, and classifications that may have changed during a completed before phase. */
     public function assertLoadedParametersUnchanged(?self $completedBefore = null): void
     {
@@ -124,10 +156,7 @@ final class CompletedAttributeGuard
 
             $reclassified = $this->parameterClassifications !== [] && $this->recheckParameterClassifications();
             // A metadata read or watched classifier can load a constructor policy.
-            $newDeclarations = $completedBefore->plans->refreshLoaded() !== $completedBefore->verifiedRevision;
-            if ($newDeclarations) {
-                $completedBefore->assertUnchanged();
-            }
+            $newDeclarations = $completedBefore->revalidateLoadedChanges();
             $checked = $reclassified || $newDeclarations;
             if ($checked) {
                 $this->checkParameterSources?->__invoke();

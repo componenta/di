@@ -117,18 +117,26 @@ final class AttributePlans
 
     /**
      * Compares declared semantics without polling availability or running composition rules.
+     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param array<int,ReflectionAttribute<object>>|null $observed
+     * @param (Closure(AttributeUsage):bool)|null $included
      */
     public function hasSameLoadedDeclarations(
-        ReflectionParameter $target,
+        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         AttributePlan $plan,
         ?array $observed = null,
+        ?Closure $included = null,
     ): bool {
         $consumed = [];
         foreach ($plan->usages as $usage) {
-            $consumed[$usage->declarationOrder] = [$usage->definition, $usage->attributeClass];
+            if ($included === null || $included($usage)) {
+                $consumed[$usage->declarationOrder] = [$usage->definition, $usage->attributeClass];
+            }
         }
         foreach ($this->discoverUsages($target, $observed ?? $target->getAttributes(), autoload: false) as $usage) {
+            if ($included !== null && !$included($usage)) {
+                continue;
+            }
             $index = $usage->declarationOrder;
             if (($consumed[$index] ?? null) !== [$usage->definition, $usage->attributeClass]) {
                 return false;

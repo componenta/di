@@ -325,6 +325,8 @@ If construction makes another declared attribute available, the execution order 
 
 Lazy objects and virtual proxies retain the policies selected during their initial before-instantiation phase. If those policies later become incompatible, initialization fails without replaying that phase. A fresh `make()` uses the now-available attributes; an existing deferred object is not reconfigured.
 
+Eager `ObjectPipeline::create(resolveParameters: ...)` checks attributes discovered while releasing arguments owned by the creation attempt before returning its result. Native lazy objects and virtual proxies check policies through completion of the DI initializer or backing factory callback. PHP can release captured values after that callback completes.
+
 External PSR-11 containers may be registered with `Container::addContainer()`. External entries participate in cycle protection and cannot shadow protected core services.
 
 Custom fallback resolvers receive runtime arguments through `EntryParameters`. Use it to forward the same construction across resolvers and deferred initialization. See the [fallback resolver migration guide](docs/migrations/di6-definitions.md#custom-fallback-resolvers).

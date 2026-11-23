@@ -147,8 +147,11 @@ final class ConstructorInvocation
         $arguments = $parameters->resolveTracked($plan, $params, $proof, $provenance);
         self::checkBeforeConstructor($beforeConstructor);
         // Argument resolution and the callback can reveal a new parameter source.
-        MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, autoload: false);
-        $proof?->assertLoadedParametersUnchanged($beforeConstructor instanceof CompletedAttributeGuard ? $beforeConstructor : null);
+        $completedBefore = $beforeConstructor instanceof CompletedAttributeGuard ? $beforeConstructor : null;
+        do {
+            MappedRequestParameterSourceGuard::assertTargetsProvenanceNoConflicts($plan->targets, $provenance, autoload: false);
+            $proof?->assertLoadedParametersUnchanged($completedBefore);
+        } while ($proof === null && $provenance !== null && $completedBefore?->revalidateLoadedChanges() === true);
 
         return $arguments;
     }

@@ -111,6 +111,27 @@ final class ObjectCreation
         ?Closure $configure = null,
         ?Closure $resolveParameters = null,
     ): object {
+        $entry = $this->createWithArguments($class, $params, $configure, $resolveParameters, $completion);
+        // The inner frame has released the deferred arguments it owned.
+        $completion?->assertLoadedAfterArgumentRetirement();
+        return $entry;
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T>|ReflectionClass<T> $class
+     * @param array<string|int,mixed>|EntryParameters $params
+     * @param Closure(object):void|null $configure
+     * @param (Closure(): (array<string|int,mixed>|EntryParameters))|null $resolveParameters
+     * @param-out ?CompletedAttributeGuard $completion
+     */
+    private function createWithArguments(
+        string|ReflectionClass $class,
+        array|EntryParameters $params,
+        ?Closure $configure,
+        ?Closure $resolveParameters,
+        ?CompletedAttributeGuard &$completion,
+    ): object {
         if ($resolveParameters !== null && $params !== []) {
             throw new InvalidConfigurationException('Supply one source of construction parameters.');
         }
@@ -159,6 +180,7 @@ final class ObjectCreation
             if (isset($creation)) {
                 $this->parametersStore->assertSetupSourcesUnchanged($creation);
             }
+            $completion = $resolveParameters === null ? null : $completed;
             return $entry;
         }
 
@@ -184,20 +206,27 @@ final class ObjectCreation
             ? $this->objectPlans->constructorPlan($metadata)
             : $this->parameters->prepareTargets([]);
 
-        return match ($creation->strategy) {
-            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $attempt, $completed, $configure),
+        $eagerCompletion = null;
+        $entry = match ($creation->strategy) {
+            CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $attempt, $completed, $configure, $eagerCompletion),
             CreationStrategy::Lazy => $this->lazy($metadata, $constructorPlan, $attempt, $completed, $configure, $resolveParameters),
             CreationStrategy::Proxy => $this->proxy($metadata, $constructorPlan, $attempt, $completed, $configure, $resolveParameters),
         };
+        $completion = $resolveParameters === null ? null : $eagerCompletion;
+        return $entry;
     }
 
-    /** @param Closure(object):void|null $configure */
+    /**
+     * @param Closure(object):void|null $configure
+     * @param-out CompletedAttributeGuard $completion
+     */
     private function eager(
         ObjectMetadata $metadata,
         PreparedParameterPlan $constructorPlan,
         ObjectCreationAttempt $attempt,
         CompletedAttributeGuard $completed,
         ?Closure $configure,
+        ?CompletedAttributeGuard &$completion = null,
     ): object {
         $creation = $attempt->context;
         $completed->assertUnchanged();
@@ -231,6 +260,7 @@ final class ObjectCreation
         $constructorProof?->assertParameterSourcesUnchanged();
         $this->parametersStore->assertSetupSourcesUnchanged($creation);
 
+        $completion = $completed;
         return $entry;
     }
 
