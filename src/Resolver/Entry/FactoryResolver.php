@@ -128,7 +128,7 @@ final class FactoryResolver implements DefinitionResolverInterface
     private function arguments(?ReflectionMethod $method, array $configured, array $runtime, bool $autowire): array
     {
         $arguments = [];
-        $context = new ParameterResolutionContext(array_replace($configured, $runtime));
+        $context = $autowire ? new ParameterResolutionContext(array_replace($configured, $runtime)) : null;
         $parameters = $method?->getParameters() ?? [];
         foreach ($parameters as $parameter) {
             if ($parameter->isVariadic()) {
@@ -144,7 +144,7 @@ final class FactoryResolver implements DefinitionResolverInterface
                 $arguments[$name] = $this->resolveDefinitionValue($configured[$name]);
             } elseif (array_key_exists($position, $configured)) {
                 $arguments[$name] = $this->resolveDefinitionValue($configured[$position]);
-            } elseif ($autowire) {
+            } elseif ($context !== null) {
                 $resolved = $this->autowire->resolveParameter($this->targets->create($parameter), $context);
                 if ($resolved !== null) {
                     $arguments[$name] = $resolved[1];
