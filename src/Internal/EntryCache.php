@@ -29,7 +29,7 @@ final class EntryCache
     /** @param array<string, mixed> $base */
     public function __construct(array $base = [])
     {
-        $this->base = $base;
+        $this->base = ResolutionMetadata::invocationSlots($base);
     }
 
     public function tryGetBase(string $id, mixed &$value): bool

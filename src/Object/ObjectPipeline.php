@@ -23,7 +23,6 @@ use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 use ReflectionObject;
-use Throwable;
 
 use function Componenta\DI\Internal\is_entry_class_eligible;
 
@@ -172,7 +171,7 @@ final class ObjectPipeline
     /** @param class-string|ReflectionClass<object> $class */
     private function metadata(string|ReflectionClass $class): ObjectMetadata
     {
-        $cacheable = !$class instanceof ReflectionObject;
+        $cacheable = is_string($class) || $class::class === ReflectionClass::class;
         while (true) {
             $revision = $this->registry->revision;
             if ($revision !== $this->metadataRevision) {
@@ -227,7 +226,9 @@ final class ObjectPipeline
     private function constructorPlan(ObjectMetadata $metadata): PreparedParameterPlan
     {
         $name = $metadata->class->getName();
-        $cached = $this->constructorPlans[$name] ?? null;
+        $cacheable = $metadata->class::class === ReflectionClass::class
+            || $metadata->class::class === ReflectionObject::class;
+        $cached = $cacheable ? ($this->constructorPlans[$name] ?? null) : null;
         $parameters = $this->parameters();
 
         if ($cached !== null && $parameters->isCurrentPlan($cached)) {
@@ -235,7 +236,7 @@ final class ObjectPipeline
         }
 
         $plan = $parameters->prepareTargets($metadata->constructorTargets);
-        if ($parameters->canCachePlans) {
+        if ($cacheable && $parameters->canCachePlans) {
             $this->constructorPlans[$name] = $plan;
         }
 
@@ -291,6 +292,7 @@ final class ObjectPipeline
             $metadata->class->getName(),
             function (object $entry) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): void {
                 $attempt = $this->freshAttempt($creation);
+                $succeeded = false;
                 try {
                     $completed->assertUnchanged();
                     if ($attempt->constructorEnabled) {
@@ -313,9 +315,12 @@ final class ObjectPipeline
                     $completed->assertUnchanged();
                     $configure?->__invoke($entry);
                     $completed->assertUnchanged();
-                } catch (Throwable $exception) {
-                    $creation = $this->freshAttempt($creation, $resolveParameters);
-                    throw $exception;
+                    $succeeded = true;
+                } finally {
+                    if (!$succeeded) {
+                        // Destroying a suspended Fiber unwinds finally without entering catch.
+                        $creation = $this->freshAttempt($creation, $resolveParameters);
+                    }
                 }
             },
         );
@@ -336,17 +341,21 @@ final class ObjectPipeline
         return $this->proxies->makeProxy(
             $metadata->class->getName(),
             function (object $_proxy) use ($metadata, $constructorPlan, &$creation, $completed, $configure, $resolveParameters): object {
+                $succeeded = false;
                 try {
-                    return $this->eager(
+                    $entry = $this->eager(
                         $metadata,
                         $constructorPlan,
                         $this->freshAttempt($creation),
                         $completed,
                         $configure,
                     );
-                } catch (Throwable $exception) {
-                    $creation = $this->freshAttempt($creation, $resolveParameters);
-                    throw $exception;
+                    $succeeded = true;
+                    return $entry;
+                } finally {
+                    if (!$succeeded) {
+                        $creation = $this->freshAttempt($creation, $resolveParameters);
+                    }
                 }
             },
         );

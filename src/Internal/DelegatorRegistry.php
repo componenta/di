@@ -39,6 +39,10 @@ final class DelegatorRegistry
     /** @return PreparedDelegator */
     public function prepare(string $id, mixed $delegator): array
     {
+        if (is_array($delegator)) {
+            $delegator = ResolutionMetadata::invocationSlots($delegator);
+        }
+
         $delegator = DependencyConfiguration::normalizeDelegatorSpecification($delegator, $id);
         return ['delegator' => $delegator, 'dependencies' => self::dependencyIds($delegator)];
     }

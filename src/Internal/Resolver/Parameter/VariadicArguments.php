@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Parameter;
 
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -34,6 +35,12 @@ final class VariadicArguments
         if (!is_array($value)) {
             throw self::failure($target, $context, 'variadic value must be an array of arguments');
         }
+        if ($value === []) {
+            return $value;
+        }
+
+        // Select the complete collection before callable checks can autoload.
+        $value = ResolutionMetadata::invocationSlots($value);
 
         $fixedNames = [];
         foreach ($target->reflection->getDeclaringFunction()->getParameters() as $parameter) {

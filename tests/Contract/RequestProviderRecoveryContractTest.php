@@ -10,6 +10,8 @@ use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\Resolver\Parameter\Request\LazyFactory;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
 use Componenta\Validation\Provider\ValidationProviderInterface;
@@ -17,6 +19,7 @@ use Componenta\Validation\Rule\Required;
 use Componenta\Validation\Validator;
 use Componenta\Validation\ValidatorInterface;
 use Nyholm\Psr7\ServerRequest;
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Throwable;
 
@@ -69,6 +72,45 @@ function failure(callable $operation): Throwable
     }
     throw new \LogicException('Expected the provider failure to prevent invocation.');
 }
+
+test('a lazy request factory validates its service and retries rejected lookups', function (): void {
+    $cause = new \TypeError('Thrown by the factory provider.');
+    $source = new class () implements ContainerInterface {
+        public mixed $service;
+        public int $reads = 0;
+
+        public function has(string $id): bool
+        {
+            return $id === FactoryInterface::class;
+        }
+
+        public function get(string $id): mixed
+        {
+            ++$this->reads;
+            if ($this->service instanceof Throwable) {
+                throw $this->service;
+            }
+            return $this->service;
+        }
+    };
+    $factory = new LazyFactory($source);
+    $source->service = new \stdClass();
+    expect(fn() => $factory->make(Input::class))->toThrow(InvalidConfigurationException::class, 'got stdClass.')
+        ->and($source->reads)->toBe(1);
+
+    $source->service = $cause;
+    expect(failure(fn() => $factory->make(Input::class)))->toBe($cause);
+
+    $source->service = new class () implements FactoryInterface {
+        public function make(string $entry, array $params = []): object
+        {
+            return (object) ['entry' => $entry, 'params' => $params];
+        }
+    };
+    expect($factory->make(Input::class, ['name' => 'first']))->toEqual((object) ['entry' => Input::class, 'params' => ['name' => 'first']]);
+    expect($factory->make(Input::class, ['name' => 'second']))->toEqual((object) ['entry' => Input::class, 'params' => ['name' => 'second']])
+        ->and($source->reads)->toBe(3);
+});
 
 test('request casting observes provider failures and recovers after replacement on a warmed callable', function (bool $throws): void {
     $container = (new ContainerBuilder())->addService(CasterProviderInterface::class, new TestCasterProvider())->build();

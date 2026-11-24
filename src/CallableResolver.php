@@ -6,6 +6,7 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
@@ -34,6 +35,10 @@ class CallableResolver implements CallableResolverInterface
                 return $this->resolveString($callable);
             }
 
+            if (is_array($callable)) {
+                $callable = ResolutionMetadata::invocationSlots($callable);
+            }
+
             if (is_callable($callable)) {
                 return $callable;
             }
@@ -54,6 +59,9 @@ class CallableResolver implements CallableResolverInterface
     {
         if ($this->container->has($callable)) {
             $entry = $this->container->get($callable);
+            if (is_array($entry)) {
+                $entry = ResolutionMetadata::invocationSlots($entry);
+            }
             if (is_callable($entry)) {
                 return $entry;
             }

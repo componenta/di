@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute;
 
 use Attribute;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use InvalidArgumentException;
@@ -47,13 +48,13 @@ final class MapRequest extends RequestMapper implements RequestDataExtractorInte
     ) {
         parent::__construct($map, $conflictPolicy);
 
-        $this->sources = array_values($sources);
-        $this->exclude = array_values($exclude);
-        $this->defaults = $defaults;
-        $this->cast = $cast;
-        $this->sortMap = $sortMap;
-        $this->attributes = array_values($attributes);
-        $this->files = array_values($files);
+        $this->sources = array_values(ResolutionMetadata::invocationSlots($sources));
+        $this->exclude = array_values(ResolutionMetadata::invocationSlots($exclude));
+        $this->defaults = ResolutionMetadata::snapshot($defaults);
+        $this->cast = ResolutionMetadata::invocationSlots($cast);
+        $this->sortMap = ResolutionMetadata::snapshot($sortMap);
+        $this->attributes = array_values(ResolutionMetadata::invocationSlots($attributes));
+        $this->files = array_values(ResolutionMetadata::invocationSlots($files));
     }
 
     /** @return array<string|int,mixed> */

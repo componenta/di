@@ -4,9 +4,15 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
+use ReflectionReference;
+
 /** Internal metadata transport helpers for DI resolution parameter arrays. @internal */
 final class ResolutionMetadata
 {
+    use ArraySnapshot {
+        snapshot as public;
+    }
+
     private const string PREFIX = "\0componenta.di.";
 
     /**
@@ -47,6 +53,25 @@ final class ResolutionMetadata
             self::publicParameters($overrides),
             $internal,
         );
+    }
+
+    /**
+     * Selects argument values without retaining caller-owned reference slots.
+     * @template TKey of array-key
+     * @template TValue
+     * @param array<TKey,TValue> $parameters
+     * @return array<TKey,TValue>
+     */
+    public static function invocationSlots(array $parameters): array
+    {
+        $referenced = [];
+        foreach ($parameters as $key => $value) {
+            if (ReflectionReference::fromArrayElement($parameters, $key) !== null) {
+                $referenced[$key] = $value;
+            }
+        }
+
+        return $referenced === [] ? $parameters : array_replace($parameters, $referenced);
     }
 
     private function __construct() {}

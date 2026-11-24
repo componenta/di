@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
+use Componenta\DI\Internal\ResolutionMetadata;
+
 /** Mutable state owned by one ParametersResolver invocation. */
 final class ParameterResolutionContext
 {
@@ -19,8 +21,8 @@ final class ParameterResolutionContext
      */
     public function __construct(array $provided = [], array $resolved = [])
     {
-        $this->provided = $provided;
-        $this->resolved = $resolved;
+        $this->provided = ResolutionMetadata::invocationSlots($provided);
+        $this->resolved = ResolutionMetadata::invocationSlots($resolved);
     }
 
     public function resolve(int $position, mixed $value): void

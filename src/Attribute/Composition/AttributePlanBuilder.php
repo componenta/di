@@ -14,11 +14,11 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionObject;
 use ReflectionParameter;
 use ReflectionProperty;
 use Throwable;
 
+use function Componenta\DI\Internal\is_attribute_class_loaded;
 use function Componenta\DI\Internal\is_closure_reflector;
 
 /** Builds, validates, orders and memoizes the semantic attribute plan for stable targets. */
@@ -46,7 +46,7 @@ final class AttributePlanBuilder
     public function build(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): AttributePlan {
-        do {
+        while (true) {
             $this->synchronizeRegistryRevision();
             $revision = $this->registryRevision;
 
@@ -55,16 +55,37 @@ final class AttributePlanBuilder
                 return $this->namedPlans[$key];
             }
 
-            $usages = $this->discoverUsages($target);
+            $unselected = [];
+            $usages = $this->discoverUsages($target, $unselected);
             // Loading a later attribute may reveal one skipped earlier. Validate
             // a complete revision, before a missing dependency can fail creation.
-        } while ($revision !== $this->registry->revision);
+            if ($revision !== $this->registry->revision) {
+                continue;
+            }
 
-        $this->assertCapabilityCardinality($target, $usages);
-        $this->assertInvocationOnlyComposition($target, $usages);
-        $this->assertParameterHandlerComposition($target, $usages);
-        $this->assertDependencies($target, $usages);
-        $this->assertCustomRules($usages);
+            $this->assertCapabilityCardinality($target, $usages);
+            $this->assertInvocationOnlyComposition($target, $usages);
+            $this->assertParameterHandlerComposition($target, $usages);
+            $this->assertDependencies($target, $usages);
+
+            $rejection = null;
+            try {
+                $this->assertCustomRules($usages);
+            } catch (AttributeCompositionException $error) {
+                $rejection = $error;
+            }
+            if ($unselected !== []
+                && array_any($unselected, fn(string $attribute): bool => is_attribute_class_loaded($attribute)
+                    && $this->registry->definition($attribute) !== null)
+            ) {
+                // Recheck only declarations that can now participate in this plan.
+                continue;
+            }
+            if ($rejection !== null) {
+                throw $rejection;
+            }
+            break;
+        }
 
         $plan = new AttributePlan($target, $this->ordered($target, $usages));
         if ($key === null) {
@@ -79,10 +100,12 @@ final class AttributePlanBuilder
 
     /**
      * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<class-string> $unselected
      * @return list<AttributeUsage>
      */
     private function discoverUsages(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array &$unselected,
     ): array {
         $usages = [];
         foreach ($target->getAttributes() as $index => $reflectionAttribute) {
@@ -90,6 +113,9 @@ final class AttributePlanBuilder
             $attributeClass = $reflectionAttribute->getName();
             $definition = $this->registry->definition($attributeClass);
             if ($definition === null) {
+                if (!$this->canCachePlans) {
+                    $unselected[] = $attributeClass;
+                }
                 continue;
             }
 
@@ -599,21 +625,22 @@ final class AttributePlanBuilder
     private static function cacheKey(
         ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
     ): ?string {
-        return match (true) {
-            $target instanceof ReflectionObject => null,
-            $target instanceof ReflectionClass => 'class:' . $target->getName(),
-            $target instanceof ReflectionProperty => sprintf(
+        // Derived reflectors can change metadata and carry application state.
+        // Only exact native reflectors are stable enough for named shared plans.
+        return match ($target::class) {
+            ReflectionClass::class => 'class:' . $target->getName(),
+            ReflectionProperty::class => sprintf(
                 'property:%s::$%s',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            $target instanceof ReflectionMethod && is_closure_reflector($target) => null,
-            $target instanceof ReflectionMethod => sprintf(
+            ReflectionMethod::class => is_closure_reflector($target) ? null : sprintf(
                 'method:%s::%s()',
                 $target->getDeclaringClass()->getName(),
                 $target->getName(),
             ),
-            default => self::parameterCacheKey($target),
+            ReflectionParameter::class => self::parameterCacheKey($target),
+            default => null,
         };
     }
 

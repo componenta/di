@@ -28,12 +28,22 @@ final class ExternalContainerRegistry
 
     public function findOwning(string $id): ?ContainerInterface
     {
-        foreach ($this->containers as $container) {
-            if ($container->has($id)) {
-                return $container;
+        $containers = $this->containers;
+        $inspected = 0;
+        while (true) {
+            foreach ($containers as $container) {
+                if ($container->has($id)) {
+                    return $container;
+                }
             }
-        }
 
-        return null;
+            $inspected += count($containers);
+            if ($inspected === count($this->containers)) {
+                return null;
+            }
+
+            // Reentrant ownership callbacks may register providers during the lookup.
+            $containers = array_slice($this->containers, $inspected, preserve_keys: true);
+        }
     }
 }

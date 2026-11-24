@@ -5,16 +5,24 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Reflector;
 
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
 final readonly class AttributePlan
 {
+    public Reflector $target;
+    /** @var list<AttributeUsage> */
+    public array $usages;
+
     /** @param list<AttributeUsage> $usages */
     public function __construct(
-        public Reflector $target,
-        public array $usages,
-    ) {}
+        Reflector $target,
+        array $usages,
+    ) {
+        $this->target = $target;
+        $this->usages = ResolutionMetadata::snapshot($usages);
+    }
 
     /**
      * @param class-string<AttributeCapabilityInterface> $capability

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Definition;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\ResolutionMetadata;
 
 /**
  * Declarative factory with explicit constructor arguments and ordered method calls.
@@ -23,6 +24,14 @@ use Componenta\DI\Exception\InvalidConfigurationException;
  */
 final readonly class ClassDefinition implements DefinitionInterface
 {
+    /** @var class-string */
+    public string $value;
+    /** @var array<string|int,mixed> */
+    public array $constructorParams;
+    /** @var list<array{method:non-empty-string,params:array<string|int,mixed>}> */
+    public array $methodCalls;
+    public bool $autowire;
+
     /**
      * @param class-string $value Class name to instantiate.
      * @param array<string|int, mixed> $constructorParams
@@ -32,11 +41,16 @@ final readonly class ClassDefinition implements DefinitionInterface
      * }> $methodCalls
      */
     public function __construct(
-        public string $value,
-        public array $constructorParams = [],
-        public array $methodCalls = [],
-        public bool $autowire = false,
-    ) {}
+        string $value,
+        array $constructorParams = [],
+        array $methodCalls = [],
+        bool $autowire = false,
+    ) {
+        $this->value = $value;
+        $this->constructorParams = ResolutionMetadata::snapshot($constructorParams);
+        $this->methodCalls = ResolutionMetadata::snapshot($methodCalls);
+        $this->autowire = $autowire;
+    }
 
     /**
      * @param class-string $className

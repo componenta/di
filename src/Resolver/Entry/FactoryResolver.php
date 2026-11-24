@@ -13,6 +13,7 @@ use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
 use Componenta\DI\LazyServiceFactoryInterface;
@@ -44,6 +45,12 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     ) {
         $this->autowire = new AutowireByTypeResolver($container);
         $this->targets = new ParameterTargetFactory();
+        $this->factories = ResolutionMetadata::invocationSlots($this->factories);
+        foreach ($this->factories as $id => $factory) {
+            if (is_array($factory)) {
+                $this->factories[$id] = ResolutionMetadata::invocationSlots($factory);
+            }
+        }
 
         foreach ($this->factories as $id => $factory) {
             if (!is_string($id) || $id === '') {
@@ -234,7 +241,8 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             $resolved[$key] = $this->resolveDefinitionValue($item, $childReferences);
         }
 
-        return $resolved;
+        // Keep the append index of configured arrays even after their last key was removed.
+        return array_replace($value, $resolved);
     }
 
     private function resolveFactory(string $id): callable|LazyServiceFactoryInterface
@@ -244,6 +252,9 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
 
         if (is_string($factory) && $this->container->has($factory)) {
             $factory = $this->container->get($factory);
+            if (is_array($factory)) {
+                $factory = ResolutionMetadata::invocationSlots($factory);
+            }
         } elseif (is_array($factory)
             && !is_callable($factory)
             && isset($factory[0])

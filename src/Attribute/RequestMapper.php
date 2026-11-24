@@ -8,8 +8,10 @@ use Componenta\Caster\CasterProviderAwareInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Caster\NullCasterProvider;
 use Componenta\DI\Exception\RequestDataConflictException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
+use Error;
 
 use function Componenta\DI\Internal\transform_request_mapper_data;
 
@@ -40,7 +42,7 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
         array $map = [],
         ?RequestDataConflictPolicy $conflictPolicy = null,
     ) {
-        $this->map = array_replace($this->map, $map);
+        $this->map = ResolutionMetadata::invocationSlots(array_replace($this->map, $map));
         if ($conflictPolicy !== null) {
             $this->conflictPolicy = $conflictPolicy;
         }
@@ -61,10 +63,15 @@ abstract class RequestMapper implements MapperInterface, CasterProviderAwareInte
                     $owners[$key] = $source;
                     continue;
                 }
-                if ($data[$key] === $value
-                    || $this->conflictPolicy === RequestDataConflictPolicy::FirstWins
-                ) {
+                if ($this->conflictPolicy === RequestDataConflictPolicy::FirstWins) {
                     continue;
+                }
+                try {
+                    if ($data[$key] === $value) {
+                        continue;
+                    }
+                } catch (Error) { // @phpstan-ignore catch.neverThrown (PHP throws for strict comparison of distinct recursive arrays.)
+                    // Values that cannot be compared still conflict.
                 }
                 throw new RequestDataConflictException(
                     key: $key,

@@ -17,14 +17,10 @@ final class LazyFactory implements FactoryInterface
 
     public function make(string $entry, array $params = []): object
     {
-        return $this->factory()->make($entry, $params);
-    }
-
-    private function factory(): FactoryInterface
-    {
         if ($this->factory !== null) {
-            return $this->factory;
+            return $this->factory->make($entry, $params);
         }
+
         $factory = $this->container->get(FactoryInterface::class);
         if (!$factory instanceof FactoryInterface) {
             throw new InvalidConfigurationException(sprintf(
@@ -34,6 +30,8 @@ final class LazyFactory implements FactoryInterface
                 get_debug_type($factory),
             ));
         }
-        return $this->factory = $factory;
+
+        $this->factory = $factory;
+        return $factory->make($entry, $params);
     }
 }

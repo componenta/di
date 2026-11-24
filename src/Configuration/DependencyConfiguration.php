@@ -13,6 +13,7 @@ use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 
@@ -46,6 +47,9 @@ final class DependencyConfiguration
      */
     public static function normalize(array $dependencies, array $defaultAliases = []): array
     {
+        // Own the caller's section slots before in-place validation.
+        $dependencies = ResolutionMetadata::invocationSlots($dependencies);
+        $defaultAliases = ResolutionMetadata::invocationSlots($defaultAliases);
         self::assertShape($dependencies);
 
         /** @var array<string,non-empty-string> $configuredAliases */
@@ -199,7 +203,7 @@ final class DependencyConfiguration
     /** @param array<array-key,mixed> $dependencies */
     private static function validateFactories(array &$dependencies): void
     {
-        $input = self::section($dependencies, ConfigKey::FACTORIES);
+        $input = ResolutionMetadata::snapshot(self::section($dependencies, ConfigKey::FACTORIES));
         $factories = [];
         foreach ($input as $id => $factory) {
             if (!is_string($id) || $id === '') {
@@ -311,6 +315,10 @@ final class DependencyConfiguration
     /** @return callable|string|array{object|string,string} */
     public static function normalizeDelegatorSpecification(mixed $delegator, string $id): mixed
     {
+        if (is_array($delegator)) {
+            $delegator = ResolutionMetadata::invocationSlots($delegator);
+        }
+
         if (is_string($delegator) && $delegator !== '') {
             return $delegator;
         }

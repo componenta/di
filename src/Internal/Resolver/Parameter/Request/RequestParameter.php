@@ -35,8 +35,8 @@ final class RequestParameter
      */
     public static function with(array $providedParameters, ServerRequestInterface $request): array
     {
-        $providedParameters[self::KEY] = $request;
-        return $providedParameters;
+        // Replace the slot itself instead of writing through a caller-owned reference.
+        return array_replace($providedParameters, [self::KEY => $request]);
     }
 
     private function __construct() {}

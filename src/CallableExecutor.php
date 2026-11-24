@@ -33,6 +33,8 @@ final class CallableExecutor implements CallableExecutorInterface
     /** @param array<string|int, mixed> $params */
     public function call(mixed $callable, array $params = []): mixed
     {
+        // Callable discovery can invoke autoloaders before the argument plan exists.
+        $params = ResolutionMetadata::invocationSlots($params);
         try {
             $resolved = $this->callableResolver->resolve($callable);
             $plan = $resolved instanceof PreparedCallable ? null : $this->plan($resolved);

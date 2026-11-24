@@ -6,6 +6,7 @@ namespace Componenta\DI\Resolver\Entry\SetUp;
 
 use Componenta\Config\Config;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
 use Psr\Container\ContainerInterface;
 use ReflectionParameter;
@@ -34,6 +35,8 @@ final readonly class ConfigUnwrapper implements SetUpValueUnwrapperInterface
             }
 
             return $config->get($value->path ?? $key, $value->default);
+        } catch (ExceptionInterface $e) {
+            throw $e;
         } catch (Throwable $e) {
             throw new ResolutionException(sprintf(
                 'Cannot unwrap #[SetUp] param "%s" (#[Config]): %s',

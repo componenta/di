@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Componenta\DI\Internal\ResolutionMetadata;
+
 /**
  * A native callable whose arguments have already been resolved.
  *
@@ -19,7 +21,7 @@ final readonly class PreparedCallable
 
     public function __construct(callable $callable)
     {
-        $this->callable = $callable;
+        $this->callable = is_array($callable) ? ResolutionMetadata::snapshot($callable) : $callable;
     }
 
     public function __invoke(mixed ...$arguments): mixed

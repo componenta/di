@@ -124,3 +124,52 @@ test('availability rejects external ownership after the alias points to an unava
         ->and(fn() => $container->get('requested'))->toThrow(NotFoundException::class)
         ->and($external->getCalls)->toBe(0);
 });
+
+test('external ownership includes providers registered during the lookup', function (string $operation): void {
+    $entry = new Product('appended');
+    $container = (new ContainerBuilder())->build();
+    $provider = new class ($entry) implements ContainerInterface {
+        public function __construct(private readonly Product $entry) {}
+
+        public function has(string $id): bool
+        {
+            return $id === 'requested';
+        }
+
+        public function get(string $id): Product
+        {
+            return $this->entry;
+        }
+    };
+    $registering = new class ($container, $provider) implements ContainerInterface {
+        public int $hasCalls = 0;
+
+        public function __construct(
+            private readonly Container $container,
+            private readonly ContainerInterface $provider,
+        ) {}
+
+        public function has(string $id): bool
+        {
+            if ($id === 'requested') {
+                ++$this->hasCalls;
+                $this->container->addContainer($this->provider);
+            }
+
+            return false;
+        }
+
+        public function get(string $id): never
+        {
+            throw new NotFoundException($id);
+        }
+    };
+    $container->addContainer($registering);
+
+    if ($operation === 'has') {
+        expect($container->has('requested'))->toBeTrue();
+    } else {
+        expect($container->get('requested'))->toBe($entry);
+    }
+    expect($registering->hasCalls)->toBe(1);
+})->with(['has', 'get']);

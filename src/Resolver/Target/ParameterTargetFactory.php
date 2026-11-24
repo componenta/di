@@ -16,6 +16,11 @@ final class ParameterTargetFactory
 
     public function create(ReflectionParameter $parameter): ParameterTarget
     {
+        if ($parameter::class !== ReflectionParameter::class) {
+            // Derived reflectors may supply instance-specific metadata and state.
+            return new ParameterTarget($parameter);
+        }
+
         $function = $parameter->getDeclaringFunction();
 
         if (is_closure_reflector($function)) {

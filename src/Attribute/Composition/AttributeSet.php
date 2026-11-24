@@ -5,12 +5,21 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute\Composition;
 
 use Componenta\DI\Exception\AttributeCompositionException;
+use Componenta\DI\Internal\ResolutionMetadata;
+
+use function Componenta\DI\Internal\is_attribute_class_loaded;
 
 /** Immutable unordered view used by custom composition rules. */
 final readonly class AttributeSet
 {
+    /** @var list<AttributeUsage> */
+    public array $attributes;
+
     /** @param list<AttributeUsage> $attributes */
-    public function __construct(public array $attributes) {}
+    public function __construct(array $attributes)
+    {
+        $this->attributes = ResolutionMetadata::snapshot($attributes);
+    }
 
     /**
      * Selector may be an attribute class/interface or a capability class.
@@ -20,13 +29,16 @@ final readonly class AttributeSet
      */
     public function all(string $selector): array
     {
+        $selectorWasLoaded = is_attribute_class_loaded($selector);
         $matches = [];
         foreach ($this->attributes as $usage) {
-            if ($this->matches($selector, $usage)) {
+            if ($usage->matches($selector)) {
                 $matches[] = $usage;
             }
         }
-        return $matches;
+        return !$selectorWasLoaded && is_attribute_class_loaded($selector)
+            ? $this->loadedMatches($selector)
+            : $matches;
     }
 
     /** @param class-string $selector */
@@ -45,17 +57,34 @@ final readonly class AttributeSet
     /** @param class-string $selector */
     public function has(string $selector): bool
     {
+        $selectorWasLoaded = is_attribute_class_loaded($selector);
         foreach ($this->attributes as $usage) {
-            if ($this->matches($selector, $usage)) {
+            if ($usage->matches($selector)) {
                 return true;
             }
         }
-        return false;
+        return !$selectorWasLoaded && is_attribute_class_loaded($selector) && $this->loadedMatches($selector) !== [];
     }
 
-    /** @param class-string $selector */
-    private function matches(string $selector, AttributeUsage $usage): bool
+    /**
+     * Recheck declarations skipped before the selector became available without
+     * retrying autoloaders for any attribute still unavailable.
+     *
+     * @param class-string $selector
+     * @return list<AttributeUsage>
+     */
+    private function loadedMatches(string $selector): array
     {
-        return $usage->matches($selector);
+        $capability = is_a($selector, AttributeCapabilityInterface::class, true);
+        $matches = [];
+        foreach ($this->attributes as $usage) {
+            if ($capability
+                ? $usage->hasCapability($selector)
+                : is_attribute_class_loaded($usage->attributeClass) && $usage->is($selector)
+            ) {
+                $matches[] = $usage;
+            }
+        }
+        return $matches;
     }
 }

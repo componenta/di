@@ -17,7 +17,7 @@ final class ParameterTarget
     /** @var list<ReflectionAttribute<object>> */
     private readonly array $attributeReflectors;
 
-    /** @var array<class-string, list<ReflectionAttribute<object>>> */
+    /** @var array<string, list<ReflectionAttribute<object>>> */
     private readonly array $attributesByClass;
 
     /** @var list<class-string> */
@@ -63,7 +63,7 @@ final class ParameterTarget
             /** @var class-string $class */
             $class = $attribute->getName();
             $allAttributes[] = $attribute;
-            $attributes[$class][] = $attribute;
+            $attributes[strtolower($class)][] = $attribute;
             $classes[$class] = true;
         }
 
@@ -79,13 +79,25 @@ final class ParameterTarget
 
     public function hasAttribute(string $attributeClass): bool
     {
-        if (isset($this->attributesByClass[$attributeClass])) {
+        if (isset($this->attributesByClass[strtolower($attributeClass)])) {
             return true;
         }
 
+        $needsRefresh = false;
         foreach ($this->attributeClasses as $class) {
+            $needsRefresh = $needsRefresh || !self::isAvailable($class);
             if (is_a($class, $attributeClass, true)) {
                 return true;
+            }
+        }
+
+        if ($needsRefresh) {
+            // Later discovery can reveal an earlier declaration or an alias
+            // for the queried base. Recheck without invoking another loader.
+            foreach ($this->attributeClasses as $class) {
+                if (self::isAvailable($class) && is_a($class, $attributeClass, true)) {
+                    return true;
+                }
             }
         }
 
@@ -112,17 +124,34 @@ final class ParameterTarget
     }
 
     /** @return list<ReflectionAttribute<object>> */
-    private function attributeReflectors(string $attributeClass): array
+    private function attributeReflectors(string $attributeClass, bool $autoload = true): array
     {
         $attributes = [];
+        $needsRefresh = false;
 
         foreach ($this->attributeReflectors as $attribute) {
-            if (is_a($attribute->getName(), $attributeClass, true)) {
+            $class = $attribute->getName();
+            if (!self::isAvailable($class)) {
+                if (!$autoload) {
+                    continue;
+                }
+                $needsRefresh = true;
+            }
+            if (is_a($class, $attributeClass, true)) {
                 $attributes[] = $attribute;
             }
         }
 
-        return $attributes;
+        // Select in declaration order after every discovery callback has
+        // finished. The loaded-only pass cannot trigger further discovery.
+        return $needsRefresh ? $this->attributeReflectors($attributeClass, false) : $attributes;
+    }
+
+    private static function isAvailable(string $attributeClass): bool
+    {
+        return class_exists($attributeClass, false)
+            || interface_exists($attributeClass, false)
+            || trait_exists($attributeClass, false);
     }
 
     public function accepts(mixed $value): bool

@@ -6,6 +6,7 @@ namespace Componenta\DI;
 
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\ResolutionMetadata;
 use ReflectionClass;
 use Throwable;
 
@@ -21,6 +22,9 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
     public function makeLazy(string $class, callable $initializer): object
     {
         try {
+            if (is_array($initializer)) {
+                $initializer = ResolutionMetadata::snapshot($initializer);
+            }
             /** @var ReflectionClass<T> $reflection */
             $reflection = new ReflectionClass($class);
             return $reflection->newLazyGhost($initializer);
@@ -40,6 +44,9 @@ final readonly class ProxyFactory implements ProxyFactoryInterface
     public function makeProxy(string $class, callable $factory): object
     {
         try {
+            if (is_array($factory)) {
+                $factory = ResolutionMetadata::snapshot($factory);
+            }
             /** @var ReflectionClass<T> $reflection */
             $reflection = new ReflectionClass($class);
             return $reflection->newLazyProxy($factory);

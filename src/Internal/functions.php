@@ -20,6 +20,12 @@ use ReflectionFunctionAbstract;
 use ReflectionMethod;
 
 /** @internal */
+function is_attribute_class_loaded(string $attributeClass): bool
+{
+    return class_exists($attributeClass, false) || interface_exists($attributeClass, false);
+}
+
+/** @internal */
 function is_closure_reflector(ReflectionFunctionAbstract $reflection): bool
 {
     // Closure::__invoke has instance-specific metadata even though PHP reports
@@ -123,11 +129,13 @@ function validate_parameter_resolution_result(
         );
     }
 
+    // A type check can autoload code that changes the resolver's tuple slots.
+    [$position, $value] = $result;
     if ($target->variadic) {
-        return [$target->position, VariadicArguments::validate($target, $result[1], $context)];
+        return [$position, VariadicArguments::validate($target, $value, $context)];
     }
 
-    if (!$target->accepts($result[1])) {
+    if (!$target->accepts($value)) {
         throw ResolutionException::forParameter(
             $target->reflection,
             reason: sprintf(
@@ -139,8 +147,7 @@ function validate_parameter_resolution_result(
         );
     }
 
-    /** @var array{0:int,1:mixed} $result */
-    return $result;
+    return [$position, $value];
 }
 
 /**
@@ -162,6 +169,10 @@ function transform_request_mapper_data(
     array $exclude,
     CasterProviderInterface $provider,
 ): array {
+    if ($map !== [] || $cast !== [] || $sortMap !== []) {
+        $data = ResolutionMetadata::invocationSlots($data);
+    }
+
     if ($map !== []) {
         $moves = [];
         $mappedSources = [];

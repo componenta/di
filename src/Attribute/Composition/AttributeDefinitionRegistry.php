@@ -41,7 +41,9 @@ final class AttributeDefinitionRegistry
     public int $revision {
         get {
             foreach ($this->unavailableAttributes as $attribute => $_) {
-                if (class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false)) {
+                if ((class_exists($attribute) || interface_exists($attribute) || class_exists($attribute, false))
+                    && isset($this->unavailableAttributes[$attribute])
+                ) {
                     // The fallback interface probe can autoload a class. Its
                     // declaration must invalidate plans in this same poll.
                     unset($this->unavailableAttributes[$attribute]);
@@ -114,12 +116,18 @@ final class AttributeDefinitionRegistry
             return $this->definitions[$attributeClass];
         }
 
+        $available = class_exists($attributeClass, false) || interface_exists($attributeClass, false);
         /** @var array<class-string, AttributeDefinition> $matches */
         $matches = [];
         foreach ($this->definitions as $registered => $definition) {
             if (is_a($attributeClass, $registered, true)) {
                 $matches[$registered] = $definition;
             }
+        }
+
+        // A later probe can load the declaration after earlier candidates were skipped.
+        if (!$available && (class_exists($attributeClass, false) || interface_exists($attributeClass, false))) {
+            return $this->definition($attributeClass);
         }
 
         if ($matches === []) {

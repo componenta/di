@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Closure;
+use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Object\CreationStrategy;
 use LogicException;
 use PropertyHookType;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionProperty;
 use Throwable;
 
@@ -198,7 +200,8 @@ final class ObjectCreationContext
             );
         }
 
-        return $property->isInitialized($entry)
+        // A getter can compute a value before its backing slot is initialized.
+        return $property->isInitialized($entry) || $property->hasHook(PropertyHookType::Get)
             ? $property->getValue($entry)
             : null;
     }
@@ -226,7 +229,22 @@ final class ObjectCreationContext
         }
 
         try {
-            $property->setValue($entry, $value);
+            $writer = $property;
+            if ($property::class !== ReflectionProperty::class
+                && $property->isPrivateSet()
+                && new ReflectionMethod($property, 'setValue')->getDeclaringClass()->getName() === ReflectionProperty::class
+            ) {
+                // Select the native slot without reading overridden metadata
+                // methods or field hooks on the custom reflector.
+                /** @var ReflectionClass<object> $owner */
+                $owner = new ReflectionMethod(ReflectionProperty::class, 'getDeclaringClass')->invoke($property);
+                /** @var string $name */
+                $name = new ReflectionMethod(ReflectionProperty::class, 'getName')->invoke($property);
+                $writer = $owner->getProperty($name);
+            }
+            $writer->setValue($entry, $value);
+        } catch (ExceptionInterface $e) {
+            throw $e;
         } catch (Throwable $e) {
             throw ResolutionException::forProperty($property, previous: $e);
         }
