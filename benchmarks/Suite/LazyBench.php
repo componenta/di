@@ -9,6 +9,8 @@ use Componenta\DI\Container;
 use PhpBench\Attributes as Bench;
 use ReflectionClass;
 
+#[Bench\Iterations(7)]
+#[Bench\Revs(1000)]
 final class LazyBench
 {
     private Container $container;

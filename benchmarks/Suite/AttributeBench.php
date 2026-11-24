@@ -7,6 +7,8 @@ namespace Componenta\DI\Benchmarks\Suite;
 use Componenta\DI\Container;
 use PhpBench\Attributes as Bench;
 
+#[Bench\Iterations(7)]
+#[Bench\Revs(1000)]
 final class AttributeBench
 {
     private Container $container;

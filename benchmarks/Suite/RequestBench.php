@@ -11,6 +11,8 @@ use Nyholm\Psr7\UploadedFile;
 use PhpBench\Attributes as Bench;
 use Psr\Http\Message\ServerRequestInterface;
 
+#[Bench\Iterations(7)]
+#[Bench\Revs(1000)]
 final class RequestBench
 {
     private Container $container;

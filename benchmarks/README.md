@@ -1,6 +1,6 @@
 # DI performance benchmarks
 
-The primary suite uses PHPBench and the current checkout's Composer autoloader. PHPBench is a development dependency, never a runtime dependency.
+The primary suite uses PHPBench and the current checkout's Composer autoloader. PHPBench is a development dependency, never a runtime dependency. Its 1.x releases require the abandoned `doctrine/annotations` package. Benchmark discovery explicitly disables annotation parsing; a package-specific Composer abandoned-status exception allows this development dependency only, without disabling vulnerability or malware checks. Remove the exception when PHPBench no longer requires it.
 
 ## Run
 
@@ -13,7 +13,7 @@ vendor/bin/phpbench run --filter=ContainerBench --report=aggregate --report=env
 vendor/bin/phpbench run --filter=benchFirstGet --report=aggregate
 ```
 
-Do not override the configured revolution count for first-operation subjects. A first operation is measured once in each isolated PHPBench iteration; repeating it on the same container would measure a different operation. A quick discovery/execution check can reduce iterations (not revolutions):
+Revolution and iteration defaults are declared on benchmark classes, with method-level overrides. Do not put `runner.revs` or `runner.iterations` in the main PHPBench configuration: PHPBench 1.x treats these as overrides of method metadata. Do not pass `--revs` when running the mixed suite or first-operation subjects. A first operation is measured once in each isolated PHPBench iteration; repeating it on the same container would measure a different operation. A quick discovery/execution check can reduce iterations (not revolutions):
 
 ```sh
 composer bench-smoke

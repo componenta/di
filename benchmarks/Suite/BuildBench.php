@@ -13,6 +13,7 @@ use Componenta\DI\ContainerFactory;
 use PhpBench\Attributes as Bench;
 
 #[Bench\Iterations(7)]
+#[Bench\Revs(1000)]
 final class BuildBench
 {
     private Config $config;

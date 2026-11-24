@@ -63,7 +63,17 @@
         },
         "sort-packages": true,
         "preferred-install": "dist",
-        "optimize-autoloader": true
+        "optimize-autoloader": true,
+        "policy": {
+            "abandoned": {
+                "ignore": {
+                    "doctrine/annotations": {
+                        "on-block": false,
+                        "reason": "PHPBench 1.x development-only dependency; benchmark discovery uses PHP attributes, not Doctrine annotations. Remove when PHPBench drops the dependency."
+                    }
+                }
+            }
+        }
     },
     "scripts": {
         "test": "pest",

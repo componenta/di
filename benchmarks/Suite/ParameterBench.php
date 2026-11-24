@@ -12,6 +12,8 @@ use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use PhpBench\Attributes as Bench;
 
+#[Bench\Iterations(7)]
+#[Bench\Revs(1000)]
 final class ParameterBench
 {
     private Container $container;

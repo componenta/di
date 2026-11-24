@@ -8,6 +8,8 @@ use Componenta\DI\Container;
 use Componenta\DI\PreparedCallable;
 use PhpBench\Attributes as Bench;
 
+#[Bench\Iterations(7)]
+#[Bench\Revs(1000)]
 final class CallableBench
 {
     private Container $container;
