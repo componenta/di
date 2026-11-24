@@ -96,11 +96,11 @@ jobs:
         if: matrix.php == '8.5'
         run: composer audit --no-interaction
 
-      - name: Run checks
-        run: composer check
-
       - name: Smoke DI 6 benchmark suite
         run: composer bench-smoke
+
+      - name: Run checks
+        run: composer check
 
   native-trait-callables:
     name: Native trait callables PHP 8.5.13
