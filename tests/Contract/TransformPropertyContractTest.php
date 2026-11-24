@@ -363,5 +363,4 @@ test('native lazy property transformations retry with fresh closures and release
     unset($entry);
     gc_collect_cycles();
     expect($reference->get())->toBeNull();
-})->with(['cached plans' => false, 'uncached plans' => true])
-    ->skip(PHP_VERSION_ID < 80500, 'Native closure attribute arguments require PHP 8.5.');
+})->with(['cached plans' => false, 'uncached plans' => true]);

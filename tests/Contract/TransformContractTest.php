@@ -514,8 +514,7 @@ test('native inline transform closures keep fresh state without retaining values
             expect($reference->get())->toBeNull();
         }
     }
-})->with(['cached plans' => false, 'uncached plans' => true])
-    ->skip(PHP_VERSION_ID < 80500, 'Native closure attribute arguments require PHP 8.5.');
+})->with(['cached plans' => false, 'uncached plans' => true]);
 
 test('native transform first-class references preserve private static scope and current alias dependencies', function (bool $uncached): void {
     $name = 'NativeReferences_' . bin2hex(random_bytes(5));
@@ -554,5 +553,4 @@ test('native transform first-class references preserve private static scope and 
     $container->alias(Dependency::class, 'native.second');
     expect($container->call([$class, 'consume'], ['value' => 'input']))->toBe('private:input:second:2')
         ->and($container->call([$class, 'named'], ['value' => 'input']))->toBe('input:second:marker');
-})->with(['cached plans' => false, 'uncached plans' => true])
-    ->skip(PHP_VERSION_ID < 80500, 'Native first-class attribute arguments require PHP 8.5.');
+})->with(['cached plans' => false, 'uncached plans' => true]);

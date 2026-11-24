@@ -52,6 +52,8 @@ $result = [
     'tagged_source_verified' => false,
 ];
 
+// The standalone gate is also executed with unsupported PHP binaries.
+// @phpstan-ignore smaller.alwaysFalse (Checks the candidate runtime before Composer's platform gate.)
 if (PHP_VERSION_ID < 80500) {
     $result['error'] = 'Native first-class callable attribute expressions require PHP 8.5.';
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";

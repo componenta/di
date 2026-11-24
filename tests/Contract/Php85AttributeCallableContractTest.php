@@ -42,8 +42,7 @@ test('native Init expressions preserve legacy callables lexical scope state and 
         'lazy' => [0, 'initialized', 1],
         'trait_inline_scope' => ['first', 'second'],
     ]);
-})->with(['cached', 'uncached'])
-    ->skip(PHP_VERSION_ID < 80500, 'Native callback expressions require PHP 8.5.');
+})->with(['cached', 'uncached']);
 
 test('unsupported native callback forms fail at their engine owned boundary', function (string $fixture, bool $compiled, string $reason): void {
     $result = nativeFixture($fixture);
@@ -61,7 +60,7 @@ test('unsupported native callback forms fail at their engine owned boundary', fu
         true,
         'Creating a callable for the magic __callStatic() method is not supported in constant expressions',
     ],
-])->skip(PHP_VERSION_ID < 80500, 'Native callback expressions require PHP 8.5.');
+]);
 
 test('native setup callbacks preserve scope state lazy retries and runtime lifetimes', function (string $mode): void {
     $result = nativeFixture('SetUpNative', $mode);
@@ -82,8 +81,7 @@ test('native setup callbacks preserve scope state lazy retries and runtime lifet
         'callbacks_released' => [true, true, true, true],
         'static_locals_released' => [true, true, true, true],
     ]);
-})->with(['cached', 'uncached'])
-    ->skip(PHP_VERSION_ID < 80500, 'Native callback expressions require PHP 8.5.');
+})->with(['cached', 'uncached']);
 
 test('setup property narrowing is an explicit major migration incompatibility', function (): void {
     $result = nativeFixture('SetUpPropertyNarrowing');

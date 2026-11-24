@@ -396,5 +396,4 @@ test('cached and uncached native closure attribute arguments keep fresh closure 
         }
         expect($entry->value)->toBe($value + 1);
     }
-})->with(['cached plans' => false, 'uncached plans' => true])
-    ->skip(PHP_VERSION_ID < 80500, 'Native closure attribute arguments require PHP 8.5.');
+})->with(['cached plans' => false, 'uncached plans' => true]);

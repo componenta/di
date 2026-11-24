@@ -21,19 +21,18 @@ interface IntersectionLeft {}
 interface IntersectionRight {}
 final class IntersectionValue implements IntersectionLeft, IntersectionRight {}
 
-test('type inspection supports relative PHP 8.4 types and canonical PHP 8.5 types', function (): void {
+test('type inspection recognizes canonical relative class types with and without context', function (): void {
     $self = new ReflectionProperty(RelativeTypeChild::class, 'same')->getType();
     $parent = new ReflectionProperty(RelativeTypeChild::class, 'ancestor')->getType();
     $childContext = contextualTypeReflection(RelativeTypeChild::class);
     $rootContext = contextualTypeReflection(RelativeTypeParent::class);
 
-    $canonical = PHP_VERSION_ID >= 80500;
-    expect(TypeHints::classOf($self))->toBe($canonical ? RelativeTypeChild::class : null)
-        ->and(TypeHints::classOf($parent))->toBe($canonical ? RelativeTypeParent::class : null)
+    expect(TypeHints::classOf($self))->toBe(RelativeTypeChild::class)
+        ->and(TypeHints::classOf($parent))->toBe(RelativeTypeParent::class)
         ->and(TypeHints::classOf($self, $childContext))->toBe(RelativeTypeChild::class)
         ->and(TypeHints::classOf($parent, $childContext))->toBe(RelativeTypeParent::class)
-        ->and(TypeHints::classOf($parent, $rootContext))->toBe($canonical ? RelativeTypeParent::class : null)
-        ->and(TypeHints::matches($self, new RelativeTypeChild()))->toBe($canonical)
+        ->and(TypeHints::classOf($parent, $rootContext))->toBe(RelativeTypeParent::class)
+        ->and(TypeHints::matches($self, new RelativeTypeChild()))->toBeTrue()
         ->and(TypeHints::matches($self, new RelativeTypeChild(), $childContext))->toBeTrue()
         ->and(TypeHints::matches($parent, new RelativeTypeParent(), $childContext))->toBeTrue();
 });

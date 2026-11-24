@@ -546,5 +546,4 @@ test('native inline afterMap closures keep fresh local state and release their v
             expect($reference->get())->toBeNull();
         }
     }
-})->with(['cached plans' => false, 'non-memoized plans' => true])
-    ->skip(PHP_VERSION_ID < 80500, 'Native closure attribute arguments require PHP 8.5.');
+})->with(['cached plans' => false, 'non-memoized plans' => true]);
