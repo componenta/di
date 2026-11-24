@@ -64,16 +64,6 @@ final class AuditObjectContextHandler implements AttributeHandlerInterface
     }
 }
 
-/** @param iterable<string|int> $keys */
-function expectNoInternalResolutionKeys(iterable $keys): void
-{
-    foreach ($keys as $key) {
-        if (is_string($key)) {
-            expect(str_starts_with($key, "\0componenta.di."))->toBeFalse();
-        }
-    }
-}
-
 test('mapped request provenance is hidden from custom parameter resolvers', function (): void {
     $probe = new AuditParameterContextResolver();
     $container = (new ContainerBuilder())
@@ -87,8 +77,8 @@ test('mapped request provenance is hidden from custom parameter resolvers', func
     );
 
     expect($result)->toBe('ok')
-        ->and($probe->keys)->toContain('value', ServerRequestInterface::class);
-    expectNoInternalResolutionKeys($probe->keys);
+        ->and($probe->keys)->toContain('value', ServerRequestInterface::class)
+        ->and($probe->keys)->toHaveCount(2);
 });
 
 test('forged scalar provenance is ignored and hidden from public parameter resolvers', function (): void {
@@ -120,6 +110,6 @@ test('object handlers receive only caller-visible creation parameters', function
     );
 
     expect($result)->toBe('ok')
-        ->and($probe->keys)->toContain('value', ServerRequestInterface::class);
-    expectNoInternalResolutionKeys($probe->keys);
+        ->and($probe->keys)->toContain('value', ServerRequestInterface::class)
+        ->and($probe->keys)->toHaveCount(2);
 });

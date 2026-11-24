@@ -12,6 +12,7 @@ use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
+use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -62,13 +63,37 @@ final readonly class ProviderFactoryProduct
     public function __construct(public string $origin) {}
 }
 
-final readonly class ProviderFirstFactoryProduct {}
+final readonly class ProviderFirstFactoryProduct
+{
+    public function __construct(public string $origin) {}
+}
 
-final readonly class ProviderSecondFactoryProduct {}
+final readonly class ProviderSecondFactoryProduct
+{
+    public function __construct(public string $origin) {}
+}
 
-final readonly class ProviderFirstInvokable {}
+#[SetUp('configure')]
+final class ProviderFirstInvokable
+{
+    public string $origin = 'invokable';
 
-final readonly class ProviderSecondInvokable {}
+    public function configure(): void
+    {
+        $this->origin = 'autowired';
+    }
+}
+
+#[SetUp('configure')]
+final class ProviderSecondInvokable
+{
+    public string $origin = 'invokable';
+
+    public function configure(): void
+    {
+        $this->origin = 'autowired';
+    }
+}
 
 final readonly class ProviderBuiltInDefaultsTarget
 {
@@ -157,7 +182,7 @@ test('ordered provider composition survives the complete DI consumer boundary', 
         ->and($composition->dependencies->sections[ConfigKey::ATTRIBUTE_DEFINITIONS_REPLACE])
         ->toBeFalse()
         ->and($composition->config->has(ConfigKey::DEPENDENCIES))->toBeFalse()
-        ->and($builtInDefaults->dependency)->toBeInstanceOf(ProviderFirstInvokable::class)
+        ->and($builtInDefaults->dependency->origin)->toBe('autowired')
         ->and($builtInDefaults->configured)->toBe('available')
         ->and($container->get('atomic.service'))->toBe('provider-b')
         ->and($container->get('composed.alias'))->toBe('second')
@@ -172,7 +197,7 @@ test('provider merge preserves keyed overrides and numeric invokable order at th
             ConfigKey::DEPENDENCIES => [
                 ConfigKey::FACTORIES => [
                     ProviderFactoryProduct::class => static fn(): ProviderFactoryProduct => new ProviderFactoryProduct('a'),
-                    ProviderFirstFactoryProduct::class => static fn(): ProviderFirstFactoryProduct => new ProviderFirstFactoryProduct(),
+                    ProviderFirstFactoryProduct::class => static fn(): ProviderFirstFactoryProduct => new ProviderFirstFactoryProduct('first-factory'),
                 ],
                 ConfigKey::INVOKABLES => [
                     'selected.invokable' => ProviderFirstInvokable::class,
@@ -184,7 +209,7 @@ test('provider merge preserves keyed overrides and numeric invokable order at th
             ConfigKey::DEPENDENCIES => [
                 ConfigKey::FACTORIES => [
                     ProviderFactoryProduct::class => static fn(): ProviderFactoryProduct => new ProviderFactoryProduct('b'),
-                    ProviderSecondFactoryProduct::class => static fn(): ProviderSecondFactoryProduct => new ProviderSecondFactoryProduct(),
+                    ProviderSecondFactoryProduct::class => static fn(): ProviderSecondFactoryProduct => new ProviderSecondFactoryProduct('second-factory'),
                 ],
                 ConfigKey::INVOKABLES => [
                     'selected.invokable' => ProviderSecondInvokable::class,
@@ -203,12 +228,24 @@ test('provider merge preserves keyed overrides and numeric invokable order at th
         throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
     }
 
+    $first = fixtureInstance($container->get(ProviderFirstInvokable::class), ProviderFirstInvokable::class);
+    $second = fixtureInstance($container->get(ProviderSecondInvokable::class), ProviderSecondInvokable::class);
+    $invokables = $composition->dependencies->sections[ConfigKey::INVOKABLES] ?? null;
+    if (!is_array($invokables)) {
+        throw new \LogicException('Expected composed invokable registrations.');
+    }
+
     expect(fixtureInstance($container->get(ProviderFactoryProduct::class), ProviderFactoryProduct::class)->origin)->toBe('b')
-        ->and($container->get(ProviderFirstFactoryProduct::class))->toBeInstanceOf(ProviderFirstFactoryProduct::class)
-        ->and($container->get(ProviderSecondFactoryProduct::class))->toBeInstanceOf(ProviderSecondFactoryProduct::class)
-        ->and($container->get('selected.invokable'))->toBeInstanceOf(ProviderSecondInvokable::class)
-        ->and($container->get(ProviderFirstInvokable::class))->toBeInstanceOf(ProviderFirstInvokable::class)
-        ->and($container->get(ProviderSecondInvokable::class))->toBeInstanceOf(ProviderSecondInvokable::class);
+        ->and(fixtureInstance($container->get(ProviderFirstFactoryProduct::class), ProviderFirstFactoryProduct::class)->origin)->toBe('first-factory')
+        ->and(fixtureInstance($container->get(ProviderSecondFactoryProduct::class), ProviderSecondFactoryProduct::class)->origin)->toBe('second-factory')
+        ->and($container->get('selected.invokable'))->toBe($second)
+        ->and($first->origin)->toBe('invokable')
+        ->and($second->origin)->toBe('invokable')
+        ->and(array_values(array_filter(
+            $invokables,
+            static fn(int|string $key): bool => is_int($key),
+            ARRAY_FILTER_USE_KEY,
+        )))->toBe([ProviderFirstInvokable::class, ProviderSecondInvokable::class]);
 });
 
 test('provider merge appends attribute definitions and capabilities before DI seals the pipeline', function (): void {

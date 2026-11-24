@@ -104,16 +104,14 @@ test('standalone construction rejects protected alias sources before attaching i
     $resolver = new CompositeResolver(new StandaloneEntryResolver());
     $executor = (new ContainerBuilder())->build();
     $seed = new StandaloneProduct(['source' => 'seed']);
-    $cache = new EntryCache(['seed' => $seed]);
-
-    expect(fn() => ContainerConstruction::create(
+    expect(fn() => new Container(
         $resolver,
-        new AliasResolver([$id => 'product']),
         $executor,
-        $cache,
+        aliases: [$id => 'product'],
+        services: ['seed' => $seed],
     ))->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI alias "' . $id . '".');
 
-    $container = ContainerConstruction::create($resolver, new AliasResolver(), $executor, $cache);
+    $container = new Container($resolver, $executor, services: ['seed' => $seed]);
 
     expect($container->get(ContainerInterface::class))->toBe($container)
         ->and($container->get('seed'))->toBe($seed);
@@ -149,10 +147,10 @@ test('standalone construction preserves the canonical config alias and applicati
 });
 
 test('standalone construction rejects an indirect reserved config alias through a mutable application alias', function (): void {
-    expect(fn() => ContainerConstruction::create(
+    expect(fn() => new Container(
         new StandaloneEntryResolver(),
-        new AliasResolver(['config' => 'application.config', 'application.config' => Config::class]),
         (new ContainerBuilder())->build(),
+        aliases: ['config' => 'application.config', 'application.config' => Config::class],
     ))->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI alias "config".');
 });
 
@@ -193,9 +191,8 @@ final class StandaloneProxyFactory implements \Componenta\DI\ProxyFactoryInterfa
 
 test('standalone lazy and proxy creation uses the supplied proxy factory', function (): void {
     $factory = new StandaloneProxyFactory();
-    $container = ContainerConstruction::create(
+    $container = new Container(
         new StandaloneEntryResolver(),
-        new AliasResolver(),
         (new ContainerBuilder())->build(),
         proxyFactory: $factory,
     );
@@ -214,9 +211,12 @@ test('standalone lazy and proxy creation uses the supplied proxy factory', funct
 });
 
 test('standalone shared lookups preserve supplied values through alias retarget and replacement', function (): void {
-    $cache = new EntryCache(['first' => null, 'second' => false]);
-    $aliases = new AliasResolver(['requested' => 'first', 'sibling' => 'first']);
-    $container = ContainerConstruction::create(new StandaloneEntryResolver(), $aliases, (new ContainerBuilder())->build(), $cache);
+    $container = new Container(
+        new StandaloneEntryResolver(),
+        (new ContainerBuilder())->build(),
+        aliases: ['requested' => 'first', 'sibling' => 'first'],
+        services: ['first' => null, 'second' => false],
+    );
 
     expect($container->get('requested'))->toBeNull()
         ->and($container->get('requested'))->toBeNull()
@@ -242,11 +242,11 @@ test('standalone shared lookups preserve supplied values through alias retarget 
 test('standalone cache seeds keep caller reference changes out of cold and warmed aliases', function (bool $warm): void {
     $original = new StandaloneProduct(['source' => 'original']);
     $seed = $original;
-    $container = ContainerConstruction::create(
+    $container = new Container(
         new StandaloneEntryResolver(),
-        new AliasResolver(['first.alias' => 'seed', 'second.alias' => 'seed']),
         (new ContainerBuilder())->build(),
-        cache: new EntryCache(['seed' => &$seed]),
+        aliases: ['first.alias' => 'seed', 'second.alias' => 'seed'],
+        services: ['seed' => &$seed],
     );
     if ($warm) {
         expect($container->get('first.alias'))->toBe($original);
@@ -262,11 +262,11 @@ test('standalone cache seeds keep caller reference changes out of cold and warme
 test('standalone entry replacement does not write through a caller seed reference', function (): void {
     $original = new StandaloneProduct(['source' => 'original']);
     $seed = $original;
-    $container = ContainerConstruction::create(
+    $container = new Container(
         new StandaloneEntryResolver(),
-        new AliasResolver(['alias' => 'seed']),
         (new ContainerBuilder())->build(),
-        cache: new EntryCache(['seed' => &$seed]),
+        aliases: ['alias' => 'seed'],
+        services: ['seed' => &$seed],
     );
     expect($container->get('alias'))->toBe($original);
     $replacement = new StandaloneProduct(['source' => 'container replacement']);
@@ -299,11 +299,10 @@ test('standalone seed ownership preserves nested references and service object i
     $nested = 'initial';
     $object = new \stdClass();
     $service = ['nested' => &$nested, 'object' => $object];
-    $container = ContainerConstruction::create(
+    $container = new Container(
         new StandaloneEntryResolver(),
-        new AliasResolver(),
         (new ContainerBuilder())->build(),
-        cache: new EntryCache(['seed' => &$service]),
+        services: ['seed' => &$service],
     );
     $nested = 'updated';
     $service['caller.only'] = true;

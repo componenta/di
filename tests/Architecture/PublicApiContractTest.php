@@ -13,14 +13,18 @@ use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\Init;
+use Componenta\DI\Attribute\Inject;
+use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\MapCookies;
 use Componenta\DI\Attribute\MapHeaders;
 use Componenta\DI\Attribute\MapQueryString;
+use Componenta\DI\Attribute\MapRequest;
 use Componenta\DI\Attribute\MapRequestAttributes;
 use Componenta\DI\Attribute\MapRequestPayload;
 use Componenta\DI\Attribute\MapServerParams;
 use Componenta\DI\Attribute\MapUploadedFiles;
+use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\PayloadParam;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\QueryParam;
@@ -28,6 +32,7 @@ use Componenta\DI\Attribute\RequestAttribute;
 use Componenta\DI\Attribute\RequestMapper;
 use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Attribute\Transform;
 use Componenta\DI\Attribute\UploadedFile;
 use Componenta\DI\CallableExecutor;
 use Componenta\DI\CallableInvokerInterface;
@@ -50,6 +55,7 @@ function publicParameterNames(string $class, string $method): array
 
 test('public resolution signatures keep their named-argument contract', function (): void {
     expect(publicParameterNames(ContainerFactory::class, 'create'))->toBe(['config', 'dependencies'])
+        ->and(publicParameterNames(ContainerFactory::class, 'createWithTargetedAttributeDiscovery'))->toBe(['config', 'dependencies'])
         ->and(publicParameterNames(FactoryInterface::class, 'make'))->toBe(['entry', 'params'])
         ->and(publicParameterNames(Container::class, 'make'))->toBe(['entry', 'params'])
         ->and(publicParameterNames(CallableInvokerInterface::class, 'call'))->toBe(['callable', 'params'])
@@ -114,6 +120,10 @@ test('attribute constructors keep their named-argument contract', function (
     'Env' => [Env::class, ['name', 'default']],
     'Make' => [Make::class, ['entry', 'params']],
     'Init' => [Init::class, ['callable', 'params']],
+    'Inject' => [Inject::class, []],
+    'Lazy' => [Lazy::class, []],
+    'NoConstructor' => [NoConstructor::class, []],
+    'Transform' => [Transform::class, ['callback']],
     'Cast' => [Cast::class, ['name', 'default']],
     'CurrentRequest' => [CurrentRequest::class, []],
     'CurrentUri' => [CurrentUri::class, []],
@@ -127,6 +137,7 @@ test('attribute constructors keep their named-argument contract', function (
     'ServerParam' => [ServerParam::class, ['name', 'default', 'cast']],
     'UploadedFile' => [UploadedFile::class, ['name']],
     'RequestMapper' => [RequestMapper::class, ['map', 'conflictPolicy']],
+    'MapRequest' => [MapRequest::class, ['sources', 'map', 'exclude', 'conflictPolicy', 'defaults', 'cast', 'sortMap', 'attributes', 'files', 'afterMap']],
     'MapQueryString' => [MapQueryString::class, ['map', 'conflictPolicy']],
     'MapRequestPayload' => [MapRequestPayload::class, ['map', 'conflictPolicy']],
     'MapHeaders' => [MapHeaders::class, ['map', 'conflictPolicy']],

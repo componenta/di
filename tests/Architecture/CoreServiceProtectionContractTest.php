@@ -16,6 +16,7 @@ use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\CallableResolverInterface;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\FactoryInterface;
 use Componenta\DI\LazyObjectFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
@@ -27,17 +28,36 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\VirtualProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
 
-test('core service ids cannot be replaced redirected or decorated at runtime', function (string $id): void {
+test('rejected mutations preserve protected service identity or unavailability', function (string $id): void {
     $container = (new ContainerBuilder())->build();
     $container->set('replacement', 'application');
+    // Protection must preserve existing state, including deliberately hidden IDs.
+    // Availability itself is verified by the public bootstrap contract tests.
+    $available = $container->has($id);
+    $original = $available ? $container->get($id) : null;
+    $decorations = 0;
+    $decorator = static function (object $entry) use (&$decorations): object {
+        ++$decorations;
+        return new \stdClass();
+    };
 
-    expect(fn() => $container->set($id, new \stdClass()))
-        ->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI id')
-        ->and(fn() => $container->alias($id, 'replacement'))
-        ->toThrow(InvalidConfigurationException::class, 'Cannot replace protected DI alias')
-        ->and(fn() => $container->delegator($id, static fn(object $entry): object => $entry))
-        ->toThrow(InvalidConfigurationException::class, 'Cannot decorate protected DI id')
-        ->and($container->get('replacement'))->toBe('application');
+    $mutations = [
+        'Cannot replace protected DI id' => fn() => $container->set($id, new \stdClass()),
+        'Cannot replace protected DI alias' => fn() => $container->alias($id, 'replacement'),
+        'Cannot decorate protected DI id' => fn() => $container->delegator($id, $decorator),
+    ];
+
+    foreach ($mutations as $message => $mutate) {
+        expect($mutate)->toThrow(InvalidConfigurationException::class, $message)
+            ->and($container->has($id))->toBe($available)
+            ->and($container->get('replacement'))->toBe('application');
+        if ($available) {
+            expect($container->get($id))->toBe($original);
+        } else {
+            expect(fn() => $container->get($id))->toThrow(NotFoundException::class);
+        }
+        expect($decorations)->toBe(0);
+    }
 })->with([
     ConfigAttribute::KEY,
     Config::class,

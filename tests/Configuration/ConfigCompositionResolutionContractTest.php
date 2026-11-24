@@ -30,6 +30,7 @@ test('composed overrides provide concrete scalar and variadic values to DI', fun
     $composition = (new ConfigFactory())->create(
         new Environment([]),
         static fn(): array => ['settings' => 'previous'],
+        static fn(): array => ['settings' => ['removed' => 'existing']],
         static fn(): array => ['settings' => [
             'name' => ConfigOverride::replace('configured'),
             'tags' => ConfigOverride::replace(['one', 'two']),
