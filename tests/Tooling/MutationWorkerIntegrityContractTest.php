@@ -45,7 +45,15 @@ test('mutation generation rebuilds stale artifacts while retaining prior scores'
 
         file_put_contents($replacement, '<?php return 41;');
         $cache->set('generated-mutation', [new Mutation($file, 'mutation', 'fixture', 1, 1, '', $replacement)]);
-        expect($cache->has('generated-mutation'))->toBeFalse();
+        expect($cache->has('generated-mutation'))->toBeFalse()
+            ->and($cache->get('previous-run-result'))->toBe(['mutation' => 'tested']);
+
+        file_put_contents($replacement, $contents);
+        $regenerated = new Mutation($file, 'regenerated', 'fixture', 1, 1, '', $replacement);
+        $cache->set('generated-mutation', [$regenerated]);
+        expect($cache->has('generated-mutation'))->toBeTrue()
+            ->and($cache->get('generated-mutation'))->toEqual([$regenerated])
+            ->and($cache->get('previous-run-result'))->toBe(['mutation' => 'tested']);
     } finally {
         new Filesystem()->remove($directory);
         if ($active) {

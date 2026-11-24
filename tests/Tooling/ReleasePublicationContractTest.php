@@ -26,6 +26,7 @@ test('release publication validates the tested tag and published release state',
     $release = $directory . '/release';
     $draft = $directory . '/draft';
     $arguments = $directory . '/release-arguments';
+    $creations = $directory . '/release-creations';
     $tag = $prerelease ? 'v6.0.0.RC1' : 'v6.0.0';
     $existingDraft = str_starts_with($scenario, 'draft-present-');
     $wrongPrerelease = str_ends_with($scenario, '-wrong-prerelease');
@@ -101,6 +102,7 @@ test('release publication validates the tested tag and published release state',
               exit
             fi
             [[ "$2" == create ]]
+            printf '.' >> "$RELEASE_CREATIONS"
             printf '%s\n' "$@" > "$RELEASE_ARGUMENTS"
             "$REAL_GIT" --git-dir "$ORIGIN" rev-parse --verify "refs/tags/$TAG^{commit}" > "$RELEASE_RESULT"
             if [[ "$SCENARIO" == draft-during-create ]]; then
@@ -123,6 +125,7 @@ test('release publication validates the tested tag and published release state',
             'RELEASE_RESULT' => $release,
             'RELEASE_DRAFT' => $draft,
             'RELEASE_ARGUMENTS' => $arguments,
+            'RELEASE_CREATIONS' => $creations,
             'RELEASE_PRERELEASE' => $prerelease !== $wrongPrerelease ? 'true' : 'false',
         ];
         $publish = ['/bin/bash', dirname(__DIR__, 2) . '/.github/scripts/publish-release.sh'];
@@ -131,7 +134,9 @@ test('release publication validates the tested tag and published release state',
 
         if ($published) {
             expect($process->getExitCode())->toBe(0)
-                ->and(trim($filesystem->readFile($release)))->toBe($tested);
+                ->and(trim($filesystem->readFile($release)))->toBe($tested)
+                ->and($runGit('--git-dir', $bare, 'rev-parse', "refs/tags/$tag^{commit}"))->toBe($tested)
+                ->and($filesystem->readFile($creations))->toBe('.');
             $flags = explode("\n", trim($filesystem->readFile($arguments)));
             expect($flags)->toContain('--verify-tag', '--target', $tested)
                 ->and(in_array('--prerelease', $flags, true))->toBe($prerelease);
@@ -140,7 +145,10 @@ test('release publication validates the tested tag and published release state',
             }
             $rerun = new Process($publish, $checkout, $environment);
             $rerun->mustRun();
-            expect($rerun->getOutput())->toContain('already exists');
+            expect($rerun->getOutput())->toContain('already exists')
+                ->and($filesystem->readFile($creations))->toBe('.')
+                ->and(explode("\n", trim($filesystem->readFile($arguments))))->toBe($flags)
+                ->and($runGit('--git-dir', $bare, 'rev-parse', "refs/tags/$tag^{commit}"))->toBe($tested);
         } elseif ($existingDraft || $scenario === 'draft-during-create') {
             expect($process->getExitCode())->toBe(1)
                 ->and($process->getErrorOutput())->toContain('is still a draft')
@@ -164,7 +172,10 @@ test('release publication validates the tested tag and published release state',
                 ->and(file_exists($release))->toBeFalse();
             if ($scenario !== 'push-failure') {
                 expect($runGit('--git-dir', $bare, 'rev-parse', "refs/tags/$tag"))->toBe($other);
+            } else {
+                expect($runGit('--git-dir', $bare, 'for-each-ref', '--format=%(objectname)', "refs/tags/$tag"))->toBe('');
             }
+            expect(file_exists($creations))->toBeFalse();
         }
     } finally {
         $filesystem->remove($directory);

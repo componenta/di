@@ -87,6 +87,7 @@ test('mutation reports retain real worker outcomes and distinguish incomplete ru
             ->and($suite->score())->toBe($score)
             ->and($report['schema_version'])->toBe(1)
             ->and($report['complete'])->toBeFalse()
+            ->and($report['pest_score'])->toBe($score)
             ->and($report['counts'])->toBe(['total' => 4, 'tested' => 1, 'untested' => 1, 'timeout' => 1, 'uncovered' => 0, 'none' => 1])
             ->and($report['files'])->toBe(['source.php' => ['sha256' => hash('sha256', $original)]])
             ->and($report['arguments'])->toBe(['tests/mutate.php', '--mutate', '--path=source.php'])
@@ -119,6 +120,7 @@ test('mutation reports retain real worker outcomes and distinguish incomplete ru
             throw new RuntimeException('Expected the updated mutation report object.');
         }
         expect($report['complete'])->toBeTrue()
+            ->and($report['pest_score'])->toBe($suite->score())
             ->and($report['counts'])->toBe(['total' => 4, 'tested' => 1, 'untested' => 2, 'timeout' => 1, 'uncovered' => 0, 'none' => 0]);
     } finally {
         new Filesystem()->remove($directory);
