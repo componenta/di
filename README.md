@@ -1,33 +1,26 @@
 # Componenta DI
 
-[Русский](README.ru.md)
+[Русская версия](README.ru.md)
 
-A [PSR-11](https://www.php-fig.org/psr/psr-11/) dependency injection container for PHP 8.4+ with autowiring, dependency definitions, attribute injection, callable execution, and native lazy objects.
+A [PSR-11](https://www.php-fig.org/psr/psr-11/) dependency injection container for PHP 8.4+.
 
-**DI 6 is unreleased.** This branch (`refactor/di6-definitions-callbacks`) contains the development API.
+Supports autowiring, explicit service and factory definitions, aliases, decorators, PHP attributes, callable invocation, PSR-7 request mapping, and native lazy objects.
 
 ## Installation
-
-Published release:
 
 ```bash
 composer require componenta/di
 ```
 
-DI 6 development branch:
-
-```bash
-composer require 'componenta/di:dev-refactor/di6-definitions-callbacks'
-```
-
-Native callback expressions directly in PHP attributes require PHP 8.5; the package itself supports PHP 8.4+.
+Native closures and first-class callable expressions written directly in attribute arguments require PHP 8.5. All other features retain the PHP 8.4 minimum.
 
 ## Documentation
 
-- [Getting started](docs/guide/getting-started.md) — installation, providers, and an example.
-- [Definitions](docs/guide/definitions.md) · [Container API](docs/guide/container.md).
-- [Lazy objects](docs/guide/lazy-objects.md) · [Attributes and HTTP mapping](docs/guide/attributes.md).
-- [Extensions](docs/guide/extensions.md) · [Runtime behavior and exceptions](docs/guide/runtime.md).
-- [DI 6 migration: definitions](docs/migrations/di6-definitions.md) · [Callbacks and unions](docs/migrations/di6-callbacks.md).
+- [Getting started](docs/guide/getting-started.md) — configure and build a container.
+- [Dependency definitions](docs/guide/definitions.md) — services, factories, aliases, and decorators.
+- [Container API](docs/guide/container.md) — lookup, object creation, invocation, and mutations.
+- [Attributes and request mapping](docs/guide/attributes.md) · [Lazy objects](docs/guide/lazy-objects.md).
+- [Extension points](docs/guide/extensions.md) · [Runtime behavior and errors](docs/guide/runtime.md).
+- [Migrating definitions](docs/migrations/di6-definitions.md) · [Migrating callbacks and unions](docs/migrations/di6-callbacks.md).
 
-[Documentation index](docs/index.md) · [Issues](https://github.com/componenta/di/issues)
+[Documentation index](docs/index.md) · [License](https://github.com/componenta/di/blob/main/LICENSE) · [Issues](https://github.com/componenta/di/issues)

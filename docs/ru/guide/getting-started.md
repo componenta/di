@@ -1,36 +1,18 @@
 # Начало работы
 
-## Установка
+## Требования и установка
 
-Опубликованная версия и ветка разработки DI 6 — разные версии.
-
-Для последнего опубликованного релиза:
+Для работы библиотеки нужен PHP 8.4 или новее. Установка выполняется через Composer:
 
 ```bash
 composer require componenta/di
 ```
 
-Чтобы до релиза использовать API из этих руководств, укажите ветку разработки:
+Зависимости перечислены в файле [composer.json](../../../composer.json). PHP 8.5 необходим только для записи нативных замыканий и ссылок на функции непосредственно в аргументах атрибутов.
 
-```bash
-composer require 'componenta/di:dev-refactor/di6-definitions-callbacks'
-```
+## Создание контейнера
 
-DI 6 требует PHP 8.4+ и зависимости из [composer.json](https://github.com/componenta/di/blob/refactor/di6-definitions-callbacks/composer.json). Для нативных inline/reference callback-выражений внутри атрибутов нужен PHP 8.5.
-
-## Основной поток
-
-```text
-Environment + упорядоченные провайдеры
-    -> ConfigFactory::create()
-    -> ConfigComposition { Config, DependencyDefinitions }
-    -> ContainerFactory::create()
-    -> ContainerValue { container, тот же Config }
-```
-
-`ContainerFactory` — основной способ создания контейнера в приложении. Она сохраняет переданные экземпляры `Config` и `Environment` без копирования. Прямой `new Container(...)` также поддерживается через [контракт самостоятельной сборки](../migrations/di6-definitions.md#прямое-создание-контейнера).
-
-## Быстрый старт
+`ConfigFactory` объединяет данные поставщиков конфигурации. Результат содержит настройки приложения в `Config` и отдельные определения зависимостей в `DependencyDefinitions`. Оба объекта передаются в `ContainerFactory`.
 
 ```php
 use Componenta\Config\ConfigFactory;
@@ -69,44 +51,48 @@ $composition = (new ConfigFactory())->create(
     $environment,
     new AppConfigProvider(),
 );
-$containerValue = (new ContainerFactory())->create(
+$context = (new ContainerFactory())->create(
     $composition->config,
     $composition->dependencies,
 );
-$container = $containerValue->container;
+$container = $context->container;
 
 $shared = $container->get(Greeting::class);
 $fresh = $container->make(Greeting::class, ['prefix' => 'Добро пожаловать']);
 
 assert($shared->message === 'Привет!');
 assert($fresh->message === 'Добро пожаловать!');
-assert($containerValue->config === $composition->config);
+assert($context->config === $composition->config);
 assert($container->get(Environment::class) === $environment);
 ```
 
-## Слияние провайдеров
+Метод `get()` возвращает общий результат для собственной записи контейнера. Метод `make()` начинает отдельную попытку создания объекта и позволяет передать дополнительные аргументы. Сама фабрика при этом вправе вернуть ранее созданный объект.
 
-`ConfigFactory` вызывает провайдеры в порядке аргументов и объединяет секции зависимостей до передачи результата в DI:
+## Объединение конфигурации
 
-- factories, aliases, services и parameter resolvers являются реестрами по ключу; позднее значение заменяет раннее с тем же ключом;
-- numeric invokables дописываются, а keyed invokables заменяются по ключу;
-- цепочки delegators, attribute definitions и attribute capabilities дописываются в порядке провайдеров;
-- флаги замены resolver-ов и определений атрибутов используют последнее явно переданное логическое значение.
+`ConfigFactory` вызывает поставщиков в указанном порядке. При объединении определений действуют следующие правила:
 
-DI один раз проверяет и нормализует объединённый `DependencyDefinitions` внутри `ContainerFactory::create()`. Пакет не вызывает провайдеры и не копирует определения зависимостей в `Config`.
+- фабрики, псевдонимы, готовые службы и обработчики параметров объединяются по ключам; более поздняя запись заменяет предыдущую;
+- классы с созданием без внедрения: элементы с числовыми ключами добавляются, а с именованными ключами заменяются;
+- цепочки обработчиков результата, определения атрибутов и ограничения их сочетаний добавляются в порядке поставщиков;
+- для признаков полной замены обработчиков параметров и определений атрибутов действует последнее явно заданное логическое значение.
 
-`ConfigProvider` предоставляет защищённые методы:
+`ContainerFactory::create()` проверяет и нормализует объединённый `DependencyDefinitions` при сборке контейнера. Повторного вызова поставщиков конфигурации не происходит.
+
+Класс `ConfigProvider` предоставляет защищённые методы для настройки:
 
 ```text
 getConfig()
 getFactories()
+getServices()
 getInvokables()
 getAliases()
 getDelegators()
-getServices()
 getParameterResolvers()
 shouldReplaceParameterResolvers()
 getAttributeDefinitions()
 shouldReplaceAttributeDefinitions()
 getAttributeCapabilities()
 ```
+
+Способы объявления зависимостей описаны в разделе [«Определения зависимостей»](definitions.md).

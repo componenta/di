@@ -1,36 +1,18 @@
 # Getting started
 
-## Installation
+## Requirements and installation
 
-The published release and the DI 6 development branch are different versions.
-
-For the latest published version:
+Componenta DI requires PHP 8.4+ and installs through Composer:
 
 ```bash
 composer require componenta/di
 ```
 
-To use the API documented here before the DI 6 release, select the development branch:
+The package dependencies are listed in the repository's [composer.json](../../composer.json). PHP 8.5 is required only for native callback expressions written directly in attribute arguments.
 
-```bash
-composer require 'componenta/di:dev-refactor/di6-definitions-callbacks'
-```
+## Create a container
 
-DI 6 requires PHP 8.4+ and the dependencies declared in [composer.json](https://github.com/componenta/di/blob/refactor/di6-definitions-callbacks/composer.json). Native inline/reference callback expressions inside attributes require PHP 8.5.
-
-## Core flow
-
-```text
-Environment + ordered providers
-    -> ConfigFactory::create()
-    -> ConfigComposition { Config, DependencyDefinitions }
-    -> ContainerFactory::create()
-    -> ContainerValue { container, the same Config }
-```
-
-`ContainerFactory` is the standard construction API for applications. It preserves the exact `Config` and `Environment` instances supplied by the application. Direct `new Container(...)` is also supported under the [standalone construction contract](../migrations/di6-definitions.md#direct-container-construction).
-
-## Quick start
+Configuration providers are assembled by `ConfigFactory`. The result includes application `Config` and a separate `DependencyDefinitions` object. Pass both to `ContainerFactory`.
 
 ```php
 use Componenta\Config\ConfigFactory;
@@ -69,44 +51,48 @@ $composition = (new ConfigFactory())->create(
     $environment,
     new AppConfigProvider(),
 );
-$containerValue = (new ContainerFactory())->create(
+$context = (new ContainerFactory())->create(
     $composition->config,
     $composition->dependencies,
 );
-$container = $containerValue->container;
+$container = $context->container;
 
 $shared = $container->get(Greeting::class);
 $fresh = $container->make(Greeting::class, ['prefix' => 'Welcome']);
 
 assert($shared->message === 'Hello!');
 assert($fresh->message === 'Welcome!');
-assert($containerValue->config === $composition->config);
+assert($context->config === $composition->config);
 assert($container->get(Environment::class) === $environment);
 ```
 
+`get()` returns a shared result for a local entry; `make()` starts a separate object-creation attempt with optional parameters. The factory itself may still choose to return an existing object.
+
 ## Provider composition
 
-`ConfigFactory` calls providers in argument order and merges their dependency sections before DI sees them. The relevant rules are:
+`ConfigFactory` invokes providers in the order given, then passes the merged dependency sections to DI. Their merge rules are:
 
-- factories, aliases, services, and parameter resolvers are keyed registries; a later value replaces an earlier value with the same key;
-- numeric invokables are appended, while keyed invokables are replaced by key;
-- delegator pipelines, attribute definitions, and attribute capabilities are appended in provider order;
-- resolver and attribute-definition replacement flags use the last explicitly supplied Boolean value.
+- factory, alias, service and parameter-resolver registries: later values replace earlier values for the same key;
+- invokable classes: numeric entries are appended, keyed entries are replaced by key;
+- delegator pipelines, attribute definitions and attribute capability policies: appended in provider order;
+- resolver/attribute-definition replacement flags: the last explicitly supplied Boolean value wins.
 
-DI validates and normalizes the merged `DependencyDefinitions` once during `ContainerFactory::create()`. It does not invoke providers and does not copy definitions into `Config`.
+`ContainerFactory::create()` validates and normalizes the resulting `DependencyDefinitions` during assembly. It does not invoke the configuration providers again.
 
-`ConfigProvider` exposes these protected hooks:
+`ConfigProvider` supplies these protected extension methods:
 
 ```text
 getConfig()
 getFactories()
+getServices()
 getInvokables()
 getAliases()
 getDelegators()
-getServices()
 getParameterResolvers()
 shouldReplaceParameterResolvers()
 getAttributeDefinitions()
 shouldReplaceAttributeDefinitions()
 getAttributeCapabilities()
 ```
+
+For definition types and their behavior, see [Dependency definitions](definitions.md).

@@ -1,20 +1,20 @@
 # Документация Componenta DI
 
-[English](../index.md) · [GitHub](https://github.com/componenta/di)
+[Английская версия](../index.md) · [Репозиторий](https://github.com/componenta/di)
 
-Документация для ещё не выпущенной **DI 6**. Требуется PHP 8.4+; нативные callback-выражения непосредственно внутри атрибутов требуют PHP 8.5.
+Контейнер внедрения зависимостей для PHP 8.4+, соответствующий стандарту PSR-11. Для нативных функций обратного вызова непосредственно в атрибутах требуется PHP 8.5.
 
 ## Руководство
 
 - [Начало работы](guide/getting-started.md)
 - [Определения зависимостей](guide/definitions.md)
-- [API контейнера](guide/container.md)
-- [Ленивые объекты и прокси](guide/lazy-objects.md)
-- [Атрибуты и HTTP-запросы](guide/attributes.md)
+- [Интерфейс контейнера](guide/container.md)
+- [Атрибуты и обработка HTTP-запросов](guide/attributes.md)
+- [Отложенное создание объектов](guide/lazy-objects.md)
 - [Расширение контейнера](guide/extensions.md)
 - [Поведение и исключения](guide/runtime.md)
 
-## Миграция
+## Переход с версии 5
 
-- [Определения DI 6](migrations/di6-definitions.md)
-- [Callbacks и union-типы](migrations/di6-callbacks.md)
+- [Определения и точки расширения](migrations/di6-definitions.md)
+- [Функции обратного вызова и объединения типов](migrations/di6-callbacks.md)

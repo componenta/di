@@ -1,20 +1,20 @@
 # Componenta DI documentation
 
-[Русский](ru/index.md) · [GitHub](https://github.com/componenta/di)
+[Русская версия](ru/index.md) · [Repository](https://github.com/componenta/di)
 
-Documentation for the unreleased **DI 6** development branch. PHP 8.4+ is required; native callback expressions written in attribute arguments require PHP 8.5.
+Componenta DI is a PSR-11 dependency injection container for PHP 8.4+. Native callback expressions inside attribute arguments require PHP 8.5.
 
 ## Guide
 
 - [Getting started](guide/getting-started.md)
 - [Dependency definitions](guide/definitions.md)
 - [Container API](guide/container.md)
-- [Lazy objects and proxies](guide/lazy-objects.md)
 - [Attributes and HTTP request mapping](guide/attributes.md)
-- [Extension points](guide/extensions.md)
+- [Lazy objects and proxies](guide/lazy-objects.md)
+- [Extending the container](guide/extensions.md)
 - [Runtime behavior and exceptions](guide/runtime.md)
 
-## Migration
+## Migrating from version 5
 
-- [DI 6 definitions](migrations/di6-definitions.md)
-- [DI 6 callbacks and unions](migrations/di6-callbacks.md)
+- [Definitions and extension APIs](migrations/di6-definitions.md)
+- [Callbacks and union autowiring](migrations/di6-callbacks.md)
