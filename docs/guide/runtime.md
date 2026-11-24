@@ -1,19 +1,30 @@
 # Runtime behavior and exceptions
 
-## Runtime behavior
+## Sharing and cache boundaries
 
-For local entries, `get()` caches a shared result, including the result of the requested ID's delegator pipeline. An external container that owns the requested ID supplies each `get()` result directly and controls its sharing; local result caches and delegators are not applied to that result.
+`get()` caches a local entry's resolved result, including its delegator chain, under the requested ID. Local cache entries can contain objects, scalars, `null` or `false`. External PSR-11 containers control their own sharing; the local cache and local delegators do not modify their results.
 
-`make()` resolves the local definition or fallback strategy on every call and accepts runtime parameters. It bypasses shared values, external containers and delegators, and requires an object result. A factory still controls the identity of its product and may return an existing object.
+`make()` always follows a local creation path and requires an object result. It does not apply delegators or consume a shared `get()` result. Explicit application factories can still return the same object on multiple calls.
 
-Reflection metadata, prepared parameter plans and alias paths are cached only in memory inside one container. Resolver selection for entries without an explicit definition checks current availability on each lookup, including the current state of composition rules.
-
-Development and production use the same `ContainerFactory`, normalization, validation, and resolver chain. Runtime dependency values are never exported, so non-serializable values have the same behavior in both environments.
+Reflection metadata, parameter plans and alias paths are cached in container memory. Binding mutations invalidate affected entries rather than rebuilding the entire container. The same construction and validation pipeline is used in development and production.
 
 ## Exceptions
 
-Package-owned failures implement `Componenta\DI\Exception\ExceptionInterface`, which also extends the PSR-11 container exception contract. Common concrete exceptions include `InvalidConfigurationException`, `NotFoundException`, `ResolutionException`, `CircularDependencyException`, `ConcurrentResolutionException`, `DelegatorException`, and `AttributeCompositionException`.
+Componenta-owned exceptions implement `Componenta\DI\Exception\ExceptionInterface`, which extends the PSR-11 container exception contract. Common types:
 
-If definition or delegator registration fails during validation or autoloading, `set()` and `delegator()` preserve an existing Componenta exception or wrap a foreign failure in `InvalidConfigurationException`, with the original throwable in `getPrevious()`. A rejection before publication leaves the previous binding and delegator pipeline intact; independently completed mutations from application code are not rolled back. After publication, all affected caches and callable chains are invalidated before retired roots are released. Synchronously delivered retirement failures become `MutationRetirementException`, whose readonly `id` and ordered `causes` identify a committed mutation; `getPrevious()` is the first cause. A propagated exception may originate from an independently committed nested mutation. See the [migration guide](../migrations/di6-definitions.md) for recovery and lifetime boundaries.
+| Exception | Meaning |
+| --- | --- |
+| `NotFoundException` | The requested entry does not exist. |
+| `ResolutionException` | Construction or dependency resolution failed. |
+| `CircularDependencyException` | A circular resolution was detected. |
+| `ConcurrentResolutionException` | Resolution conflicts with another active execution. |
+| `InvalidConfigurationException` | Invalid registration or configuration. |
+| `AttributeCompositionException` | Incompatible attribute composition. |
+| `DelegatorException` | Delegator resolution or invocation failed. |
+| `MutationRetirementException` | A mutation committed, but releasing replaced values failed. |
 
-After DI resolves an explicitly invoked callable and enters its body, exceptions thrown by that callable propagate unchanged.
+Errors from a selected factory or constructor are reported under the owning resolution boundary and may preserve the original exception in `getPrevious()`. An exception thrown by the body of an explicitly invoked callable propagates unchanged once invocation begins.
+
+A failed registration that was rejected before publication leaves its previous binding intact. If releasing replaced values fails *after* a mutation commits, `MutationRetirementException` exposes the affected `id` and the ordered `causes` array; do not blindly retry the registration. Independently completed nested mutations are not rolled back.
+
+See [Definition migration](../migrations/di6-definitions.md) for error-handling changes.

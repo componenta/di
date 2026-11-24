@@ -1,8 +1,10 @@
 # Dependency definitions
 
+The container accepts ready-to-use values, factories, class definitions and invokable classes. When no explicit binding exists, it can construct a concrete class using reflection.
+
 ## Services
 
-Services are runtime values and retain their state and identity. Objects, closures, resources, `null`, and `false` are valid values.
+`ConfigProvider::getServices()` supplies existing values. Objects keep their identity; closures, resources, `null` and `false` are also valid.
 
 ```php
 protected function getServices(): array
@@ -14,49 +16,52 @@ protected function getServices(): array
 }
 ```
 
+A local `get()` result is shared under the requested identifier. Use `has()` to check whether an entry is known, not whether its construction is guaranteed to succeed.
+
 ## Factories
 
-The complete runtime factory ABI is `(ContainerValue $context, array $params)`. A callable may declare a compatible prefix of these arguments. Known direct non-string callables are checked when their definitions are registered, including during container construction. Strings and unresolved service-method specifications are resolved and validated when the factory is requested; registration does not instantiate a deferred factory owner.
+Factory functions receive a compatible prefix of `(ContainerValue $context, array $params)`; zero, one or two declared arguments are supported. The context provides the container and configuration. Additional arguments supplied to `make()` are in `$params`.
 
 ```php
+use Componenta\Config\ContainerValue;
+
 protected function getFactories(): array
 {
     return [
-        Client::class => static fn(ContainerValue $context, array $params): Client =>
-            new Client(
-                $context->config->string('api.endpoint'),
-                $params['timeout'] ?? 10,
-            ),
+        Client::class => static fn(
+            ContainerValue $context,
+            array $params,
+        ): Client => new Client(
+            $context->config->string('api.endpoint'),
+            $params['timeout'] ?? 10,
+        ),
     ];
 }
 ```
 
-A factory owns the complete creation of its result. The container does not apply that result's DI attributes after the factory returns it.
+A factory is responsible for creating its result. The container does not subsequently apply DI attributes to it. Callable arguments that can be checked immediately are validated at registration; unresolved callable service owners are checked when used.
 
-`ClassDefinition` is a declarative factory. It invokes a public constructor immediately and then executes explicit `call()` instructions in registration order, including repeated calls to the same method:
+## Declarative class definitions
+
+`ClassDefinition` calls the public constructor with configured arguments, then executes methods in declaration order. It supports nested service references and optional type-based fallback.
 
 ```php
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 
 $definition = ClassDefinition::create(Client::class)
-    ->constructor(['endpoint' => 'https://api.example.test', 'timeout' => 10])
-    ->call('setLogger', [Definition::reference(LoggerInterface::class)]);
+    ->constructor(['endpoint' => 'https://api.example.test'])
+    ->call('setLogger', [Definition::reference(LoggerInterface::class)])
+    ->autowire();
 ```
 
-By default, arguments come only from the definition, constructor overrides supplied to `make()`, and PHP parameter defaults. `make()` overrides match constructor parameter names or positions; a name takes precedence over a position. Type-name keys are not constructor arguments. Replaced references are not resolved, and runtime values remain literal. `ReferenceDefinition` looks up a dependency through the existing container; that dependency follows its own registration and lifecycle.
+`constructor()`, `call()` and `autowire()` return new definitions, leaving the original unchanged. `call()` replaces the former `method()` API; repeated calls are preserved.
 
-Nested configured argument arrays resolve `ReferenceDefinition` values recursively. A cyclic array in `constructor()` or `call()` throws `InvalidConfigurationException`. Reusing the same non-cyclic array in separate arguments is supported. Runtime overrides and values returned by references remain literal.
+By default, only explicitly configured arguments, runtime constructor overrides and PHP defaults are used. `autowire()` enables resolution by class/interface type for *missing* arguments; explicit `null` still takes precedence. It does not enable parameter attributes or custom parameter resolvers. Neither the class, constructor parameters nor its properties/methods have their DI attributes executed by `ClassDefinition`.
 
-Call `autowire()` or `autowire(true)` to enable type-based DI fallback for missing constructor and method arguments. Explicit arguments, including `null`, take precedence. If no service is available for the declared class/interface type, PHP defaults still apply; a required argument without a value fails. `autowire(false)` disables this fallback. The flag does not enable parameter attributes or custom parameter resolvers.
+`Definition::reference()` performs a container lookup when its configured argument is resolved; nested configured arrays are processed recursively. Runtime overrides remain literal. Unknown configured arguments in fixed constructor/method signatures are rejected. Cyclic configured arrays are rejected with `InvalidConfigurationException`.
 
-`ClassDefinition` never executes DI attributes on its target class, properties, constructor parameters, or configured methods. This includes `SetUp`, `Inject`, `Lazy`, `Proxy`, and `NoConstructor`, even when autowiring fallback is enabled. A failed constructor or explicit method call aborts creation; the failed result is not shared. A later `get()` or `make()` starts a new creation attempt.
-
-Unused arguments explicitly configured in `constructor()` or a reflected non-variadic `call()` throw `InvalidConfigurationException` when resolved, including unknown names and extra positions. Unrelated runtime keys passed to `make()` remain ignored for fixed signatures. Explicit variadic definitions and magic method calls retain native argument binding.
-
-`constructor()`, `call()`, and `autowire()` return new immutable definitions. `call()` replaces the former `method()` API. `DefinitionInterface` is a marker; it imposes no shared `value` property on concrete definitions.
-
-## Invokables and aliases
+## Invokable classes and aliases
 
 ```php
 protected function getInvokables(): array
@@ -69,17 +74,15 @@ protected function getInvokables(): array
 
 protected function getAliases(): array
 {
-    return [
-        CacheInterface::class => RedisCache::class,
-    ];
+    return [CacheInterface::class => RedisCache::class];
 }
 ```
 
-A keyed invokable registers both the concrete class and an alias. Invokables use a direct zero-argument constructor call, including PHP defaults, without processing DI attributes. A constructor failure preserves an existing Componenta exception, including the original circular-dependency diagnostic; a foreign failure becomes `ResolutionException` with the original throwable as its previous exception. Failed creation is not shared, and a later resolution can retry.
+An invokable class is created using a constructor with no supplied arguments (PHP defaults still apply). It does not use attribute injection. A keyed invokable adds an alias for its concrete class; `getAliases()` creates aliases independently. Failed construction is not cached as a successful service.
 
 ## Delegators
 
-Delegators receive the current entry and may optionally accept the container. They run in provider and registration order.
+Delegators transform a resolved local entry. They receive the current value and can optionally accept the container. Their order follows configuration-provider and registration order.
 
 ```php
 protected function getDelegators(): array
@@ -93,4 +96,6 @@ protected function getDelegators(): array
 }
 ```
 
-A deferred service-method pair such as `['tracing.decorator', 'decorate']` must be nested inside the pipeline list. This distinguishes it from a pipeline containing two string delegators.
+A deferred `[service ID, method]` callable must be nested inside the delegator list. This differs from a list containing two independent string callables. Delegators affect shared local `get()` results; `make()` does not apply them.
+
+See [Container API](container.md) for lookup and mutation semantics.
