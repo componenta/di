@@ -1,0 +1,50 @@
+# DI performance benchmarks
+
+The primary suite uses PHPBench and the current checkout's Composer autoloader. PHPBench is a development dependency, never a runtime dependency.
+
+## Run
+
+Use the PHP version required by composer.json and install development dependencies:
+
+```sh
+composer install
+composer bench
+vendor/bin/phpbench run --filter=ContainerBench --report=aggregate --report=env
+vendor/bin/phpbench run --filter=benchFirstGet --report=aggregate
+```
+
+Do not override the configured revolution count for first-operation subjects. A first operation is measured once in each isolated PHPBench iteration; repeating it on the same container would measure a different operation. A quick discovery/execution check can reduce iterations (not revolutions):
+
+```sh
+composer bench-smoke
+```
+
+To compare revisions, use separate checkouts with the same PHP build, extensions, Composer dependency versions, CPU/power settings and PHP configuration. Record OPcache/JIT and Xdebug settings. For example, store the first result with `vendor/bin/phpbench run --tag=baseline --report=aggregate` and use PHPBench's stored baseline comparison on the same machine. Keep local results out of version control.
+
+## Coverage
+
+| Benchmark | Workload |
+| --- | --- |
+| BuildBench | Dependency normalization; first and repeated container assembly; normal vs targeted discovery; empty, representative, service and alias-chain sizes |
+| ContainerBench | First and shared get; first and repeated has; scalar, null and false entries; reflection, shared dependency graph, invokable, factory, class definitions with nested references and repeated configured methods, alias, delegators; first and repeated make with default and override arguments |
+| CallableBench | First and repeated call/resolve for closures, function names, object/class methods, static strings, invokable objects, callable service IDs and prepared callables; newly allocated closures |
+| ParameterBench | Default/nullable, named/positional, variadic, union, custom parameter resolver and missing entry error |
+| AttributeBench | Constructor and property attributes, configuration, environment fallback, explicit lookup, make, initialization, setup method and PHP 8.5 setup/transform callbacks, named caster, constructor suppression, targeted discovery and plan-cache parity |
+| RequestBench | All individual PSR-7 extractors; seven single-source mappers and multi-source mapping; arrays of 1–4096 keys; DTO mapping, native callback, casting and raw-data validation; first/repeated and plan-cache modes |
+| LazyBench | Explicit native lazy ghosts and virtual proxies, class and injection-point attributes, allocation, first state access and initialized access |
+| MutationBench | Replacement of cached entries, alias retargeting, delegator registration, external provider registration, notification, first and repeated get and has |
+
+## Measurement boundaries
+
+- Build subjects construct configuration inputs outside the timer. Repeated assembly measures new containers in a warm process, not reuse of a container. First assembly uses a single revolution.
+- First get/has/make/call/resolve start with a newly assembled container and no prior target operation. The process and its autoloader are already bootstrapped; this is not total PHP startup or HTTP latency.
+- Shared get reuses the same resolved entry. Repeated make creates new results with warmed metadata and may reuse shared dependencies. Repeated callable/request work uses warmed metadata but resolves inputs each time. A prepared callable is a different invocation contract, not a faster equivalent for an unresolved argument list.
+- The attribute plan comparison follows the library's cache-parity contract fixtures: the same marker attribute is registered in both modes, with a no-op composition rule in the uncached-plan variant. The latter includes rule execution and is not a general cache-off mode. Other caches remain active.
+- Lazy allocation does not initialize object state. First state access uses a fresh uninitialized object and one revolution. Initialized access uses a pre-initialized object.
+- Mutations use independent, warmed containers and one revolution unless explicitly measuring repeated external lookup. Verification runs outside timed subjects. Request construction and input preparation are excluded.
+- Use aggregate latency and relative standard deviation to compare cases; repeat noisy measurements. Single-revolution first-operation results are more sensitive to timer and process noise. Do not infer a regression from a small difference within that noise. PHPBench's peak memory is process-level memory, not bytes allocated by a single DI call; do not subtract unrelated peaks or divide them by revolutions.
+- No absolute machine-dependent performance assertions are enabled. Check functional correctness with the contract suite separately (`composer test`).
+
+## Targeted diagnostic scripts
+
+The existing independent scripts in this directory are retained for their focused internal, scaling and historical cross-version experiments. They are not discovered by the main PHPBench suite. Most require `COMPONENTA_DI_BENCH_AUTOLOAD` and `COMPONENTA_DI_BENCH_SOURCE` to select the dependency installation and DI source. In particular, the legacy RuntimeBench and GeneratedVsReflectionBench are useful only when comparing compatible historical workloads. Use the PHPBench suite for current DI 6 performance reporting.

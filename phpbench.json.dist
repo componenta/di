@@ -1,0 +1,8 @@
+{
+    "$schema": "./vendor/phpbench/phpbench/phpbench.schema.json",
+    "runner.bootstrap": "benchmarks/bootstrap.php",
+    "runner.path": "benchmarks/Suite",
+    "runner.iterations": 7,
+    "runner.revs": 1000,
+    "runner.time_unit": "microseconds"
+}

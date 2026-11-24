@@ -8,3 +8,5 @@
 /coverage.xml
 /junit.xml
 /integration/composer.lock
+/.phpbench/
+/phpbench.json
