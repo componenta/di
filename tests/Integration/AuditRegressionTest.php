@@ -27,13 +27,18 @@ final readonly class AuditMappedFactoryEnvelope
     ) {}
 }
 
+final readonly class AuditLazyProduct
+{
+    public function __construct(public string $label) {}
+}
+
 final class AuditLazyFactory implements LazyServiceFactoryInterface
 {
     public ?ContainerInterface $seenContainer = null;
-    public ?ProxyFactoryInterface $seenProxyFactory = null;
     /** @var array<string|int,mixed> */
     public array $seenContext = [];
     public int $calls = 0;
+    public int $initializations = 0;
 
     public function lazy(
         ContainerInterface $container,
@@ -42,9 +47,16 @@ final class AuditLazyFactory implements LazyServiceFactoryInterface
     ): object {
         ++$this->calls;
         $this->seenContainer = $container;
-        $this->seenProxyFactory = $proxyFactory;
         $this->seenContext = $context;
-        return new \stdClass();
+        $label = $context['label'] ?? 'default';
+        if (!is_string($label)) {
+            throw new \LogicException('Expected a string label.');
+        }
+
+        return $proxyFactory->makeProxy(AuditLazyProduct::class, function () use ($label): AuditLazyProduct {
+            ++$this->initializations;
+            return new AuditLazyProduct($label);
+        });
     }
 
     public function __invoke(ContainerInterface $container): object
@@ -91,18 +103,27 @@ test('lazy service factories use the current ContainerValue runtime ABI', functi
         ->build();
 
     $first = $container->get('audit.lazy');
-    expect($first)->toBeInstanceOf(\stdClass::class)
-        ->and($container->get('audit.lazy'))->toBe($first)
+    Assert::assertInstanceOf(AuditLazyProduct::class, $first);
+    expect($container->get('audit.lazy'))->toBe($first)
         ->and($factory->calls)->toBe(1)
+        ->and($factory->initializations)->toBe(0)
         ->and($factory->seenContext)->toBe([]);
 
     $fresh = $container->make('audit.lazy', ['label' => 'caller']);
-    expect($fresh)->toBeInstanceOf(\stdClass::class)
-        ->and($fresh)->not->toBe($first)
+    Assert::assertInstanceOf(AuditLazyProduct::class, $fresh);
+    expect($fresh)->not->toBe($first)
         ->and($factory->calls)->toBe(2)
+        ->and($factory->initializations)->toBe(0)
         ->and($factory->seenContext)->toBe(['label' => 'caller'])
-        ->and($factory->seenProxyFactory)->toBe($container->get(ProxyFactoryInterface::class))
-        ->and($factory->seenContainer)->toBeInstanceOf(ContainerValue::class);
+        ->and($factory->seenContainer)->toBeInstanceOf(ContainerValue::class)
+        ->and($fresh->label)->toBe('caller')
+        ->and($factory->initializations)->toBe(1)
+        ->and($first->label)->toBe('default')
+        ->and($factory->initializations)->toBe(2)
+        ->and($container->get('audit.lazy'))->toBe($first)
+        ->and($factory->calls)->toBe(2)
+        ->and($first->label)->toBe('default')
+        ->and($factory->initializations)->toBe(2);
 
     if (!$factory->seenContainer instanceof ContainerValue) {
         throw new \LogicException('The lazy factory did not receive ContainerValue.');
