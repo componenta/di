@@ -17,6 +17,7 @@ use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
@@ -161,8 +162,10 @@ final class AttributePlans
         ?AttributePlan $previousPlan = null,
     ): AttributePlan {
         $closure = null;
+        $closureDeclaration = null;
         if ($target instanceof Closure) {
             $closure = $target;
+            $closureDeclaration = new ReflectionFunction($closure);
             $target = ReflectionSnapshot::target($closure);
         }
         $key = $observed === null ? self::cacheKey($target) : null;
@@ -184,7 +187,8 @@ final class AttributePlans
 
             $awaitsDiscovery = false;
             $validatedUserRules = false;
-            $attributes = $observed ?? $metadata?->attributeOverride($previous) ?? $target->getAttributes();
+            $attributes = $observed ?? $metadata?->attributeOverride($previous)
+                ?? $closureDeclaration?->getAttributes() ?? $target->getAttributes();
             if ($metadata !== null) {
                 $previous = $attributes;
             }
@@ -266,9 +270,11 @@ final class AttributePlans
                 continue;
             }
 
-            if (!$this->supportsTarget($attributeClass, $target)) {
+            $targetFlag = $closure === null ? self::targetFlag($target) : $reflectionAttribute->getTarget();
+            $attributeFlags = $this->attributeTargetFlags($attributeClass);
+            if (($attributeFlags & $targetFlag) === 0) {
                 if (self::isPromotedDuplicateTarget($target)
-                    && ($this->attributeTargetFlags($attributeClass) & (Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)) !== 0
+                    && ($attributeFlags & (Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)) !== 0
                 ) {
                     continue;
                 }
@@ -276,12 +282,12 @@ final class AttributePlans
                 throw new AttributeCompositionException(sprintf(
                     'Attribute "%s" cannot target %s.',
                     $attributeClass,
-                    self::targetKind($target),
+                    self::targetKind($targetFlag),
                 ));
             }
 
             if ($reflectionAttribute->isRepeated()
-                && ($this->attributeTargetFlags($attributeClass) & Attribute::IS_REPEATABLE) === 0
+                && ($attributeFlags & Attribute::IS_REPEATABLE) === 0
             ) {
                 throw new AttributeCompositionException(sprintf(
                     'Attribute "%s" must not be repeated on %s.',
@@ -316,17 +322,6 @@ final class AttributePlans
         $this->availabilityRevision = $revision;
 
         return $revision;
-    }
-
-    /**
-     * @param class-string $attributeClass
-     * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
-     */
-    private function supportsTarget(
-        string $attributeClass,
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-    ): bool {
-        return ($this->attributeTargetFlags($attributeClass) & self::targetFlag($target)) !== 0;
     }
 
     /** @param class-string $attributeClass */
@@ -404,14 +399,13 @@ final class AttributePlans
             && $target->isPromoted();
     }
 
-    /** @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target */
-    private static function targetKind(
-        ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
-    ): string {
-        return match (true) {
-            $target instanceof ReflectionClass => 'class',
-            $target instanceof ReflectionProperty => 'property',
-            $target instanceof ReflectionMethod => 'method',
+    private static function targetKind(int $targetFlag): string
+    {
+        return match ($targetFlag) {
+            Attribute::TARGET_CLASS => 'class',
+            Attribute::TARGET_FUNCTION => 'function',
+            Attribute::TARGET_METHOD => 'method',
+            Attribute::TARGET_PROPERTY => 'property',
             default => 'parameter',
         };
     }

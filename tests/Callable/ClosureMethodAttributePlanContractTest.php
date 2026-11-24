@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Callable\ClosureMethodAttributePlanContract;
 
 use Attribute;
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributeDefinitionRegistry;
@@ -26,6 +27,27 @@ use WeakReference;
 final readonly class Label
 {
     public function __construct(public string $value) {}
+}
+
+#[Attribute(Attribute::TARGET_FUNCTION)]
+final class FunctionLabel {}
+
+#[Attribute(Attribute::TARGET_METHOD)]
+final class MethodLabel {}
+
+#[FunctionLabel]
+function labelledFunction(): int
+{
+    return 1;
+}
+
+final class LabelledMethod
+{
+    #[MethodLabel]
+    public static function value(): int
+    {
+        return 2;
+    }
 }
 
 final readonly class RetargetingRule implements AttributeCompositionRuleInterface
@@ -71,6 +93,51 @@ test('closure invocation method plans preserve each instance declaration and sig
             ->and($plan->usages[0]->target->getAttributes(Label::class)[0]->getArguments())->toBe($expected[0]);
     }
 })->with(['ordinary composition' => false, 'custom composition rule' => true]);
+
+test('closure plans preserve the native target of function and method attributes', function (
+    string $form,
+    string $attribute,
+    int $nativeTarget,
+): void {
+    if (!class_exists($attribute)) {
+        throw new LogicException('Expected a native attribute fixture.');
+    }
+    $closure = match ($form) {
+        'inline' => #[FunctionLabel] static fn(): int => 1,
+        'named function' => labelledFunction(...),
+        'named method' => LabelledMethod::value(...),
+        default => throw new LogicException('Expected a closure fixture.'),
+    };
+    $registry = new AttributeDefinitionRegistry();
+    $definition = new AttributeDefinition($attribute);
+    $registry->register($definition);
+
+    $plan = new AttributePlanBuilder($registry)->build($closure);
+    $target = $plan->target;
+
+    expect($plan->usages)->toHaveCount(1)
+        ->and($target)->toBeInstanceOf(ReflectionMethod::class)
+        ->and($target->getName())->toBe('__invoke')
+        ->and($plan->usages[0]->definition)->toBe($definition)
+        ->and($plan->usages[0]->reflection->getTarget())->toBe($nativeTarget)
+        ->and($plan->usages[0]->newInstance())->toBeInstanceOf($attribute);
+})->with([
+    'inline closure' => ['inline', FunctionLabel::class, Attribute::TARGET_FUNCTION],
+    'first-class function' => ['named function', FunctionLabel::class, Attribute::TARGET_FUNCTION],
+    'first-class method' => ['named method', MethodLabel::class, Attribute::TARGET_METHOD],
+]);
+
+test('inline closure plans reject method-only attributes', function (): void {
+    $closure = eval('namespace ' . __NAMESPACE__ . '; return #[MethodLabel] static fn(): int => 1;');
+    if (!$closure instanceof Closure) {
+        throw new LogicException('Expected the closure with an invalid attribute target.');
+    }
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(MethodLabel::class));
+
+    expect(fn() => new AttributePlanBuilder($registry)->build($closure))
+        ->toThrow(AttributeCompositionException::class, 'Attribute "' . MethodLabel::class . '" cannot target function.');
+});
 
 test('a closure invocation method needs the original closure at publication boundaries', function (bool $derived): void {
     $closure = #[Label('source')] static fn(): int => 1;

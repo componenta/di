@@ -23,7 +23,8 @@ final class AttributePlanBuilder extends AttributePlanScope
     }
 
     /**
-     * Pass the closure itself for its instance-specific invocation method.
+     * A Closure uses the original PHP declaration for its attributes and exposes
+     * its instance-specific invocation method as the plan target.
      * Derived reflectors supply native ReflectionAttribute declarations.
      *
      * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
