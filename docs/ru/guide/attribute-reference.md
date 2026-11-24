@@ -128,7 +128,7 @@ final class ImportedRecord
 | `CurrentRequest` | Без аргументов | Текущий запрос `ServerRequestInterface`. |
 | `CurrentUri` | Без аргументов | Адрес запроса `UriInterface`. |
 | `Header` | `string $name, mixed $default = DefaultValue::None, ?string $cast = null` | Значение строки заголовка по имени; можно задать значение при отсутствии заголовка. |
-| `Cookie` | `string $name, mixed $default = DefaultValue::None, ?string $cast = null` | Значение сохранённых данных браузера из `getCookieParams()`. |
+| `Cookie` | `string $name, mixed $default = DefaultValue::None, ?string $cast = null` | Значение из параметров браузера, переданных в HTTP-запросе; читается методом `getCookieParams()`. |
 | `QueryParam` | `?string $name = null, mixed $default = DefaultValue::None, ?string $cast = null` | Параметр строки запроса; без имени используется имя аргумента функции. |
 | `PayloadParam` | `string\|ConfigPath\|null $name = null, mixed $default = DefaultValue::None, ?string $cast = null` | Поле разобранного тела; `ConfigPath` позволяет обратиться к вложенному значению. |
 | `RequestAttribute` | `?string $name = null, mixed $default = DefaultValue::None, ?string $cast = null` | Атрибут запроса PSR-7, по умолчанию с именем параметра. |
@@ -171,7 +171,7 @@ $handler = static function (
 | `MapRequestPayload` | `array $map = [], ?RequestDataConflictPolicy $conflictPolicy = null` | Разобранное тело. |
 | `MapQueryString` | Те же, что у `MapRequestPayload` | Строка запроса. |
 | `MapHeaders` | Те же | Заголовки HTTP, объединённые в строки. |
-| `MapCookies` | Те же | Данные браузера. |
+| `MapCookies` | Те же | Значения из `getCookieParams()`. |
 | `MapRequestAttributes` | Те же | Атрибуты запроса. |
 | `MapServerParams` | Те же | Серверные параметры. |
 | `MapUploadedFiles` | Те же | Загруженные файлы. |

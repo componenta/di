@@ -1,6 +1,6 @@
 # Public API reference
 
-The public types of `Componenta\\DI` are documented by capability below. Implementation details in the `Internal` namespace are not public contracts.
+The public types of `Componenta\DI` are documented by capability below. Implementation details in the `Internal` namespace are not public contracts.
 
 - [Core](container.md) — Container, ContainerFactory, configuration and ObjectPipeline.
 - [Definitions](definitions.md) — Factory, class, invokable and reference descriptors.
