@@ -129,23 +129,33 @@ test('a newly discovered ownership failure rejects the external container and pr
     $container->delegator('first', 'first.decorator');
     $first = $container->get('first');
     $warmed = null;
-    $external = new CallbackContainer(['first.decorator' => $remote], static function (string $id) use ($container, &$warmed): void {
+    $failure = new LogicException('New dependency cannot be inspected.');
+    $external = new CallbackContainer([
+        'first.decorator' => $remote,
+        'candidate.entry' => 'must not be published',
+    ], static function (string $id) use ($container, $failure, &$warmed): void {
         if ($id === 'first.decorator' && $warmed === null) {
             $container->delegator('second', 'second.decorator');
             $warmed = $container->get('second');
         }
         if ($id === 'second.decorator') {
-            throw new LogicException('New dependency cannot be inspected.');
+            throw $failure;
         }
     });
 
-    expect(fn() => $container->addContainer($external))
-        ->toThrow(InvalidConfigurationException::class, 'Failed to inspect an external container while registering it.');
+    try {
+        $container->addContainer($external);
+        throw new LogicException('Expected the candidate registration to fail.');
+    } catch (InvalidConfigurationException $exception) {
+        expect($exception->getMessage())->toContain('Failed to inspect an external container while registering it.')
+            ->and($exception->getPrevious())->toBe($failure);
+    }
     expect($external->queries)->toBe(['first.decorator' => 1, 'second.decorator' => 1])
         ->and($container->get('first'))->toBe($first)
         ->and($container->get('second'))->toBe($warmed)
         ->and($container->get('second'))->toEqual(new Product('second:local'))
-        ->and($container->get('second.decorator'))->toBe($local);
+        ->and($container->get('second.decorator'))->toBe($local)
+        ->and($container->has('candidate.entry'))->toBeFalse();
 });
 
 test('external registration preserves results warmed by a nested owner registration', function (bool $sameCandidate): void {

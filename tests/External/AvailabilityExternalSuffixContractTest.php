@@ -70,7 +70,11 @@ test('an appended provider can query the same ID without reentering the finished
     $di = new ContainerBuilder()->build();
     $legacy = __NAMESPACE__ . '\\Legacy_' . bin2hex(random_bytes(5));
     $di->alias('preferred.product', $legacy);
-    $new = new Provider(static function () use ($di): bool {
+    $queries = 0;
+    $new = new Provider(static function () use ($di, &$queries): bool {
+        if (++$queries > 1) {
+            throw new \LogicException('The active ownership callback was entered recursively.');
+        }
         expect($di->has('preferred.product'))->toBeFalse();
         return true;
     });
@@ -82,7 +86,8 @@ test('an appended provider can query the same ID without reentering the finished
     spl_autoload_register($loader);
 
     try {
-        expect($di->has('preferred.product'))->toBeTrue();
+        expect($di->has('preferred.product'))->toBeTrue()
+            ->and($queries)->toBe(1);
     } finally {
         spl_autoload_unregister($loader);
     }

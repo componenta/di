@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\External\ProtectedExternalContainer;
 
 use Componenta\Config\Config;
+use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Psr\Container\ContainerInterface;
@@ -15,17 +16,20 @@ final readonly class ExternalLookupValue
 }
 
 test('external containers cannot shadow protected DI entries or aliases to them', function (): void {
-    $container = (new ContainerBuilder())->build();
+    $config = new Config(['source' => 'local'], new Environment([]));
+    $externalConfig = new Config(['source' => 'external'], new Environment([]));
+    $container = ContainerBuilder::configure($config)->build();
     $container->alias('protected.container', ContainerInterface::class);
     $externalValue = new ExternalLookupValue('external');
 
-    $container->addContainer(new class ($externalValue) implements ContainerInterface {
-        public function __construct(private readonly ExternalLookupValue $value) {}
+    $container->addContainer(new class ($externalValue, $externalConfig) implements ContainerInterface {
+        public function __construct(private readonly ExternalLookupValue $value, private readonly Config $config) {}
 
         public function get(string $id): mixed
         {
             return match ($id) {
                 'external.entry' => $this->value,
+                Config::class, ConfigAttribute::KEY => $this->config,
                 default => new \stdClass(),
             };
         }
@@ -43,8 +47,8 @@ test('external containers cannot shadow protected DI entries or aliases to them'
     });
 
     expect($container->get(ContainerInterface::class))->toBe($container)
-        ->and($container->get(Config::class))->toBeInstanceOf(Config::class)
-        ->and($container->get(ConfigAttribute::KEY))->toBeInstanceOf(Config::class)
+        ->and($container->get(Config::class))->toBe($config)
+        ->and($container->get(ConfigAttribute::KEY))->toBe($config)
         ->and($container->get('protected.container'))->toBe($container)
         ->and($container->has(ContainerInterface::class))->toBeTrue()
         ->and($container->has(Config::class))->toBeTrue()

@@ -12,7 +12,6 @@ use Componenta\DI\Container;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Internal\AvailableEntryLookup;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use DomainException;
 use LogicException;
@@ -108,8 +107,25 @@ test('an external native container proxy offers entries from its backing contain
         ->and($parent->get(Label::class))->toBe($entry);
 });
 
-test('native entry lookup has no public operation to attach a reader to a container proxy', function (): void {
-    expect(get_class_methods(AvailableEntryLookup::class))->not->toContain('attach');
+test('independent native container proxies resolve their own backing entries', function (): void {
+    $first = new Label('first');
+    $second = new Label('second');
+    $allocator = new ContainerBuilder()->build();
+    $parents = [];
+    foreach ([$first, $second] as $entry) {
+        $backing = new ContainerBuilder()->addService(Label::class, $entry)->build();
+        $proxy = $allocator->makeProxy(Container::class, static fn(): Container => $backing);
+        $parent = new ContainerBuilder()->build();
+        $parent->addContainer($proxy);
+        $parents[] = $parent;
+    }
+    $lookup = static fn(?Label $label = null): ?Label => $label;
+
+    foreach ([0, 1, 0, 1] as $index) {
+        $expected = $index === 0 ? $first : $second;
+        expect($parents[$index]->call($lookup))->toBe($expected)
+            ->and($parents[$index]->get(Label::class))->toBe($expected);
+    }
 });
 
 test('get wraps an initialization failure of a native container proxy', function (): void {

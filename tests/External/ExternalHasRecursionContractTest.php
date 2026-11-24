@@ -120,6 +120,8 @@ test('recursive external retrieval is rejected before probing ownership again', 
     $di = container();
     $provider = new class ($di) implements ContainerInterface {
         public int $probes = 0;
+        public int $reads = 0;
+        public bool $recursive = true;
 
         public function __construct(private readonly Container $parent) {}
 
@@ -131,11 +133,24 @@ test('recursive external retrieval is rejected before probing ownership again', 
 
         public function get(string $id): mixed
         {
+            ++$this->reads;
+            if (!$this->recursive) {
+                return 'recovered';
+            }
+            if ($this->reads > 1) {
+                throw new \LogicException('The active retrieval was entered recursively.');
+            }
             return $this->parent->get($id);
         }
     };
     $di->addContainer($provider);
 
     expect(fn() => $di->get('entry'))->toThrow(\Componenta\DI\Exception\CircularDependencyException::class)
-        ->and($provider->probes)->toBe(1);
+        ->and($provider->probes)->toBe(1)
+        ->and($provider->reads)->toBe(1);
+
+    $provider->recursive = false;
+    expect($di->get('entry'))->toBe('recovered')
+        ->and($provider->probes)->toBe(2)
+        ->and($provider->reads)->toBe(2);
 });
