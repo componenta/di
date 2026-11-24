@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Componenta\DI\Tests\Diagnostics\LateAttributeConstructionParity;
+namespace Componenta\DI\Tests\Attribute\LateAttributeConstructionParity;
 
 use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;

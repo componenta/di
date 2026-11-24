@@ -76,7 +76,7 @@ test('container factory exposes default and targeted construction', function ():
 
     expect($factory->isFinal())->toBeTrue()
         ->and($publicMethods)->toBe(['__construct', 'create', 'createWithTargetedAttributeDiscovery'])
-        ->and(is_file(dirname(__DIR__, 2) . '/src/ContainerBuilder.php'))->toBeFalse()
+        ->and(class_exists('Componenta\\DI\\ContainerBuilder'))->toBeFalse()
         ->and(in_array('create', $containerMethods, true))->toBeFalse();
 });
 
