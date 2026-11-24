@@ -55,6 +55,24 @@ final class BuildBench
         $this->definitions = new DependencyDefinitions($this->sections);
     }
 
+    public function prepareWarm(array $params): void
+    {
+        $this->prepare($params);
+        $this->result = $this->factory->create($this->config, $this->definitions);
+        $this->verifyBuild($params);
+        unset($this->result);
+        gc_collect_cycles();
+    }
+
+    public function prepareTargetedWarm(array $params): void
+    {
+        $this->prepare($params);
+        $this->result = $this->factory->createWithTargetedAttributeDiscovery($this->config, $this->definitions);
+        $this->verifyBuild($params);
+        unset($this->result);
+        gc_collect_cycles();
+    }
+
     public function verifyBuild(array $params): void
     {
         $container = $this->result->container;
@@ -75,6 +93,36 @@ final class BuildBench
     public function benchFirstAssembly(array $params): void
     {
         $this->result = $this->factory->create($this->config, $this->definitions);
+    }
+
+    #[Bench\ParamProviders('provideSections')]
+    #[Bench\BeforeMethods('prepare')]
+    #[Bench\AfterMethods('verifyBuild')]
+    #[Bench\Revs(1)]
+    #[Bench\Iterations(15)]
+    public function benchFirstTargetedAssembly(array $params): void
+    {
+        $this->result = $this->factory->createWithTargetedAttributeDiscovery($this->config, $this->definitions);
+    }
+
+    #[Bench\ParamProviders('provideSections')]
+    #[Bench\BeforeMethods('prepareWarm')]
+    #[Bench\AfterMethods('verifyBuild')]
+    #[Bench\Revs(1)]
+    #[Bench\Iterations(15)]
+    public function benchFirstAssemblyInWarmProcess(array $params): void
+    {
+        $this->result = $this->factory->create($this->config, $this->definitions);
+    }
+
+    #[Bench\ParamProviders('provideSections')]
+    #[Bench\BeforeMethods('prepareTargetedWarm')]
+    #[Bench\AfterMethods('verifyBuild')]
+    #[Bench\Revs(1)]
+    #[Bench\Iterations(15)]
+    public function benchFirstTargetedAssemblyInWarmProcess(array $params): void
+    {
+        $this->result = $this->factory->createWithTargetedAttributeDiscovery($this->config, $this->definitions);
     }
 
     #[Bench\ParamProviders('provideSections')]

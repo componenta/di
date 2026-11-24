@@ -27,8 +27,9 @@ To compare revisions, use separate checkouts with the same PHP build, extensions
 
 | Benchmark | Workload |
 | --- | --- |
-| BuildBench | Dependency normalization; first and repeated container assembly; normal vs targeted discovery; empty, representative, service and alias-chain sizes |
-| ContainerBench | First and shared get; first and repeated has; scalar, null and false entries; reflection, shared dependency graph, invokable, factory, class definitions with nested references and repeated configured methods, alias, delegators; first and repeated make with default and override arguments |
+| BuildBench | Dependency normalization; cold-process, warm-process single assembly and repeated batch assembly; normal vs targeted discovery; empty, representative, service and alias-chain sizes |
+| ContainerBench | First and shared get; first and repeated has, including after a shared get; scalar, null and false entries; reflection, shared dependency graph, invokable, factory, class definitions with nested references and repeated configured methods, alias, delegators; first and repeated make with default and override arguments |
+| LifecycleBench | Assembly plus first graph resolution, attribute-injected object, or request-to-DTO callback; cold and warm PHP processes; normal vs targeted discovery |
 | CallableBench | First and repeated call/resolve for closures, function names, object/class methods, static strings, invokable objects, callable service IDs and prepared callables; newly allocated closures |
 | ParameterBench | Default/nullable, named/positional, variadic, union, custom parameter resolver and missing entry error |
 | AttributeBench | Constructor and property attributes, configuration, environment fallback, explicit lookup, make, initialization, setup method and PHP 8.5 setup/transform callbacks, named caster, constructor suppression, targeted discovery and plan-cache parity |
@@ -38,7 +39,8 @@ To compare revisions, use separate checkouts with the same PHP build, extensions
 
 ## Measurement boundaries
 
-- Build subjects construct configuration inputs outside the timer. Repeated assembly measures new containers in a warm process, not reuse of a container. First assembly uses a single revolution.
+- Build subjects construct configuration inputs outside the timer. The single-revolution warm-process subjects first assemble and release a container, then collect cycles before timing an independent assembly. Repeated assembly measures a batch of new containers in a warm process, including natural object retirement and possible garbage collection. Its process peak memory and timing are not interchangeable with isolated assembly results.
+- Lifecycle subjects measure assembly plus one real resolution or request-handler invocation through the newly assembled container. Warm-process lifecycle subjects release the previous container and result and collect cycles before timing. Neither variant includes PHP startup, dependency installation, HTTP parsing or response emission.
 - First get/has/make/call/resolve start with a newly assembled container and no prior target operation. The process and its autoloader are already bootstrapped; this is not total PHP startup or HTTP latency.
 - Shared get reuses the same resolved entry. Repeated make creates new results with warmed metadata and may reuse shared dependencies. Repeated callable/request work uses warmed metadata but resolves inputs each time. A prepared callable is a different invocation contract, not a faster equivalent for an unresolved argument list.
 - The attribute plan comparison follows the library's cache-parity contract fixtures: the same marker attribute is registered in both modes, with a no-op composition rule in the uncached-plan variant. The latter includes rule execution and is not a general cache-off mode. Other caches remain active.

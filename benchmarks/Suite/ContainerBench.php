@@ -54,6 +54,7 @@ final class ContainerBench
             yield $label . '-override' => ['id' => $id, 'args' => ['number' => 42], 'number' => 42];
         }
         yield 'definition-methods' => ['id' => 'bench.configured', 'args' => [], 'number' => null];
+        yield 'reflection-no-arguments' => ['id' => Leaf::class, 'args' => [], 'number' => null];
         yield 'invokable' => ['id' => EmptyEntry::class, 'args' => [], 'number' => null];
         yield 'graph' => ['id' => Graph::class, 'args' => [], 'number' => null];
     }
@@ -87,6 +88,7 @@ final class ContainerBench
     {
         $valid = match ($params['id']) {
             EmptyEntry::class => $result instanceof EmptyEntry,
+            Leaf::class => $result instanceof Leaf,
             'bench.configured' => $result instanceof ConfiguredProduct
                 && $result->tags === ['first', 'second']
                 && $result->parts['leaf'] === $result->leaf,
@@ -159,6 +161,16 @@ final class ContainerBench
     #[Bench\Revs(10000)]
     #[Bench\Warmup(100)]
     public function benchRepeatedHas(array $params): void
+    {
+        $this->result = $this->container->has($params['id']);
+    }
+
+    #[Bench\ParamProviders('provideEntries')]
+    #[Bench\BeforeMethods('prepareShared')]
+    #[Bench\AfterMethods('verifyHas')]
+    #[Bench\Revs(10000)]
+    #[Bench\Warmup(100)]
+    public function benchHasAfterGet(array $params): void
     {
         $this->result = $this->container->has($params['id']);
     }
