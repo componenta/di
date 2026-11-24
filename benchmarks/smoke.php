@@ -43,7 +43,8 @@ try {
         if (!$subject instanceof DOMElement || !$subject->parentNode instanceof DOMElement) {
             throw new RuntimeException('Invalid benchmark subject in report.');
         }
-        $key = $subject->parentNode->getAttribute('class') . '::' . $subject->getAttribute('name');
+        // PHPBench's file reflector reports fully qualified names with a leading slash.
+        $key = ltrim($subject->parentNode->getAttribute('class'), '\\') . '::' . $subject->getAttribute('name');
         if (isset($subjects[$key])) {
             throw new RuntimeException('Duplicate benchmark subject: ' . $key);
         }
