@@ -60,21 +60,41 @@ if (PHP_VERSION_ID < 80500) {
     exit(2);
 }
 
-$pipes = [];
-$process = proc_open([PHP_BINARY, '-n', $fixture], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+// File descriptors keep either stream from blocking the child on a full pipe.
+$output = tmpfile();
+$errors = tmpfile();
+if ($output === false || $errors === false) {
+    throw new RuntimeException('Cannot capture output from the native platform fixture.');
+}
+$process = proc_open([PHP_BINARY, '-n', $fixture], [1 => $output, 2 => $errors], $pipes);
 if (!is_resource($process)) {
     throw new RuntimeException('Cannot start the native platform fixture.');
 }
 
-$stdout = stream_get_contents($pipes[1]);
-$stderr = stream_get_contents($pipes[2]);
-fclose($pipes[1]);
-fclose($pipes[2]);
+$deadline = hrtime(true) + 10_000_000_000;
+$timedOut = false;
+while (proc_get_status($process)['running']) {
+    if (hrtime(true) >= $deadline) {
+        $timedOut = true;
+        proc_terminate($process, 9);
+        break;
+    }
+    usleep(10_000);
+}
 $status = proc_close($process);
 $result['fixture_exit_code'] = $status;
 
-if ($status !== 0 || $stderr !== '') {
-    $result['error'] = 'The native platform fixture did not complete cleanly.';
+rewind($output);
+rewind($errors);
+$stdout = stream_get_contents($output);
+$stderr = stream_get_contents($errors);
+fclose($output);
+fclose($errors);
+
+if ($timedOut || $status !== 0 || $stderr !== '') {
+    $result['error'] = $timedOut
+        ? 'The native platform fixture timed out.'
+        : 'The native platform fixture did not complete cleanly.';
     $result['stdout'] = $stdout;
     $result['stderr'] = $stderr;
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";

@@ -37,6 +37,7 @@ use Throwable;
 use WeakReference;
 
 use function Componenta\DI\Tests\Support\assembledContainer;
+use function Componenta\DI\Tests\Support\runContainerFixture;
 
 final class Product
 {
@@ -109,25 +110,7 @@ test('a cycle guard cannot share the resolution stack with a shallow copy', func
 });
 
 test('cold collaborator autoloading never exposes an unusable published container', function (): void {
-    $root = dirname(__DIR__, 2);
-    $process = proc_open([
-        PHP_BINARY,
-        '-n',
-        $root . '/tests/Fixtures/ContainerBootstrapCold.php',
-        $root . '/vendor/autoload.php',
-        $root . '/src',
-    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($process)) {
-        throw new LogicException('Could not start the cold bootstrap fixture.');
-    }
-    fclose($pipes[0]);
-    $stdout = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
-
-    expect(proc_close($process))->toBe(0, $stdout . $stderr);
-    expect(json_decode($stdout, true, flags: JSON_THROW_ON_ERROR))->toBe([
+    expect(runContainerFixture('ContainerBootstrapCold.php'))->toBe([
         'autoload_observed' => true,
         'early_errors' => [],
         'value' => 'ready',
@@ -136,34 +119,14 @@ test('cold collaborator autoloading never exposes an unusable published containe
 });
 
 test('collaborator loading leaves one usable attachment after failure or reentry', function (string $collaborator): void {
-    $root = dirname(__DIR__, 2);
-    $process = proc_open([
-        PHP_BINARY,
-        '-n',
-        $root . '/tests/Fixtures/ContainerConstructionRetry.php',
-        $root . '/vendor/autoload.php',
-        $root . '/src',
-        $collaborator,
-    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($process)) {
-        throw new LogicException('Could not start the construction retry fixture.');
-    }
-    fclose($pipes[0]);
-    $stdout = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
-
-    expect(proc_close($process))->toBe(0, $stdout . $stderr)
-        ->and($stderr)->toBe('')
-        ->and(json_decode($stdout, true, flags: JSON_THROW_ON_ERROR))->toBe([
+    expect(runContainerFixture('ContainerConstructionRetry.php', $collaborator))->toBe([
             'autoload_observed' => true,
             'original_failure_preserved' => !str_ends_with($collaborator, '-reentry') && !str_ends_with($collaborator, '-alias'),
             'duplicate_attachment_rejected' => $collaborator === 'writer-reentry',
             'shared_collaborator_rejected' => $collaborator === 'cache-reentry',
             'protected_alias_rejected' => $collaborator === 'writer-core-alias',
             'unexpected_core_publication' => false,
-            'nested_owner_preserved' => true,
+        'nested_owner_preserved' => str_ends_with($collaborator, '-reentry') ? true : null,
             'retry_error' => null,
             'result' => ['value' => 'ready', 'self' => true, 'call' => 'invoked'],
         ]);
@@ -181,28 +144,8 @@ test('collaborator loading leaves one usable attachment after failure or reentry
 ]);
 
 test('automatic garbage collection preserves collaborator ownership and alias routing', function (string $shared): void {
-    $root = dirname(__DIR__, 2);
-    $process = proc_open([
-        PHP_BINARY,
-        '-n',
-        $root . '/tests/Fixtures/ContainerConstructionGc.php',
-        $root . '/vendor/autoload.php',
-        $root . '/src',
-        $shared,
-    ], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($process)) {
-        throw new LogicException('Could not start the GC reentry fixture.');
-    }
-    fclose($pipes[0]);
-    $stdout = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
-
-    expect(proc_close($process))->toBe(0, $stdout . $stderr)
-        ->and($stderr)->toBe('');
-    $observation = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
-    if (!is_array($observation) || !is_int($observation['reentries'] ?? null) || !is_array($observation['violations'] ?? null)) {
+    $observation = runContainerFixture('ContainerConstructionGc.php', $shared);
+    if (!is_int($observation['reentries'] ?? null) || !is_array($observation['violations'] ?? null)) {
         throw new LogicException('Expected the GC fixture result.');
     }
     expect($observation['reentries'])->toBeGreaterThan(0)
@@ -294,25 +237,23 @@ test('retained runtime collaborators cannot mutate the published container', fun
         ->and($container->get('external'))->toBe($replacement);
 });
 
-test('direct construction rejects a cache containing previously resolved entries', function (): void {
+test('direct construction rejects a cache containing previously resolved entries', function (string $id): void {
     $cache = new EntryCache();
-    $id = ContainerInterface::class;
     $cache->putResolved($id, $id, new Product());
     $executor = (new ContainerBuilder())->build();
 
     expect(fn() => ContainerConstruction::create(new EntryResolver(), new AliasResolver(), $executor, $cache))
-        ->toThrow(InvalidConfigurationException::class);
-});
+        ->toThrow(InvalidConfigurationException::class, 'A container cache can only be seeded with base entries.');
+})->with(['core service' => ContainerInterface::class, 'application service' => 'product']);
 
-test('direct construction requires delegators to be registered through the container', function (): void {
+test('direct construction requires delegators to be registered through the container', function (string $id): void {
     $executor = (new ContainerBuilder())->build();
     $delegators = new DelegatorRegistry($executor);
-    $id = ContainerInterface::class;
     $delegators->register($id, $delegators->prepare($id, static fn(): Product => new Product()), new MutationRetirement($id));
 
     expect(fn() => ContainerConstruction::create(new EntryResolver(), new AliasResolver(), $executor, delegators: $delegators))
-        ->toThrow(InvalidConfigurationException::class);
-});
+        ->toThrow(InvalidConfigurationException::class, 'Register delegators through the container after construction.');
+})->with(['core service' => ContainerInterface::class, 'application service' => 'product']);
 
 test('editing an attached alias requires a container mutation and keeps an independent snapshot writable', function (): void {
     $aliases = new AliasResolver();

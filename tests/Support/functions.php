@@ -13,6 +13,7 @@ use Componenta\DI\Internal\ContainerAssembly;
 use Componenta\DI\Internal\ResolutionRuntime;
 use PHPUnit\Framework\Assert;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 
 /** @param array<string, mixed> $sections */
 function container(array $sections = [], ?Config $config = null): Container
@@ -62,4 +63,25 @@ function fixtureInstance(mixed $value, string $type): object
 {
     Assert::assertInstanceOf($type, $value);
     return $value;
+}
+
+/** @return array<array-key, mixed> */
+function runContainerFixture(string $fixture, string ...$arguments): array
+{
+    $root = dirname(__DIR__, 2);
+    $process = new Process([
+        PHP_BINARY,
+        '-n',
+        $root . '/tests/Fixtures/' . $fixture,
+        $root . '/vendor/autoload.php',
+        $root . '/src',
+        ...$arguments,
+    ], timeout: 30.0);
+    $process->mustRun();
+
+    Assert::assertSame('', $process->getErrorOutput(), 'Unexpected stderr from ' . $fixture);
+    $result = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+    Assert::assertIsArray($result);
+
+    return $result;
 }

@@ -117,7 +117,10 @@ function tryWithGcPressure(CallableExecutorInterface $executor, string $shared, 
     }
     $nested = $state->nested;
     $owner = $outer ?? $nested;
+    $aliasMatches = $shared !== 'aliases'
+        || $aliases->target(ContainerInterface::class) === ($aliasWritten ? 'application' : null);
     return ($outer !== null || $aliasWritten) !== ($nested !== null)
+        && $aliasMatches
         && $owner?->get(ContainerInterface::class) === $owner;
 }
 

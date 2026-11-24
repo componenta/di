@@ -162,7 +162,9 @@ echo json_encode([
     'protected_alias_rejected' => $caught instanceof InvalidConfigurationException
         && $caught->getMessage() === sprintf('Cannot replace protected DI alias "%s".', ContainerInterface::class),
     'unexpected_core_publication' => $unexpectedCorePublication,
-    'nested_owner_preserved' => $nested->container === null || $nested->container->get(ContainerInterface::class) === $nested->container,
+    'nested_owner_preserved' => $nested->container === null
+        ? null
+        : $nested->container->get(ContainerInterface::class) === $nested->container,
     'retry_error' => $retryError,
     'result' => $result,
 ], JSON_THROW_ON_ERROR);
