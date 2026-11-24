@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Parameter;
 
-use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Internal\Resolver\Parameter\VariadicArguments;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
@@ -24,33 +24,32 @@ final class ArrayResolver implements ParameterResolverInterface
             return VariadicArguments::provided($target, $context);
         }
 
-        if (isset($context->provided[$target->name]) || array_key_exists($target->name, $context->provided)) {
-            $value = $context->provided[$target->name];
+        $provided = ParameterContextAccess::provided($context);
+        if (isset($provided[$target->name]) || array_key_exists($target->name, $provided)) {
+            $value = $provided[$target->name];
 
             if ($target->accepts($value)) {
                 return [$target->position, $value];
             }
 
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 reason: sprintf('value provided for "$%s" does not satisfy declared type', $target->name),
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
 
-        if (isset($context->provided[$target->position]) || array_key_exists($target->position, $context->provided)) {
-            $value = $context->provided[$target->position];
+        if (isset($provided[$target->position]) || array_key_exists($target->position, $provided)) {
+            $value = $provided[$target->position];
 
             if ($target->accepts($value)) {
                 return [$target->position, $value];
             }
 
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 reason: sprintf('value provided at position %d does not satisfy declared type', $target->position),
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
 

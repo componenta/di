@@ -12,8 +12,7 @@ interface EntryResolverInterface
     public function can(string $id): bool;
 
     /**
-     * @param array<string|int, mixed> $params
      * @throws ExceptionInterface
      */
-    public function resolve(string $id, array $params = []): mixed;
+    public function resolve(string $id, EntryParameters $params): mixed;
 }

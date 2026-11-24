@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Componenta\DI\Tests\Support\MutationWorkerCheck;
 use Pest\Kernel;
 use Pest\Mutate\Support\StreamWrapper;
 use Pest\Panic;
@@ -9,11 +10,23 @@ use Pest\TestSuite;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\ConsoleOutput;
 
+$packageDirectory = dirname(__DIR__);
+$initialArguments = $_SERVER['argv'] ?? [];
+if (getenv('PEST_MUTATION_TESTING') === false
+    && is_array($initialArguments)
+    && in_array('--mutate', $initialArguments, true)
+) {
+    // A failed bootstrap must not leave a previous run looking like the current report.
+    $report = $packageDirectory . '/.phpunit.cache/mutation-report.json';
+    if (is_file($report) && !unlink($report)) {
+        throw new RuntimeException('Cannot remove the previous mutation report.');
+    }
+}
+
 if (filter_var(ini_get('opcache.enable_cli'), FILTER_VALIDATE_BOOL)) {
     throw new RuntimeException('Mutation testing requires opcache.enable_cli=0; use composer test-mutation.');
 }
 
-$packageDirectory = dirname(__DIR__);
 $vendorDirectory = is_file($packageDirectory . '/vendor/autoload.php')
     ? $packageDirectory . '/vendor'
     : dirname($packageDirectory) . '/var-export/vendor';
@@ -104,7 +117,11 @@ try {
             static fn(string $argument): bool => $argument !== '--processes' && !str_starts_with($argument, '--processes='),
         ));
     }
-    exit($kernel->handle($arguments, $arguments));
+    $status = $kernel->handle($arguments, $arguments);
+    if (class_exists(MutationWorkerCheck::class, false)) {
+        MutationWorkerCheck::discardEmptyRun();
+    }
+    exit($status);
 } catch (Throwable $error) {
     Panic::with($error);
 }

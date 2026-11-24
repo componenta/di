@@ -4,51 +4,99 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Closure;
 use Componenta\DI\Definition\DefinitionInterface;
+use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AliasResolver;
+use Componenta\DI\Internal\ContainerEntryOperations;
 use Componenta\DI\Internal\CycleGuard;
+use Componenta\DI\Internal\DelegatorLookupScope;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
+use Componenta\DI\Internal\EntryLookupRevision;
 use Componenta\DI\Internal\ExternalContainerRegistry;
+use Componenta\DI\Internal\ExternalDependencyInspection;
+use Componenta\DI\Internal\ExternalLookupProbes;
+use Componenta\DI\Internal\MutationRetirement;
 use Componenta\DI\Internal\ProtectedServiceIds;
-use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
-use Componenta\DI\Resolver\Entry\DefinitionAwareResolverInterface;
+use Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings;
+use Componenta\DI\Internal\Resolver\Entry\CompositeAttachment;
+use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
+use Componenta\DI\Resolver\Entry\CompositeResolver;
+use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Throwable;
 
 /** PSR-11 container and fresh-resolution façade. */
-final class Container implements
+final class Container extends ContainerEntryOperations implements
     ContainerInterface,
     FactoryInterface,
     CallableExecutorInterface,
     ProxyFactoryInterface
 {
+    private readonly AliasResolver $aliases;
+    private readonly CallableExecutorInterface $callableExecutor;
     private readonly EntryCache $cache;
     private readonly DelegatorRegistry $delegators;
+    private ?DelegatorLookupScope $delegatorLookups = null;
     private ?ExternalContainerRegistry $externalContainers = null;
     private readonly CycleGuard $cycleGuard;
     private ?CycleGuard $lookupGuard = null;
+    private ?ExternalLookupProbes $providerProbes = null;
+    /** @var (Closure(string):void)|null */
+    private ?Closure $recordSharedLookup = null;
     private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
+    private readonly AttachedEntryBindings $resolver;
+    private readonly object $runtimeAuthority;
 
-    /** @param array<array-key, mixed> $bootstrapServices */
+    /**
+     * @param array<string,string> $aliases
+     * @param array<array-key,mixed> $services
+     */
     public function __construct(
-        private readonly EntryResolverInterface $resolver,
-        private readonly AliasResolver $aliases,
-        private readonly CallableExecutorInterface $callableExecutor,
+        EntryResolverInterface $resolver,
+        CallableExecutorInterface $callableExecutor,
+        array $aliases = [],
+        array $services = [],
+        ?ProxyFactoryInterface $proxyFactory = null,
+    ) {
+        $routes = new AliasResolver($aliases);
+        $cache = new EntryCache();
+        foreach ($services as $id => $service) {
+            $id = (string) $id;
+            self::assertMutableId($id, 'service');
+            $canonical = $routes->resolve($id);
+            if (ProtectedServiceIds::contains($id) || ProtectedServiceIds::contains($canonical)) {
+                throw new InvalidConfigurationException(sprintf('Cannot register a service for protected DI id "%s".', $canonical));
+            }
+            $cache->putBase($canonical, $service);
+        }
+        $this->assemble($resolver, $routes, $callableExecutor, cache: $cache, proxyFactory: $proxyFactory);
+    }
+
+    /** @param array<array-key,mixed> $bootstrapServices */
+    protected function assemble(
+        EntryResolverInterface $resolver,
+        AliasResolver $aliases,
+        CallableExecutorInterface $callableExecutor,
         ?EntryCache $cache = null,
         ?DelegatorRegistry $delegators = null,
         ?ExternalContainerRegistry $externalContainers = null,
         ?CycleGuard $cycleGuard = null,
         ?ProxyFactoryInterface $proxyFactory = null,
         array $bootstrapServices = [],
-    ) {
+    ): void {
+        $this->aliases = $aliases;
+        $this->callableExecutor = $callableExecutor;
+        $validatedAliasRevision = $aliases->validateProtectedRoutes();
+
         $core = [
             ContainerInterface::class => $this,
             FactoryInterface::class => $this,
@@ -77,43 +125,84 @@ final class Container implements
             $validated[$id] = $service;
         }
 
-        $this->cache = $cache ?? new EntryCache();
-        foreach ($core + $validated as $id => $service) {
-            $this->cache->putBase($id, $service);
-        }
+        $root = $resolver instanceof CompositeResolver ? $resolver : new CompositeResolver($resolver);
 
-        $this->delegators = $delegators ?? new DelegatorRegistry($this);
+        $this->cache = $cache ?? new EntryCache();
+        $this->delegators = $delegators ?? new DelegatorRegistry($this, selectionLookups: $this->standaloneDelegatorLookups(...));
         $this->externalContainers = $externalContainers;
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
         $this->resolvedEntryGuard = new CycleGuard();
         $this->proxyFactory = $proxyFactory ?? new ProxyFactory();
+
+        $ownership = new RuntimeCollaboratorOwnership(
+            $aliases,
+            $this->cache,
+            $this->delegators,
+            $this->cycleGuard,
+            $externalContainers,
+            $validatedAliasRevision,
+        );
+        // Attach the root and its collaborators after loading helpers, before publishing core values.
+        $this->resolver = CompositeAttachment::toContainer($root, $ownership);
+        $this->runtimeAuthority = $ownership->authority;
+
+        // Supplied core seeds can reenter from destructors. Publish the complete
+        // core only after every collaborator is ready, then release old values.
+        $replacedCore = [];
+        foreach ($core + $validated as $id => $service) {
+            if ($this->cache->tryGetBase($id, $previous)) {
+                $replacedCore[] = $previous;
+            }
+            $this->cache->putBase($id, $service, $this->runtimeAuthority);
+        }
+        unset($previous, $replacedCore);
     }
 
-    /**
-     * @template T of object
-     * @param class-string<T>|string $id
-     * @return ($id is class-string<T> ? T : mixed)
-     */
     public function get(string $id): mixed
     {
         try {
-            $entryId = $this->aliases->resolve($id);
-            if ($this->externalContainers !== null
-                && !ProtectedServiceIds::contains($id)
-                && !ProtectedServiceIds::contains($entryId)
-            ) {
-                $externalGuard = "\0external:" . $id;
-                $lookupGuard = $this->lookupGuard ??= new CycleGuard();
-                $lookupGuard->enter($externalGuard);
-                try {
-                    $external = $this->externalContainers->findOwning($id);
+            if ($this->externalContainers === null && $this->cache->tryGetResolved($id, $entry)) {
+                ($this->recordSharedLookup)?->__invoke($id);
+                return $entry;
+            }
+        } catch (Throwable $e) {
+            throw self::entryResolutionFailure($id, $e);
+        }
+
+        return $this->getEntry($id, requireResolvable: false);
+    }
+
+    protected function getEntry(string $id, bool $requireResolvable): mixed
+    {
+        try {
+            $delegatorObservation = $this->delegatorLookups?->beginLookup($id);
+            $this->providerProbes?->trackLookup($id, requireResolvable: $requireResolvable);
+            $entryId = null;
+            if ($this->externalContainers !== null) {
+                $entryId = $this->aliases->resolve($id);
+                if (!ProtectedServiceIds::contains($id) && !ProtectedServiceIds::contains($entryId)) {
+                    $externalGuard = "\0external:" . $id;
+                    $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+                    $lookupGuard->assertInactive($externalGuard);
+                    $probes = $this->providerProbes ?? $this->externalLookupProbes();
+                    $registry = $this->externalContainers;
+                    $external = $registry->findOwning(
+                        $id,
+                        fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                        $requireResolvable,
+                        $probes,
+                    );
                     // External has() may retarget aliases before local resolution.
                     $entryId = $this->aliases->resolve($id);
                     if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
-                        return $external->get($id);
+                        $lookupGuard->enter($externalGuard);
+                        try {
+                            return $probes->retrieve($external, $id, $requireResolvable);
+                        } finally {
+                            $lookupGuard->leave($externalGuard);
+                        }
                     }
-                } finally {
-                    $lookupGuard->leave($externalGuard);
+                    $checkedProviderRevision = $registry->revision;
                 }
             }
 
@@ -121,83 +210,315 @@ final class Container implements
                 return $entry;
             }
 
+            $entryId ??= $this->aliases->resolve($id);
+            $aliasRevision = $this->aliases->revision;
             $this->resolvedEntryGuard->enterShared($id);
             try {
-                return $this->resolveAndStore($id, $entryId);
+                if ($this->tryResolveAndStore($id, $entryId, $entry)) {
+                    return $entry;
+                }
             } finally {
                 $this->resolvedEntryGuard->leaveShared($id);
             }
-        } catch (ExceptionInterface $e) {
-            throw $e;
-        } catch (NotFoundExceptionInterface $e) {
-            throw NotFoundException::forService($id, $e);
-        } catch (Throwable $e) {
-            throw ResolutionException::forService($id, $e);
-        }
-    }
 
-    private function resolveAndStore(string $requestedId, string $entryId): mixed
-    {
-        $requestedRevision = $this->cache->resolvedRevision($requestedId);
-        $baseRevision = $this->cache->baseRevision($entryId);
-        if (!$this->cache->tryGetBase($entryId, $entry)) {
-            // Aliases share source creation, but each requested id owns its
-            // delegator pipeline and may read another id once the source exists.
-            $this->cycleGuard->enterShared($entryId);
-            try {
-                $entry = $this->resolver->resolve($entryId);
-                if ($this->cache->baseRevision($entryId) === $baseRevision) {
-                    $this->cache->putBase($entryId, $entry);
-                    $baseRevision = $this->cache->baseRevision($entryId);
-                }
-            } finally {
-                $this->cycleGuard->leaveShared($entryId);
+            $checkedProviderRevision = isset($checkedProviderRevision) && !ProtectedServiceIds::contains($entryId)
+                ? $checkedProviderRevision
+                : 0;
+            if (($aliasRevision !== $this->aliases->revision
+                    || ($this->externalContainers->revision ?? 0) > $checkedProviderRevision)
+                && $this->tryResolveAfterMiss($id, $entryId, $requireResolvable, $checkedProviderRevision, $entry)
+            ) {
+                return $entry;
+            }
+        } catch (Throwable $e) {
+            throw self::entryResolutionFailure($id, $e);
+        } finally {
+            if (isset($delegatorObservation)) {
+                $this->delegatorLookups?->replace($delegatorObservation);
             }
         }
 
-        $entry = $this->delegators->apply($requestedId, $entry, $this);
-        // A factory or delegator may mutate bindings, including while suspended.
-        // Its in-flight result must not repopulate an invalidated shared entry.
-        if ($this->cache->resolvedRevision($requestedId) === $requestedRevision
-            && $this->cache->baseRevision($entryId) === $baseRevision
-        ) {
-            $this->cache->putResolved($requestedId, $entryId, $entry);
-        }
-
-        return $entry;
+        throw NotFoundException::forService($id);
     }
 
+    private function tryResolveAfterMiss(
+        string $id,
+        string $entryId,
+        bool $requireResolvable,
+        int $checkedProviderRevision,
+        mixed &$entry,
+    ): bool {
+        $routes = [];
+        // Only a lookup that selected no value follows a newer publication.
+        while (true) {
+            $currentId = $this->aliases->resolve($id);
+            $localChanged = $currentId !== $entryId;
+            $registry = $this->externalContainers;
+            if ($registry !== null
+                && $registry->revision > $checkedProviderRevision
+                && !ProtectedServiceIds::contains($id)
+                && !ProtectedServiceIds::contains($currentId)
+            ) {
+                $examinedId = $currentId;
+                $baseRevision = $this->cache->baseRevision($examinedId);
+                $declared = class_exists($examinedId, false);
+                $externalGuard = "\0external:" . $id;
+                $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+                $lookupGuard->assertInactive($externalGuard);
+                $probes = $this->providerProbes ?? $this->externalLookupProbes();
+                $external = $registry->findOwning(
+                    $id,
+                    fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                    $requireResolvable,
+                    $probes,
+                    afterRevision: $checkedProviderRevision,
+                );
+                $currentId = $this->aliases->resolve($id);
+                if (!ProtectedServiceIds::contains($currentId)) {
+                    if ($external !== null) {
+                        $lookupGuard->enter($externalGuard);
+                        try {
+                            $entry = $probes->retrieve($external, $id, $requireResolvable);
+                            return true;
+                        } finally {
+                            $lookupGuard->leave($externalGuard);
+                        }
+                    }
+                    $checkedProviderRevision = $registry->revision;
+                }
+                $localChanged = $localChanged
+                    || $currentId !== $examinedId
+                    || $baseRevision !== $this->cache->baseRevision($currentId)
+                    || (!$declared && class_exists($currentId, false));
+            }
+
+            if ($this->cache->tryGetResolved($id, $entry)) {
+                return true;
+            }
+            if (!$localChanged) {
+                return false;
+            }
+
+            $entryId = $currentId;
+            $this->rememberRetriedRoute($id, $entryId, $routes);
+            $this->resolvedEntryGuard->enterShared($id);
+            try {
+                if ($this->tryResolveAndStore($id, $entryId, $entry)) {
+                    return true;
+                }
+            } finally {
+                $this->resolvedEntryGuard->leaveShared($id);
+            }
+        }
+    }
+
+    private static function entryResolutionFailure(string $id, Throwable $error): ExceptionInterface
+    {
+        return $error instanceof ExceptionInterface && !$error instanceof NotFoundExceptionInterface
+            ? $error
+            : ResolutionException::forService($id, $error);
+    }
+
+    /** @param array<array-key, array{int, int, bool}> $routes */
+    private function rememberRetriedRoute(string $id, string $entryId, array &$routes): void
+    {
+        // A return to an earlier route is useful when its binding or availability changed.
+        $state = [
+            $this->cache->baseRevision($entryId),
+            $this->externalContainers->revision ?? 0,
+            class_exists($entryId, false),
+        ];
+        if (($routes[$entryId] ?? null) === $state) {
+            throw CircularDependencyException::forService([$id, ...array_map(strval(...), array_keys($routes)), $entryId]);
+        }
+        $routes[$entryId] = $state;
+    }
+
+    private function tryResolveAndStore(string $requestedId, string $entryId, mixed &$entry): bool
+    {
+        $requestedRevision = $this->cache->resolvedRevision($requestedId);
+        $baseRevision = $this->cache->baseRevision($entryId);
+        $lookupRevision = EntryLookupRevision::current();
+        if (!$this->cache->tryGetBase($entryId, $entry)) {
+            // Aliases share source creation, but each requested id owns its
+            // delegator pipeline and may read another id once the source exists.
+            $this->cycleGuard->enterShared($entryId, $this->runtimeAuthority);
+            try {
+                $aliasRevision = $this->aliases->revision;
+                $selected = $this->resolver->selectShared(
+                    $entryId,
+                    fn(): bool => $this->cache->tryGetBase($entryId, $published),
+                );
+                // Selection may publish a binding or retire the canonical ID by aliasing it.
+                // Only a reachable canonical ID can adopt a new base revision.
+                $selectedBaseRevision = $this->cache->baseRevision($entryId);
+                if ($selectedBaseRevision !== $baseRevision && !$this->aliases->has($entryId)) {
+                    $baseRevision = $selectedBaseRevision;
+                }
+                if ($this->aliases->revision === $aliasRevision || $this->aliases->resolve($requestedId) === $entryId) {
+                    $requestedRevision = $this->cache->resolvedRevision($requestedId);
+                }
+                if (!$this->cache->tryGetBase($entryId, $entry)) {
+                    if ($selected === null) {
+                        return false;
+                    }
+                    $entry = $this->resolver->resolveSelectedShared($entryId, $selected);
+                    if ($this->cache->baseRevision($entryId) === $baseRevision && EntryLookupRevision::current() === $lookupRevision) {
+                        $this->cache->putBase($entryId, $entry, $this->runtimeAuthority);
+                        $baseRevision = $this->cache->baseRevision($entryId);
+                    }
+                }
+            } finally {
+                $this->cycleGuard->leaveShared($entryId, $this->runtimeAuthority);
+            }
+        }
+
+        $entry = $this->delegators->apply($requestedId, $entry, $this, $this->runtimeAuthority);
+        // A factory or delegator may mutate bindings, including while suspended.
+        // Its in-flight result must not repopulate an invalidated shared entry.
+        // A nested lookup can also have selected a temporary route around an active provider.
+        if ($this->cache->resolvedRevision($requestedId) === $requestedRevision
+            && $this->cache->baseRevision($entryId) === $baseRevision
+            && EntryLookupRevision::current() === $lookupRevision
+        ) {
+            $this->cache->putResolved($requestedId, $entryId, $entry, $this->runtimeAuthority);
+        }
+
+        return true;
+    }
+
+    /** @throws ExceptionInterface If availability could not be established. */
     public function has(string $id): bool
     {
+        return $this->hasEntry($id, requireResolvable: false);
+    }
+
+    protected function hasEntry(string $id, bool $requireResolvable): bool
+    {
         try {
-            $guardId = "\0has:" . $id;
-            $lookupGuard = $this->lookupGuard ??= new CycleGuard();
-            $lookupGuard->enter($guardId);
-            try {
-                $entryId = $this->aliases->resolve($id);
-                if ($this->externalContainers !== null
-                    && !ProtectedServiceIds::contains($id)
-                    && !ProtectedServiceIds::contains($entryId)
-                ) {
-                    $external = $this->externalContainers->findOwning($id);
+            $delegatorObservation = $this->delegatorLookups?->beginLookup($id);
+            $this->providerProbes?->trackLookup($id, availability: true, requireResolvable: $requireResolvable);
+            $entryId = $this->aliases->resolve($id);
+            // A callback may retarget this alias to an existing core service.
+            // Its availability is known without entering another lookup cycle.
+            if (ProtectedServiceIds::contains($entryId) && $this->cache->tryGetBase($entryId, $base)) {
+                return true;
+            }
+
+            $localGuard = "\0has:" . $id;
+            if ($this->externalContainers !== null
+                && !ProtectedServiceIds::contains($id)
+                && !ProtectedServiceIds::contains($entryId)
+            ) {
+                $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+                if (!$lookupGuard->contains($localGuard)) {
+                    $registry = $this->externalContainers;
+                    $external = $registry->findOwning(
+                        $id,
+                        fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                        $requireResolvable,
+                        $this->providerProbes ?? $this->externalLookupProbes(),
+                    );
                     // External has() may retarget aliases before local availability checks.
                     $entryId = $this->aliases->resolve($id);
                     if ($external !== null && !ProtectedServiceIds::contains($entryId)) {
                         return true;
                     }
+                    $checkedProviderRevision = $registry->revision;
                 }
-                if ($this->cache->tryGetResolved($id, $resolved)) {
-                    return true;
-                }
-                if ($this->cache->tryGetBase($entryId, $base)) {
-                    return true;
-                }
-                return $this->resolver->can($entryId);
-            } finally {
-                $lookupGuard->leave($guardId);
             }
-        } catch (Throwable) {
-            return false;
+            if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($entryId, $base)) {
+                return true;
+            }
+
+            return $this->hasUncachedEntry(
+                $id,
+                $entryId,
+                $localGuard,
+                $requireResolvable,
+                isset($checkedProviderRevision) && !ProtectedServiceIds::contains($entryId) ? $checkedProviderRevision : 0,
+            );
+        } catch (Throwable $e) {
+            if ($requireResolvable) {
+                return false;
+            }
+            throw self::entryResolutionFailure($id, $e);
+        } finally {
+            if (isset($delegatorObservation)) {
+                $this->delegatorLookups?->replace($delegatorObservation);
+            }
+        }
+    }
+
+    private function hasUncachedEntry(
+        string $id,
+        string $entryId,
+        string $localGuard,
+        bool $requireResolvable,
+        int $checkedProviderRevision,
+    ): bool {
+        $lookupGuard = $this->lookupGuard ??= new CycleGuard();
+        $routes = [];
+        while (true) {
+            $lookupGuard->enter($localGuard);
+            try {
+                $revision = $this->aliases->revision;
+                $hasSharedValue = fn(): bool => $this->cache->tryGetBase($entryId, $published);
+                $available = $requireResolvable
+                    ? $this->resolver->can($entryId, $hasSharedValue)
+                    : $this->resolver->knows($entryId, $hasSharedValue);
+            } finally {
+                $lookupGuard->leave($localGuard);
+            }
+            $currentId = $revision === $this->aliases->revision ? $entryId : $this->aliases->resolve($id);
+            $localChanged = $currentId !== $entryId;
+            if ($localChanged) {
+                if ($this->cache->tryGetResolved($id, $resolved) || $this->cache->tryGetBase($currentId, $base)) {
+                    return true;
+                }
+            } elseif ($available || $hasSharedValue()) {
+                return true;
+            }
+
+            $registry = $this->externalContainers;
+            if ($registry !== null
+                && $registry->revision > $checkedProviderRevision
+                && !ProtectedServiceIds::contains($id)
+                && !ProtectedServiceIds::contains($currentId)
+            ) {
+                // Check new providers before running another local fallback.
+                $baseRevision = $this->cache->baseRevision($entryId);
+                $declared = class_exists($entryId, false);
+                $external = $registry->findOwning(
+                    $id,
+                    fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
+                    $requireResolvable,
+                    $this->providerProbes ?? $this->externalLookupProbes(),
+                    afterRevision: $checkedProviderRevision,
+                );
+                $currentId = $this->aliases->resolve($id);
+                $protected = ProtectedServiceIds::contains($currentId);
+                if (($external !== null && !$protected)
+                    || $this->cache->tryGetResolved($id, $resolved)
+                    || $this->cache->tryGetBase($currentId, $base)
+                ) {
+                    return true;
+                }
+                if ($currentId === $entryId
+                    && $baseRevision === $this->cache->baseRevision($entryId)
+                    && ($declared || !class_exists($entryId, false))
+                ) {
+                    return $available;
+                }
+                if (!$protected) {
+                    $checkedProviderRevision = $registry->revision;
+                }
+            } elseif (!$localChanged) {
+                return false;
+            }
+
+            $entryId = $currentId;
+            $this->rememberRetriedRoute($id, $entryId, $routes);
         }
     }
 
@@ -209,14 +530,10 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot replace protected DI id "%s".', $id));
         }
 
+        $binding = null;
         if ($entry instanceof DefinitionInterface) {
             try {
-                if (!$this->resolver instanceof DefinitionAwareResolverInterface
-                    || !$this->resolver->supportsDefinition($entry)
-                ) {
-                    throw InvalidConfigurationException::forInvalidDefinition($entry);
-                }
-                $this->resolver->setDefinition($canonical, $entry);
+                $binding = $this->resolver->prepare($canonical, $entry);
             } catch (ExceptionInterface $e) {
                 throw $e;
             } catch (Throwable $e) {
@@ -225,34 +542,60 @@ final class Container implements
                     previous: $e,
                 );
             }
-            $this->cache->removeBase($canonical);
-        } else {
-            $this->cache->putBase($canonical, $entry);
         }
 
-        // Registration may autoload code that retargets deferred dependencies.
+        $retirement = new MutationRetirement($canonical);
+        // A nested alias can retire this binding before its validation completes.
+        if ($this->aliases->has($canonical)) {
+            return;
+        }
+
+        // Registration and helper autoloading may retarget deferred dependencies.
         $affected = $this->deferredDependenciesResolvingTo($canonical);
-        $this->invalidate($id, $canonical);
-        $this->invalidateDeferredDelegators($affected);
+        // Invalidate the requested pipeline only if it still reads the selected binding.
+        $affectedId = $this->aliases->resolve($id) === $canonical ? $id : $canonical;
+        $observing = $this->providerProbes?->observesReads() === true;
+        // The previous binding may already be known without creating its value.
+        $availabilityChanged = $observing
+            && !$this->cache->hasBase($canonical)
+            && !$this->resolver->hasBinding($canonical);
+        $sameScalarBase = $observing && (is_scalar($entry) || $entry === null)
+            && $this->cache->hasSameScalarBase($canonical, $entry);
+        if ($binding !== null) {
+            $this->resolver->publish($binding, $retirement);
+            $this->cache->removeBase($canonical, $retirement, $this->runtimeAuthority);
+        } else {
+            $this->cache->replaceBase($canonical, $entry, $retirement, $this->runtimeAuthority);
+        }
+        $this->invalidate($affectedId, $canonical, $retirement);
+        $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->invalidate(
+            invalidated: $invalidated,
+            canonicalBinding: $canonical,
+            availabilityChanged: $availabilityChanged,
+            baseValueChanged: !$sameScalarBase,
+        );
+        $retirement->release();
     }
 
     /**
-     * @template T of object
-     * @param class-string<T>|non-empty-string $entry
+     * @param non-empty-string $entry
      * @param array<string|int, mixed> $params
-     * @return ($entry is class-string<T> ? T : object)
      */
     public function make(string $entry, array $params = []): object
     {
+        return $this->makeEntry($entry, $params);
+    }
+
+    /** @param array<string|int,mixed>|EntryParameters $params */
+    protected function makeEntry(string $entry, array|EntryParameters $params): object
+    {
         try {
             $resolved = $this->aliases->resolve($entry);
-            $this->cycleGuard->enter($resolved);
+            $this->cycleGuard->enter($resolved, $this->runtimeAuthority);
 
             try {
-                $instance = $this->resolver->resolve(
-                    $resolved,
-                    EntryResolverContext::for($this->resolver, $params),
-                );
+                $instance = $this->resolver->resolve($resolved, $params);
 
                 if (!is_object($instance)) {
                     throw ResolutionException::forNonObject($resolved, get_debug_type($instance));
@@ -260,7 +603,7 @@ final class Container implements
 
                 return $instance;
             } finally {
-                $this->cycleGuard->leave($resolved);
+                $this->cycleGuard->leave($resolved, $this->runtimeAuthority);
             }
         } catch (ExceptionInterface $e) {
             throw $e;
@@ -297,12 +640,20 @@ final class Container implements
         if ($container === $this) {
             throw new InvalidConfigurationException('The container cannot delegate lookups to itself.');
         }
-        if ($this->externalContainers?->contains($container) === true) {
+        if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
             return;
         }
 
+        $retirement = new MutationRetirement(null);
+        // Helper autoloaders may publish nested registrations before inspection.
+        $externalContainers = $this->externalContainers ?? new ExternalContainerRegistry();
         try {
-            $affected = $this->deferredDependenciesTakenOverBy($container);
+            $affected = new ExternalDependencyInspection(
+                $this->delegators,
+                fn(): ?ExternalContainerRegistry => $this->externalContainers,
+                fn(string $id): bool => !$this->isProtectedDependency($id),
+                $this->providerProbes ?? $this->externalLookupProbes(),
+            )->takenOverBy($container);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -312,8 +663,48 @@ final class Container implements
             );
         }
 
-        ($this->externalContainers ??= new ExternalContainerRegistry())->register($container);
-        $this->invalidateDeferredDelegators($affected);
+        if ($this->externalContainers !== null && $this->externalContainers->contains($container)) {
+            return;
+        }
+
+        ($this->externalContainers ??= $externalContainers)->register($container, $this->runtimeAuthority);
+        $invalidated = $this->invalidateDeferredDelegators($affected['delegators'], $retirement);
+        $this->providerProbes?->invalidate(appending: true, invalidated: $invalidated, ownerChanges: $affected['lookups']);
+        $retirement->release();
+    }
+
+    /**
+     * Refreshes delegators that can read externally changed entries.
+     * The provider publishes its changes before reporting the affected IDs.
+     */
+    public function notifyExternalEntriesChanged(ContainerInterface $provider, string ...$ids): void
+    {
+        $external = $this->externalContainers;
+        if ($external === null || !$external->contains($provider)) {
+            throw new InvalidConfigurationException('External entry changes require a registered provider.');
+        }
+        $affected = [];
+        $externalIds = [];
+        foreach ($ids as $id) {
+            self::assertMutableId($id, 'external entry');
+            if (!$this->isProtectedDependency($id)) {
+                $externalIds[] = $id;
+                if ($this->delegators->dependsOn($id)) {
+                    $affected[] = $id;
+                }
+            }
+        }
+        if ($externalIds !== []) {
+            $this->providerProbes?->notify($externalIds, $affected);
+        }
+        if ($affected === []) {
+            return;
+        }
+
+        $retirement = new MutationRetirement(null);
+        $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->noteInvalidatedEntries($invalidated);
+        $retirement->release();
     }
 
     public function alias(string $alias, string $target): void
@@ -322,42 +713,41 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot replace protected DI alias "%s".', $alias));
         }
 
-        // Validate the complete candidate graph before mutating the live alias
-        // resolver. Runtime alias changes must preserve the same protected-core
-        // Declarative bindings are validated by ContainerFactory before construction.
-        $candidate = clone $this->aliases;
-        $candidate->set($alias, $target);
-        foreach ($this->delegators->entryIds() as $delegatorId) {
-            $canonical = $candidate->resolve($delegatorId);
-            if (ProtectedServiceIds::contains($canonical)) {
+        $retirement = new MutationRetirement($alias);
+        // Only this edge and the aliases leading to it can change destination.
+        do {
+            $revision = $this->aliases->revision;
+            $previousTarget = $this->aliases->resolve($alias);
+            $canonical = $this->aliases->validateTarget($alias, $target);
+            $affected = $this->aliases->affectedIds($alias);
+            if (ProtectedServiceIds::contains($canonical)
+                && ($delegatorId = $this->delegators->firstDelegatedEntryAmong($affected)) !== null
+            ) {
                 throw new InvalidConfigurationException(sprintf(
                     'Cannot retarget delegator for id "%s" to protected DI id "%s".',
                     $delegatorId,
                     $canonical,
                 ));
             }
-        }
+            $changedDependencies = $canonical === $previousTarget ? [] : $this->delegators->dependenciesAmong($affected);
+            $hidesCanonical = !$this->aliases->has($alias);
+        } while (!$this->aliases->publishValidated($alias, $target, $revision, $this->runtimeAuthority, $affected));
 
-        $changedTargets = $this->aliases->changedTargets($candidate);
-        $before = $this->deferredDependencyTargets();
-        $this->aliases->set($alias, $target);
-        foreach ($changedTargets as $changedId => $previousTarget) {
-            $this->invalidateRequested((string) $changedId, $previousTarget);
+        if ($hidesCanonical) {
+            $this->resolver->retire($alias, $retirement);
+            $this->cache->removeBase($alias, $retirement, $this->runtimeAuthority);
         }
-
-        $changed = [];
-        foreach ($before as $dependencyId => $previousTarget) {
-            $dependencyId = (string) $dependencyId;
-            try {
-                $currentTarget = $this->aliases->resolve($dependencyId);
-            } catch (Throwable) {
-                $currentTarget = null;
-            }
-            if ($currentTarget !== $previousTarget) {
-                $changed[] = $dependencyId;
+        if ($canonical !== $previousTarget) {
+            foreach ($affected as $changedId => $_) {
+                $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
             }
         }
-        $this->invalidateDeferredDelegators($changed);
+        $invalidated = $this->invalidateDeferredDelegators($changedDependencies, $retirement);
+        $this->providerProbes?->invalidate(
+            invalidated: $invalidated,
+            directChanges: $canonical === $previousTarget ? [] : $affected,
+        );
+        $retirement->release();
     }
 
     /** @param callable|string|array{0: object|string, 1: string} $delegator */
@@ -369,6 +759,7 @@ final class Container implements
             throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
         }
 
+        $retirement = new MutationRetirement($id);
         try {
             $prepared = $this->delegators->prepare($id, $delegator);
             // Preparing a callable may autoload code that retargets this alias.
@@ -376,7 +767,6 @@ final class Container implements
             if (ProtectedServiceIds::contains($canonical)) {
                 throw new InvalidConfigurationException(sprintf('Cannot decorate protected DI id "%s".', $id));
             }
-            $this->delegators->register($id, $prepared);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -385,8 +775,11 @@ final class Container implements
                 previous: $e,
             );
         }
-        $this->invalidateRequested($id, $canonical);
-        $this->invalidateDeferredDelegators([$id]);
+        $this->delegators->register($id, $prepared, $retirement, $this->runtimeAuthority);
+        $this->invalidateRequested($id, $canonical, $retirement);
+        $invalidated = $this->invalidateDeferredDelegators([$id], $retirement);
+        $this->providerProbes?->invalidate(invalidated: [$id, ...$invalidated]);
+        $retirement->release();
     }
 
     private static function assertMutableId(string $id, string $kind): void
@@ -396,89 +789,91 @@ final class Container implements
         }
     }
 
-    private function invalidate(string $id, ?string $knownCanonical = null): void
+    private function invalidate(string $id, string $canonical, MutationRetirement $retirement): void
     {
-        try {
-            $canonical = $knownCanonical ?? $this->aliases->resolve($id);
-        } catch (Throwable) {
-            $canonical = $id;
-        }
-
-        $this->cache->invalidate($id, $canonical);
-        $this->delegators->invalidate($id);
+        $this->cache->invalidate($id, $canonical, $retirement, $this->runtimeAuthority);
+        $this->delegators->invalidate($id, $retirement, $this->runtimeAuthority);
         if ($canonical !== $id) {
-            $this->delegators->invalidate($canonical);
+            $this->delegators->invalidate($canonical, $retirement, $this->runtimeAuthority);
         }
     }
 
-    private function invalidateRequested(string $id, string $canonical): void
+    private function invalidateRequested(string $id, string $canonical, MutationRetirement $retirement): void
     {
-        $this->cache->invalidateRequested($id, $canonical);
-        $this->delegators->invalidate($id);
+        $this->cache->invalidateRequested($id, $canonical, $retirement, $this->runtimeAuthority);
+        $this->delegators->invalidate($id, $retirement, $this->runtimeAuthority);
+    }
+
+    private function externalLookupProbes(): ExternalLookupProbes
+    {
+        $probes = $this->providerProbes ??= new ExternalLookupProbes($this->aliases, $this->delegators);
+        $this->recordSharedLookup ??= $probes->trackLookup(...);
+        return $probes;
+    }
+
+    private function standaloneDelegatorLookups(): DelegatorLookupScope
+    {
+        if ($this->delegatorLookups === null) {
+            $scope = $this->delegatorLookups = new DelegatorLookupScope();
+            $this->recordSharedLookup = function (string $id) use ($scope): void {
+                $this->providerProbes?->trackLookup($id);
+                $scope->record($id);
+            };
+        }
+        return $this->delegatorLookups;
     }
 
     /** @return list<string> */
     private function deferredDependenciesResolvingTo(string $canonical): array
     {
+        $dependencyCount = $this->delegators->dependencyCount;
+        if ($dependencyCount === 0) {
+            return [];
+        }
+
+        $family = $this->aliases->affectedIds($canonical, $dependencyCount);
+        if ($family !== null) {
+            return $this->delegators->dependenciesAmong($family);
+        }
+
+        // A binding can serve many aliases while only a few delegators depend
+        // on them. Bound the reverse walk by the size of the dependency index.
         $dependencies = [];
-        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            try {
-                if ($this->aliases->resolve($dependencyId) === $canonical) {
-                    $dependencies[] = $dependencyId;
-                }
-            } catch (Throwable) {
+        foreach ($this->delegators->deferredDependencies() as $dependency) {
+            if ($this->aliases->resolve($dependency) === $canonical) {
+                $dependencies[] = $dependency;
             }
         }
         return $dependencies;
     }
 
-    /** @return list<string> */
-    private function deferredDependenciesTakenOverBy(ContainerInterface $container): array
+    /**
+     * Reentrant ownership callbacks can retarget aliases between queries.
+     * @phpstan-impure
+     */
+    private function isProtectedDependency(string $id): bool
     {
-        $dependencies = [];
-        $inspected = [];
-        do {
-            $discovered = false;
-            foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-                if (isset($inspected[$dependencyId])) {
-                    continue;
-                }
-                $inspected[$dependencyId] = true;
-                $discovered = true;
-                if ($this->externalContainers?->findOwning($dependencyId) !== null || !$container->has($dependencyId)) {
-                    continue;
-                }
-                $dependencies[] = $dependencyId;
-            }
-            // Ownership callbacks can register more deferred dependencies.
-        } while ($discovered);
-        return $dependencies;
+        return ProtectedServiceIds::contains($id)
+            || ProtectedServiceIds::contains($this->aliases->resolve($id));
     }
 
-    /** @return array<string, string|null> */
-    private function deferredDependencyTargets(): array
+    /**
+     * @param iterable<string> $dependencyIds
+     * @return list<string>
+     */
+    private function invalidateDeferredDelegators(iterable $dependencyIds, MutationRetirement $retirement): array
     {
-        $targets = [];
-        foreach ($this->delegators->deferredDependencies() as $dependencyId) {
-            try {
-                $targets[$dependencyId] = $this->aliases->resolve($dependencyId);
-            } catch (Throwable) {
-                $targets[$dependencyId] = null;
-            }
-        }
-        return $targets;
-    }
-
-    /** @param iterable<string> $dependencyIds */
-    private function invalidateDeferredDelegators(iterable $dependencyIds): void
-    {
-        foreach ($this->delegators->invalidateDependencies($dependencyIds) as $entryId) {
+        $invalidated = $this->delegators->invalidateDependencies($dependencyIds, $retirement, $this->runtimeAuthority);
+        foreach ($invalidated as $entryId) {
             try {
                 $canonical = $this->aliases->resolve($entryId);
             } catch (Throwable) {
                 $canonical = $entryId;
             }
-            $this->invalidateRequested($entryId, $canonical);
+            $this->invalidateRequested($entryId, $canonical, $retirement);
         }
+        return $invalidated;
     }
+
+    private function __clone() {}
 }

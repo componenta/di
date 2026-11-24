@@ -1,6 +1,6 @@
 {
     "name": "componenta/di",
-    "description": "PSR-11 dependency injection container for PHP 8.4+ with composable attribute semantics, autowiring and lazy objects",
+    "description": "PSR-11 dependency injection container for PHP 8.5.13+ with composable attribute semantics, autowiring and lazy objects",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -11,7 +11,7 @@
         "psr-11",
         "autowiring",
         "lazy-objects",
-        "php84",
+        "php85",
         "attributes"
     ],
     "authors": [
@@ -25,7 +25,7 @@
         "source": "https://github.com/Componenta/di"
     },
     "require": {
-        "php": "^8.4",
+        "php": "^8.5.13",
         "componenta/caster": "^1.0",
         "componenta/config": "^3.0.0",
         "componenta/reflection": "^2.0.1",
@@ -37,8 +37,12 @@
         "friendsofphp/php-cs-fixer": "^3.0",
         "nyholm/psr7": "^1.8",
         "pestphp/pest": "^4.0",
+        "phpbench/phpbench": "^1.7",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0"
+    },
+    "conflict": {
+        "symfony/polyfill-php83": "<1.30.0"
     },
     "autoload": {
         "psr-4": {
@@ -59,14 +63,25 @@
         },
         "sort-packages": true,
         "preferred-install": "dist",
-        "optimize-autoloader": true
+        "optimize-autoloader": true,
+        "policy": {
+            "abandoned": {
+                "ignore": {
+                    "doctrine/annotations": {
+                        "on-block": false,
+                        "reason": "PHPBench 1.x development-only dependency; benchmark discovery uses PHP attributes, not Doctrine annotations. Remove when PHPBench drops the dependency."
+                    }
+                }
+            }
+        }
     },
     "scripts": {
         "test": "pest",
-        "test-coverage": "pest --coverage --min=80",
+        "test-platform": "@php -n tests/php85-platform.php",
+        "test-coverage": "@php -d memory_limit=4G vendor/bin/pest --coverage --min=80",
         "test-mutation": [
             "Composer\\Config::disableProcessTimeout",
-            "@php -d opcache.enable_cli=0 tests/mutate.php --mutate --path=src --everything --min=85 --compact"
+            "@php -d memory_limit=4G -d opcache.enable_cli=0 tests/mutate.php --mutate --path=src --everything --min=85 --compact"
         ],
         "phpstan": "phpstan analyse src tests --level=max",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
@@ -75,6 +90,14 @@
             "@cs-check",
             "@phpstan",
             "@test"
+        ],
+        "bench": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php vendor/bin/phpbench run --config=phpbench.json.dist --report=aggregate --report=env"
+        ],
+        "bench-smoke": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php benchmarks/smoke.php"
         ]
     },
     "minimum-stability": "stable",
@@ -84,7 +107,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-main": "5.0.x-dev"
+            "dev-main": "6.0.x-dev"
         }
     }
 }

@@ -1,0 +1,273 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Tests\Extension\DeferredExtensionSpecification;
+
+use Attribute;
+use Componenta\Config\Config;
+use Componenta\Config\DependencyDefinitions;
+use Componenta\Config\Environment;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
+use Componenta\DI\ConfigKey;
+use Componenta\DI\Container;
+use Componenta\DI\ContainerFactory;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
+use Componenta\DI\Resolver\Target\ParameterTarget;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
+use Psr\Container\ContainerInterface;
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class DeferredValue {}
+
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class DeferredAutowiredValue {}
+
+final readonly class DeferredValueResolver implements ParameterResolverInterface
+{
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->hasAttribute(DeferredValue::class);
+    }
+
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return $this->supports($target)
+            ? [$target->position, 'from-service-method']
+            : null;
+    }
+}
+
+final readonly class DeferredConventionResolver implements ParameterResolverInterface
+{
+    public function supports(ParameterTarget $target): bool
+    {
+        return $target->name === 'fallback';
+    }
+
+    public function resolveParameter(
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+    ): ?array {
+        return $this->supports($target)
+            ? [$target->position, 'from-deferred-resolver']
+            : null;
+    }
+}
+
+final readonly class DeferredExtensionFactoryService
+{
+    public function attribute(ContainerInterface $container): AttributeDefinition
+    {
+        return new AttributeDefinition(
+            DeferredValue::class,
+            handler: null,
+            capabilities: [ValueProvider::class],
+        );
+    }
+
+    public function valueResolver(ContainerInterface $container): ParameterResolverInterface
+    {
+        return new DeferredValueResolver();
+    }
+
+    public function conventionResolver(ContainerInterface $container): ParameterResolverInterface
+    {
+        return new DeferredConventionResolver();
+    }
+}
+
+final class DeferredAutowiredDependency
+{
+    public int $factoryCalls = 0;
+    public string $value = 'autowired';
+}
+
+final readonly class DeferredAutowiredHandler implements ParameterAttributeHandlerInterface
+{
+    public function __construct(private DeferredAutowiredDependency $dependency) {}
+
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        return ParameterAttributeValue::resolved($this->dependency->value);
+    }
+}
+
+final readonly class DeferredAutowiredAttributeFactory
+{
+    public function __construct(public DeferredAutowiredDependency $dependency) {}
+
+    public function attribute(ContainerInterface $container): AttributeDefinition
+    {
+        ++$this->dependency->factoryCalls;
+        return new AttributeDefinition(
+            DeferredAutowiredValue::class,
+            new DeferredAutowiredHandler($this->dependency),
+            [ValueProvider::class],
+        );
+    }
+}
+
+final readonly class DeferredExtensionDto
+{
+    public function __construct(
+        #[DeferredValue]
+        public string $value,
+        public string $fallback,
+    ) {}
+}
+
+final readonly class DeferredClosureDto
+{
+    public function __construct(
+        #[DeferredValue]
+        public string $value,
+    ) {}
+}
+
+function deferredFunctionResolverFactory(ContainerInterface $container): ParameterResolverInterface
+{
+    return new DeferredValueResolver();
+}
+
+test('deferred extension factories can use constructor autowiring during bootstrap', function (): void {
+    $container = (new ContainerBuilder())
+        ->addAttributeDefinition([DeferredAutowiredAttributeFactory::class, 'attribute'])
+        ->build();
+
+    $factory = $container->get(DeferredAutowiredAttributeFactory::class);
+    Assert::assertInstanceOf(DeferredAutowiredAttributeFactory::class, $factory);
+
+    expect($factory->dependency)->toBe($container->get(DeferredAutowiredDependency::class))
+        ->and($factory->dependency->factoryCalls)->toBe(1)
+        ->and($container->call(static fn(#[DeferredAutowiredValue] string $value): string => $value))->toBe('autowired');
+
+    $factory->dependency->value = 'updated';
+    expect($container->call(static fn(#[DeferredAutowiredValue] string $value): string => $value))->toBe('updated')
+        ->and($factory->dependency->factoryCalls)->toBe(1);
+});
+
+test('container factory accepts deferred extension service method forms', function (): void {
+    $config = new Config([], new Environment([]));
+    $dependencies = new DependencyDefinitions([
+        ConfigKey::SERVICES => [
+            DeferredExtensionFactoryService::class => new DeferredExtensionFactoryService(),
+        ],
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            [DeferredExtensionFactoryService::class, 'attribute'],
+        ],
+        ConfigKey::PARAMETER_RESOLVERS => [
+            750 => [DeferredExtensionFactoryService::class, 'valueResolver'],
+            350 => [DeferredExtensionFactoryService::class, 'conventionResolver'],
+        ],
+    ]);
+
+    $container = (new ContainerFactory())->create($config, $dependencies)->container;
+    if (!$container instanceof Container) {
+        throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
+    }
+    $dto = $container->make(DeferredExtensionDto::class);
+    Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
+
+    expect($dto->value)->toBe('from-service-method')
+        ->and($dto->fallback)->toBe('from-deferred-resolver');
+});
+
+test('container factory materializes closure function and service-id extension forms', function (): void {
+    $attributeFactoryCalls = 0;
+    $receivedContainer = null;
+    $config = new Config([], new Environment([]));
+    $dependencies = new DependencyDefinitions([
+        ConfigKey::SERVICES => [
+            'deferred.resolver.service' => new DeferredConventionResolver(),
+        ],
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            static function (ContainerInterface $container) use (&$attributeFactoryCalls, &$receivedContainer): AttributeDefinition {
+                ++$attributeFactoryCalls;
+                $receivedContainer = $container;
+                return new AttributeDefinition(
+                    DeferredValue::class,
+                    capabilities: [ValueProvider::class],
+                );
+            },
+        ],
+        ConfigKey::PARAMETER_RESOLVERS => [
+            750 => __NAMESPACE__ . '\\deferredFunctionResolverFactory',
+            700 => 'deferred.resolver.service',
+        ],
+    ]);
+
+    $container = (new ContainerFactory())->create($config, $dependencies)->container;
+    if (!$container instanceof Container) {
+        throw new \LogicException('ContainerFactory returned an unsupported container implementation.');
+    }
+
+    $dto = $container->make(DeferredExtensionDto::class);
+    Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
+
+    $second = $container->make(DeferredExtensionDto::class);
+    expect($attributeFactoryCalls)->toBe(1)
+        ->and($receivedContainer)->toBe($container)
+        ->and($dto->value)->toBe('from-service-method')
+        ->and($dto->fallback)->toBe('from-deferred-resolver')
+        ->and($second)->toEqual($dto)
+        ->and($second)->not->toBe($dto);
+});
+
+test(
+    'container factory rejects invalid deferred extension results at construction',
+    function (
+        array $sections,
+        string $message,
+    ): void {
+        $namedSections = [];
+        foreach ($sections as $key => $value) {
+            if (!is_string($key)) {
+                throw new \LogicException('Expected dependency section names to be strings.');
+            }
+            $namedSections[$key] = $value;
+        }
+
+        expect(fn() => (new ContainerFactory())->create(
+            new Config([], new Environment([])),
+            new DependencyDefinitions($namedSections),
+        ))->toThrow(\Componenta\DI\Exception\InvalidConfigurationException::class, $message);
+    },
+)->with([
+    'resolver factory returns wrong object' => [[
+        ConfigKey::PARAMETER_RESOLVERS => [
+            100 => static fn(ContainerInterface $container): object => new \stdClass(),
+        ],
+    ], 'Expected ' . ParameterResolverInterface::class],
+    'attribute factory returns wrong object' => [[
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            static fn(ContainerInterface $container): object => new \stdClass(),
+        ],
+    ], 'Attribute definition factory returned stdClass'],
+    'extension factory returns scalar' => [[
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            static fn(ContainerInterface $container): int => 42,
+        ],
+    ], 'Extension factory returned int instead of an object'],
+    'extension service method is not callable' => [[
+        ConfigKey::SERVICES => [
+            'extension.factory' => new \stdClass(),
+        ],
+        ConfigKey::ATTRIBUTE_DEFINITIONS => [
+            ['extension.factory', 'create'],
+        ],
+    ], 'Extension service method "extension.factory::create" is not callable'],
+]);

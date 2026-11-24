@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Entry;
 
+use Closure;
 use Componenta\Config\ContainerValue;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\DefinitionInterface;
@@ -11,15 +12,19 @@ use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\AvailableEntryLookup;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Entry\ConfiguredFactoryDefinition;
 use Componenta\DI\Internal\Resolver\Entry\FactorySpecificationValidator;
-use Componenta\DI\Internal\Resolver\Parameter\Request\MappedRequestContext;
+use Componenta\DI\Internal\Resolver\Entry\PreparedClassDefinition;
+use Componenta\DI\Internal\Resolver\Entry\PreparedFactoryDefinition;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Parameter\AutowireByTypeResolver;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTargetFactory;
+use Error;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionMethod;
@@ -27,68 +32,51 @@ use ReflectionParameter;
 use ReflectionReference;
 use Throwable;
 
-/** Resolves configured factories and class definitions. */
-final class FactoryResolver implements DefinitionAwareResolverInterface
-{
-    /** @var array<string,true> */
-    private array $validateResolvedFactories = [];
+use function Componenta\DI\Internal\is_abstract_static_dispatch_error;
 
+/** Validates and executes factory definitions without owning registrations. */
+final class FactoryResolver implements DefinitionResolverInterface
+{
     private readonly AutowireByTypeResolver $autowire;
     private readonly ParameterTargetFactory $targets;
 
-    /** @param array<string,mixed> $factories */
     public function __construct(
-        private array $factories,
         private readonly ContainerInterface $container,
         private readonly ProxyFactoryInterface $proxyFactory,
     ) {
         $this->autowire = new AutowireByTypeResolver($container);
         $this->targets = new ParameterTargetFactory();
 
-        foreach ($this->factories as $id => $factory) {
-            if (!is_string($id) || $id === '') {
-                throw new InvalidConfigurationException('Factory ids must be non-empty strings.');
-            }
-
-            if (is_string($factory) || !is_callable($factory)) {
-                $this->validateResolvedFactories[$id] = true;
-            }
-
-            FactorySpecificationValidator::assertValid($id, $factory);
-            if ($factory instanceof FactoryDefinition) {
-                $this->factories[$id] = $factory->value;
-                if (is_string($factory->value) || !is_callable($factory->value)) {
-                    $this->validateResolvedFactories[$id] = true;
-                }
-            }
-        }
-    }
-
-    public function can(string $id): bool
-    {
-        return array_key_exists($id, $this->factories);
     }
 
     /** @param array<string|int, mixed> $params */
-    public function resolve(string $id, array $params = []): mixed
+    public function resolveDefinition(string $id, DefinitionInterface $validated, array $params = []): mixed
     {
-        if (!$this->can($id)) {
-            throw NotFoundException::forService($id);
-        }
-
         try {
-            $definition = $this->factories[$id];
-            if ($definition instanceof ClassDefinition) {
-                return $this->classDefinition($definition, $params);
+            if ($validated instanceof PreparedClassDefinition) {
+                return $validated->resolve($this, $params);
+            }
+            if (!$validated instanceof PreparedFactoryDefinition) {
+                throw InvalidConfigurationException::forUnsupportedDefinition($validated, self::class);
             }
 
-            $factory = $this->resolveFactory($id);
+            // A captured static callable does not retain its object receiver.
+            $resolvedFactory = $this->resolveFactory($id, $validated);
+            $factory = $resolvedFactory;
+            // Qualified ancestor arrays are native callables but cannot be
+            // invoked directly. Capture their route without changing binding.
+            if (is_array($factory) && str_contains($factory[1], '::')) {
+                $factory = Closure::fromCallable($factory);
+            }
+            if ($validated->validateResolvedCallable && !$factory instanceof LazyServiceFactoryInterface) {
+                FactorySpecificationValidator::assertResolvedCallable($id, $factory);
+            }
             $container = $this->container->get(ContainerValue::class);
             if (!$container instanceof ContainerValue) {
                 throw new InvalidConfigurationException('ContainerValue bootstrap service is unavailable.');
             }
 
-            $factoryParams = MappedRequestContext::strip($params);
+            $factoryParams = ResolutionMetadata::publicParameters($params);
 
             return $factory instanceof LazyServiceFactoryInterface
                 ? $factory->lazy($container, $this->proxyFactory, $factoryParams)
@@ -100,19 +88,29 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         }
     }
 
-    /** @param array<string|int, mixed> $params */
-    private function classDefinition(ClassDefinition $definition, array $params): object
-    {
-        $class = $definition->value;
+    /**
+     * @param class-string $class
+     * @param array<string|int,mixed> $constructorParams
+     * @param list<array{method: non-empty-string, params: array<string|int,mixed>}> $methodCalls
+     * @param array<string|int,mixed> $params
+     */
+    private function classDefinition(
+        string $class,
+        array $constructorParams,
+        array $methodCalls,
+        bool $autowire,
+        array $params,
+    ): object {
+        $runtime = ResolutionMetadata::invocationSlots(ResolutionMetadata::publicParameters($params));
         $reflection = new ReflectionClass($class);
         $constructor = $reflection->getConstructor();
-        $arguments = $this->arguments($constructor, $definition->constructorParams, MappedRequestContext::strip($params), $definition->autowire);
+        $arguments = $this->arguments($constructor, $constructorParams, $runtime, $autowire);
         $entry = new $class(...$arguments);
 
-        foreach ($definition->methodCalls as $call) {
+        foreach ($methodCalls as $call) {
             $method = $reflection->hasMethod($call['method']) ? $reflection->getMethod($call['method']) : null;
             $methodParams = $method?->isPublic() === true
-                ? $this->arguments($method, $call['params'], [], $definition->autowire)
+                ? $this->arguments($method, $call['params'], [], $autowire)
                 : $this->resolveDefinitionValue($call['params']);
             if (!is_array($methodParams)) {
                 throw new InvalidConfigurationException('ClassDefinition method parameters must resolve to an array.');
@@ -131,7 +129,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
     private function arguments(?ReflectionMethod $method, array $configured, array $runtime, bool $autowire): array
     {
         $arguments = [];
-        $context = new ParameterResolutionContext(array_replace($configured, $runtime));
+        $context = $autowire ? new ParameterResolutionContext(array_replace($configured, $runtime)) : null;
         $parameters = $method?->getParameters() ?? [];
         foreach ($parameters as $parameter) {
             if ($parameter->isVariadic()) {
@@ -147,7 +145,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 $arguments[$name] = $this->resolveDefinitionValue($configured[$name]);
             } elseif (array_key_exists($position, $configured)) {
                 $arguments[$name] = $this->resolveDefinitionValue($configured[$position]);
-            } elseif ($autowire) {
+            } elseif ($context !== null) {
                 $resolved = $this->autowire->resolveParameter($this->targets->create($parameter), $context);
                 if ($resolved !== null) {
                     $arguments[$name] = $resolved[1];
@@ -179,7 +177,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         foreach (array_replace($configured, $runtime) as $key => $value) {
             $value = array_key_exists($key, $runtime) ? $value : $this->resolveDefinitionValue($value);
             if (is_int($key)) {
-                $positional[] = $value;
+                $positional[$key] = $value;
             } else {
                 $named[$key] = $value;
             }
@@ -187,6 +185,7 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         if ($positional === []) {
             return $arguments + $named;
         }
+        ksort($positional, SORT_NUMERIC);
 
         // Positional variadic values require the preceding arguments to occupy
         // their native positions. Evaluate omitted defaults only for this call.
@@ -213,14 +212,18 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
         if ($value instanceof ReferenceDefinition) {
             return $this->container->get($value->value);
         }
-        if (!is_array($value)) {
+        if (!is_array($value) || $value === []) {
             return $value;
         }
 
         $resolved = [];
         foreach ($value as $key => $item) {
-            $childReferences = $references;
             $reference = ReflectionReference::fromArrayElement($value, $key);
+            if ($reference === null && !is_array($item) && !$item instanceof ReferenceDefinition) {
+                continue;
+            }
+
+            $childReferences = $references;
             if ($reference !== null) {
                 $referenceId = $reference->getId();
                 if (isset($references[$referenceId])) {
@@ -234,23 +237,32 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
             $resolved[$key] = $this->resolveDefinitionValue($item, $childReferences);
         }
 
-        return $resolved;
+        // Preserve unchanged slots and native array state; detach only changed slots.
+        return $resolved === [] ? $value : array_replace($value, $resolved);
     }
 
-    private function resolveFactory(string $id): callable|LazyServiceFactoryInterface
+    private function resolveFactory(string $id, PreparedFactoryDefinition $definition): callable|LazyServiceFactoryInterface
     {
-        $factory = $this->factories[$id];
-        $validateResolved = isset($this->validateResolvedFactories[$id]);
+        $factory = $definition->factory;
 
-        if (is_string($factory) && $this->container->has($factory)) {
-            $factory = $this->container->get($factory);
+        if (is_string($factory) && AvailableEntryLookup::has($this->container, $factory)) {
+            $factory = AvailableEntryLookup::get($this->container, $factory);
+            if (is_array($factory)) {
+                // A service can return caller-owned routing references. Capture
+                // this invocation before validation can autoload application code.
+                $snapshot = [];
+                foreach ($factory as $key => $value) {
+                    $snapshot[$key] = $value;
+                }
+                $factory = $snapshot;
+            }
         } elseif (is_array($factory)
-            && !is_callable($factory)
+            && !$this->isNativeFactory($factory)
             && isset($factory[0])
             && is_string($factory[0])
-            && $this->container->has($factory[0])
+            && AvailableEntryLookup::has($this->container, $factory[0])
         ) {
-            $factory[0] = $this->container->get($factory[0]);
+            $factory[0] = AvailableEntryLookup::get($this->container, $factory[0]);
         }
 
         if (!$factory instanceof LazyServiceFactoryInterface && !is_callable($factory)) {
@@ -260,37 +272,62 @@ final class FactoryResolver implements DefinitionAwareResolverInterface
                 get_debug_type($factory),
             ));
         }
-        if ($validateResolved
-            && !$factory instanceof LazyServiceFactoryInterface
-        ) {
-            FactorySpecificationValidator::assertResolvedCallable($id, $factory);
-        }
-
         return $factory;
     }
 
-    public function setDefinition(string $id, DefinitionInterface $definition): void
+    public function validateDefinition(string $id, DefinitionInterface $definition): DefinitionInterface
     {
-        if (!$this->supportsDefinition($definition)) {
-            throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class);
+        if ($definition instanceof ClassDefinition) {
+            $class = $definition->value;
+            $constructorParams = $definition->constructorParams;
+            $methodCalls = $definition->methodCalls;
+            $autowire = $definition->autowire;
+            FactorySpecificationValidator::assertClassDefinition($id, $class, $methodCalls);
+            return new PreparedClassDefinition(
+                static fn(self $resolver, array $params): object => $resolver->classDefinition(
+                    $class,
+                    $constructorParams,
+                    $methodCalls,
+                    $autowire,
+                    $params,
+                ),
+            );
         }
+        $factory = match (true) {
+            $definition instanceof FactoryDefinition => $definition->value,
+            $definition instanceof ConfiguredFactoryDefinition => $definition->factory,
+            default => throw InvalidConfigurationException::forUnsupportedDefinition($definition, self::class),
+        };
+        if (is_array($factory)) {
+            // Readonly arrays can still contain caller-owned references. Snapshot
+            // routing slots while preserving the factory object's business state.
+            $snapshot = [];
+            foreach ($factory as $key => $value) {
+                $snapshot[$key] = $value;
+            }
+            $factory = $snapshot;
+        }
+        $validateResolved = is_string($factory) || !$this->isNativeFactory($factory);
+        FactorySpecificationValidator::assertValid($id, $factory);
+        return new PreparedFactoryDefinition($factory, $validateResolved);
+    }
 
-        FactorySpecificationValidator::assertValid($id, $definition);
-        $this->factories[$id] = $definition instanceof FactoryDefinition
-            ? $definition->value
-            : $definition;
-        unset($this->validateResolvedFactories[$id]);
-
-        if ($definition instanceof FactoryDefinition
-            && (is_string($definition->value) || !is_callable($definition->value))
-        ) {
-            $this->validateResolvedFactories[$id] = true;
+    private function isNativeFactory(mixed $factory): bool
+    {
+        try {
+            return is_callable($factory);
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
+            return false;
         }
     }
 
     public function supportsDefinition(DefinitionInterface $definition): bool
     {
         return $definition instanceof FactoryDefinition
-            || $definition instanceof ClassDefinition;
+            || $definition instanceof ClassDefinition
+            || $definition instanceof ConfiguredFactoryDefinition;
     }
 }

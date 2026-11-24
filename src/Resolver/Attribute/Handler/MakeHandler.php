@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
+use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributePlanBuilder;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Internal\EntryLookupRevision;
+use Componenta\DI\Internal\MakeHandlerScope;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Object\CreationStrategy;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
@@ -27,7 +31,7 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Make] and #[Proxy] on classes, parameters and properties. */
-final class MakeHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+final class MakeHandler extends MakeHandlerScope implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(
         private readonly FactoryInterface $factory,
@@ -42,6 +46,18 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         AttributePlan $plan,
         ParameterAttributeValue $value,
     ): ParameterAttributeValue {
+        return $this->resolveComposed($attribute, $target, $context, $plan, $value, null);
+    }
+
+    /** @param (Closure(class-string):(?object))|null $findCompanion */
+    protected function resolveComposed(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+        ?Closure $findCompanion,
+    ): ParameterAttributeValue {
         if (!$attribute instanceof Make && !$attribute instanceof Proxy) {
             throw new LogicException('MakeHandler received an unsupported parameter attribute.');
         }
@@ -51,10 +67,10 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
         $make = $attribute instanceof Make
             ? $attribute
-            : self::firstAttribute($plan, Make::class);
+            : self::firstAttribute($plan, Make::class, $findCompanion);
         $proxy = $attribute instanceof Proxy
             ? $attribute
-            : self::firstAttribute($plan, Proxy::class);
+            : self::firstAttribute($plan, Proxy::class, $findCompanion);
         $config = self::configuration(
             $target->name,
             $target->className,
@@ -67,17 +83,26 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }
 
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
+        $this->handleComposed($attribute, $target, $context, null);
+    }
+
+    /** @param (Closure(class-string):(?object))|null $findCompanion */
+    protected function handleComposed(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $findCompanion,
+    ): void {
         if ($attribute instanceof Proxy && $target instanceof ReflectionClass) {
             if ($context->entry !== null) {
                 return;
@@ -107,19 +132,18 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
             return;
         }
 
-        $plan = $this->plans->build($target);
-        $make = $attribute instanceof Make
-            ? $attribute
-            : self::firstAttribute($plan, Make::class);
-        $proxy = $attribute instanceof Proxy
-            ? $attribute
-            : self::firstAttribute($plan, Proxy::class);
+        $companionClass = $attribute instanceof Make ? Proxy::class : Make::class;
+        $companion = $findCompanion === null
+            ? self::firstAttribute($this->plans->build($target), $companionClass, null)
+            : $findCompanion($companionClass);
+        $make = $attribute instanceof Make ? $attribute : $companion;
+        $proxy = $attribute instanceof Proxy ? $attribute : $companion;
 
         $config = self::configuration(
             $target->getName(),
             TypeHints::classOf($target->getType(), $target->getDeclaringClass()),
-            $make,
-            $proxy,
+            $make instanceof Make ? $make : null,
+            $proxy instanceof Proxy ? $proxy : null,
         );
 
         try {
@@ -178,11 +202,11 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
         /** @var ReflectionClass<object> $reflection */
         $reflection = new ReflectionClass($class);
-        if (!$reflection->isInstantiable()) {
-            throw new LogicException(sprintf('Virtual proxy class "%s" must be concrete and instantiable.', $class));
+        if ($reflection->isInterface() || $reflection->isTrait() || $reflection->isAbstract() || $reflection->isEnum()) {
+            throw new LogicException(sprintf('Virtual proxy class "%s" must be concrete.', $class));
         }
         if ($typeName !== null
-            && (class_exists($typeName) || interface_exists($typeName))
+            && (class_exists($typeName) || interface_exists($typeName) || class_exists($typeName, false))
             && !is_a($class, $typeName, true)
         ) {
             throw new LogicException(sprintf(
@@ -200,12 +224,14 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
     /**
      * @template T of object
      * @param class-string<T> $attributeClass
+     * @param (Closure(class-string):(?object))|null $findCompanion
      * @return T|null
      */
-    private static function firstAttribute(AttributePlan $plan, string $attributeClass): ?object
+    private static function firstAttribute(AttributePlan $plan, string $attributeClass, ?Closure $findCompanion): ?object
     {
-        $usage = $plan->attributes($attributeClass)[0] ?? null;
-        $attribute = $usage?->newInstance();
+        $attribute = $findCompanion === null
+            ? ($plan->attributes($attributeClass)[0] ?? null)?->newInstance()
+            : $findCompanion($attributeClass);
         return $attribute instanceof $attributeClass ? $attribute : null;
     }
 
@@ -219,6 +245,7 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
         return $this->proxyFactory->makeProxy(
             $config['proxyClass'],
             function (object $_proxy) use ($config): object {
+                $lookupRevision = EntryLookupRevision::current();
                 $backing = $this->factory->make($config['entry'], $config['params']);
                 $proxyClass = $config['proxyClass'];
                 if (!$backing instanceof $proxyClass) {
@@ -231,6 +258,7 @@ final class MakeHandler implements AttributeHandlerInterface, ParameterAttribute
 
                     throw ResolutionException::forService($config['entry'], $cause);
                 }
+                EntryLookupRevision::assertCompleteSince($lookupRevision, $config['entry']);
                 return $backing;
             },
         );

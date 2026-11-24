@@ -1,0 +1,187 @@
+<?php
+
+declare(strict_types=1);
+
+use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
+use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributeSet;
+use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Init;
+use Componenta\DI\Attribute\Lazy;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+
+require $argv[1];
+require_once dirname(__DIR__, 2) . '/Support/functions.php';
+$canonicalPath = static function (string|false $path): string|false {
+    $canonical = $path === false ? false : realpath($path);
+    return $canonical === false ? false : str_replace(DIRECTORY_SEPARATOR, '/', $canonical);
+};
+$source = $canonicalPath($argv[2]);
+if ($source === false || !is_dir($source)) {
+    throw new RuntimeException('The fixture selected source root must be an existing directory.');
+}
+$sourceMap = [
+    'class' => $canonicalPath(new ReflectionClass(Componenta\DI\Container::class)->getFileName()) === $source . '/Container.php',
+    'functions' => $canonicalPath(new ReflectionFunction('Componenta\\DI\\Internal\\is_entry_class_eligible')->getFileName()) === $source . '/Internal/functions.php',
+];
+if (in_array(false, $sourceMap, true)) {
+    throw new RuntimeException('The fixture must load the selected checkout source.');
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final class CacheControl {}
+
+final class NoOpRule implements AttributeCompositionRuleInterface
+{
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
+}
+
+final readonly class Dependency
+{
+    public function __construct(public string $value) {}
+}
+
+function namedCounter(): int
+{
+    static $count = 0;
+    return ++$count;
+}
+
+function legacyInitializer(Dependency $dependency): string
+{
+    return $dependency->value;
+}
+
+final class Helpers
+{
+    public const COUNTER = static function (): int {
+        static $count = 0;
+        return ++$count;
+    };
+
+    public static function next(): int
+    {
+        static $count = 0;
+        return ++$count;
+    }
+
+    public static function legacy(Dependency $dependency): string
+    {
+        return $dependency->value;
+    }
+}
+
+final class InvokableInitializer
+{
+    public function __invoke(Dependency $dependency): string
+    {
+        return $dependency->value;
+    }
+}
+
+final class Target
+{
+    #[CacheControl, Init(static function (): int { static $count = 0; return ++$count; })]
+    public int $inline;
+
+    #[CacheControl, Init(namedCounter(...))]
+    public int $named;
+
+    #[CacheControl, Init(Helpers::next(...))]
+    public int $method;
+
+    #[CacheControl, Init(Helpers::COUNTER)]
+    public int $constant;
+
+    #[CacheControl, Init(self::initialize(...))]
+    public readonly string $private;
+
+    #[CacheControl, Init('legacyInitializer')]
+    public string $string;
+
+    #[CacheControl, Init([Helpers::class, 'legacy'])]
+    public string $array;
+
+    #[CacheControl, Init(new InvokableInitializer())]
+    public string $invokable;
+
+    private static function initialize(Dependency $dependency): string
+    {
+        return $dependency->value;
+    }
+}
+
+final class LifetimeTarget
+{
+    #[CacheControl, Init(static function (): WeakReference {
+        static $held;
+        $held ??= new stdClass();
+        return WeakReference::create($held);
+    })]
+    public WeakReference $reference;
+}
+
+final class Calls
+{
+    public static int $count = 0;
+}
+
+#[Lazy]
+final class Delayed
+{
+    #[CacheControl, Init(static function (): string { ++Calls::$count; return 'initialized'; })]
+    public string $value;
+}
+
+trait InlineScope
+{
+    #[CacheControl, Init(static function (): string { return self::who(); })]
+    public string $scope;
+}
+
+final class FirstScope
+{
+    use InlineScope;
+    public static function who(): string { return 'first'; }
+}
+
+final class SecondScope
+{
+    use InlineScope;
+    public static function who(): string { return 'second'; }
+}
+
+[$container, $runtime] = (new ContainerBuilder())
+    ->addAttributeDefinition(new AttributeDefinition(
+        CacheControl::class,
+        rules: $argv[3] === 'uncached' ? [new NoOpRule()] : [],
+    ))
+    ->assemble();
+$metadataTarget = new ReflectionProperty(Target::class, 'inline');
+$firstPlan = $runtime->plans->build($metadataTarget);
+if (count($firstPlan->attributes(CacheControl::class)) !== 1) {
+    throw new RuntimeException('Expected the cache-control marker on the callback target.');
+}
+$planReused = $runtime->plans->build($metadataTarget) === $firstPlan;
+$values = [];
+foreach (['one', 'two', 'three'] as $value) {
+    $container->set(Dependency::class, new Dependency($value));
+    $entry = $container->make(Target::class);
+    $values[] = [$entry->inline, $entry->named, $entry->method, $entry->constant, $entry->private, $entry->string, $entry->array, $entry->invokable];
+}
+$first = $container->get(Target::class);
+$second = $container->get(Target::class);
+$lifetime = $container->make(LifetimeTarget::class);
+$lazy = $container->make(Delayed::class);
+$before = Calls::$count;
+$lazyValue = $lazy->value;
+
+echo json_encode([
+    'source_map' => $sourceMap,
+    'plan_reused' => $planReused,
+    'values' => $values,
+    'shared' => $first === $second,
+    'inline_static_retained' => $lifetime->reference->get() !== null,
+    'lazy' => [$before, $lazyValue, Calls::$count],
+    'trait_inline_scope' => [$container->make(FirstScope::class)->scope, $container->make(SecondScope::class)->scope],
+], JSON_THROW_ON_ERROR);

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute;
 
+use Closure;
+
 /**
- * Specifies a method to call after object instantiation and property injection.
+ * Specifies a method or callback after object instantiation and property injection.
  *
  * This attribute can be applied multiple times to define
  * a sequence of initialization steps. Methods are called
@@ -41,11 +43,11 @@ namespace Componenta\DI\Attribute;
 readonly class SetUp
 {
     /**
-     * @param string $method Method name to call after instantiation.
+     * @param string|Closure $method Method name or callback receiving the instance.
      * @param array<string, mixed> $params Explicit parameters (merged with resolved).
      */
     public function __construct(
-        public string $method,
+        public string|Closure $method,
         public array $params = [],
     ) {}
 }

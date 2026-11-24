@@ -1,0 +1,126 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Internal;
+
+use Closure;
+use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Transform;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Entry\PropertyValueHandlerScope;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
+use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use Componenta\DI\Resolver\Entry\ObjectCreationContext;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
+use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
+use Componenta\DI\Resolver\Target\ParameterTarget;
+use LogicException;
+use Psr\Container\ContainerExceptionInterface;
+use ReflectionProperty;
+use Reflector;
+use Throwable;
+
+/** Handles #[Transform] through the shared semantic-argument callback binder. */
+final class TransformHandler extends PropertyValueHandlerScope implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+{
+    public function __construct(private readonly AttributeCallbackInvoker $callbacks) {}
+
+    /** @param (Closure():void)|null $beforeInvocation */
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+        ?Closure $beforeInvocation = null,
+    ): ParameterAttributeValue {
+        if (!$attribute instanceof Transform) {
+            throw new LogicException('TransformHandler received an unsupported parameter attribute.');
+        }
+
+        if (!$value->resolved) {
+            if ($target->variadic) {
+                $value = ParameterAttributeValue::resolved([]);
+            } elseif ($target->hasDefault) {
+                $value = ParameterAttributeValue::resolved($target->defaultValue);
+            } elseif ($target->allowsNull) {
+                $value = ParameterAttributeValue::resolved(null);
+            } else {
+                throw ParameterContextAccess::failure(
+                    $context,
+                    $target->reflection,
+                    reason: 'missing required value for #[Transform]',
+                );
+            }
+        }
+
+        try {
+            return ParameterAttributeValue::resolved($this->callbacks->invoke(
+                $attribute->callback,
+                $value->value,
+                beforeInvocation: $beforeInvocation,
+            ));
+        } catch (ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ParameterContextAccess::failure(
+                $context,
+                $target->reflection,
+                previous: $e,
+            );
+        }
+    }
+
+    public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
+    {
+        $this->handleProperty($attribute, $target, $context, null);
+    }
+
+    protected function handleProperty(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $readArgument,
+    ): void {
+        if (!$attribute instanceof Transform || !$target instanceof ReflectionProperty) {
+            throw new LogicException('TransformHandler received an unsupported attribute target.');
+        }
+
+        try {
+            $beforeInvocation = null;
+            if ($context->propertyClaimed($target)) {
+                $value = $context->readProperty($target);
+            } else {
+                if (!$context->claimProperty($target)) {
+                    return;
+                }
+
+                $name = $target->getName();
+                $hasValue = $readArgument === null
+                    ? ObjectCreationAccess::tryReadParameter($context, $name, $value)
+                    : $readArgument($name, $value);
+                if (!$hasValue) {
+                    throw ResolutionException::forProperty(
+                        $target,
+                        reason: sprintf('missing context key "%s"', $name),
+                    );
+                }
+                // Validate the supplied value again after callback dependencies.
+                $beforeInvocation = static fn() => ObjectCreationAccess::recheckParameters($context);
+            }
+
+            $context->writeProperty($target, $this->callbacks->invoke(
+                $attribute->callback,
+                $value,
+                beforeInvocation: $beforeInvocation,
+            ));
+        } catch (ContainerExceptionInterface $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ResolutionException::forProperty($target, previous: $e);
+        }
+    }
+}

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal;
 
+use Closure;
+use Componenta\DI\Container;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -15,25 +17,105 @@ final class ExternalContainerRegistry
 {
     /** @var array<int, ContainerInterface> */
     private array $containers = [];
+    public private(set) int $revision = 0;
 
-    public function register(ContainerInterface $container): void
+    public function register(ContainerInterface $container, ?object $authority = null): void
     {
-        $this->containers[spl_object_id($container)] ??= $container;
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $id = spl_object_id($container);
+        if (!isset($this->containers[$id])) {
+            $this->containers[$id] = $container;
+            ++$this->revision;
+        }
     }
 
+    /**
+     * Reentrant ownership callbacks can change membership between queries.
+     * @phpstan-impure
+     */
     public function contains(ContainerInterface $container): bool
     {
         return isset($this->containers[spl_object_id($container)]);
     }
 
-    public function findOwning(string $id): ?ContainerInterface
-    {
-        foreach ($this->containers as $container) {
-            if ($container->has($id)) {
-                return $container;
+    /**
+     * @param Closure(string):bool $mayInspect
+     * @param ?Closure(ContainerInterface):bool $registrationProbe
+     */
+    public function findOwning(
+        string $id,
+        Closure $mayInspect,
+        bool $requireResolvable,
+        ExternalLookupProbes $lookupProbes,
+        ?Closure $registrationProbe = null,
+        int $afterRevision = 0,
+    ): ?ContainerInterface {
+        $probes = $registrationProbe === null ? $lookupProbes->start($id) : null;
+        $caller = $probes?->begin();
+        $skipped = false;
+        try {
+            $containers = $this->containers;
+            $inspected = count($containers);
+            if ($afterRevision !== 0) {
+                // Each membership revision publishes exactly one provider.
+                $containers = array_slice($containers, $afterRevision, preserve_keys: true);
+            }
+            while (true) {
+                foreach ($containers as $providerId => $container) {
+                    $revision = $lookupProbes->revision;
+                    if ($probes !== null && !$probes->canProbe($providerId, $caller, $requireResolvable, $revision)) {
+                        $confirmed = $probes->confirmedOwnership(
+                            $providerId,
+                            $requireResolvable || !$container instanceof Container,
+                            $lookupProbes->confirmationRevision,
+                            $revision,
+                        );
+                        if ($confirmed === null) {
+                            $skipped = true;
+                        } else {
+                            if ($confirmed['registryRevision'] !== null) {
+                                $lookupProbes->trackLookup($id, availability: true, requireResolvable: $requireResolvable);
+                            }
+                            if ($confirmed['owns']) {
+                                return $mayInspect($id) ? $container : null;
+                            }
+                        }
+                        continue;
+                    }
+                    if (!$mayInspect($id)) {
+                        return null;
+                    }
+                    $probes?->enterProvider($providerId);
+                    try {
+                        $owns = $registrationProbe !== null
+                            ? $registrationProbe($container)
+                            : ($requireResolvable ? AvailableEntryLookup::has($container, $id) : $container->has($id));
+                        if ($owns) {
+                            $probes?->recordOwner($providerId);
+                            return $container;
+                        }
+                        // A repeated recursive miss can reopen the same search tree.
+                        if ($caller !== null) {
+                            $probes?->recordRecursiveMiss($caller, $providerId, $requireResolvable, $revision);
+                        }
+                    } finally {
+                        $probes?->leaveProvider($providerId);
+                    }
+                }
+
+                if ($inspected === count($this->containers)) {
+                    return null;
+                }
+
+                // Ownership callbacks may append providers, including while a Fiber
+                // is suspended. Visit the new suffix without replaying earlier has().
+                $containers = array_slice($this->containers, $inspected, preserve_keys: true);
+                $inspected += count($containers);
+            }
+        } finally {
+            if ($probes !== null) {
+                $lookupProbes->finish($id, $probes, $skipped);
             }
         }
-
-        return null;
     }
 }

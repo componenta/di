@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Closure;
+use Componenta\DI\Internal\ReflectionSnapshot;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -19,6 +21,14 @@ final class AttributeUsage
     /** @var class-string */
     public readonly string $attributeClass;
 
+    /** @var Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    private readonly Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
+
+    /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target {
+        get => ReflectionSnapshot::target($this->declaration);
+    }
+
     /**
      * Declared expressions are evaluated on read, never retained in a shared plan.
      *
@@ -30,16 +40,18 @@ final class AttributeUsage
 
     /**
      * @param ReflectionAttribute<object> $reflection
-     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      */
     public function __construct(
         ReflectionAttribute $reflection,
         public readonly AttributeDefinition $definition,
-        public readonly ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
         public readonly int $declarationOrder,
     ) {
+        ReflectionSnapshot::assertNativeAttribute($reflection);
         $this->reflection = $reflection;
         $this->attributeClass = $reflection->getName();
+        $this->declaration = ReflectionSnapshot::planDeclaration($target);
     }
 
     /** Creates an isolated runtime attribute instance for one handler invocation. */

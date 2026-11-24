@@ -1,1 +1,10 @@
 * text=auto eol=lf
+/.github export-ignore
+/benchmarks export-ignore
+/tests export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/phpstan.neon.dist export-ignore
+/phpunit.xml export-ignore
+/phpbench.json.dist export-ignore

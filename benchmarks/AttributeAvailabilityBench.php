@@ -13,7 +13,8 @@ declare(strict_types=1);
  * Both COMPONENTA_DI_BENCH_* paths are required, as in the other benchmarks.
  * DI_BENCH_ITERATIONS and DI_BENCH_ROUNDS are optional positive integers.
  * Each case/round gets an independent container. Bootstrap, contamination and
- * warmup are excluded from timing and autoload counts. The counting loader is
+ * warmup are excluded from timing and autoload counts. To measure targeted
+ * discovery, also set DI_BENCH_TARGETED_DISCOVERY=1. The counting loader is
  * prepended and observes only the eight deliberately unavailable fixture names.
  */
 
@@ -55,12 +56,15 @@ namespace Componenta\DI\Benchmarks\AttributeAvailability {
     #[MissingOptionalEight]
     final class EightUnavailableAttributes {}
 
-    function createContainer(): Container
+    function createContainer(bool $targeted): Container
     {
-        $container = (new ContainerFactory())->create(
-            new Config([], new Environment([])),
-            new DependencyDefinitions([]),
-        )->container;
+        $factory = new ContainerFactory();
+        $config = new Config([], new Environment([]));
+        $definitions = new DependencyDefinitions([]);
+        $result = $targeted
+            ? $factory->createWithTargetedAttributeDiscovery($config, $definitions)
+            : $factory->create($config, $definitions);
+        $container = $result->container;
 
         if (!$container instanceof Container) {
             throw new RuntimeException('ContainerFactory returned an unsupported container implementation.');
@@ -109,6 +113,7 @@ namespace Componenta\DI\Benchmarks\AttributeAvailability {
 
     $iterations = positiveEnvironmentInteger('DI_BENCH_ITERATIONS', 10_000);
     $rounds = positiveEnvironmentInteger('DI_BENCH_ROUNDS', 7);
+    $targeted = getenv('DI_BENCH_TARGETED_DISCOVERY') === '1';
     $warmup = min(2_000, $iterations);
     $attributes = [
         MissingOptionalOne::class,
@@ -139,6 +144,7 @@ namespace Componenta\DI\Benchmarks\AttributeAvailability {
 
     printf("PHP %s (%s, %s), binary %s\n", PHP_VERSION, PHP_OS_FAMILY, php_uname('m'), PHP_BINARY);
     printf("source %s\n", $source);
+    printf("attribute discovery %s\n", $targeted ? 'targeted' : 'compatible');
     printf(
         "iterations %d, rounds %d, warmup %d per case/round\n",
         $iterations,
@@ -159,7 +165,7 @@ namespace Componenta\DI\Benchmarks\AttributeAvailability {
             // Alternate ordering to reduce a fixed clean-versus-contaminated bias.
             $orderedCases = $round % 2 === 0 ? $cases : array_reverse($cases, true);
             foreach ($orderedCases as $name => $case) {
-                $container = createContainer();
+                $container = createContainer($targeted);
                 if ($case['fixture'] !== null) {
                     $container->make($case['fixture']);
                 }

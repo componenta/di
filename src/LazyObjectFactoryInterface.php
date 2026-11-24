@@ -7,7 +7,7 @@ namespace Componenta\DI;
 use Componenta\DI\Exception\ExceptionInterface;
 use ReflectionClass;
 
-/** Produces native lazy objects for a target class. */
+/** Produces lazy objects for a target class. */
 interface LazyObjectFactoryInterface
 {
     /**
@@ -20,6 +20,14 @@ interface LazyObjectFactoryInterface
      * The initializer is deferred. Throwables raised by a caller-supplied
      * initializer later are owned by that callback unless it re-enters a DI
      * resolution boundary.
+     *
+     * The default {@see ProxyFactory} requires a non-static backed instance
+     * property, possibly inherited. A native-eligible target without one
+     * fails before allocation with {@see \Componenta\DI\Exception\ResolutionException};
+     * use ordinary eager construction instead. Other native restrictions
+     * retain PHP's failure as the previous exception. This property
+     * requirement belongs to the default adapter; custom implementations
+     * may support other mechanisms while preserving the deferred contract.
      *
      * @see ReflectionClass::newLazyGhost()
      */

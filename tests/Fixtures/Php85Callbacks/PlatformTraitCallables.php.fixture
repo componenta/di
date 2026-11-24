@@ -1,0 +1,296 @@
+<?php
+
+declare(strict_types=1);
+
+// Pure engine acceptance for E1. Do not add a Composer autoloader or DI calls.
+// The first six cases preserve the behavior specified by php-src 44a2a2c3:
+// Zend/tests/first_class_callable/constexpr/trait_scope_001.phpt ... 006.phpt.
+
+namespace Componenta\DI\PlatformAcceptance\SelfReference {
+    trait Callback
+    {
+        public static function make(\Closure $callback = self::who(...)): string
+        {
+            return $callback();
+        }
+    }
+
+    final class First
+    {
+        use Callback;
+
+        public static function who(): string
+        {
+            return 'first';
+        }
+    }
+
+    final class Second
+    {
+        use Callback;
+
+        public static function who(): string
+        {
+            return 'second';
+        }
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance\ParentReference {
+    class FirstParent
+    {
+        public static function who(): string
+        {
+            return 'first-parent';
+        }
+    }
+
+    class SecondParent
+    {
+        public static function who(): string
+        {
+            return 'second-parent';
+        }
+    }
+
+    trait Callback
+    {
+        public static function make(\Closure $callback = parent::who(...)): string
+        {
+            return $callback();
+        }
+    }
+
+    final class First extends FirstParent
+    {
+        use Callback;
+    }
+
+    final class Second extends SecondParent
+    {
+        use Callback;
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance\ConstantAndProperty {
+    trait Callback
+    {
+        public const CALLBACK = self::who(...);
+
+        public \Closure $callback = self::who(...);
+    }
+
+    final class First
+    {
+        use Callback;
+
+        public static function who(): string
+        {
+            return 'first';
+        }
+    }
+
+    final class Second
+    {
+        use Callback;
+
+        public static function who(): string
+        {
+            return 'second';
+        }
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance\PrivateSelfReference {
+    trait Callback
+    {
+        public static function make(\Closure $callback = self::who(...)): string
+        {
+            return $callback();
+        }
+    }
+
+    final class First
+    {
+        use Callback;
+
+        private static function who(): string
+        {
+            return 'private-first';
+        }
+    }
+
+    final class Second
+    {
+        use Callback;
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance\NamedPrivateReference {
+    trait Callback
+    {
+        public static function make(\Closure $callback = First::who(...)): string
+        {
+            return $callback();
+        }
+    }
+
+    final class First
+    {
+        use Callback;
+
+        private static function who(): string
+        {
+            return 'private-first';
+        }
+    }
+
+    final class Second
+    {
+        use Callback;
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance\NamedPublicReference {
+    trait Callback
+    {
+        public static function make(\Closure $callback = First::who(...)): string
+        {
+            return $callback();
+        }
+    }
+
+    final class First
+    {
+        use Callback;
+
+        public static function who(): string
+        {
+            return 'public-first';
+        }
+    }
+
+    final class Second
+    {
+        use Callback;
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance\Attributes {
+    #[\Attribute(\Attribute::TARGET_PROPERTY)]
+    final readonly class Callback
+    {
+        public function __construct(public \Closure $value) {}
+    }
+
+    trait SelfReference
+    {
+        #[Callback(self::who(...))]
+        public string $firstClass;
+
+        #[Callback(static function (): string { return self::who(); })]
+        public string $inline;
+    }
+
+    final class First
+    {
+        use SelfReference;
+
+        public static function who(): string
+        {
+            return 'first';
+        }
+    }
+
+    final class Second
+    {
+        use SelfReference;
+
+        public static function who(): string
+        {
+            return 'second';
+        }
+    }
+
+    trait ParentReference
+    {
+        #[Callback(parent::who(...))]
+        public string $value;
+    }
+
+    final class FirstChild extends \Componenta\DI\PlatformAcceptance\ParentReference\FirstParent
+    {
+        use ParentReference;
+    }
+
+    final class SecondChild extends \Componenta\DI\PlatformAcceptance\ParentReference\SecondParent
+    {
+        use ParentReference;
+    }
+
+    trait NamedPrivateReference
+    {
+        #[Callback(PrivateFirst::who(...))]
+        public string $value;
+    }
+
+    final class PrivateFirst
+    {
+        use NamedPrivateReference;
+
+        private static function who(): string
+        {
+            return 'private-first';
+        }
+    }
+
+    final class PrivateSecond
+    {
+        use NamedPrivateReference;
+    }
+
+    function value(string $class, string $property): string
+    {
+        $attribute = (new \ReflectionProperty($class, $property))->getAttributes()[0]->newInstance();
+
+        return ($attribute->value)();
+    }
+}
+
+namespace Componenta\DI\PlatformAcceptance {
+    function observe(\Closure $callback): array
+    {
+        try {
+            return ['value' => $callback()];
+        } catch (\Error $error) {
+            return ['error' => $error::class, 'message' => $error->getMessage()];
+        }
+    }
+
+    echo json_encode([
+        'self_default' => [SelfReference\First::make(), SelfReference\Second::make()],
+        'parent_default' => [ParentReference\First::make(), ParentReference\Second::make()],
+        'constant_and_property' => [
+            (ConstantAndProperty\First::CALLBACK)(),
+            (ConstantAndProperty\Second::CALLBACK)(),
+            ((new ConstantAndProperty\First())->callback)(),
+            ((new ConstantAndProperty\Second())->callback)(),
+        ],
+        'private_self_default' => [
+            observe(static fn(): string => PrivateSelfReference\First::make()),
+            observe(static fn(): string => PrivateSelfReference\Second::make()),
+        ],
+        'named_private_default' => [
+            observe(static fn(): string => NamedPrivateReference\First::make()),
+            observe(static fn(): string => NamedPrivateReference\Second::make()),
+        ],
+        'named_public_default' => [NamedPublicReference\First::make(), NamedPublicReference\Second::make(), NamedPublicReference\First::make()],
+        'attribute_self' => [Attributes\value(Attributes\First::class, 'firstClass'), Attributes\value(Attributes\Second::class, 'firstClass')],
+        'attribute_inline' => [Attributes\value(Attributes\First::class, 'inline'), Attributes\value(Attributes\Second::class, 'inline')],
+        'attribute_parent' => [Attributes\value(Attributes\FirstChild::class, 'value'), Attributes\value(Attributes\SecondChild::class, 'value')],
+        'attribute_named_private' => [
+            observe(static fn(): string => Attributes\value(Attributes\PrivateFirst::class, 'value')),
+            observe(static fn(): string => Attributes\value(Attributes\PrivateSecond::class, 'value')),
+        ],
+    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+}

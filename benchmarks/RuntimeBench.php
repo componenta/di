@@ -21,8 +21,15 @@ namespace Componenta\DI\Benchmarks\Runtime {
     use Componenta\Config\Config;
     use Componenta\Config\DependencyDefinitions;
     use Componenta\Config\Environment;
+    use Componenta\DI\Attribute\MapRequest;
+    use Componenta\DI\Attribute\MapRequestPayload;
+    use Componenta\DI\Attribute\SetUp;
+    use Componenta\DI\Attribute\Transform;
     use Componenta\DI\Container;
     use Componenta\DI\ContainerFactory;
+    use Componenta\DI\Exception\ResolutionException;
+    use Nyholm\Psr7\ServerRequest;
+    use Psr\Http\Message\ServerRequestInterface;
 
     final class Dependency {}
 
@@ -38,6 +45,91 @@ namespace Componenta\DI\Benchmarks\Runtime {
         public function execute(Dependency $dependency): Dependency
         {
             return $dependency;
+        }
+    }
+
+    interface Left {}
+    interface Right {}
+    final class LeftValue implements Left {}
+    final class RightValue implements Right {}
+
+    #[SetUp('configure')]
+    final class MethodSetupTarget
+    {
+        public function configure(Dependency $dependency): void {}
+    }
+
+    #[SetUp(SETUP_CALLBACK)]
+    final class CallbackSetupTarget {}
+
+    final class TransformTargets
+    {
+        public static function none(int $value): int
+        {
+            return $value;
+        }
+
+        public static function zeroArguments(#[Transform(ZERO_CALLBACK)] int $value): int
+        {
+            return $value;
+        }
+
+        public static function one(#[Transform(VALUE_CALLBACK)] int $value): int
+        {
+            return $value;
+        }
+
+        public static function three(#[Transform(VALUE_CALLBACK), Transform(VALUE_CALLBACK), Transform(VALUE_CALLBACK)] int $value): int
+        {
+            return $value;
+        }
+
+        public static function suffix(#[Transform(SUFFIX_CALLBACK)] int $value): int
+        {
+            return $value;
+        }
+
+        public static function union(Left|Right|false $value = false): Left|Right|false
+        {
+            return $value;
+        }
+    }
+
+    final readonly class MappedValue
+    {
+        public function __construct(public string $value) {}
+    }
+
+    final class RequestMappingTargets
+    {
+        public static function array(#[MapRequest] array $input): array
+        {
+            return $input;
+        }
+
+        public static function payload(#[MapRequestPayload] array $input): array
+        {
+            return $input;
+        }
+
+        public static function callback(#[MapRequest(afterMap: MAPPING_CALLBACK)] array $input): array
+        {
+            return $input;
+        }
+
+        public static function suffix(#[MapRequest(afterMap: MAPPING_SUFFIX)] array $input): array
+        {
+            return $input;
+        }
+
+        public static function dto(#[MapRequest] MappedValue $input): MappedValue
+        {
+            return $input;
+        }
+
+        public static function dtoCallback(#[MapRequest(afterMap: MAPPING_CALLBACK)] MappedValue $input): MappedValue
+        {
+            return $input;
         }
     }
 
@@ -87,6 +179,25 @@ namespace Componenta\DI\Benchmarks\Runtime {
         ];
     }
 
+    /** @param array<string,array{callable,int}> $cases */
+    function reportCases(array $cases): void
+    {
+        $selection = getenv('DI_BENCH_CASES');
+        $selected = is_string($selection) && $selection !== '' ? explode(',', $selection) : [];
+        foreach ($cases as $name => [$operation, $caseIterations]) {
+            if ($selected !== [] && !in_array($name, $selected, true)) {
+                continue;
+            }
+            $result = benchmark($operation, $caseIterations);
+            printf(
+                "%-22s %10.1f ns %14.0f\n",
+                $name,
+                $result['nanoseconds'],
+                $result['operations'],
+            );
+        }
+    }
+
     $iterations = max(10_000, (int) ($_SERVER['DI_BENCH_ITERATIONS'] ?? 100_000));
     $buildIterations = max(100, (int) ($_SERVER['DI_BUILD_ITERATIONS'] ?? 2_000));
     $container = createContainer();
@@ -97,6 +208,10 @@ namespace Componenta\DI\Benchmarks\Runtime {
         'build/default' => [
             static fn(): object => createContainer(),
             $buildIterations,
+        ],
+        'get/shared' => [
+            static fn(): mixed => $container->get(Dependency::class),
+            $iterations,
         ],
         'make/no-arguments' => [
             static fn(): object => $container->make(NoArguments::class),
@@ -125,15 +240,89 @@ namespace Componenta\DI\Benchmarks\Runtime {
     printf("PHP %s, source %s\n", PHP_VERSION, $source);
     printf("%-22s %14s %14s\n", 'case', 'latency', 'operations/s');
     printf("%-22s %14s %14s\n", str_repeat('-', 22), str_repeat('-', 14), str_repeat('-', 14));
+    // Finish comparable cases before creating feature-only container graphs.
+    reportCases($cases);
 
-    foreach ($cases as $name => [$operation, $caseIterations]) {
-        $result = benchmark($operation, $caseIterations);
+    // Runtime constants keep this harness parseable on PHP 8.4. Native PHP 8.5
+    // expression identity and lifetime are established by separate contract tests.
+    if (class_exists(Transform::class)) {
+        $cases = [];
+        define(__NAMESPACE__ . '\\ZERO_CALLBACK', static fn(): int => 1);
+        define(__NAMESPACE__ . '\\VALUE_CALLBACK', static fn(int $value): int => $value + 1);
+        define(__NAMESPACE__ . '\\SUFFIX_CALLBACK', static fn(int $value, Dependency $dependency): int => $value + 1);
+        define(__NAMESPACE__ . '\\SETUP_CALLBACK', static function (CallbackSetupTarget $entry, Dependency $dependency): void {});
 
-        printf(
-            "%-22s %10.1f ns %14.0f\n",
-            $name,
-            $result['nanoseconds'],
-            $result['operations'],
-        );
+        foreach (['none', 'zeroArguments', 'one', 'three', 'suffix'] as $shape) {
+            $cases['transform/' . $shape] = [
+                static fn(): mixed => $container->call([TransformTargets::class, $shape], ['value' => 1]),
+                $iterations,
+            ];
+        }
+        $cases['setup/method'] = [static fn(): object => $container->make(MethodSetupTarget::class), $iterations];
+        $cases['setup/callback'] = [static fn(): object => $container->make(CallbackSetupTarget::class), $iterations];
+
+        $oneCandidate = createContainer();
+        $oneCandidate->set(Left::class, new LeftValue());
+        $twoCandidates = createContainer();
+        $twoCandidates->set(Left::class, new LeftValue());
+        $twoCandidates->set(Right::class, new RightValue());
+        $cases['union/zero'] = [
+            static fn(): mixed => $container->call([TransformTargets::class, 'union']),
+            $iterations,
+        ];
+        $cases['union/one'] = [
+            static fn(): mixed => $oneCandidate->call([TransformTargets::class, 'union']),
+            $iterations,
+        ];
+        $cases['union/two-rejected'] = [
+            static function () use ($twoCandidates): void {
+                try {
+                    $twoCandidates->call([TransformTargets::class, 'union']);
+                } catch (ResolutionException) {
+                    return;
+                }
+                throw new \RuntimeException('The ambiguous union must be rejected.');
+            },
+            $iterations,
+        ];
+        reportCases($cases);
+    }
+
+    if (class_exists(MapRequest::class)) {
+        $cases = [];
+        $hasCallback = property_exists(MapRequest::class, 'afterMap');
+        define(__NAMESPACE__ . '\\MAPPING_CALLBACK', static fn(array $data): array => $data);
+        define(__NAMESPACE__ . '\\MAPPING_SUFFIX', static fn(array $data, Dependency $dependency): array => $data);
+
+        // Request cases use the existing build-iteration setting. Each size is
+        // measured with the callback disabled and, where supported, enabled.
+        foreach ([1, 16, 256, 4096] as $size) {
+            $data = ['value' => 'mapped'];
+            for ($index = 1; $index < $size; ++$index) {
+                $data['field-' . $index] = $index;
+            }
+            $request = (new ServerRequest('POST', '/'))->withParsedBody($data);
+            $provided = [ServerRequestInterface::class => $request];
+            $cases['request/array-' . $size] = [
+                static fn(): mixed => $container->call([RequestMappingTargets::class, 'array'], $provided),
+                $buildIterations,
+            ];
+            if ($hasCallback) {
+                $cases['request/callback-' . $size] = [
+                    static fn(): mixed => $container->call([RequestMappingTargets::class, 'callback'], $provided),
+                    $buildIterations,
+                ];
+            }
+        }
+
+        $request = (new ServerRequest('POST', '/'))->withParsedBody(['value' => 'mapped']);
+        $provided = [ServerRequestInterface::class => $request];
+        foreach (['payload', 'dto', ...($hasCallback ? ['suffix', 'dtoCallback'] : [])] as $shape) {
+            $cases['request/' . $shape] = [
+                static fn(): mixed => $container->call([RequestMappingTargets::class, $shape], $provided),
+                $buildIterations,
+            ];
+        }
+        reportCases($cases);
     }
 }

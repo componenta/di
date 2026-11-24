@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver\Attribute\Handler;
 
+use Closure;
 use Componenta\Caster\CasterInterface;
 use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\DefaultValue;
 use Componenta\DI\Attribute\Cast;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\Resolver\Entry\ObjectCreationAccess;
+use Componenta\DI\Internal\Resolver\Entry\PropertyValueHandlerScope;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterContextAccess;
 use Componenta\DI\Resolver\Attribute\AttributeHandlerInterface;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
@@ -24,16 +28,18 @@ use Reflector;
 use Throwable;
 
 /** Handles #[Cast] on parameters and properties. */
-final class CastHandler implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
+final class CastHandler extends PropertyValueHandlerScope implements AttributeHandlerInterface, ParameterAttributeHandlerInterface
 {
     public function __construct(private readonly ContainerInterface $container) {}
 
+    /** @param (Closure():void)|null $beforeConsumption */
     public function resolveParameter(
         object $attribute,
         ParameterTarget $target,
         ParameterResolutionContext $context,
         AttributePlan $plan,
         ParameterAttributeValue $value,
+        ?Closure $beforeConsumption = null,
     ): ParameterAttributeValue {
         if (!$attribute instanceof Cast) {
             throw new LogicException('CastHandler received an unsupported parameter attribute.');
@@ -45,37 +51,48 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             } elseif ($target->variadic) {
                 $value = ParameterAttributeValue::resolved([]);
             } elseif ($target->hasDefault) {
-                $value = ParameterAttributeValue::resolved($target->reflection->getDefaultValue());
+                $value = ParameterAttributeValue::resolved($target->defaultValue);
             } elseif ($target->allowsNull) {
                 $value = ParameterAttributeValue::resolved(null);
             } else {
-                throw ResolutionException::forParameter(
+                throw ParameterContextAccess::failure(
+                    $context,
                     $target->reflection,
                     reason: sprintf('missing required value for #[Cast("%s")]', $attribute->name),
-                    providedParameters: $context->provided,
-                    resolvedParameters: $context->resolved,
                 );
             }
         }
 
         try {
+            $caster = $this->caster($attribute->name);
+            // Provider construction and lookup can reveal a source before the
+            // selected caster receives the already supplied parameter value.
+            $beforeConsumption?->__invoke();
             return ParameterAttributeValue::resolved(
-                $this->caster($attribute->name)->cast($value->value),
+                $caster->cast($value->value),
             );
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            throw ResolutionException::forParameter(
+            throw ParameterContextAccess::failure(
+                $context,
                 $target->reflection,
                 previous: $e,
-                providedParameters: $context->provided,
-                resolvedParameters: $context->resolved,
             );
         }
     }
 
     public function handle(object $attribute, Reflector $target, ObjectCreationContext $context): void
     {
+        $this->handleProperty($attribute, $target, $context, null);
+    }
+
+    protected function handleProperty(
+        object $attribute,
+        Reflector $target,
+        ObjectCreationContext $context,
+        ?Closure $readArgument,
+    ): void {
         if (!$attribute instanceof Cast || !$target instanceof ReflectionProperty) {
             throw new LogicException('CastHandler received an unsupported attribute target.');
         }
@@ -94,16 +111,23 @@ final class CastHandler implements AttributeHandlerInterface, ParameterAttribute
             }
 
             $name = $target->getName();
-            $hasValue = array_key_exists($name, $context->parameters);
-            if (!$hasValue && $attribute->default === DefaultValue::None) {
+            $propertyValue = $attribute->default;
+            $hasValue = $readArgument === null
+                ? ObjectCreationAccess::tryReadParameter($context, $name, $propertyValue)
+                : $readArgument($name, $propertyValue);
+            if (!$hasValue && $propertyValue === DefaultValue::None) {
                 throw ResolutionException::forProperty(
                     $target,
                     reason: sprintf('missing context key "%s"', $name),
                 );
             }
 
-            $propertyValue = $hasValue ? $context->parameters[$name] : $attribute->default;
-            $context->writeProperty($target, $this->caster($attribute->name)->cast($propertyValue));
+            $caster = $this->caster($attribute->name);
+            if ($hasValue) {
+                // Preparing the caster may reveal a source after the value was read.
+                ObjectCreationAccess::recheckParameters($context);
+            }
+            $context->writeProperty($target, $caster->cast($propertyValue));
         } catch (ContainerExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {

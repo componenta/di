@@ -9,7 +9,11 @@ use Componenta\Caster\CasterProviderInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Psr\Container\ContainerInterface;
 
-/** Mutable-container-aware caster provider bridge. @internal */
+/**
+ * Mutable-container-aware caster provider bridge.
+ *
+ * @internal
+ */
 final readonly class LazyCasterProvider implements CasterProviderInterface
 {
     public function __construct(private ContainerInterface $container) {}

@@ -6,7 +6,11 @@ namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
 use Psr\Http\Message\ServerRequestInterface;
 
-/** Internal PSR-7 request transport carried through the ordinary parameter array. @internal */
+/**
+ * Internal PSR-7 request transport carried through the ordinary parameter array.
+ *
+ * @internal
+ */
 final class RequestParameter
 {
     public const string KEY = ServerRequestInterface::class;
@@ -35,8 +39,8 @@ final class RequestParameter
      */
     public static function with(array $providedParameters, ServerRequestInterface $request): array
     {
-        $providedParameters[self::KEY] = $request;
-        return $providedParameters;
+        // Replace the slot itself instead of writing through a caller-owned reference.
+        return array_replace($providedParameters, [self::KEY => $request]);
     }
 
     private function __construct() {}

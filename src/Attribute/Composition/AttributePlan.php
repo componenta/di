@@ -4,17 +4,39 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Attribute\Composition;
 
+use Closure;
 use Componenta\DI\Exception\AttributeCompositionException;
-use Reflector;
+use Componenta\DI\Internal\ReflectionSnapshot;
+use Componenta\DI\Internal\ResolutionMetadata;
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionProperty;
 
 /** Validated, immutable semantic plan for all registered DI attributes on one target. */
-final readonly class AttributePlan
+final class AttributePlan
 {
-    /** @param list<AttributeUsage> $usages */
+    /** @var Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    private readonly Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $declaration;
+    /** @var list<AttributeUsage> */
+    public readonly array $usages;
+
+    /** @var ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty */
+    public ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target {
+        get => ReflectionSnapshot::target($this->declaration);
+    }
+
+    /**
+     * @param Closure|ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
+     * @param list<AttributeUsage> $usages
+     */
     public function __construct(
-        public Reflector $target,
-        public array $usages,
-    ) {}
+        Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target,
+        array $usages,
+    ) {
+        $this->declaration = ReflectionSnapshot::planDeclaration($target);
+        $this->usages = ResolutionMetadata::snapshot($usages);
+    }
 
     /**
      * @param class-string<AttributeCapabilityInterface> $capability
@@ -34,21 +56,34 @@ final readonly class AttributePlan
     /** @param class-string<AttributeCapabilityInterface> $capability */
     public function one(string $capability): ?AttributeUsage
     {
-        $usages = $this->all($capability);
-        if (count($usages) > 1) {
+        $first = null;
+        $count = 0;
+        foreach ($this->usages as $usage) {
+            if ($usage->hasCapability($capability)) {
+                $first ??= $usage;
+                ++$count;
+            }
+        }
+        if ($count > 1) {
             throw new AttributeCompositionException(sprintf(
                 'Capability "%s" is not singular in this plan.',
                 $capability,
             ));
         }
 
-        return $usages[0] ?? null;
+        return $first;
     }
 
     /** @param class-string<AttributeCapabilityInterface> $capability */
     public function has(string $capability): bool
     {
-        return $this->all($capability) !== [];
+        $found = false;
+        foreach ($this->usages as $usage) {
+            if ($usage->hasCapability($capability)) {
+                $found = true;
+            }
+        }
+        return $found;
     }
 
     /**

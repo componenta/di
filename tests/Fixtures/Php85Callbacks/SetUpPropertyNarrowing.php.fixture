@@ -1,0 +1,7 @@
+<?php
+require $argv[1];
+readonly class ExistingChild extends Componenta\DI\Attribute\SetUp
+{
+    public string $method;
+}
+echo "compiled\n";

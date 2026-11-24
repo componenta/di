@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Resolver;
 
+use Closure;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -59,6 +60,40 @@ final class TypeHints
         return array_keys($classes);
     }
 
+    /**
+     * Returns stable service candidates only for unions of named types.
+     * Intersections retain their separate explicit-value contract.
+     *
+     * @param ReflectionClass<object>|null $declaringClass
+     * @return list<class-string>
+     */
+    public static function simpleUnionClassNames(
+        ?ReflectionType $type,
+        ?ReflectionClass $declaringClass = null,
+    ): array {
+        if (!$type instanceof ReflectionUnionType) {
+            return [];
+        }
+
+        $candidates = [];
+        foreach ($type->getTypes() as $member) {
+            if (!$member instanceof ReflectionNamedType) {
+                return [];
+            }
+            $class = self::classOf($member, $declaringClass);
+            if ($class !== null) {
+                $candidates[] = $class;
+            }
+        }
+
+        sort($candidates, SORT_STRING);
+        $unique = [];
+        foreach ($candidates as $candidate) {
+            $unique[strtolower($candidate)] ??= $candidate;
+        }
+        return array_values($unique);
+    }
+
     /** @param ReflectionClass<object>|null $declaringClass */
     public static function matches(
         ?ReflectionType $type,
@@ -93,20 +128,30 @@ final class TypeHints
                 'string' => is_string($value),
                 'array' => is_array($value),
                 'object' => is_object($value),
-                'callable' => is_callable($value),
+                'callable' => self::matchesCallable($value, $declaringClass),
                 'iterable' => is_iterable($value),
                 default => false,
             };
         }
 
         if ($type instanceof ReflectionUnionType) {
+            $callableType = null;
             foreach ($type->getTypes() as $nested) {
+                // Native unions accept ordinary types before inspecting callable
+                // syntax, which can autoload application code unnecessarily.
+                if ($nested instanceof ReflectionNamedType
+                    && $nested->isBuiltin()
+                    && $nested->getName() === 'callable'
+                ) {
+                    $callableType = $nested;
+                    continue;
+                }
                 if (self::matches($nested, $value, $declaringClass)) {
                     return true;
                 }
             }
 
-            return false;
+            return $callableType !== null && self::matches($callableType, $value, $declaringClass);
         }
 
         if ($type instanceof ReflectionIntersectionType) {
@@ -120,6 +165,21 @@ final class TypeHints
         }
 
         return false;
+    }
+
+    /** @param ReflectionClass<object>|null $declaringClass */
+    private static function matchesCallable(mixed $value, ?ReflectionClass $declaringClass): bool
+    {
+        if ($value instanceof Closure) {
+            return true;
+        }
+
+        // PHP checks userland callable parameters in the receiving declaration's
+        // scope. Global and internal targets must not inherit TypeHints' access.
+        $scope = $declaringClass?->isUserDefined() === true ? $declaringClass->getName() : null;
+        $check = Closure::bind(static fn(mixed $callback): bool => is_callable($callback), null, $scope);
+
+        return $check !== null && $check($value);
     }
 
     /**

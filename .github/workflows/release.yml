@@ -17,12 +17,66 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - php: '8.4'
-            os: ubuntu-latest
           - php: '8.5'
             os: ubuntu-latest
-          - php: '8.4'
+          - php: '8.5'
             os: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Validate release tag
+        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.5'
+        shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: bash .github/scripts/release-tag.sh "$COMMIT_MESSAGE"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: fileinfo, mbstring, pdo_sqlite
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Audit dependencies
+        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.5'
+        run: composer audit --no-interaction
+
+      - name: Run checks
+        run: composer check
+
+  native-trait-callables:
+    if: startsWith(github.event.head_commit.message, 'Release v')
+    name: Native trait callables PHP 8.5.13
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build and check minimum verified native runtime
+        shell: bash
+        run: bash .github/scripts/check-native-trait-callables.sh
+
+  consumer-lowest:
+    if: startsWith(github.event.head_commit.message, 'Release v')
+    name: Lowest production dependencies PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.5'
+          - '8.6'
 
     steps:
       - name: Checkout
@@ -33,25 +87,34 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          extensions: fileinfo, mbstring
           tools: composer:v2
 
-      - name: Validate Composer metadata
-        run: composer validate --strict
-
-      - name: Install dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
-
-      - name: Audit dependencies
-        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.4'
-        run: composer audit --no-interaction
-
-      - name: Run checks
-        run: composer check
+      - name: Install and smoke test a production consumer
+        shell: bash
+        run: |
+          consumer_workspace="$(mktemp -d "$RUNNER_TEMP/di-consumer.XXXXXX")"
+          trap 'rm -rf "$consumer_workspace"' EXIT
+          mkdir "$consumer_workspace/package" "$consumer_workspace/consumer"
+          git archive HEAD | tar -x -C "$consumer_workspace/package"
+          cat > "$consumer_workspace/consumer/composer.json" <<'JSON'
+          {
+            "require": {"componenta/di": "*@dev"},
+            "repositories": [
+              {"type": "path", "url": "../package", "options": {"symlink": false}}
+            ],
+            "minimum-stability": "stable",
+            "prefer-stable": true
+          }
+          JSON
+          composer update --working-dir="$consumer_workspace/consumer" \
+            --prefer-lowest --prefer-stable --no-dev --no-interaction --no-progress --prefer-dist
+          cmp "$consumer_workspace/package/composer.json" "$consumer_workspace/consumer/vendor/componenta/di/composer.json"
+          diff -r "$consumer_workspace/package/src" "$consumer_workspace/consumer/vendor/componenta/di/src"
+          php tests/consumer-smoke.php "$consumer_workspace/consumer/vendor/autoload.php"
 
   coverage:
     if: startsWith(github.event.head_commit.message, 'Release v')
-    name: Coverage PHP 8.4
+    name: Coverage PHP 8.5
     runs-on: ubuntu-latest
 
     steps:
@@ -61,10 +124,10 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           coverage: pcov
-          extensions: fileinfo, mbstring
-          ini-values: memory_limit=1G
+          extensions: fileinfo, mbstring, pdo_sqlite
+          ini-values: memory_limit=2G
           tools: composer:v2
 
       - name: Validate Composer metadata
@@ -82,7 +145,7 @@ jobs:
       - name: Upload coverage artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-coverage-php-8.4
+          name: release-coverage-php-8.5
           path: coverage.xml
           if-no-files-found: error
 
@@ -90,6 +153,8 @@ jobs:
     if: startsWith(github.event.head_commit.message, 'Release v')
     needs:
       - verify
+      - native-trait-callables
+      - consumer-lowest
       - coverage
     runs-on: ubuntu-latest
     permissions:
@@ -104,22 +169,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-        run: |
-          set -euo pipefail
-          first_line="${COMMIT_MESSAGE%%$'\n'*}"
-          tag="${first_line#Release }"
-
-          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $tag" >&2
-            exit 1
-          fi
-
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists."
-            exit 0
-          fi
-
-          gh release create "$tag" \
-            --target "$GITHUB_SHA" \
-            --title "$tag" \
-            --generate-notes
+        run: bash .github/scripts/publish-release.sh

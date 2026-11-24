@@ -1,0 +1,229 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Tests\Object\ObjectLifecycleParity;
+
+use Componenta\DI\Attribute\Init;
+use Componenta\DI\Attribute\Inject;
+use Componenta\DI\Attribute\Make;
+use Componenta\DI\Attribute\Proxy;
+use Componenta\DI\Exception\CircularDependencyException;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use PHPUnit\Framework\Assert;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
+interface LifecycleProxyContract
+{
+    public function value(): string;
+}
+
+final readonly class LifecycleProxyService implements LifecycleProxyContract
+{
+    public function __construct(private string $value = 'proxied') {}
+
+    public function value(): string
+    {
+        return $this->value;
+    }
+}
+
+final readonly class LifecycleIncompatibleProxyService
+{
+    public function value(): string
+    {
+        return 'incompatible';
+    }
+}
+
+final readonly class LifecycleProxyConsumer
+{
+    public function __construct(
+        #[Proxy(LifecycleProxyService::class)]
+        public LifecycleProxyContract $service,
+    ) {}
+}
+
+final readonly class LifecycleServiceIdProxyConsumer
+{
+    public function __construct(
+        #[Make('lifecycle.proxy.service'), Proxy(LifecycleProxyService::class)]
+        public LifecycleProxyContract $service,
+    ) {}
+}
+
+final readonly class LifecycleAmbiguousProxyConsumer
+{
+    public function __construct(
+        #[Proxy]
+        public LifecycleProxyContract $service,
+    ) {}
+}
+
+final readonly class LifecycleIncompatibleProxyConsumer
+{
+    public function __construct(
+        #[Proxy(LifecycleIncompatibleProxyService::class)]
+        public LifecycleProxyContract $service,
+    ) {}
+}
+
+final readonly class LifecycleWrongBackingProxyConsumer
+{
+    public function __construct(
+        #[Make('lifecycle.wrong.proxy.service'), Proxy(LifecycleProxyService::class)]
+        public LifecycleProxyContract $service,
+    ) {}
+}
+
+final class LifecycleMakeCycleA
+{
+    public function __construct(
+        #[Make]
+        public LifecycleMakeCycleB $dependency,
+    ) {}
+}
+
+final class LifecycleMakeCycleB
+{
+    public function __construct(
+        #[Make]
+        public LifecycleMakeCycleA $dependency,
+    ) {}
+}
+
+final class LifecyclePromotedInitTarget
+{
+    public function __construct(
+        #[Init('strtoupper', ['initialized'])]
+        public string $value = 'constructor',
+    ) {}
+}
+
+final readonly class LifecycleReadonlyPromotedInitTarget
+{
+    public function __construct(
+        #[Init('strtoupper', ['ignored'])]
+        public string $value = 'constructor',
+    ) {}
+}
+
+final class LifecycleInjectedDependency {}
+
+abstract class LifecyclePrivateInjectedParent
+{
+    #[Inject]
+    private LifecycleInjectedDependency $dependency;
+
+    public function __construct()
+    {
+        $this->dependency = new LifecycleInjectedDependency();
+    }
+
+    public function dependency(): LifecycleInjectedDependency
+    {
+        return $this->dependency;
+    }
+}
+
+final class LifecyclePrivateInjectedChild extends LifecyclePrivateInjectedParent {}
+
+test('Proxy keeps explicit concrete implementation for interface targets', function (): void {
+    $backingCreations = 0;
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            LifecycleProxyContract::class,
+            static function () use (&$backingCreations): LifecycleProxyContract {
+                ++$backingCreations;
+                return new LifecycleProxyService();
+            },
+        )
+        ->build();
+    $consumer = $container->make(LifecycleProxyConsumer::class);
+    Assert::assertInstanceOf(LifecycleProxyConsumer::class, $consumer);
+
+    expect($consumer->service)->toBeInstanceOf(LifecycleProxyService::class)
+        ->and($backingCreations)->toBe(0)
+        ->and($consumer->service->value())->toBe('proxied')
+        ->and($backingCreations)->toBe(1);
+});
+
+test('Make service id and Proxy concrete class remain independent', function (): void {
+    $backingCreations = 0;
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            'lifecycle.proxy.service',
+            static function () use (&$backingCreations): LifecycleProxyContract {
+                ++$backingCreations;
+                return new LifecycleProxyService('service-id');
+            },
+        )
+        ->build();
+
+    $consumer = fixtureInstance($container->make(LifecycleServiceIdProxyConsumer::class), LifecycleServiceIdProxyConsumer::class);
+    expect($consumer->service)->toBeInstanceOf(LifecycleProxyService::class)
+        ->and($backingCreations)->toBe(0)
+        ->and($consumer->service->value())->toBe('service-id')
+        ->and($backingCreations)->toBe(1);
+});
+
+test('Proxy rejects an interface target without a concrete proxy class', function (): void {
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            LifecycleProxyContract::class,
+            static fn(): LifecycleProxyContract => new LifecycleProxyService(),
+        )
+        ->build();
+
+    expect(fn() => $container->make(LifecycleAmbiguousProxyConsumer::class))
+        ->toThrow(ResolutionException::class, 'specify #[Proxy(ConcreteClass::class)]');
+});
+
+test('Proxy rejects a concrete class incompatible with the declared type', function (): void {
+    expect(fn() => (new ContainerBuilder())->build()->make(LifecycleIncompatibleProxyConsumer::class))
+        ->toThrow(ResolutionException::class, 'is incompatible with declared type');
+});
+
+test('Proxy normalizes a deferred backing type mismatch to ResolutionException', function (): void {
+    $container = (new ContainerBuilder())
+        ->addFactory(
+            'lifecycle.wrong.proxy.service',
+            static fn(): object => new \stdClass(),
+        )
+        ->build();
+    $consumer = $container->make(LifecycleWrongBackingProxyConsumer::class);
+    Assert::assertInstanceOf(LifecycleWrongBackingProxyConsumer::class, $consumer);
+
+    expect(fn() => $consumer->service->value())
+        ->toThrow(ResolutionException::class, 'must be an instance of');
+});
+
+test('Make detects cycles created by Make attributes', function (): void {
+    expect(fn() => (new ContainerBuilder())->build()->make(LifecycleMakeCycleA::class))
+        ->toThrow(CircularDependencyException::class);
+});
+
+test('Init overwrites a mutable promoted property after construction', function (): void {
+    $entry = (new ContainerBuilder())->build()->make(LifecyclePromotedInitTarget::class);
+    Assert::assertInstanceOf(LifecyclePromotedInitTarget::class, $entry);
+
+    expect($entry->value)->toBe('INITIALIZED');
+});
+
+test('Init leaves an initialized readonly promoted property unchanged', function (): void {
+    $entry = (new ContainerBuilder())->build()->make(LifecycleReadonlyPromotedInitTarget::class);
+    Assert::assertInstanceOf(LifecycleReadonlyPromotedInitTarget::class, $entry);
+
+    expect($entry->value)->toBe('constructor');
+});
+
+test('Attribute processing includes private properties declared by ancestors', function (): void {
+    $dependency = new LifecycleInjectedDependency();
+    $container = (new ContainerBuilder())
+        ->addService(LifecycleInjectedDependency::class, $dependency)
+        ->build();
+
+    expect(fixtureInstance($container->make(LifecyclePrivateInjectedChild::class), LifecyclePrivateInjectedChild::class)->dependency())->toBe($dependency);
+});

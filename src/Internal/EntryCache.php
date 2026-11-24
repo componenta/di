@@ -26,12 +26,23 @@ final class EntryCache
     /** @var array<string, int> */
     private array $resolvedRevisions = [];
 
+    public bool $hasResolvedEntries {
+        get => $this->resolved !== [];
+    }
+
     /** @param array<string, mixed> $base */
     public function __construct(array $base = [])
     {
-        $this->base = $base;
+        if (class_exists(RuntimeCollaboratorOwnership::class, false)) {
+            RuntimeCollaboratorOwnership::assertWritable($this, null);
+        }
+        // Own the entry slots; caller references must not bypass invalidation.
+        foreach ($base as $id => $value) {
+            $this->base[$id] = $value;
+        }
     }
 
+    /** @phpstan-impure */
     public function tryGetBase(string $id, mixed &$value): bool
     {
         if (isset($this->base[$id])) {
@@ -47,7 +58,41 @@ final class EntryCache
         return true;
     }
 
-    public function putBase(string $id, mixed $value): void
+    public function hasBase(string $id): bool
+    {
+        return array_key_exists($id, $this->base);
+    }
+
+    public function hasSameScalarBase(string $id, bool|int|float|string|null $value): bool
+    {
+        if (!array_key_exists($id, $this->base)) {
+            return false;
+        }
+
+        $previous = $this->base[$id];
+        if (is_float($value)) {
+            // Signed zero has observable behavior despite PHP strict equality.
+            return is_float($previous) && pack('d', $previous) === pack('d', $value);
+        }
+        return ($previous === null || is_scalar($previous)) && $previous === $value;
+    }
+
+    public function putBase(string $id, mixed $value, ?object $authority = null): void
+    {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $this->storeBase($id, $value);
+    }
+
+    public function replaceBase(string $id, mixed $value, MutationRetirement $retirement, ?object $authority = null): void
+    {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        if (array_key_exists($id, $this->base)) {
+            $retirement->retain($this->base[$id]);
+        }
+        $this->storeBase($id, $value);
+    }
+
+    private function storeBase(string $id, mixed $value): void
     {
         $this->base[$id] = $value;
         $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
@@ -63,8 +108,12 @@ final class EntryCache
         return $this->resolvedRevisions[$id] ?? 0;
     }
 
-    public function removeBase(string $id): void
+    public function removeBase(string $id, MutationRetirement $retirement, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        if (array_key_exists($id, $this->base)) {
+            $retirement->retain($this->base[$id]);
+        }
         unset($this->base[$id]);
         $this->baseRevisions[$id] = $this->baseRevision($id) + 1;
     }
@@ -84,8 +133,9 @@ final class EntryCache
         return true;
     }
 
-    public function putResolved(string $requestedId, string $canonicalId, mixed $value): void
+    public function putResolved(string $requestedId, string $canonicalId, mixed $value, ?object $authority = null): void
     {
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
         $this->resolved[$requestedId] = $value;
 
         if ($canonicalId !== $requestedId) {
@@ -93,36 +143,41 @@ final class EntryCache
         }
     }
 
-    public function invalidate(string $requestedId, ?string $canonicalId = null): void
+    public function invalidate(string $requestedId, ?string $canonicalId, MutationRetirement $retirement, ?object $authority = null): void
     {
-        $this->invalidateResolved($requestedId);
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $this->invalidateResolved($requestedId, $retirement);
 
         $canonical = $canonicalId ?? $requestedId;
 
         if ($canonical !== $requestedId) {
-            $this->invalidateResolved($canonical);
+            $this->invalidateResolved($canonical, $retirement);
         }
 
         if (isset($this->reverseIndex[$canonical])) {
             foreach ($this->reverseIndex[$canonical] as $sibling => $_) {
-                $this->invalidateResolved((string) $sibling);
+                $this->invalidateResolved((string) $sibling, $retirement);
             }
             unset($this->reverseIndex[$canonical]);
         }
     }
 
     /** Invalidates one requested pipeline without changing its shared source. */
-    public function invalidateRequested(string $requestedId, string $canonicalId): void
+    public function invalidateRequested(string $requestedId, string $canonicalId, MutationRetirement $retirement, ?object $authority = null): void
     {
-        $this->invalidateResolved($requestedId);
+        RuntimeCollaboratorOwnership::assertWritable($this, $authority);
+        $this->invalidateResolved($requestedId, $retirement);
         unset($this->reverseIndex[$canonicalId][$requestedId]);
         if (($this->reverseIndex[$canonicalId] ?? []) === []) {
             unset($this->reverseIndex[$canonicalId]);
         }
     }
 
-    private function invalidateResolved(string $id): void
+    private function invalidateResolved(string $id, MutationRetirement $retirement): void
     {
+        if (array_key_exists($id, $this->resolved)) {
+            $retirement->retain($this->resolved[$id]);
+        }
         unset($this->resolved[$id]);
         $this->resolvedRevisions[$id] = $this->resolvedRevision($id) + 1;
     }

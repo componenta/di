@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Componenta\DI\Attribute;
 
 use Attribute;
+use Closure;
+use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Resolver\Parameter\Request\CallbackMapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use InvalidArgumentException;
@@ -12,7 +15,7 @@ use Psr\Http\Message\ServerRequestInterface;
 
 /** Maps one or more PSR-7 request sources into an array or class-typed DTO. */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-final class MapRequest extends RequestMapper implements RequestDataExtractorInterface
+final class MapRequest extends RequestMapper implements RequestDataExtractorInterface, CallbackMapperInterface
 {
     /** Wildcard for selecting all request attributes or uploaded files. */
     public const string ALL = '*';
@@ -44,16 +47,17 @@ final class MapRequest extends RequestMapper implements RequestDataExtractorInte
         array $sortMap = [],
         array $attributes = [],
         array $files = [],
+        public readonly ?Closure $afterMap = null,
     ) {
         parent::__construct($map, $conflictPolicy);
 
-        $this->sources = array_values($sources);
-        $this->exclude = array_values($exclude);
-        $this->defaults = $defaults;
-        $this->cast = $cast;
-        $this->sortMap = $sortMap;
-        $this->attributes = array_values($attributes);
-        $this->files = array_values($files);
+        $this->sources = array_values(ResolutionMetadata::invocationSlots($sources));
+        $this->exclude = array_values(ResolutionMetadata::invocationSlots($exclude));
+        $this->defaults = ResolutionMetadata::snapshot($defaults);
+        $this->cast = ResolutionMetadata::invocationSlots($cast);
+        $this->sortMap = ResolutionMetadata::snapshot($sortMap);
+        $this->attributes = array_values(ResolutionMetadata::invocationSlots($attributes));
+        $this->files = array_values(ResolutionMetadata::invocationSlots($files));
     }
 
     /** @return array<string|int,mixed> */

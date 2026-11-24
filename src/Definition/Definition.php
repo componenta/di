@@ -10,9 +10,16 @@ final class Definition
     /**
      * Factory callables may declare any 0/1/2-argument prefix compatible with
      * the runtime `(ContainerValue, array)` invocation ABI.
+     *
+     * @param callable $factory
      */
-    public static function factory(callable $factory): FactoryDefinition
+    public static function factory(callable|array $factory): FactoryDefinition
     {
+        // Autoloading the descriptor may change caller-owned references.
+        if (is_array($factory) && !class_exists(FactoryDefinition::class, false)) {
+            $factory = array_map(static fn(mixed $slot): mixed => $slot, $factory);
+        }
+
         return new FactoryDefinition($factory);
     }
 

@@ -20,24 +20,34 @@ use Componenta\DI\LazyObjectFactoryInterface;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
+use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\VirtualProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
 
 /**
- * Internal ids owned by the v5 composition root.
+ * Reserved ids owned by the composition root.
  *
  * @internal
  */
 final class ProtectedServiceIds
 {
+    private const array AUTOWIRING_EXCLUDED = [
+        DependencyDefinitions::class => false,
+        RequestAttributeHandler::class => false,
+        AttributeDefinitionRegistry::class => false,
+        AttributePlanBuilder::class => false,
+        AttributeProcessor::class => false,
+        ParametersResolver::class => false,
+        ObjectPipeline::class => false,
+    ];
+
     /** @var array<string,class-string|false> */
     private const array IDS = [
         ConfigAttribute::KEY => false,
         Config::class => Config::class,
         Environment::class => Environment::class,
         ContainerValue::class => ContainerValue::class,
-        DependencyDefinitions::class => false,
         Container::class => false,
         ContainerInterface::class => false,
         FactoryInterface::class => false,
@@ -47,12 +57,14 @@ final class ProtectedServiceIds
         ProxyFactoryInterface::class => false,
         LazyObjectFactoryInterface::class => false,
         VirtualProxyFactoryInterface::class => false,
-        AttributeDefinitionRegistry::class => AttributeDefinitionRegistry::class,
-        AttributePlanBuilder::class => AttributePlanBuilder::class,
-        AttributeProcessor::class => AttributeProcessor::class,
-        ParametersResolver::class => ParametersResolver::class,
-        ObjectPipeline::class => ObjectPipeline::class,
+        ...self::AUTOWIRING_EXCLUDED,
     ];
+
+    /** @return list<class-string> */
+    public static function autowiringExcluded(): array
+    {
+        return array_keys(self::AUTOWIRING_EXCLUDED);
+    }
 
     public static function contains(string $id): bool
     {

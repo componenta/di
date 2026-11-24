@@ -5,4 +5,6 @@ parameters:
         - tests
     bootstrapFiles:
         - tests/bootstrap.php
+    additionalConstructors:
+        - Componenta\DI\Internal\ContainerEntryOperations::assemble
     treatPhpDocTypesAsCertain: false

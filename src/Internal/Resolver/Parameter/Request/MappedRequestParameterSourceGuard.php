@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
+use Closure;
 use Componenta\DI\Exception\RequestParameterSourceConflictException;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterTargetAccess;
 use Componenta\DI\Resolver\Parameter\ParameterSourceAttributeInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use Componenta\DI\Resolver\TypeHints;
+use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionFunctionAbstract;
 use ReflectionParameter;
 
-/** Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources. @internal */
+use function Componenta\DI\Internal\is_attribute_class_loaded;
+
+/**
+ * Guards mapped HTTP DTO data from shadowing explicitly declared parameter sources.
+ *
+ * @internal
+ */
 final class MappedRequestParameterSourceGuard
 {
     /** @var array<class-string,list<array{parameter:string,source:class-string,keys:list<string>}>> */
@@ -37,11 +47,9 @@ final class MappedRequestParameterSourceGuard
 
     /**
      * @param class-string $class
-     * @param array<string|int,mixed> $context
      */
-    public static function assertClassContextNoConflicts(string $class, array $context): void
+    public static function assertClassNoConflicts(string $class, ?MappedRequestContext $provenance): void
     {
-        $provenance = MappedRequestContext::get($context);
         if ($provenance === null) {
             return;
         }
@@ -55,44 +63,147 @@ final class MappedRequestParameterSourceGuard
     }
 
     /**
+     * Selects potential sources without retrying autoloaders. An optional
+     * provenance snapshot narrows checks to keys fixed for one invocation.
+     * Loaded non-source classes cannot change their ancestry. Keep unresolved
+     * declarations whenever their keys can conflict, even if loaded later.
+     *
+     * @internal
      * @param iterable<ParameterTarget> $targets
-     * @param array<string|int,mixed> $context
+     * @return list<ParameterTarget>
      */
-    public static function assertTargetsContextNoConflicts(iterable $targets, array $context): void
+    public static function potentialSourceTargets(iterable $targets, ?MappedRequestContext $provenance = null): array
     {
-        $provenance = MappedRequestContext::get($context);
+        $potential = [];
+        foreach ($targets as $target) {
+            if ($provenance !== null) {
+                $matches = $provenance->contains($target->name);
+                foreach ($target->typeNames as $typeName) {
+                    $matches = $matches || $provenance->contains($typeName);
+                }
+                if (!$matches) {
+                    continue;
+                }
+            }
+            if (self::hasLiveAttributeMetadata($target)) {
+                $potential[] = $target;
+                continue;
+            }
+            $complete = true;
+            $source = self::declaredTargetSource($target, $complete, autoload: false);
+            if ($source !== null || !$complete) {
+                $potential[] = $target;
+            }
+        }
+        return $potential;
+    }
+
+    /**
+     * @internal
+     * @param iterable<ParameterTarget> $targets
+     * @param class-string|null $diagnosticOwner
+     */
+    public static function assertTargetsProvenanceNoConflicts(
+        iterable $targets,
+        ?MappedRequestContext $provenance,
+        ?string $diagnosticOwner = null,
+        bool $autoload = true,
+    ): void {
         if ($provenance === null) {
             return;
         }
-        foreach ($targets as $target) {
-            self::assertTargetProvenanceNoConflicts($target, $provenance);
-        }
-    }
-
-    public static function assertTargetProvenanceNoConflicts(
-        ParameterTarget $target,
-        MappedRequestContext $provenance,
-    ): void {
-        $binding = self::targetBinding($target);
-        if ($binding === null) {
-            return;
-        }
-        $declaringClass = $target->reflection->getDeclaringClass();
-        if ($declaringClass === null) {
-            return;
-        }
-        /** @var class-string $class */
-        $class = $declaringClass->getName();
-        foreach ($binding['keys'] as $key) {
-            if ($provenance->contains($key)) {
-                self::throwConflict($class, $binding, $key);
+        foreach ($autoload ? [true, false] : [false] as $discover) {
+            $pending = [];
+            foreach ($targets as $target) {
+                $complete = true;
+                $binding = self::targetBinding($target, $complete, $discover);
+                if (!$complete) {
+                    $pending[] = $target;
+                }
+                if ($binding === null) {
+                    continue;
+                }
+                foreach ($binding['keys'] as $key) {
+                    if ($provenance->contains($key)) {
+                        // Diagnostic metadata may execute custom reflector code.
+                        // Do not run it for a target with no conflicting key.
+                        $class = $diagnosticOwner ?? ParameterTargetAccess::declaration($target)->metadataDeclaringClassName;
+                        if ($class === null) {
+                            break;
+                        }
+                        self::throwConflict($class, $binding, $key);
+                    }
+                }
             }
+            // Later discovery may reveal an earlier skipped source. Only keep
+            // incomplete targets, and never rewind a caller's iterable or retry loaders.
+            $targets = $pending;
         }
     }
 
     public static function supportsTarget(ParameterTarget $target): bool
     {
-        return self::targetBinding($target) !== null;
+        $complete = true;
+        return self::targetBinding($target, $complete, true) !== null
+            || (!$complete && self::targetBinding($target, $complete, false) !== null);
+    }
+
+    /**
+     * Retains only unresolved declarations whose parameter keys were mapped.
+     *
+     * @param class-string $owner
+     * @param array<int,array<int,ReflectionAttribute<object>>>|null $selectedDeclarations
+     * @return (Closure():void)|null
+     */
+    public static function watchInvocation(
+        ReflectionFunctionAbstract $callable,
+        MappedRequestContext $provenance,
+        string $owner,
+        bool $skipFirst = false,
+        ?array $selectedDeclarations = null,
+    ): ?Closure {
+        $checks = [];
+        foreach ($callable->getParameters() as $parameter) {
+            $position = $parameter->getPosition();
+            if ($skipFirst && $position === 0) {
+                continue;
+            }
+            $attributes = $selectedDeclarations === null ? $parameter->getAttributes() : ($selectedDeclarations[$position] ?? []);
+            if ($attributes === []) {
+                continue;
+            }
+            $name = $parameter->getName();
+            $keys = self::bindingKeys($name, TypeHints::classNames($parameter->getType(), $parameter->getDeclaringClass()));
+            $key = array_find($keys, $provenance->contains(...));
+            if ($key === null) {
+                continue;
+            }
+
+            $pending = [];
+            foreach ($attributes as $attribute) {
+                $attributeClass = $attribute->getName();
+                if (!is_attribute_class_loaded($attributeClass)) {
+                    $pending[] = $attributeClass;
+                }
+            }
+            if ($pending !== []) {
+                $checks[] = [$name, $key, $pending];
+            }
+        }
+        if ($checks === []) {
+            return null;
+        }
+
+        // The completion check must let callback captures and reflectors retire.
+        return static function () use ($checks, $owner): void {
+            foreach ($checks as [$name, $key, $pending]) {
+                foreach ($pending as $attribute) {
+                    if (is_attribute_class_loaded($attribute) && is_a($attribute, ParameterSourceAttributeInterface::class, true)) {
+                        throw new RequestParameterSourceConflictException($owner, $key, $attribute, $name);
+                    }
+                }
+            }
+        };
     }
 
     /**
@@ -140,9 +251,9 @@ final class MappedRequestParameterSourceGuard
     }
 
     /** @return array{parameter:string,source:class-string,keys:list<string>}|null */
-    private static function targetBinding(ParameterTarget $target): ?array
+    private static function targetBinding(ParameterTarget $target, bool &$complete, bool $autoload): ?array
     {
-        $source = self::declaredTargetSource($target);
+        $source = self::declaredTargetSource($target, $complete, $autoload);
         return $source === null ? null : self::binding($target->name, $source, $target->typeNames);
     }
 
@@ -153,6 +264,19 @@ final class MappedRequestParameterSourceGuard
      */
     private static function binding(string $parameter, string $source, array $typeNames): array
     {
+        return [
+            'parameter' => $parameter,
+            'source' => $source,
+            'keys' => self::bindingKeys($parameter, $typeNames),
+        ];
+    }
+
+    /**
+     * @param list<class-string> $typeNames
+     * @return list<string>
+     */
+    private static function bindingKeys(string $parameter, array $typeNames): array
+    {
         /** @var list<string> $keys */
         $keys = [$parameter];
         foreach ($typeNames as $typeName) {
@@ -161,11 +285,7 @@ final class MappedRequestParameterSourceGuard
             }
         }
 
-        return [
-            'parameter' => $parameter,
-            'source' => $source,
-            'keys' => $keys,
-        ];
+        return $keys;
     }
 
     /** @return class-string|null */
@@ -186,14 +306,30 @@ final class MappedRequestParameterSourceGuard
     }
 
     /** @return class-string|null */
-    private static function declaredTargetSource(ParameterTarget $target): ?string
+    private static function declaredTargetSource(ParameterTarget $target, bool &$complete, bool $autoload): ?string
     {
+        if (self::hasLiveAttributeMetadata($target)) {
+            $target = ParameterTargetAccess::forResolution($target);
+        }
         foreach ($target->attributeClasses as $attributeClass) {
+            if (!$autoload && !is_attribute_class_loaded($attributeClass)) {
+                $complete = false;
+                continue;
+            }
             if (is_a($attributeClass, ParameterSourceAttributeInterface::class, true)) {
                 return $attributeClass;
             }
+            if (!is_attribute_class_loaded($attributeClass)) {
+                $complete = false;
+            }
         }
         return null;
+    }
+
+    private static function hasLiveAttributeMetadata(ParameterTarget $target): bool
+    {
+        $declaration = ParameterTargetAccess::declaration($target);
+        return $declaration->borrowedMetadata !== null && $declaration->resolutionAttributes === null;
     }
 
     /**

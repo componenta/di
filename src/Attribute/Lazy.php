@@ -17,14 +17,27 @@ use Attribute;
  *
  * ## Compatibility
  *
- * - **Autowired services** (resolved by reflection): fully supported.
+ * - **Autowired services** (resolved by reflection): supported for targets
+ *   eligible for the selected lazy factory.
  *   The constructor is invoked on the lazy instance using arguments resolved
- *   by the configured parameter-resolver pipeline.
+ *   by the configured parameter-resolver pipeline, unless {@see NoConstructor}
+ *   suppresses it. Property injection and setup still run during initialization.
  * - **Factory-bound services** (resolved by an application factory):
  *   not supported. Ghost mode requires constructor visibility, which
- *   opaque factories do not provide. Use {@see Proxy} instead, or
+ *   opaque factories do not provide. Use explicit proxy injection with
+ *   {@see Proxy} instead, or
  *   implement {@see \Componenta\DI\LazyServiceFactoryInterface} on the
  *   factory to take direct control of laziness.
+ *
+ * The default {@see \Componenta\DI\ProxyFactory} requires a non-static
+ * backed instance property, including inherited private properties. An
+ * otherwise native-eligible class with no properties, only static properties
+ * or only virtual hooks is rejected before allocation with
+ * {@see \Componenta\DI\Exception\ResolutionException}. Other native failures
+ * retain their existing exception route. Remove this attribute for ordinary
+ * eager reflection creation, or use an explicit factory / ClassDefinition
+ * with its own initialization contract. Custom factory implementations keep
+ * their supported mechanisms and the deferred-callback contract.
  *
  * Reference: {@see \ReflectionClass::newLazyGhost()} on PHP 8.4+.
  */

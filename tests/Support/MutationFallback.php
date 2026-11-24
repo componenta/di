@@ -8,6 +8,8 @@ use Pest\Mutate\Event\Events\Test\Outcome\Uncovered;
 use Pest\Mutate\Event\Events\Test\Outcome\UncoveredSubscriber;
 use Pest\Mutate\MutationTest;
 use Pest\Mutate\Support\MutationTestResult;
+use Symfony\Component\Filesystem\Path;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
@@ -21,16 +23,21 @@ final class MutationFallback implements UncoveredSubscriber
         private readonly string $directory,
         private readonly float $timeout = 120.0,
         private readonly ?string $reportDirectory = null,
+        private readonly ?string $controlSource = null,
     ) {}
 
     public function verifyControl(): void
     {
         $process = new Process($this->command, $this->directory, [
-            'PEST_MUTATION_TESTING' => false,
-            'PEST_MUTATION_FILE' => false,
+            'PEST_MUTATION_TESTING' => $this->controlSource ?? false,
+            'PEST_MUTATION_FILE' => $this->controlSource ?? false,
             'XDEBUG_MODE' => 'off',
         ], timeout: $this->timeout);
-        $process->run();
+        try {
+            $process->run();
+        } catch (ProcessSignaledException $error) {
+            $this->abortSignaledWorker($error);
+        }
         $this->report('control', $process);
         if (!$process->isSuccessful()) {
             throw new \RuntimeException('Unmodified mutation worker failed: ' . $process->getOutput() . $process->getErrorOutput());
@@ -48,8 +55,26 @@ final class MutationFallback implements UncoveredSubscriber
                     $process->start();
                     $running[] = [$test, $process];
                 }
-                foreach ($running as [$test, $process]) {
-                    $this->primed[$test->getId()] = $this->finish($test, $process);
+                while ($running !== []) {
+                    foreach ($running as $index => [$test, $process]) {
+                        try {
+                            // Polling drains both output pipes without waiting for
+                            // one worker while another is blocked on a full pipe.
+                            if ($process->isRunning()) {
+                                $process->checkTimeout();
+                                continue;
+                            }
+                            $result = $this->finish($test, $process);
+                        } catch (ProcessTimedOutException) {
+                            $result = MutationTestResult::Timeout;
+                            $this->report($test->getId(), $process);
+                        }
+                        $this->primed[$test->getId()] = $result;
+                        unset($running[$index]);
+                    }
+                    if ($running !== []) {
+                        usleep(1000);
+                    }
                 }
             } finally {
                 foreach ($running as [$_test, $process]) {
@@ -89,12 +114,29 @@ final class MutationFallback implements UncoveredSubscriber
             $result = $process->isSuccessful() ? MutationTestResult::Untested : MutationTestResult::Tested;
         } catch (ProcessTimedOutException) {
             $result = MutationTestResult::Timeout;
+        } catch (ProcessSignaledException $error) {
+            $this->abortSignaledWorker($error, $test);
         }
         $this->report($test->getId(), $process);
         return $result;
     }
 
-    private function report(string $name, Process $process): void
+    private function abortSignaledWorker(ProcessSignaledException $error, ?MutationTest $test = null): never
+    {
+        $id = $test?->getId() ?? 'control';
+        $worker = 'Unmodified mutation worker';
+        if ($test !== null) {
+            $file = $test->mutation->file;
+            $root = realpath($this->directory) ?: $this->directory;
+            $source = Path::makeRelative($file->getRealPath() ?: $file->getPathname(), $root);
+            $worker = sprintf('Mutation worker %s (%s:%d)', $id, $source, $test->mutation->startLine);
+        }
+        $message = sprintf('%s terminated by signal %d.', $worker, $error->getSignal());
+        $this->report($id, $error->getProcess(), $message . PHP_EOL);
+        throw new \RuntimeException($message, previous: $error);
+    }
+
+    private function report(string $name, Process $process, string $details = ''): void
     {
         if ($this->reportDirectory === null) {
             return;
@@ -102,7 +144,7 @@ final class MutationFallback implements UncoveredSubscriber
         if (!is_dir($this->reportDirectory) && !mkdir($this->reportDirectory, recursive: true) && !is_dir($this->reportDirectory)) {
             throw new \RuntimeException('Cannot create mutation worker report directory.');
         }
-        $output = 'exit=' . $process->getExitCode() . PHP_EOL . $process->getOutput() . $process->getErrorOutput();
+        $output = 'exit=' . $process->getExitCode() . PHP_EOL . $details . $process->getOutput() . $process->getErrorOutput();
         if (file_put_contents($this->reportDirectory . '/' . $name . '.log', $output) === false) {
             throw new \RuntimeException('Cannot save mutation worker report.');
         }

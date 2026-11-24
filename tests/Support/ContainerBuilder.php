@@ -13,6 +13,7 @@ use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\ResolutionRuntime;
 
 /**
  * Test data builder. Production tests still cross the public ContainerFactory
@@ -55,6 +56,12 @@ final class ContainerBuilder
         return $value->container;
     }
 
+    /** @return array{Container, ResolutionRuntime} */
+    public function assemble(?ResolutionRuntime $runtime = null): array
+    {
+        return assembledContainer($this->sections, $this->config, runtime: $runtime);
+    }
+
     public function addFactory(string $id, mixed $factory): self
     {
         $factories = $this->section(ConfigKey::FACTORIES);
@@ -82,7 +89,11 @@ final class ContainerBuilder
     public function addInvokable(string $classOrAlias, ?string $class = null): self
     {
         $invokables = $this->section(ConfigKey::INVOKABLES);
-        $invokables[$class === null ? count($invokables) : $classOrAlias] = $class ?? $classOrAlias;
+        if ($class === null) {
+            $invokables[] = $classOrAlias;
+        } else {
+            $invokables[$classOrAlias] = $class;
+        }
         $this->sections[ConfigKey::INVOKABLES] = $invokables;
 
         return $this;

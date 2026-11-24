@@ -8,18 +8,23 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 
-/** Explicit input and collection validation for one variadic parameter. @internal */
+/**
+ * Explicit input and collection validation for one variadic parameter.
+ *
+ * @internal
+ */
 final class VariadicArguments
 {
     /** @return array{0:int,1:mixed}|null */
     public static function provided(ParameterTarget $target, ParameterResolutionContext $context): ?array
     {
-        if (array_key_exists($target->name, $context->provided)) {
-            return [$target->position, $context->provided[$target->name]];
+        $provided = ParameterContextAccess::provided($context);
+        if (array_key_exists($target->name, $provided)) {
+            return [$target->position, $provided[$target->name]];
         }
 
         $values = [];
-        foreach ($context->provided as $position => $value) {
+        foreach ($provided as $position => $value) {
             if (is_int($position) && $position >= $target->position) {
                 $values[$position] = $value;
             }
@@ -34,9 +39,21 @@ final class VariadicArguments
         if (!is_array($value)) {
             throw self::failure($target, $context, 'variadic value must be an array of arguments');
         }
+        if ($value === []) {
+            return $value;
+        }
+
+        // Native by-value calls select every argument before type checks can autoload.
+        // Detach only the argument slots, preserving nested references and array state.
+        $selected = [];
+        foreach ($value as $key => $item) {
+            $selected[$key] = $item;
+        }
+        $value = array_replace($value, $selected);
+        unset($selected, $item);
 
         $fixedNames = [];
-        foreach ($target->reflection->getDeclaringFunction()->getParameters() as $parameter) {
+        foreach (ParameterTargetAccess::declaration($target)->declaringFunction()->getParameters() as $parameter) {
             if (!$parameter->isVariadic()) {
                 $fixedNames[$parameter->getName()] = true;
             }
@@ -71,11 +88,10 @@ final class VariadicArguments
         ParameterResolutionContext $context,
         string $reason,
     ): ResolutionException {
-        return ResolutionException::forParameter(
+        return ParameterContextAccess::failure(
+            $context,
             $target->reflection,
             reason: $reason,
-            providedParameters: $context->provided,
-            resolvedParameters: $context->resolved,
         );
     }
 

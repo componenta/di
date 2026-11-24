@@ -5,84 +5,46 @@ declare(strict_types=1);
 namespace Componenta\DI\Resolver\Entry;
 
 use Componenta\DI\Definition\DefinitionInterface;
-use Componenta\DI\Exception\InvalidConfigurationException;
-use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\Internal\Resolver\Entry\EntryResolverContext;
+use Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings;
+use Componenta\DI\Internal\Resolver\Entry\CompositeScope;
+use Componenta\DI\Internal\Resolver\Entry\EntryBindings;
+use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
 
-/** Ordered entry resolver chain. */
-final class CompositeResolver implements DefinitionAwareResolverInterface
+/** Composes explicit definitions and ordered fallback resolvers. */
+final class CompositeResolver extends CompositeScope implements EntryResolverInterface
 {
-    /** @var list<EntryResolverInterface> */
-    private array $resolvers;
-    /** @var array<string, DefinitionAwareResolverInterface> */
-    private array $definitionOwners = [];
+    private readonly EntryBindings $bindings;
 
-    public function __construct(EntryResolverInterface ...$resolvers)
+    public function __construct(EntryResolverInterface|DefinitionResolverInterface ...$providers)
     {
-        $seen = [];
-        foreach ($resolvers as $resolver) {
-            $id = spl_object_id($resolver);
-            if (isset($seen[$id])) {
-                throw new InvalidConfigurationException(sprintf(
-                    'Entry resolver %s is registered more than once.',
-                    $resolver::class,
-                ));
-            }
-            $seen[$id] = true;
-        }
-        $this->resolvers = array_values($resolvers);
+        $this->bindings = new EntryBindings(...array_map(
+            static fn(EntryResolverInterface|DefinitionResolverInterface $provider): EntryBindings|EntryResolverInterface|DefinitionResolverInterface
+                => $provider instanceof self ? $provider->bindings : $provider,
+            $providers,
+        ));
     }
 
     public function can(string $id): bool
     {
-        return $this->owner($id) !== null;
+        return $this->bindings->can($id);
     }
 
-    /** @param array<string|int, mixed> $params */
-    public function resolve(string $id, array $params = []): mixed
+    /** @param array<string|int,mixed>|EntryParameters $params */
+    public function resolve(string $id, array|EntryParameters $params = []): mixed
     {
-        $owner = $this->owner($id)
-            ?? throw NotFoundException::forService($id);
-        return $owner->resolve($id, EntryResolverContext::for($owner, $params));
+        return $this->bindings->resolve($id, $params);
     }
 
+    /** Registers a definition in a standalone composition. Attached roots use Container::set(). */
     public function setDefinition(string $id, DefinitionInterface $definition): void
     {
-        foreach ($this->resolvers as $resolver) {
-            if (!$resolver instanceof DefinitionAwareResolverInterface
-                || !$resolver->supportsDefinition($definition)
-            ) {
-                continue;
-            }
-            $resolver->setDefinition($id, $definition);
-            $this->definitionOwners[$id] = $resolver;
-            return;
-        }
-        throw InvalidConfigurationException::forInvalidDefinition($definition);
+        $this->bindings->setDefinition($id, $definition);
     }
 
-    public function supportsDefinition(DefinitionInterface $definition): bool
+    protected function attach(RuntimeCollaboratorOwnership $ownership): AttachedEntryBindings
     {
-        foreach ($this->resolvers as $resolver) {
-            if ($resolver instanceof DefinitionAwareResolverInterface
-                && $resolver->supportsDefinition($definition)
-            ) {
-                return true;
-            }
-        }
-        return false;
+        return $this->bindings->attach($ownership);
     }
 
-    private function owner(string $id): ?EntryResolverInterface
-    {
-        if (isset($this->definitionOwners[$id])) {
-            return $this->definitionOwners[$id];
-        }
-        foreach ($this->resolvers as $resolver) {
-            if ($resolver->can($id)) {
-                return $resolver;
-            }
-        }
-        return null;
-    }
+    private function __clone() {}
 }

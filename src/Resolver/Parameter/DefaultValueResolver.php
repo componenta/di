@@ -23,7 +23,7 @@ final class DefaultValueResolver implements ParameterResolverInterface
         }
 
         return $target->hasDefault
-            ? [$target->position, $target->reflection->getDefaultValue()]
+            ? [$target->position, $target->defaultValue]
             : null;
     }
 }

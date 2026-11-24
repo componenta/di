@@ -6,10 +6,16 @@ namespace Componenta\DI\Internal\Resolver\Parameter\Request;
 
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\FactoryInterface;
+use Componenta\DI\Resolver\Entry\EntryParameters;
+use Componenta\DI\Resolver\Entry\EntryParametersFactoryInterface;
 use Psr\Container\ContainerInterface;
 
-/** Lazily obtains the protected runtime FactoryInterface service. @internal */
-final class LazyFactory implements FactoryInterface
+/**
+ * Lazily obtains the protected runtime FactoryInterface service.
+ *
+ * @internal
+ */
+final class LazyFactory implements EntryParametersFactoryInterface
 {
     private ?FactoryInterface $factory = null;
 
@@ -18,6 +24,12 @@ final class LazyFactory implements FactoryInterface
     public function make(string $entry, array $params = []): object
     {
         return $this->factory()->make($entry, $params);
+    }
+
+    /** @param non-empty-string $entry */
+    public function makeEntry(string $entry, EntryParameters $parameters): object
+    {
+        return $parameters->forwardTo($this->factory(), $entry);
     }
 
     private function factory(): FactoryInterface

@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Entry;
 
+use Closure;
 use Componenta\Config\ContainerValue;
-use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Componenta\DI\Internal\CallableReflector;
 use Componenta\DI\LazyServiceFactoryInterface;
-use Componenta\Reflection\Reflection;
 use Componenta\Reflection\ReflectionType;
+use Error;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionFunction;
@@ -19,6 +20,7 @@ use ReflectionMethod;
 use ReflectionParameter;
 use WeakMap;
 
+use function Componenta\DI\Internal\is_abstract_static_dispatch_error;
 use function Componenta\DI\Internal\is_entry_class_eligible;
 use function Componenta\DI\Internal\is_magic_closure_trampoline;
 
@@ -29,18 +31,16 @@ use function Componenta\DI\Internal\is_magic_closure_trampoline;
  */
 final class FactorySpecificationValidator
 {
-    /** @var WeakMap<ReflectionFunctionAbstract,true>|null */
-    private static ?WeakMap $validatedCallables = null;
+    /** @var WeakMap<Closure,true>|null */
+    private static ?WeakMap $validatedClosures = null;
+    /** @var array<string,true> */
+    private static array $validatedDeclarations = [];
     private static ?ContainerValue $containerArgument = null;
 
     public static function assertValid(string $id, mixed $factory): void
     {
         if ($factory instanceof FactoryDefinition) {
             self::assertKnownCallable($id, $factory->value);
-            return;
-        }
-        if ($factory instanceof ClassDefinition) {
-            self::assertClassDefinition($id, $factory);
             return;
         }
         if ($factory instanceof LazyServiceFactoryInterface) {
@@ -50,9 +50,15 @@ final class FactorySpecificationValidator
         if (is_string($factory) && $factory !== '') {
             return;
         }
-        if (is_callable($factory)) {
-            self::assertResolvedCallable($id, $factory);
-            return;
+        try {
+            if (is_callable($factory)) {
+                self::assertResolvedCallable($id, $factory);
+                return;
+            }
+        } catch (Error $error) {
+            if (!is_abstract_static_dispatch_error($error, __FILE__)) {
+                throw $error;
+            }
         }
         if (self::isDeferredCallable($factory)) {
             return;
@@ -71,22 +77,44 @@ final class FactorySpecificationValidator
             return;
         }
 
-        try {
-            $reflection = Reflection::callable($factory);
-        } catch (InvalidArgumentException) {
+        if (is_array($factory)) {
+            if ($factory[0] instanceof Closure && strcasecmp($factory[1], '__invoke') === 0) {
+                $factory = $factory[0];
+            } elseif (str_contains($factory[1], '::')) {
+                $factory = Closure::fromCallable($factory);
+            }
+        } elseif (is_string($factory) && substr_count($factory, '::') > 1) {
+            // PHP permits class aliases that contain the method separator.
+            $factory = Closure::fromCallable($factory);
+        }
+
+        if ($factory instanceof Closure) {
+            $validated = self::$validatedClosures ??= new WeakMap();
+            if (!isset($validated[$factory])) {
+                $reflection = new ReflectionFunction($factory);
+                if (!is_magic_closure_trampoline($reflection)) {
+                    self::assertSignature($id, $reflection);
+                }
+                $validated[$factory] = true;
+            }
             return;
         }
 
-        $validated = self::$validatedCallables ??= new WeakMap();
-        if (isset($validated[$reflection])) {
+        $reflection = CallableReflector::reflect($factory);
+        if ($reflection === null) {
             return;
         }
-
-        if (is_magic_closure_trampoline($reflection)) {
-            $validated[$reflection] = true;
-            return;
+        $key = $reflection instanceof ReflectionMethod
+            ? $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName()
+            : $reflection->getName();
+        if (!isset(self::$validatedDeclarations[$key])) {
+            self::assertSignature($id, $reflection);
+            self::$validatedDeclarations[$key] = true;
         }
+    }
 
+    private static function assertSignature(string $id, ReflectionFunctionAbstract $reflection): void
+    {
         self::assertArgumentCount($id, $reflection);
 
         /** @var list<ReflectionParameter> $parameters */
@@ -94,8 +122,6 @@ final class FactorySpecificationValidator
         $scope = self::callableScope($reflection);
         self::assertArgument($id, $parameters, 0, self::containerArgument(), $scope);
         self::assertArgument($id, $parameters, 1, [], $scope);
-
-        $validated[$reflection] = true;
     }
 
     private static function assertKnownCallable(string $id, callable $factory): void
@@ -140,13 +166,14 @@ final class FactorySpecificationValidator
         ?ReflectionClass $scope,
     ): void {
         $parameter = self::parameterAt($parameters, $position);
-        if ($parameter === null || $parameter->getType() === null) {
+        $type = $parameter?->getType();
+        if ($parameter === null || $type === null) {
             return;
         }
 
         try {
             $valid = ReflectionType::match(
-                $parameter->getType(),
+                $type,
                 $argument,
                 strict: true,
                 scope: $scope,
@@ -166,7 +193,7 @@ final class FactorySpecificationValidator
                 $id,
                 $position + 1,
                 $parameter->getName(),
-                (string) $parameter->getType(),
+                (string) $type,
                 get_debug_type($argument),
             ));
         }
@@ -210,9 +237,9 @@ final class FactorySpecificationValidator
         return self::$containerArgument = $class->newInstanceWithoutConstructor();
     }
 
-    private static function assertClassDefinition(string $id, ClassDefinition $definition): void
+    /** @param list<array{method: non-empty-string, params: array<string|int,mixed>}> $methodCalls */
+    public static function assertClassDefinition(string $id, string $className, array $methodCalls): void
     {
-        $className = $definition->value;
         // The interface probe can autoload a class after the first probe failed.
         if (!class_exists($className) && !interface_exists($className) && !class_exists($className, false)) {
             throw new InvalidConfigurationException(sprintf(
@@ -234,7 +261,7 @@ final class FactorySpecificationValidator
         }
 
         $magicCall = $class->hasMethod('__call') && $class->getMethod('__call')->isPublic();
-        foreach ($definition->methodCalls as $index => $call) {
+        foreach ($methodCalls as $index => $call) {
             if (!is_array($call)
                 || !array_key_exists('method', $call)
                 || !is_string($call['method'])

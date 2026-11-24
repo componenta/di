@@ -4,5 +4,5 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Definition;
 
-/** Marks a dependency definition interpreted by a compatible entry resolver. */
+/** Marks configuration admitted and executed by a compatible definition strategy. */
 interface DefinitionInterface {}

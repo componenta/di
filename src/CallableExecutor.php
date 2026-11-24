@@ -7,46 +7,75 @@ namespace Componenta\DI;
 use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Internal\CallableInvocationResolver;
+use Componenta\DI\Internal\CallableMagicInvocation;
+use Componenta\DI\Internal\CallableReflector;
 use Componenta\DI\Internal\ResolutionMetadata;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\Internal\Resolver\Parameter\PreparedParameterPlan;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
-use Componenta\Reflection\Reflection;
-use InvalidArgumentException;
 use LogicException;
 use ReflectionFunction;
 use ReflectionParameter;
 use Throwable;
 
 use function Componenta\DI\Internal\is_magic_closure_trampoline;
+use function Componenta\DI\Internal\is_qualified_method_pair;
+use function Componenta\DI\Internal\try_capture_qualified_callable;
 
 /** DI-aware callable executor. */
 final class CallableExecutor implements CallableExecutorInterface
 {
-    /** @var array<string, PreparedParameterPlan|null> */
+    /** @var array<string, PreparedParameterPlan> */
     private array $callablePlans = [];
+
+    private readonly ParameterExecution $parameters;
 
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
-        private readonly ParametersResolver $parameters,
-    ) {}
+        ParametersResolver $parameters,
+    ) {
+        $this->parameters = ParameterExecutionAccess::for($parameters);
+    }
 
     /** @param array<string|int, mixed> $params */
     public function call(mixed $callable, array $params = []): mixed
     {
+        $qualified = null;
         try {
-            $resolved = $this->callableResolver->resolve($callable);
-            $plan = $resolved instanceof PreparedCallable ? null : $this->plan($resolved);
-            $arguments = $plan === null
-                ? ResolutionMetadata::publicParameters($params)
-                : $this->parameters->resolvePrepared($plan, $params);
+            $source = is_array($callable) ? self::snapshotCallable($callable) : $callable;
+            $resolver = $this->callableResolver;
+            if ($resolver::class === CallableResolver::class
+                && (is_string($source) || (is_array($source) && is_qualified_method_pair($source)))
+            ) {
+                [$resolved, $qualified] = CallableInvocationResolver::resolve($resolver, $source);
+            } else {
+                $resolved = $resolver->resolve($source);
+            }
+            if (is_array($resolved)) {
+                $resolved = self::snapshotCallable($resolved);
+                if (is_qualified_method_pair($resolved)) {
+                    $qualified = $resolved;
+                    $resolved = try_capture_qualified_callable($resolved, deferAbstractDispatch: false)
+                        ?? throw InvalidCallableException::forValue($callable);
+                }
+            }
+            $arguments = $this->resolveArguments($resolved, $params);
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
             throw InvalidCallableException::forValue($callable, $e);
         }
 
-        // Deliberately outside the normalization boundary: once control enters
-        // the explicit user callable, its throwables belong to application code.
+        // Binding and body failures retain their native form. Retain the
+        // original receiver for a qualified static route through invocation.
+        if ($qualified !== null && $resolved instanceof Closure
+            && ($magic = CallableMagicInvocation::prepare($resolved, $arguments)) !== null
+        ) {
+            return call_user_func_array($magic[0], $magic[1]);
+        }
+
         return call_user_func_array($resolved, $arguments);
     }
 
@@ -62,12 +91,32 @@ final class CallableExecutor implements CallableExecutorInterface
     }
 
     /**
-     * null denotes a native callable whose concrete signature is unavailable
-     * because PHP dispatches it through magic method handling. An empty plan
-     * denotes a reflected callable that genuinely takes no arguments.
+     * @template T of array<array-key,mixed>
+     * @param T $callable
+     * @return T
      */
-    private function plan(callable $callable): ?PreparedParameterPlan
+    private static function snapshotCallable(array $callable): array
     {
+        // Argument resolution may mutate caller-owned reference slots. Keep
+        // the callable used for reflection and invocation on the same route.
+        $snapshot = [];
+        foreach ($callable as $key => $value) {
+            $snapshot[$key] = $value;
+        }
+
+        /** @var T $snapshot */
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string|int,mixed> $params
+     * @return array<string|int,mixed>
+     */
+    private function resolveArguments(callable $callable, array $params): array
+    {
+        if ($callable instanceof PreparedCallable) {
+            return ResolutionMetadata::publicParameters($params);
+        }
         if (is_array($callable) && $callable[0] instanceof Closure
             && strcasecmp((string) $callable[1], '__invoke') === 0
         ) {
@@ -82,53 +131,44 @@ final class CallableExecutor implements CallableExecutorInterface
             // per invocation; stable named/method callables remain cacheable.
             $reflection = new ReflectionFunction($callable);
             if (is_magic_closure_trampoline($reflection)) {
-                return null;
+                return ResolutionMetadata::publicParameters($params);
             }
+            $params = ResolutionMetadata::invocationSlots($params);
             /** @var list<ReflectionParameter> $parameters */
             $parameters = array_values($reflection->getParameters());
-            return $this->parameters->prepare($parameters);
+            $plan = $this->parameters->prepare($parameters, $callable);
+            return $this->parameters->resolvePrepared($plan, $params);
         }
 
         $key = self::cacheKey($callable);
-        if (array_key_exists($key, $this->callablePlans)) {
-            $cached = $this->callablePlans[$key];
-            if ($cached === null || $this->parameters->isCurrentPlan($cached)) {
-                return $cached;
+        $cached = $this->callablePlans[$key] ?? null;
+        if ($cached !== null) {
+            // Plan availability can itself invoke autoloaders.
+            $params = ResolutionMetadata::invocationSlots($params);
+            if ($this->parameters->isCurrentPlan($cached)) {
+                return $this->parameters->resolvePrepared($cached, $params);
             }
             unset($this->callablePlans[$key]);
         }
 
-        // Missing methods use native magic dispatch and have no signature to
-        // cache. Their names may vary on every call in a long-running process;
-        // retain metadata only for actual declarations, not that input history.
-        if (is_array($callable) && !method_exists($callable[0], (string) $callable[1])) {
-            return null;
+        $reflection = CallableReflector::reflect($callable);
+        if ($reflection === null) {
+            // Magic-dispatched names can vary on every call and have no signature to cache.
+            return ResolutionMetadata::publicParameters($params);
         }
-        if (is_string($callable) && str_contains($callable, '::')) {
-            [$class, $method] = explode('::', $callable, 2);
-            if (!method_exists($class, $method)) {
-                return null;
-            }
-        }
-
-        try {
-            $reflection = Reflection::callable($callable);
-        } catch (InvalidArgumentException) {
-            // CallableResolver has already established native callability. If
-            // reflection cannot expose a concrete method, PHP is dispatching
-            // through __call()/__callStatic(); preserve native argument binding.
-            return $this->callablePlans[$key] = null;
+        if ($cached === null) {
+            $params = ResolutionMetadata::invocationSlots($params);
         }
 
         /** @var list<ReflectionParameter> $parameters */
         $parameters = array_values($reflection->getParameters());
         $plan = $this->parameters->prepare($parameters);
 
-        if ($this->parameters->canCachePlans) {
+        if ($this->parameters->isSealed && !$plan->requiresFreshValidation) {
             $this->callablePlans[$key] = $plan;
         }
 
-        return $plan;
+        return $this->parameters->resolvePrepared($plan, $params);
     }
 
     private static function cacheKey(callable $callable): string
@@ -138,8 +178,9 @@ final class CallableExecutor implements CallableExecutorInterface
         }
         if (is_array($callable)) {
             [$owner, $method] = $callable;
-            $class = is_object($owner) ? $owner::class : $owner;
-            return 'method:' . strtolower($class) . '::' . strtolower((string) $method);
+            $class = strtolower(is_object($owner) ? $owner::class : $owner);
+            // Class aliases can contain ::, so the separator alone is ambiguous.
+            return 'method:' . strlen($class) . ':' . $class . '::' . strtolower((string) $method);
         }
         if (!is_object($callable)) {
             throw new LogicException('Resolved callable must be a function, method or invokable object.');
