@@ -18,10 +18,10 @@ final class MutationCoverage implements StartMutationGenerationSubscriber
     /** Pinned Pest 4 generated class selectors; these are not executed line coverage. */
     private const array SUBPROCESS_CONTRACTS = [
         'src/Container.php' => [
-            'tests/Contract/ContainerColdMutationContractTest.php' => 'P\\Tests\\Contract\\ContainerColdMutationContractTest::',
+            'tests/Runtime/ContainerColdMutationContractTest.php' => 'P\\Tests\\Runtime\\ContainerColdMutationContractTest::',
         ],
         'src/ContainerFactory.php' => [
-            'tests/Contract/ContainerFactoryCompletionContractTest.php' => 'P\\Tests\\Contract\\ContainerFactoryCompletionContractTest::',
+            'tests/Container/ContainerFactoryCompletionContractTest.php' => 'P\\Tests\\Container\\ContainerFactoryCompletionContractTest::',
         ],
     ];
 

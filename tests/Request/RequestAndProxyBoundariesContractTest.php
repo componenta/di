@@ -1,0 +1,117 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Componenta\DI\Tests\Request\RequestAndProxyBoundariesContract;
+
+use Componenta\DI\Attribute\Make;
+use Componenta\DI\Attribute\MapRequest;
+use Componenta\DI\Attribute\Proxy;
+use Componenta\DI\Attribute\RequestDataSource;
+use Componenta\DI\Exception\RequestDataConflictException;
+use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Tests\Support\ContainerBuilder;
+use InvalidArgumentException;
+use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\Stream;
+use Nyholm\Psr7\UploadedFile;
+
+use function Componenta\DI\Tests\Support\fixtureInstance;
+
+class ExplicitProxyBase
+{
+    public int $value = 17;
+}
+
+final class ExplicitProxyChild extends ExplicitProxyBase {}
+
+final class ExplicitProxyOwner
+{
+    #[Make('proxy-product'), Proxy(ExplicitProxyChild::class)]
+    public ExplicitProxyBase $product;
+}
+
+test('an explicit concrete proxy class takes precedence over a concrete declared parent type', function (bool $property): void {
+    $container = (new ContainerBuilder())
+        ->addFactory('proxy-product', static fn(): object => new ExplicitProxyChild())
+        ->build();
+    $product = $property
+        ? fixtureInstance($container->make(ExplicitProxyOwner::class), ExplicitProxyOwner::class)->product
+        : $container->call(static fn(#[Make('proxy-product'), Proxy(ExplicitProxyChild::class)] ExplicitProxyBase $product): ExplicitProxyBase => $product);
+
+    if (!$product instanceof ExplicitProxyBase) {
+        throw new \LogicException('Expected the configured proxy type.');
+    }
+    expect($product)->toBeInstanceOf(ExplicitProxyChild::class)
+        ->and($product->value)->toBe(17);
+})->with([false, true]);
+
+test('proxy compatibility observes late declarations without another autoload attempt', function (int $loadOn, bool $declared): void {
+    $type = __NAMESPACE__ . '\\UnrelatedProxyType_' . bin2hex(random_bytes(6));
+    if ($loadOn === 0) {
+        class_alias(\stdClass::class, $type, autoload: false);
+    }
+    $attempts = 0;
+    $loader = static function (string $name) use ($type, $loadOn, &$attempts): void {
+        if ($name === $type && ++$attempts === $loadOn) {
+            class_alias(\stdClass::class, $type, autoload: false);
+        }
+    };
+    $callable = eval(sprintf(
+        'return static fn(#[\\%s(\\%s::class)] \\%s $product): object => $product;',
+        Proxy::class,
+        ExplicitProxyChild::class,
+        $type,
+    ));
+    $container = (new ContainerBuilder())->build();
+    $reason = $declared
+        ? sprintf('Virtual proxy class "%s" is incompatible with declared type "%s".', ExplicitProxyChild::class, $type)
+        : 'does not satisfy the declared type';
+
+    spl_autoload_register($loader);
+    try {
+        expect(fn() => $container->call($callable))->toThrow(ResolutionException::class, $reason)
+            ->and(class_exists($type, false))->toBe($declared);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with([
+    'loaded control' => [0, true],
+    'declaration during the interface probe' => [2, true],
+    'type still unavailable after discovery' => [3, false],
+]);
+
+test('request mapping adds selected uploads independently of the primary source list', function (bool $explicitFiles): void {
+    $upload = new UploadedFile(Stream::create('file'), 4, UPLOAD_ERR_OK);
+    $hidden = new UploadedFile(Stream::create('private'), 7, UPLOAD_ERR_OK);
+    $request = (new ServerRequest('POST', '/'))
+        ->withQueryParams(['query' => 'value'])
+        ->withUploadedFiles(['upload' => $upload, 'hidden' => $hidden]);
+    $mapper = new MapRequest(
+        sources: $explicitFiles ? [RequestDataSource::Files, RequestDataSource::Query] : [RequestDataSource::Query],
+        files: ['upload', 'missing'],
+    );
+
+    expect($mapper->extract($request))->toBe(['upload' => $upload, 'query' => 'value']);
+})->with([false, true]);
+
+test('request mapping reports the selected source when a wildcard is mixed with a name', function (bool $files): void {
+    $mapper = new MapRequest(
+        sources: [RequestDataSource::Query],
+        attributes: $files ? [] : ['*', 'route'],
+        files: $files ? ['*', 'upload'] : [],
+    );
+
+    expect(fn() => $mapper->extract(new ServerRequest('GET', '/')))
+        ->toThrow(InvalidArgumentException::class, ($files ? 'Uploaded files' : 'Request attributes') . ' wildcard must be the only selector.');
+})->with([false, true]);
+
+test('conflicting request sources retain the key and both source names in their diagnostic', function (): void {
+    $mapper = new MapRequest(sources: [RequestDataSource::Query, RequestDataSource::Cookies]);
+    $request = (new ServerRequest('GET', '/'))->withQueryParams(['key' => 'first'])->withCookieParams(['key' => 'second']);
+
+    expect(fn() => $mapper->extract($request))->toThrow(
+        RequestDataConflictException::class,
+        'Request data key "key" is present in both query string and cookies with different values.',
+    );
+});
