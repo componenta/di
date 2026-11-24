@@ -93,16 +93,15 @@ test('alias decoration still rejects real cycles and releases the guard after fa
 
 test('aliases cannot reenter a shared source factory before it returns', function (): void {
     $source = new stdClass();
-    $reenter = true;
-    $attempts = 0;
+    $state = new AliasDelegatorState();
     $container = container([
         ConfigKey::FACTORIES => [
-            'source' => static function (ContainerValue $container) use ($source, &$reenter, &$attempts): mixed {
-                ++$attempts;
-                if (!$reenter) {
+            'source' => static function (ContainerValue $container) use ($source, $state): mixed {
+                ++$state->attempts;
+                if (!$state->reenter) {
                     return $source;
                 }
-                if ($attempts > 1) {
+                if ($state->attempts > 1) {
                     throw new \LogicException('The cyclic source factory was invoked recursively.');
                 }
                 return $container->get('second');
@@ -112,12 +111,12 @@ test('aliases cannot reenter a shared source factory before it returns', functio
     ]);
 
     expect(fn() => $container->get('first'))->toThrow(CircularDependencyException::class)
-        ->and($attempts)->toBe(1);
+        ->and($state->attempts)->toBe(1);
 
-    $reenter = false;
+    $state->reenter = false;
     expect($container->get('first'))->toBe($source)
         ->and($container->get('second'))->toBe($source)
-        ->and($attempts)->toBe(2);
+        ->and($state->attempts)->toBe(2);
 });
 
 test('a suspended source factory cannot run twice through different aliases', function (): void {
