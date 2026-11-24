@@ -8,7 +8,7 @@ The classes below are in `Componenta\DI`. The container exposes the high-level m
 | --- | --- | --- |
 | `CallableResolverInterface` | `resolve(mixed $callable): callable` | Convert a callable specification into an invocable PHP value without executing it. |
 | `CallableResolver` | `__construct(ContainerInterface $container)`; `resolve(mixed $callable): callable` | Resolve closures, functions, static/instance methods, service IDs and invokable objects. |
-| `CallableInvokerInterface` | `call(mixed $callable, array $params = []): mixed` | Invoke a fully prepared callable with PHP's argument rules. |
+| `CallableInvokerInterface` | `call(mixed $callable, array $params = []): mixed` | Invoke a callable with caller-supplied arguments; implementations may resolve missing arguments. |
 | `CallableInvoker` | `call(mixed $callable, array $params = []): mixed` | Invoke without further dependency resolution, using native call semantics. |
 | `CallableExecutorInterface` | Extends both interfaces above | Combined resolution and invocation contract. |
 | `CallableExecutor` | `__construct(CallableResolverInterface $callableResolver, ParametersResolver $parameters)`; `resolve()`; `call()` | Resolve callable parameters through DI, then invoke the target. |

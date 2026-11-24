@@ -38,7 +38,7 @@ resolveParameter(
 | `ConfigHandler` | `__construct(ContainerInterface $container)` | Оба | Чтение значений `Config`. |
 | `EntryIdHandler` | `__construct(ContainerInterface $container)` | Оба | Получение службы по явно заданному `EntryId`. |
 | `EnvHandler` | `__construct(ContainerInterface $container)` | Оба | Получение `Env` со связанным преобразованием типа. |
-| `InitHandler` | `__construct(CallableInvokerInterface $callableInvoker)` | Объект | Инициализация свойства через `Init`. |
+| `InitHandler` | `__construct(CallableInvokerInterface $callableInvoker)` | Объект | Вызов указанной функции или метода и запись результата в свойство. |
 | `InjectHandler` | `__construct(ContainerInterface $container)` | Объект | Внедрение свойства через `Inject`. |
 | `LazyHandler` | Без аргументов | Объект | Выбор отложенного создания для `Lazy`. |
 | `MakeHandler` | `__construct(FactoryInterface $factory, ProxyFactoryInterface $proxyFactory, AttributePlanBuilder $plans)` | Оба | Обработка `Make` и поддерживаемых вариантов внедрения виртуального заместителя. |
@@ -46,6 +46,8 @@ resolveParameter(
 | `RequestAttributeHandler` | Сигнатура ниже | Параметр | Получение данных PSR-7, преобразование полей и создание объектов передачи данных. |
 
 Пометка «Оба» означает реализацию `AttributeHandlerInterface` и `ParameterAttributeHandlerInterface`. Обработчики параметров предоставляют `resolveParameter()`, а обработчики объектов — `handle()`. В `CastHandler::resolveParameter()` есть дополнительный необязательный аргумент `?Closure $beforeConsumption = null`: он позволяет проверить изменения правил источников перед использованием значения.
+
+Стандартный контейнер передаёт в `InitHandler` собственный механизм вызовов с внедрением зависимостей. Поэтому `#[Init]` поддерживает разрешение аргументов и явные значения. При прямом создании обработчика с `new CallableInvoker()` выполняется обычный вызов PHP без внедрения.
 
 Конструктор `RequestAttributeHandler`:
 

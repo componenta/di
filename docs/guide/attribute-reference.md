@@ -70,7 +70,7 @@ The caster named `trim` and the required services must be available in the confi
 
 | Attribute | Target | Constructor arguments and defaults | Behavior |
 | --- | --- | --- | --- |
-| `Init` | P | `mixed $callable, array $params = []` | Populate a property by invoking a callable with explicit `params`, without automatic parameter injection. |
+| `Init` | P | `mixed $callable, array $params = []` | Populate a property with a callable result; the standard container resolves missing arguments and accepts explicit `params`. |
 | `SetUp` | C; repeatable | `string\|Closure $method, array $params = []` | Invoke a public instance method (string form), or a callback receiving the instance first, after property injection. Repeated hooks run in declaration order. |
 | `NoConstructor` | C | None | Skip the constructor, while retaining property injection and setup. |
 | `Lazy` | C | None | Select native lazy-ghost creation for reflection-created instances. |
@@ -96,7 +96,7 @@ final class Service
 
 ### Initialization examples
 
-`Init` calls its configured callable through `CallableInvoker`, passing only the explicit `params`, and assigns the returned value to the property; it does not autowire the callable's arguments. `SetUp` with a string requires a public, concrete, non-static instance method; with a closure it supplies the created object as the first argument. Its return value is ignored. Explicit `params` can include named values and supported `new Config(...)`, `new Env(...)` and `new EntryId(...)` descriptors.
+`Init` invokes the configured callable through the container's callable executor and assigns the result to the property. Missing arguments are resolved by the container; `params` supplies explicit arguments. If `InitHandler` is constructed with a different `CallableInvokerInterface` implementation, invocation follows that implementation's contract. `SetUp` with a string requires a public, concrete, non-static instance method; with a closure it supplies the created object as the first argument. Its return value is ignored. Explicit `params` can include named values and supported `new Config(...)`, `new Env(...)` and `new EntryId(...)` descriptors.
 
 ```php
 use Componenta\DI\Attribute\{Init, NoConstructor, SetUp};
@@ -108,6 +108,12 @@ final class ImportedRecord
     #[Init(strlen(...), ['string' => 'example'])]
     public int $length;
 
+    #[Init(static function (LoggerInterface $logger): string {
+        $logger->info('Record initialized');
+        return 'ready';
+    })]
+    public string $status;
+
     public bool $initialized = false;
 
     public function initialize(): void
@@ -116,6 +122,8 @@ final class ImportedRecord
     }
 }
 ```
+
+The example requires a registered `LoggerInterface` service. The `length` property uses an explicit argument; the `status` property obtains its logger through dependency resolution.
 
 `NoConstructor` leaves properties without defaults or injection rules uninitialized. A class-level `#[Proxy]` must not specify a proxy class. At an injection point, `#[Make('client'), Proxy(Client::class)]` selects a concrete proxy compatible with the declared type and a backing object created through the named entry. See [deferred creation](lazy-objects.md) for both native mechanisms.
 

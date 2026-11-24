@@ -6,7 +6,7 @@ namespace Componenta\DI\Attribute;
 
 use Attribute;
 
-/** Initializes a property from a callable invoked with explicitly supplied arguments. */
+/** Initializes a property by invoking a callable through the configured invoker, with optional explicit arguments. */
 #[Attribute(Attribute::TARGET_PROPERTY)]
 final readonly class Init
 {

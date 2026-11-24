@@ -38,7 +38,7 @@ It receives the current value state and returns a new resolved/unresolved state.
 | `ConfigHandler` | `__construct(ContainerInterface $container)` | Both | Read `Config` values. |
 | `EntryIdHandler` | `__construct(ContainerInterface $container)` | Both | Resolve an explicit service `EntryId`. |
 | `EnvHandler` | `__construct(ContainerInterface $container)` | Both | Obtain `Env` values with supported type conversion. |
-| `InitHandler` | `__construct(CallableInvokerInterface $callableInvoker)` | Object | Initialize a property via `Init`. |
+| `InitHandler` | `__construct(CallableInvokerInterface $callableInvoker)` | Object | Invoke the configured callable and assign its result to a property. |
 | `InjectHandler` | `__construct(ContainerInterface $container)` | Object | Inject a property using `Inject`. |
 | `LazyHandler` | No arguments | Object | Select lazy object creation when `Lazy` is present. |
 | `MakeHandler` | `__construct(FactoryInterface $factory, ProxyFactoryInterface $proxyFactory, AttributePlanBuilder $plans)` | Both | Handle `Make` and supported proxy injection paths. |
@@ -46,6 +46,8 @@ It receives the current value state and returns a new resolved/unresolved state.
 | `RequestAttributeHandler` | Constructor below | Parameter | Resolve PSR-7 request sources, map data and construct DTOs. |
 
 "Both" means implementing both `AttributeHandlerInterface` and `ParameterAttributeHandlerInterface`. All parameter implementations expose `resolveParameter()`; object implementations expose `handle()`. `CastHandler::resolveParameter()` has an additional optional `?Closure $beforeConsumption = null` argument, supporting validation of late input-policy changes before consuming a value.
+
+The standard container supplies its DI-aware executor to `InitHandler`, so `#[Init]` supports dependency resolution and explicit arguments. Direct construction with `new CallableInvoker()` instead performs native invocation without DI.
 
 `RequestAttributeHandler` constructor:
 

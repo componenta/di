@@ -50,7 +50,7 @@ final class Worker
 
 Setup callbacks run after property injection. Their return value is ignored; they cannot replace the constructed object. Repeated hooks preserve declaration order. Subclasses redeclaring `SetUp::$method` with type `string` must accommodate `string|Closure`.
 
-`#[Init]` still accepts the existing string, array and invokable callable forms. Its native PHP 8.5 expression support is additive.
+`#[Init]` still accepts the existing string, array and invokable callable forms. It retains DI-aware invocation through the standard container and supports explicit `params`. Native callback expressions are an additional way to declare the callable.
 
 ## Union-type autowiring
 

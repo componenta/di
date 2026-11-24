@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `CallableResolverInterface` | `resolve(mixed $callable): callable` | Преобразование описания вызова в вызываемое значение без выполнения. |
 | `CallableResolver` | `__construct(ContainerInterface $container)`; `resolve(mixed $callable): callable` | Поиск замыканий, функций, методов, служб и вызываемых объектов. |
-| `CallableInvokerInterface` | `call(mixed $callable, array $params = []): mixed` | Вызов полностью подготовленной функции по правилам PHP. |
+| `CallableInvokerInterface` | `call(mixed $callable, array $params = []): mixed` | Вызов функции или метода с переданными аргументами; реализация может разрешать недостающие зависимости. |
 | `CallableInvoker` | `call(mixed $callable, array $params = []): mixed` | Вызов без дополнительного разрешения зависимостей. |
 | `CallableExecutorInterface` | Объединяет два предыдущих интерфейса | Общий договор на разрешение и выполнение вызовов. |
 | `CallableExecutor` | `__construct(CallableResolverInterface $callableResolver, ParametersResolver $parameters)`; `resolve()`; `call()` | Разрешение параметров через контейнер и выполнение вызова. |
