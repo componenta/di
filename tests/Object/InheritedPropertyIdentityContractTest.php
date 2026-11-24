@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\Object\InheritedPropertyIdentityContract;
 
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use LogicException;
 use stdClass;
 
 class DiContractPropertyOwner
