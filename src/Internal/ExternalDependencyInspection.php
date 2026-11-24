@@ -28,10 +28,17 @@ final readonly class ExternalDependencyInspection
     /** @return list<string> */
     public function takenOverBy(ContainerInterface $container): array
     {
+        return $this->lookupProbes->duringRegistration(fn(): array => $this->inspectDependencies($container));
+    }
+
+    /** @return list<string> */
+    private function inspectDependencies(ContainerInterface $container): array
+    {
         $mayInspect = $this->mayInspect(...);
         $candidates = [];
         $inspected = [];
         $membershipEvidence = [];
+        $reads = [];
         $pending = [];
         do {
             $ownershipRevision = $this->currentRegistry()->ownershipRevision ?? 0;
@@ -40,10 +47,11 @@ final readonly class ExternalDependencyInspection
                 $dependencyRevision = $this->currentRegistry()?->ownershipRevisionFor($dependencyId) ?? 0;
                 if (($inspected[$dependencyId] ?? null) === $dependencyRevision && !isset($pending[$dependencyId])
                     && ($membershipEvidence[$dependencyId] ?? $membershipRevision) >= $membershipRevision
+                    && $this->lookupProbes->readsStillCurrent($reads[$dependencyId] ?? [])
                 ) {
                     continue;
                 }
-                unset($candidates[$dependencyId], $membershipEvidence[$dependencyId]);
+                unset($candidates[$dependencyId], $membershipEvidence[$dependencyId], $reads[$dependencyId]);
                 $inspected[$dependencyId] = $dependencyRevision;
                 if (!$this->mayInspect($dependencyId)) {
                     $pending[$dependencyId] = true;
@@ -51,14 +59,9 @@ final readonly class ExternalDependencyInspection
                 }
                 unset($pending[$dependencyId]);
                 do {
-                    $revision = $this->currentRegistry()->revision ?? 0;
-                    $owner = $this->currentRegistry()?->findOwning(
-                        $dependencyId,
-                        $mayInspect,
-                        requireResolvable: true,
-                        lookupProbes: $this->lookupProbes,
-                        forRegistration: true,
-                    );
+                    $registry = $this->currentRegistry();
+                    $revision = $registry->revision ?? 0;
+                    $ownership = $this->inspectExisting($registry, $dependencyId, $mayInspect);
                     if ($this->currentRegistry()?->contains($container) === true) {
                         return [];
                     }
@@ -68,16 +71,23 @@ final readonly class ExternalDependencyInspection
                     $pending[$dependencyId] = true;
                     continue;
                 }
-                if ($owner !== null) {
+                $reads[$dependencyId] = $ownership['reads'];
+                if ($ownership['result'] !== null) {
                     // A later append can change the owner that blocked candidate inspection.
                     $membershipEvidence[$dependencyId] = $this->lookupProbes->membershipRevision;
                 } else {
                     $answer = $this->lookupProbes->observeLookup(static fn(): bool => AvailableEntryLookup::has($container, $dependencyId));
+                    if ($this->mayInspect($dependencyId)) {
+                        // The completed proof below handles later changes to this ID's protection.
+                        $reads[$dependencyId] += $answer['reads'];
+                    }
+                    $answerRevision = $answer['registryRevision'];
+                    if (!$answer['result'] || ($answerRevision !== null && $answerRevision < $this->lookupProbes->membershipRevision)) {
+                        // An already superseded candidate answer is stale in either direction.
+                        $membershipEvidence[$dependencyId] = $answerRevision;
+                    }
                     if ($answer['result']) {
                         $candidates[$dependencyId] = true;
-                    } else {
-                        // A miss can hide a new owner after an observed registry changes.
-                        $membershipEvidence[$dependencyId] = $answer['registryRevision'];
                     }
                 }
                 if ($this->currentRegistry()?->contains($container) === true) {
@@ -99,13 +109,8 @@ final readonly class ExternalDependencyInspection
                     $protectedCandidates[$dependencyId] = true;
                     continue;
                 }
-                $owner = $this->currentRegistry()?->findOwning(
-                    $dependencyId,
-                    $mayInspect,
-                    requireResolvable: true,
-                    lookupProbes: $this->lookupProbes,
-                    forRegistration: true,
-                );
+                $ownership = $this->inspectExisting($this->currentRegistry(), $dependencyId, $mayInspect);
+                $reads[$dependencyId] += $ownership['reads'];
                 if ($this->currentRegistry()?->contains($container) === true) {
                     return [];
                 }
@@ -113,7 +118,7 @@ final readonly class ExternalDependencyInspection
                     $protectedCandidates[$dependencyId] = true;
                     continue;
                 }
-                if ($owner === null) {
+                if ($ownership['result'] === null) {
                     $dependencies[] = $dependencyId;
                 }
             }
@@ -134,11 +139,32 @@ final readonly class ExternalDependencyInspection
             || $ownershipRevision !== ($registry->ownershipRevision ?? 0)
             || array_any(
                 $this->delegators->deferredDependencies(),
-                static fn(string $id): bool => !isset($inspected[$id]) || ($membershipEvidence[$id] ?? $membershipRevision) < $membershipRevision,
+                fn(string $id): bool => !isset($inspected[$id])
+                    || ($membershipEvidence[$id] ?? $membershipRevision) < $membershipRevision
+                    || !$this->lookupProbes->readsStillCurrent($reads[$id] ?? []),
             ));
 
         // A later proof may also protect a dependency already selected above.
         return array_values(array_filter($dependencies, $mayInspect));
+    }
+
+    /**
+     * @param Closure(string):bool $mayInspect
+     * @return array{result:?ContainerInterface,reads:array<string,int>}
+     */
+    private function inspectExisting(?ExternalContainerRegistry $registry, string $id, Closure $mayInspect): array
+    {
+        if ($registry === null) {
+            return ['result' => null, 'reads' => []];
+        }
+
+        return $this->lookupProbes->observeLookup(fn(): ?ContainerInterface => $registry->findOwning(
+            $id,
+            $mayInspect,
+            requireResolvable: true,
+            lookupProbes: $this->lookupProbes,
+            forRegistration: true,
+        ));
     }
 
     /** @phpstan-impure */

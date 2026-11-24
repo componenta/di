@@ -565,6 +565,180 @@ test('external registration refreshes a candidate answer that used an earlier re
     'independent answer' => [false, null],
 ])->with(['append during another dependency' => false, 'append after reading inside the same probe' => true]);
 
+test('registration rechecks an ownership answer after its observed feature changes', function (string $change, bool $ownedBefore, bool $suspend): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $external = static fn(Product $entry): Product => new Product($entry->value . ':external');
+    $container = (new ContainerBuilder())
+        ->addServices(['entry' => new Product('base'), 'owner' => $local, 'enabled' => true])
+        ->addDelegator('entry', 'owner')
+        ->build();
+    $state = new class () {
+        public bool $enabled = false;
+    };
+    $feature = new OwnershipContainer(['feature' => true], static function (string $id) use ($state): bool {
+        return $id === 'feature' && $state->enabled;
+    });
+    if ($change === 'notification') {
+        $container->addContainer($feature);
+    }
+    if ($change === 'alias' || $change === 'alias source') {
+        $container->alias('feature', 'missing.feature');
+    }
+    $publish = static function () use ($change, $container, $feature, $state): void {
+        match ($change) {
+            'set' => $container->set('feature', true),
+            'alias' => $container->alias('feature', 'enabled'),
+            'alias source' => $container->set('missing.feature', true),
+            'append' => $container->addContainer(new OwnershipContainer(['feature' => true])),
+            'notification' => (static function () use ($container, $feature, $state): void {
+                $state->enabled = true;
+                $container->notifyExternalEntriesChanged($feature, 'feature');
+            })(),
+            default => throw new LogicException('Expected a feature publication fixture.'),
+        };
+    };
+    $checks = 0;
+    $candidate = new OwnershipContainer(['owner' => $external], static function (string $id) use ($container, $publish, $ownedBefore, $suspend, &$checks): bool {
+        if ($id !== 'owner') {
+            return false;
+        }
+        $owns = $container->has('feature') !== $ownedBefore;
+        if (++$checks === 1) {
+            if ($suspend) {
+                Fiber::suspend('checked owner');
+            } else {
+                $publish();
+            }
+        }
+        return $owns;
+    });
+    $warm = $container->get('entry');
+
+    if ($suspend) {
+        $registration = new Fiber(static fn() => $container->addContainer($candidate));
+        expect($registration->start())->toBe('checked owner');
+        $publish();
+        $registration->resume();
+    } else {
+        $container->addContainer($candidate);
+    }
+
+    $registrationChecks = $checks;
+    $current = $container->get('entry');
+    if ($ownedBefore) {
+        expect($current)->toBe($warm)
+            ->and($container->get('owner'))->toBe($local);
+    } else {
+        expect($current)->toEqual(new Product('base:external'))
+            ->and($current)->not->toBe($warm)
+            ->and($container->get('owner'))->toBe($external);
+    }
+    expect($container->get('entry'))->toBe($current)
+        ->and($registrationChecks)->toBe(2);
+})->with(['set', 'alias', 'alias source', 'append', 'notification'])
+    ->with(['candidate gains ownership' => false, 'candidate loses ownership' => true])
+    ->with(['reentrant publication' => false, 'publication while suspended' => true]);
+
+test('registration preserves a negative ownership answer when its observed IDs stay current', function (bool $mutate): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $container = (new ContainerBuilder())
+        ->addServices(['entry' => new Product('base'), 'owner' => $local])
+        ->addDelegator('entry', 'owner')
+        ->build();
+    $checks = 0;
+    $candidate = new OwnershipContainer([], static function (string $id) use ($container, $mutate, &$checks): bool {
+        if ($id !== 'owner') {
+            return false;
+        }
+        $owns = $container->has('feature');
+        if (++$checks > 1) {
+            throw new LogicException('An unchanged miss must not be checked again.');
+        }
+        if ($mutate) {
+            $container->set('unrelated', true);
+        }
+        return $owns;
+    });
+    $warm = $container->get('entry');
+
+    $container->addContainer($candidate);
+
+    expect($checks)->toBe(1)
+        ->and($container->get('entry'))->toBe($warm);
+})->with(['stable miss' => false, 'changes an unrelated ID in its callback' => true]);
+
+test('registration rechecks ownership when an observed decorated value changes', function (bool $deferred): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $external = static fn(Product $entry): Product => new Product($entry->value . ':external');
+    $builder = (new ContainerBuilder())
+        ->addServices(['entry' => new Product('base'), 'owner' => $local, 'feature' => false, 'feature.owner' => static fn(): bool => false])
+        ->addFactory('shared.factory', static fn(ContainerValue $value): Product => new Product($value->container->get('feature') ? 'enabled' : 'disabled'))
+        ->addDelegator('entry', 'owner');
+    if ($deferred) {
+        $builder->addDelegator('feature', 'feature.owner');
+    }
+    $container = $builder->build();
+    expect($container->get('feature'))->toBeFalse();
+    $shared = $container->get('shared.factory');
+    expect($shared)->toEqual(new Product('disabled'));
+    $warm = $container->get('entry');
+
+    $checks = 0;
+    $candidate = new OwnershipContainer(['owner' => $external], static function (string $id) use ($container, $deferred, &$checks): bool {
+        if ($id !== 'owner') {
+            return false;
+        }
+        $owns = $container->get('feature') === true;
+        if (++$checks === 1) {
+            if ($deferred) {
+                $container->set('feature.owner', static fn(): bool => true);
+            } else {
+                $container->delegator('feature', static fn(): bool => true);
+            }
+        }
+        return $owns;
+    });
+
+    $container->addContainer($candidate);
+
+    $checksDuringRegistration = $checks;
+    expect($container->get('feature'))->toBeTrue()
+        ->and($container->get('owner'))->toBe($external)
+        ->and($container->get('shared.factory'))->toBe($shared)
+        ->and($container->get('entry'))->toEqual(new Product('base:external'))
+        ->and($container->get('entry'))->not->toBe($warm)
+        ->and($checksDuringRegistration)->toBe(2);
+})->with(['new delegator' => false, 'replacement of deferred callable' => true]);
+
+test('registration refreshes a previous owner whose observed binding changes during a later probe', function (): void {
+    $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $earlier = static fn(Product $entry): Product => new Product($entry->value . ':earlier');
+    $external = static fn(Product $entry): Product => new Product($entry->value . ':external');
+    $container = (new ContainerBuilder())
+        ->addServices(['entry' => new Product('base'), 'owner' => $local, 'trigger' => new Product('trigger'), 'trigger.owner' => $local])
+        ->addDelegator('entry', 'owner')
+        ->addDelegator('trigger', 'trigger.owner')
+        ->build();
+    $container->addContainer(new OwnershipContainer(['owner' => $earlier], static function (string $id) use ($container): bool {
+        return $id === 'owner' && !$container->has('feature');
+    }));
+    $candidate = new OwnershipContainer(['owner' => $external], static function (string $id) use ($container): bool {
+        if ($id === 'trigger.owner') {
+            $container->set('feature', true);
+        }
+        return $id === 'owner';
+    });
+    $warm = $container->get('entry');
+    expect($warm)->toEqual(new Product('base:earlier'));
+
+    $container->addContainer($candidate);
+    $current = $container->get('entry');
+
+    expect($container->get('owner'))->toBe($external)
+        ->and($current)->toEqual(new Product('base:external'))
+        ->and($container->get('entry'))->toBe($current);
+});
+
 test('external registration stops inspecting ownership once nested work registered its candidate', function (string $completion): void {
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
     $selected = static fn(Product $entry): Product => new Product($entry->value . ':selected');

@@ -561,8 +561,8 @@ final class Container extends ContainerEntryOperations implements
             $this->cache->replaceBase($canonical, $entry, $retirement, $this->runtimeAuthority);
         }
         $this->invalidate($affectedId, $canonical, $retirement);
-        $this->invalidateDeferredDelegators($affected, $retirement);
-        $this->providerProbes?->invalidate();
+        $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->invalidate(invalidated: $invalidated, canonicalBinding: $canonical);
         $retirement->release();
     }
 
@@ -656,8 +656,8 @@ final class Container extends ContainerEntryOperations implements
         }
 
         ($this->externalContainers ??= $externalContainers)->register($container, $this->runtimeAuthority);
-        $this->invalidateDeferredDelegators($affected, $retirement);
-        $this->providerProbes?->invalidate(appending: true);
+        $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->invalidate(appending: true, invalidated: $invalidated);
         $retirement->release();
     }
 
@@ -691,7 +691,8 @@ final class Container extends ContainerEntryOperations implements
 
         $retirement = new MutationRetirement(null);
         $external->noteOwnershipChanges($affected, $this->runtimeAuthority);
-        $this->invalidateDeferredDelegators($affected, $retirement);
+        $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
+        $this->providerProbes?->noteInvalidatedEntries($invalidated);
         $retirement->release();
     }
 
@@ -730,8 +731,11 @@ final class Container extends ContainerEntryOperations implements
                 $this->invalidateRequested((string) $changedId, $previousTarget, $retirement);
             }
         }
-        $this->invalidateDeferredDelegators($changedDependencies, $retirement);
-        $this->providerProbes?->invalidate();
+        $invalidated = $this->invalidateDeferredDelegators($changedDependencies, $retirement);
+        $this->providerProbes?->invalidate(
+            invalidated: $invalidated,
+            directChanges: $canonical === $previousTarget ? [] : $affected,
+        );
         $retirement->release();
     }
 
@@ -762,8 +766,8 @@ final class Container extends ContainerEntryOperations implements
         }
         $this->delegators->register($id, $prepared, $retirement, $this->runtimeAuthority);
         $this->invalidateRequested($id, $canonical, $retirement);
-        $this->invalidateDeferredDelegators([$id], $retirement);
-        $this->providerProbes?->invalidate();
+        $invalidated = $this->invalidateDeferredDelegators([$id], $retirement);
+        $this->providerProbes?->invalidate(invalidated: $invalidated, directChanges: [$id => true]);
         $retirement->release();
     }
 
@@ -791,7 +795,7 @@ final class Container extends ContainerEntryOperations implements
 
     private function externalLookupProbes(): ExternalLookupProbes
     {
-        $probes = $this->providerProbes ??= new ExternalLookupProbes();
+        $probes = $this->providerProbes ??= new ExternalLookupProbes($this->aliases);
         $this->recordSharedLookup ??= $probes->trackLookup(...);
         return $probes;
     }
@@ -842,10 +846,14 @@ final class Container extends ContainerEntryOperations implements
             || ProtectedServiceIds::contains($this->aliases->resolve($id));
     }
 
-    /** @param iterable<string> $dependencyIds */
-    private function invalidateDeferredDelegators(iterable $dependencyIds, MutationRetirement $retirement): void
+    /**
+     * @param iterable<string> $dependencyIds
+     * @return list<string>
+     */
+    private function invalidateDeferredDelegators(iterable $dependencyIds, MutationRetirement $retirement): array
     {
-        foreach ($this->delegators->invalidateDependencies($dependencyIds, $retirement, $this->runtimeAuthority) as $entryId) {
+        $invalidated = $this->delegators->invalidateDependencies($dependencyIds, $retirement, $this->runtimeAuthority);
+        foreach ($invalidated as $entryId) {
             try {
                 $canonical = $this->aliases->resolve($entryId);
             } catch (Throwable) {
@@ -853,6 +861,7 @@ final class Container extends ContainerEntryOperations implements
             }
             $this->invalidateRequested($entryId, $canonical, $retirement);
         }
+        return $invalidated;
     }
 
     private function __clone() {}

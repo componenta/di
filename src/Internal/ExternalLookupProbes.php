@@ -15,7 +15,7 @@ use WeakMap;
  * A scope starts with just its ID. Nested reads and matching notifications
  * extend it only while the operation is in flight.
  *
- * @phpstan-type ObservedLookup array{id:?string,registryRevision:?int,reads:array<string,true>,notified:bool}
+ * @phpstan-type ObservedLookup array{id:?string,registryRevision:?int,reads:array<string,int>,notified:bool}
  * @phpstan-type LookupObservation string|ObservedLookup|null
  * @internal
  */
@@ -29,13 +29,16 @@ final class ExternalLookupProbes
     private array $mainObservations = [];
     /** @var WeakMap<object,list<LookupObservation>> */
     private readonly WeakMap $fiberObservations;
+    private int $activeRegistrations = 0;
+    /** @var array<string,int> Mutation revisions for IDs read by live registrations. */
+    private array $registrationReads = [];
     /** Local changes and provider appends can invalidate any nested registry read. */
     private int $lastUnscopedChange = 0;
     public private(set) int $revision = 0;
     public private(set) int $confirmationRevision = 0;
     public private(set) int $membershipRevision = 0;
 
-    public function __construct()
+    public function __construct(private readonly AliasResolver $aliases)
     {
         $this->fibers = new WeakMap();
         $this->fiberObservations = new WeakMap();
@@ -118,7 +121,7 @@ final class ExternalLookupProbes
      *
      * @template T
      * @param Closure():T $operation
-     * @return array{result:T,registryRevision:?int}
+     * @return array{result:T,registryRevision:?int,reads:array<string,int>}
      */
     public function observeLookup(Closure $operation): array
     {
@@ -133,7 +136,39 @@ final class ExternalLookupProbes
         } finally {
             $observation = $fiber === null ? array_pop($this->mainObservations) : $this->popFiberObservation($fiber);
         }
-        return ['result' => $result, 'registryRevision' => $observation['registryRevision'] ?? null];
+        return [
+            'result' => $result,
+            'registryRevision' => $observation['registryRevision'] ?? null,
+            'reads' => $observation['reads'] ?? [],
+        ];
+    }
+
+    /**
+     * @template T
+     * @param Closure():T $operation
+     * @return T
+     */
+    public function duringRegistration(Closure $operation): mixed
+    {
+        ++$this->activeRegistrations;
+        try {
+            return $operation();
+        } finally {
+            if (--$this->activeRegistrations === 0) {
+                $this->registrationReads = [];
+            }
+        }
+    }
+
+    /** @param array<string,int> $reads */
+    public function readsStillCurrent(array $reads): bool
+    {
+        foreach ($reads as $id => $revision) {
+            if (($this->registrationReads[$id] ?? 0) > $revision) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public function trackLookup(string $id): void
@@ -163,7 +198,10 @@ final class ExternalLookupProbes
                 ];
             }
             $observation['registryRevision'] ??= $this->revision;
-            $observation['reads'][$id] = true;
+            $observation['reads'][$id] ??= $this->revision;
+            if ($observation['id'] === null && $this->activeRegistrations !== 0) {
+                $this->registrationReads[$id] ??= 0;
+            }
         }
     }
 
@@ -213,13 +251,49 @@ final class ExternalLookupProbes
         $this->fibers[$fiber] = $states;
     }
 
-    public function invalidate(bool $appending = false): void
-    {
+    /**
+     * @param list<string> $invalidated
+     * @param array<array-key,int|true> $directChanges
+     */
+    public function invalidate(
+        bool $appending = false,
+        array $invalidated = [],
+        array $directChanges = [],
+        ?string $canonicalBinding = null,
+    ): void {
         $this->lastUnscopedChange = ++$this->revision;
         if ($appending) {
             $this->membershipRevision = $this->revision;
         } else {
             $this->confirmationRevision = $this->revision;
+        }
+        if ($this->registrationReads !== []) {
+            $this->recordChangedReads($invalidated, $directChanges, $canonicalBinding);
+        }
+    }
+
+    /** @param list<string> $invalidated */
+    public function noteInvalidatedEntries(array $invalidated): void
+    {
+        if ($this->registrationReads !== []) {
+            $this->recordChangedReads($invalidated);
+        }
+    }
+
+    /**
+     * @param list<string> $invalidated
+     * @param array<array-key,int|true> $directChanges
+     */
+    private function recordChangedReads(
+        array $invalidated,
+        array $directChanges = [],
+        ?string $canonicalBinding = null,
+    ): void {
+        $changed = $directChanges + array_fill_keys($invalidated, true);
+        foreach ($this->registrationReads as $id => $_) {
+            if (isset($changed[$id]) || ($canonicalBinding !== null && $this->aliases->resolve((string) $id) === $canonicalBinding)) {
+                $this->registrationReads[$id] = $this->revision;
+            }
         }
     }
 
@@ -227,6 +301,7 @@ final class ExternalLookupProbes
     public function notify(array $ids): void
     {
         $this->confirmationRevision = ++$this->revision;
+        $this->noteInvalidatedEntries($ids);
         if ($this->mainObservations === [] && count($this->fiberObservations) === 0) {
             return;
         }
