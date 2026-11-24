@@ -1,12 +1,12 @@
-# DI 6 migration: definitions and extensions
+# Migrating definitions and extensions from version 5
 
-[Русский](../ru/migrations/di6-definitions.md)
+[Русская версия](../ru/migrations/di6-definitions.md)
 
-This document describes the **unreleased** DI 6 API. Application use of `ContainerFactory`, `get()`, `make()`, `set()`, factories and aliases is retained. The changes mainly affect declarative definitions and low-level extensions.
+Application-level entry points such as `ContainerFactory`, `get()`, `make()`, `set()` and configuration providers remain available. Review code that builds `ClassDefinition` objects, implements custom entry resolvers or constructs built-in resolution strategies directly.
 
-## Declarative definitions
+## Class definitions
 
-`ClassDefinition::call()` replaces the former `method()` API. `constructor()`, `call()` and `autowire()` return new immutable definitions.
+`ClassDefinition::call()` replaces `method()`. `constructor()`, `call()` and `autowire()` return new definition objects rather than mutating the existing one.
 
 ```php
 use Componenta\DI\Definition\ClassDefinition;
@@ -16,40 +16,55 @@ $container->set(
     Client::class,
     ClassDefinition::create(Client::class)
         ->constructor(['endpoint' => 'https://api.example.test'])
-        ->call('setLogger', [Definition::reference(LoggerInterface::class)]),
+        ->call('setLogger', [Definition::reference(LoggerInterface::class)])
+        ->autowire(),
 );
 ```
 
-`ClassDefinition` executes configured constructor and method calls, but **does not execute the target's DI attributes**. Type-based fallback requires `autowire()`. `Definition::reference()` represents a configured argument, not a standalone entry. Invokables still call constructors with no supplied arguments. A factory owns creation of its result; the container does not subsequently run that result's DI attributes.
+`ClassDefinition` does not execute DI attributes on the target class or its members, even if `autowire()` is enabled. Its type-based fallback fills only missing arguments. `Definition::reference()` is an argument descriptor; it cannot be registered as a standalone entry using the built-in strategies. Explicit factory callables still receive a compatible prefix of `(ContainerValue, array)`.
 
-## Custom strategies
+## Custom definition strategies
 
-DI 6 holds registrations in a central binding owner. Definition strategies validate and execute supplied descriptors without maintaining their own ID-to-definition maps.
+The composite owns registrations. Definition strategies validate and execute descriptors without maintaining a separate ID-to-definition map.
 
-| Before | DI 6 |
+| Version 5 use | Version 6 equivalent |
 | --- | --- |
 | `DefinitionAwareResolverInterface` | `DefinitionResolverInterface` |
 | `new FactoryResolver($factories, $container, $proxyFactory)` | `new FactoryResolver($container, $proxyFactory)` |
 | `new InvokableResolver($invokables)` | `new InvokableResolver()` |
-| Registration on individual built-in strategies | `CompositeResolver::setDefinition()` |
+| Register on a built-in strategy | Register through `CompositeResolver::setDefinition()` |
 | Fallback `resolve(string $id, array $params)` | `resolve(string $id, EntryParameters $params)` |
 
-`DefinitionResolverInterface` declares `supportsDefinition()`, `validateDefinition()` and `resolveDefinition()`. Validation returns the descriptor to execute later; a `CompositeResolver` owns registrations. Fallback resolvers continue to implement `EntryResolverInterface`.
+A `DefinitionResolverInterface` implementation provides `supportsDefinition()`, `validateDefinition()` and `resolveDefinition()`. Classification selects the first supporting strategy. Validation returns a stable descriptor for subsequent execution and does not register it. Fallback strategies retain `EntryResolverInterface`.
 
-`DependencyConfiguration::normalize()` preserves definitions in its factory section; it does not prove that a descriptor can be executed. Registration validates a definition before publication.
+`DependencyConfiguration::normalize()` preserves definition objects in the factory section. Normalization checks configuration shape; it does not by itself prove that a definition can be executed. Admission to a composite or container performs the semantic checks.
 
-## Direct container construction
+## Forwarding fallback arguments
 
-Prefer `ContainerFactory::create($config, $dependencies)` for assembling a container. Direct constructors of `Container` or its internal collaborators require a review of the changed DI 6 signature and ownership rules.
+Custom fallback resolvers receive `EntryParameters`; the values are exposed through `$params->values`. Use `$params->forwardTo($factory, $entry)` to preserve parameter provenance across a continued construction when the recipient supports it. Passing a plain array to `make()` starts another construction attempt.
 
-## Custom fallback resolvers
+Prefer `ContainerFactory::create($config, $dependencies)`. Code constructing `Container` or its internal collaborators directly must be updated to the new constructor and ownership rules.
 
-`EntryResolverInterface::resolve()` receives `EntryParameters`. The application arguments are available through `$params->values`. Use `EntryParameters::forwardTo()` to forward the same construction while preserving source provenance. Calling `make()` with a regular array begins another construction.
+## Registration failures and lifetime
 
-## Mutation errors
+The mutation methods `set()`, `alias()`, `delegator()` and `addContainer()` validate and publish their changes, invalidate affected state and then release replaced values. An error *before* publication leaves the previous binding intact. `MutationRetirementException` signals an error *after* the change committed.
 
-`set()`, `alias()`, `delegator()` and `addContainer()` invalidate affected caches before retired values are released. `MutationRetirementException` indicates that the mutation **already committed**, even though cleanup failed. Catch it before `InvalidConfigurationException`, and do not blindly repeat the registration. An invalid registration rejected before publication preserves the prior binding.
+```php
+use Componenta\DI\Exception\MutationRetirementException;
 
-A missing requested ID is a PSR-11 not-found error; an unavailable dependency inside an existing entry is a resolution error.
+try {
+    $container->set('example', Definition::factory(
+        static fn() => new Example(),
+    ));
+} catch (MutationRetirementException $error) {
+    // The registration committed. Inspect $error->causes; do not retry blindly.
+}
+```
 
-Review custom resolver interfaces, former constructors and `ClassDefinition::method()` calls before upgrading. See [Definitions](../guide/definitions.md) and [Runtime behavior](../guide/runtime.md).
+`MutationRetirementException` extends `InvalidConfigurationException`, so catch the specific type first. Its `id` and `causes` properties identify the affected mutation and ordered cleanup errors. Independently completed nested changes are not rolled back.
+
+A missing *requested* entry produces a PSR-11 not-found exception; failure to obtain a dependency within an existing entry is a resolution failure.
+
+## Before upgrading
+
+Check uses of `ClassDefinition::method()`, old strategy constructors, implementation of entry resolver interfaces, assumptions about normalized factory values and exception handling after runtime registration. See [Dependency definitions](../guide/definitions.md), [Container API](../guide/container.md), and the public interfaces in `src/Resolver/Entry/`.
