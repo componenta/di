@@ -65,7 +65,15 @@ test('ClassDefinition bound to an interface consumes mapped fields without activ
 });
 
 test('ordinary programmatic ClassDefinition overrides are not treated as mapped input', function (): void {
-    $command = mappedClassDefinitionBuilder()->build()->make(
+    $container = mappedClassDefinitionBuilder()->build();
+    $request = (new ServerRequest('POST', '/'))->withParsedBody(['value' => 'mapped', 'token' => 'mapped-token']);
+    $mapped = $container->make(MappedClassDefinitionEnvelope::class, [ServerRequestInterface::class => $request]);
+    Assert::assertInstanceOf(MappedClassDefinitionEnvelope::class, $mapped);
+    Assert::assertInstanceOf(MappedClassDefinitionCommand::class, $mapped->command);
+    expect($mapped->command->value)->toBe('mapped')
+        ->and($mapped->command->token)->toBe('mapped-token');
+
+    $command = $container->make(
         MappedClassDefinitionContract::class,
         [
             'value' => 'programmatic-value',
@@ -76,7 +84,7 @@ test('ordinary programmatic ClassDefinition overrides are not treated as mapped 
         throw new \LogicException('The class definition contract resolved to an unexpected type.');
     }
 
-    expect($command)->toBeInstanceOf(MappedClassDefinitionCommand::class)
+    expect($command)->not->toBe($mapped->command)
         ->and($command->value)->toBe('programmatic-value')
         ->and($command->token)->toBe('programmatic-token');
 });

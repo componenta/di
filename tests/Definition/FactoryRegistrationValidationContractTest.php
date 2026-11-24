@@ -26,10 +26,14 @@ test('invalid wrapped factory registration preserves the previous shared value a
     expect(fn() => $container->set('product', new FactoryDefinition($factory)))
         ->toThrow(InvalidConfigurationException::class, $message);
 
-    expect($container->get('product'))->toBe($shared)
-        ->and($calls->count)->toBe(1)
-        ->and($container->make('product'))->not->toBe($shared)
-        ->and($calls->count)->toBe(2);
+    expect($shared)->toBeInstanceOf(\stdClass::class)
+        ->and($container->get('product'))->toBe($shared)
+        ->and($calls->count)->toBe(1);
+    $fresh = $container->make('product');
+    expect($fresh)->toBeInstanceOf(\stdClass::class)
+        ->and($fresh)->not->toBe($shared)
+        ->and($calls->count)->toBe(2)
+        ->and($container->get('product'))->toBe($shared);
 })->with([
     'wrong container type' => [static fn(array $container): array => $container, 'parameter #1'],
     'wrong context type' => [static fn(ContainerValue $container, string $context): string => $context, 'parameter #2'],

@@ -9,7 +9,15 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
-final class OrdinaryTarget {}
+final class OrdinaryTarget
+{
+    public static int $constructions = 0;
+
+    public function __construct()
+    {
+        ++self::$constructions;
+    }
+}
 
 final class MagicTarget
 {
@@ -53,10 +61,13 @@ test('native internal factories accept the complete runtime argument pair', func
 });
 
 test('ClassDefinition rejects missing methods before creating the target', function (): void {
+    OrdinaryTarget::$constructions = 0;
+
     expect(fn() => (new ContainerBuilder())->addDefinition(
         'product',
         ClassDefinition::create(OrdinaryTarget::class)->call('configure'),
-    )->build())->toThrow(InvalidConfigurationException::class, 'calls missing method');
+    )->build())->toThrow(InvalidConfigurationException::class, 'calls missing method')
+        ->and(OrdinaryTarget::$constructions)->toBe(0);
 });
 
 test('ClassDefinition permits configured methods implemented by public magic dispatch', function (): void {

@@ -138,12 +138,23 @@ test('deferred factory resolution preserves caller references and looks up the c
         ->addFactory('product', [&$ownerId, &$method])
         ->build();
 
-    expect($container->make('product'))->toEqual(new Product($original, 'create', 'original'))
+    $first = $container->make('product');
+    if (!$first instanceof Product) {
+        throw new LogicException('Expected a product from the original owner.');
+    }
+    expect($first)->toEqual(new Product($original, 'create', 'original'))
+        ->and($first->owner)->toBe($original)
         ->and($ownerId)->toBe('factory.owner')
         ->and($method)->toBe('create');
     $container->set('factory.owner', $replacement);
 
-    expect($container->make('product'))->toEqual(new Product($replacement, 'create', 'replacement'))
+    $second = $container->make('product');
+    if (!$second instanceof Product) {
+        throw new LogicException('Expected a product from the replacement owner.');
+    }
+    expect($second)->toEqual(new Product($replacement, 'create', 'replacement'))
+        ->and($second->owner)->toBe($replacement)
+        ->and($second)->not->toBe($first)
         ->and($ownerId)->toBe('factory.owner');
 });
 

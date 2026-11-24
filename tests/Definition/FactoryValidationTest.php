@@ -29,7 +29,7 @@ final class DefinitionMethodTarget
 
 final readonly class FactoryValueResult
 {
-    public function __construct(public int $value) {}
+    public function __construct(public int $value, public ContainerInterface $container) {}
 }
 
 final readonly class StandaloneLazyResult
@@ -75,12 +75,14 @@ test('factory callable signatures accept ContainerValue or ContainerInterface pl
             'value.factory',
             static fn(ContainerValue $_container, array $params): object => new FactoryValueResult(
                 is_int($params['value'] ?? null) ? $params['value'] : 0,
+                $_container,
             ),
         )
         ->addFactory(
             'interface.factory',
             static fn(ContainerInterface $_container, array $params): object => new FactoryValueResult(
                 is_int($params['value'] ?? null) ? $params['value'] : 0,
+                $_container,
             ),
         )
         ->build();
@@ -91,8 +93,11 @@ test('factory callable signatures accept ContainerValue or ContainerInterface pl
         throw new \LogicException('The factory ABI fixture returned an unexpected type.');
     }
 
+    $context = $container->get(ContainerValue::class);
     expect($valueResult->value)->toBe(1)
-        ->and($interfaceResult->value)->toBe(2);
+        ->and($interfaceResult->value)->toBe(2)
+        ->and($valueResult->container)->toBe($context)
+        ->and($interfaceResult->container)->toBe($context);
 });
 
 test('standalone lazy service factories do not need to be callable', function (): void {

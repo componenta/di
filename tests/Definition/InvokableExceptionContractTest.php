@@ -40,6 +40,9 @@ test('invokable constructor recursion preserves the original cycle diagnostic an
     $state = new ConstructionState();
     Product::$constructions = 0;
     Product::$construct = static function () use ($read, $state): void {
+        if (Product::$constructions > 1) {
+            throw new LogicException('The recursive invokable constructor was executed again.');
+        }
         try {
             $read();
         } catch (Throwable $exception) {
@@ -69,8 +72,17 @@ test('invokable constructor recursion preserves the original cycle diagnostic an
 
         Product::$construct = null;
 
-        expect($read())->toBeInstanceOf(Product::class)
+        $recovered = $read();
+        expect($recovered)->toBeInstanceOf(Product::class)
             ->and(Product::$constructions)->toBe(2);
+
+        if ($fresh) {
+            expect($read())->not->toBe($recovered)
+                ->and(Product::$constructions)->toBe(3);
+        } else {
+            expect($read())->toBe($recovered)
+                ->and(Product::$constructions)->toBe(2);
+        }
     } finally {
         Product::$construct = null;
     }
@@ -102,8 +114,17 @@ test('foreign invokable constructor failures retain their original cause and per
 
         Product::$construct = null;
 
-        expect($read())->toBeInstanceOf(Product::class)
+        $recovered = $read();
+        expect($recovered)->toBeInstanceOf(Product::class)
             ->and(Product::$constructions)->toBe(2);
+
+        if ($fresh) {
+            expect($read())->not->toBe($recovered)
+                ->and(Product::$constructions)->toBe(3);
+        } else {
+            expect($read())->toBe($recovered)
+                ->and(Product::$constructions)->toBe(2);
+        }
     } finally {
         Product::$construct = null;
     }

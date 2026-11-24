@@ -42,10 +42,13 @@ test('invokable classes must be directly constructible without required argument
 });
 
 test('runtime InvokableDefinition updates use the same configuration validation', function (): void {
-    $container = (new ContainerBuilder())->build();
+    $original = new \stdClass();
+    $container = (new ContainerBuilder())->addService('audit.invokable', $original)->build();
+    expect($container->get('audit.invokable'))->toBe($original);
 
     expect(fn() => $container->set(
         'audit.invokable',
         Definition::invokable(AuditInvokableWithRequiredDependency::class),
-    ))->toThrow(InvalidConfigurationException::class, 'constructor requires arguments');
+    ))->toThrow(InvalidConfigurationException::class, 'constructor requires arguments')
+        ->and($container->get('audit.invokable'))->toBe($original);
 });
