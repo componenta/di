@@ -30,7 +30,6 @@ jobs:
       fail-fast: false
       matrix:
         php:
-          - '8.4'
           - '8.5'
 
     steps:
@@ -94,7 +93,7 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Audit dependencies
-        if: matrix.php == '8.4'
+        if: matrix.php == '8.5'
         run: composer audit --no-interaction
 
       - name: Run checks
@@ -131,7 +130,6 @@ jobs:
       fail-fast: false
       matrix:
         php:
-          - '8.4'
           - '8.5'
           - '8.6'
 
@@ -176,7 +174,6 @@ jobs:
       fail-fast: false
       matrix:
         php:
-          - '8.4'
           - '8.5'
 
     steps:
@@ -245,7 +242,7 @@ jobs:
         run: composer check
 
   coverage:
-    name: Coverage PHP 8.4
+    name: Coverage PHP 8.5
     runs-on: ubuntu-latest
 
     steps:
@@ -279,7 +276,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           coverage: pcov
           extensions: pdo_sqlite
           ini-values: memory_limit=2G
@@ -319,7 +316,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mutation-php-8.4
+          name: mutation-php-8.5
           path: |
             .phpunit.cache/mutation-report.json
             .phpunit.cache/mutation-workers/
@@ -330,7 +327,7 @@ jobs:
       - name: Upload coverage artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: coverage-php-8.4
+          name: coverage-php-8.5
           path: coverage.xml
           if-no-files-found: error
 
@@ -380,7 +377,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           coverage: none
           tools: composer:v2
 

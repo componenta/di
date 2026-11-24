@@ -1,6 +1,6 @@
 {
     "name": "componenta/di",
-    "description": "PSR-11 dependency injection container for PHP 8.4+ with composable attribute semantics, autowiring and lazy objects",
+    "description": "PSR-11 dependency injection container for PHP 8.5.13+ with composable attribute semantics, autowiring and lazy objects",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -11,7 +11,7 @@
         "psr-11",
         "autowiring",
         "lazy-objects",
-        "php84",
+        "php85",
         "attributes"
     ],
     "authors": [
@@ -25,7 +25,7 @@
         "source": "https://github.com/Componenta/di"
     },
     "require": {
-        "php": "^8.4",
+        "php": "^8.5.13",
         "componenta/caster": "^1.0",
         "componenta/config": "^3.0.0",
         "componenta/reflection": "^2.0.1",
