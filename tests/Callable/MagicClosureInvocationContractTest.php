@@ -45,7 +45,7 @@ final class MagicClosureTarget
     }
 }
 
-test('magic closures receive the supplied positional arguments', function (bool $static, bool $firstClass): void {
+test('magic closures preserve native positional and named argument behavior', function (bool $static, bool $firstClass): void {
     $target = new MagicClosureTarget();
     $callable = $static
         ? ($firstClass ? MagicClosureTarget::dispatchStatic(...) : Closure::fromCallable([MagicClosureTarget::class, 'dispatchStatic']))
@@ -54,8 +54,22 @@ test('magic closures receive the supplied positional arguments', function (bool 
     $container = container();
 
     expect($container->call($callable, ['value', 42]))->toBe([$method, ['value', 42]])
-        ->and($container->call($callable, ['next']))->toBe([$method, ['next']])
-        ->and($container->call($callable, ['position', 'named' => 42]))->toBe([$method, ['position', 'named' => 42]]);
+        ->and($container->call($callable, ['next']))->toBe([$method, ['next']]);
+
+    $arguments = ['position', 'named' => 42];
+    // PHP does not accept named arguments for every native magic closure.
+    // Compare with the actual native call instead of assuming a variadic signature.
+    try {
+        $expected = call_user_func_array($callable, $arguments);
+    } catch (\Error $nativeFailure) {
+        expect(fn() => $container->call($callable, $arguments))
+            ->toThrow($nativeFailure::class, $nativeFailure->getMessage())
+            ->and($container->call($callable, ['recovered']))->toBe([$method, ['recovered']]);
+        return;
+    }
+
+    expect($expected)->toBe([$method, $arguments])
+        ->and($container->call($callable, $arguments))->toBe($expected);
 })->with(['instance' => false, 'static' => true])
     ->with(['fromCallable' => false, 'first class' => true]);
 
