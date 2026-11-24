@@ -35,6 +35,8 @@ A resolved callable is not invoked until application code calls it. `call()` can
 
 `CallableInvoker` deliberately **does not autowire**. It accepts a complete argument list and can pass reference-bearing arrays to native PHP callables. By contrast, `PreparedCallable` forwards arguments by value and is unsuitable for by-reference parameters.
 
+For magic methods passed as an array or string, `CallableInvoker` preserves PHP's argument order, named keys, and references. Validating a qualified ancestor array emits PHP's deprecation for that syntax.
+
 ```php
 use Componenta\DI\PreparedCallable;
 

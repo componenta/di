@@ -7,7 +7,8 @@ namespace Componenta\DI;
 use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
-use Componenta\DI\Internal\CallableReflector;
+use Componenta\DI\Internal\CallableMagicInvocation;
+use ReflectionReference;
 use Throwable;
 use TypeError;
 
@@ -71,9 +72,21 @@ final class CallableInvoker implements CallableInvokerInterface
             throw InvalidCallableException::forValue($callable, $cause);
         }
 
-        $target = array_is_list($params)
-            ? $resolved
-            : CallableReflector::nativeMagicMethod($callable, $resolved) ?? $resolved;
-        return call_user_func_array($target, $params);
+        if ($params !== [] && (is_array($callable) || (is_string($callable) && str_contains($callable, '::')))) {
+            $prepareMagic = !array_is_list($params);
+            if (!$prepareMagic) {
+                foreach ($params as $position => $_) {
+                    if (ReflectionReference::fromArrayElement($params, $position) !== null) {
+                        $prepareMagic = true;
+                        break;
+                    }
+                }
+            }
+            if ($prepareMagic && ($magic = CallableMagicInvocation::prepare($resolved, $params)) !== null) {
+                return call_user_func_array($magic[0], $magic[1]);
+            }
+        }
+
+        return call_user_func_array($resolved, $params);
     }
 }

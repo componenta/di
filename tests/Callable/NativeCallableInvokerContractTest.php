@@ -127,27 +127,31 @@ test('a caller-supplied magic closure keeps the behavior of its native capture',
     expect($invoker->call($target, $parameters))->toBe($native);
 });
 
-test('a qualification diagnostic can rebind the source without changing the selected magic hook', function (): void {
+test('a qualification diagnostic can rebind the source without changing the selected magic hook', function (bool $named): void {
     $qualified = NativeMagicOwner::class . '::Unused';
-    $invoke = static function (bool $native, string $qualified): array {
+    $invoke = static function (bool $native, string $qualified) use ($named): array {
+        $owner = new NativeMagicReplacement();
         $method = $qualified;
         /** @var array{NativeMagicReplacement,string}&callable $target */
-        $target = [new NativeMagicReplacement(), &$method];
+        $target = [&$owner, &$method];
+        $value = 'before';
+        $arguments = $named ? [3 => 'positional', 'named' => &$value] : [3 => &$value];
         $warnings = [];
-        set_error_handler(static function (int $severity) use (&$warnings, &$method): bool {
+        set_error_handler(static function (int $severity) use (&$warnings, &$owner, &$method, &$value): bool {
             $warnings[] = $severity;
+            $owner = new NativeMagicChild();
             $method = 'Unused';
+            $value = 'after diagnostic';
             return true;
         });
         try {
-            $arguments = [3 => 'positional'];
             $result = $native
                 ? \call_user_func_array($target, $arguments)
                 : new CallableInvoker()->call($target, $arguments);
             if (!is_array($result)) {
                 throw new LogicException('Expected the selected native magic hook.');
             }
-            return [$result[0], $result[1], $result[3], $warnings, $method];
+            return [$result[0], $result[1], $result[3], $warnings, $owner::class, $method];
         } finally {
             restore_error_handler();
         }
@@ -155,9 +159,10 @@ test('a qualification diagnostic can rebind the source without changing the sele
 
     $native = $invoke(true, $qualified);
 
-    expect($native)->toBe(['static', NativeMagicReplacement::class, ['positional'], [E_DEPRECATED], 'Unused'])
+    $arguments = $named ? ['positional', 'named' => 'after diagnostic'] : ['after diagnostic'];
+    expect($native)->toBe(['static', NativeMagicReplacement::class, $arguments, [E_DEPRECATED], NativeMagicChild::class, 'Unused'])
         ->and($invoke(false, $qualified))->toBe($native);
-});
+})->with(['sparse positional' => false, 'named' => true]);
 
 test('native invoker reports the rejected callable shape', function (
     mixed $value,
