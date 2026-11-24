@@ -70,7 +70,7 @@ The caster named `trim` and the required services must be available in the confi
 
 | Attribute | Target | Constructor arguments and defaults | Behavior |
 | --- | --- | --- | --- |
-| `Init` | P | `mixed $callable, array $params = []` | Populate a property by invoking a DI-aware callable with optional parameters. |
+| `Init` | P | `mixed $callable, array $params = []` | Populate a property by invoking a callable with explicit `params`, without automatic parameter injection. |
 | `SetUp` | C; repeatable | `string\|Closure $method, array $params = []` | Invoke a public instance method (string form), or a callback receiving the instance first, after property injection. Repeated hooks run in declaration order. |
 | `NoConstructor` | C | None | Skip the constructor, while retaining property injection and setup. |
 | `Lazy` | C | None | Select native lazy-ghost creation for reflection-created instances. |
@@ -96,7 +96,7 @@ final class Service
 
 ### Initialization examples
 
-`Init` invokes a callable and assigns its result to the property. `SetUp` with a string requires a public, concrete, non-static instance method; with a closure it supplies the created object as the first argument. Its return value is ignored. Explicit `params` can include named values and supported `new Config(...)`, `new Env(...)` and `new EntryId(...)` descriptors.
+`Init` calls its configured callable through `CallableInvoker`, passing only the explicit `params`, and assigns the returned value to the property; it does not autowire the callable's arguments. `SetUp` with a string requires a public, concrete, non-static instance method; with a closure it supplies the created object as the first argument. Its return value is ignored. Explicit `params` can include named values and supported `new Config(...)`, `new Env(...)` and `new EntryId(...)` descriptors.
 
 ```php
 use Componenta\DI\Attribute\{Init, NoConstructor, SetUp};

@@ -11,7 +11,7 @@ Attributes control dependency sources, object initialization and HTTP argument m
 | `#[Make]` | Create an object through `make()` rather than retrieve a shared entry. |
 | `#[Inject]` | Inject a property using its declared type. |
 | `#[Cast]`, `#[Transform]` | Cast or transform a parameter/property value. |
-| `#[Init]` | Initialize a property by invoking a callable with DI support. |
+| `#[Init]` | Initialize a property with a callable and explicit arguments, without automatic parameter injection. |
 | `#[SetUp]` | Invoke ordered initialization methods or callbacks after property injection. |
 | `#[NoConstructor]` | Suppress the reflected class constructor. |
 | `#[Lazy]`, `#[Proxy]` | Use the selected lazy-object strategy. |
