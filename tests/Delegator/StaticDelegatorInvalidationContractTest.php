@@ -80,6 +80,7 @@ test('native static delegators preserve shared results when an unused owner bind
     $specification = StaticDecorator::class . '::' . $method;
     $container->delegator('product', $specification);
     $original = $container->get('product');
+    expect($original)->toEqual(new Product('base:' . $method));
 
     $container->set(StaticDecorator::class, new \stdClass());
 
@@ -118,6 +119,7 @@ test('static delegators loaded during registration do not acquire owner dependen
         $container->delegator('product', $class . '::declared');
         expect(class_exists($class, false))->toBeTrue();
         $original = $container->get('product');
+        expect($original)->toEqual(new Product('base:declared'));
 
         $container->set($class, new \stdClass());
 
@@ -134,6 +136,7 @@ test('native static pairs remain independent of both owner bindings and exact st
     $specification = [StaticDecorator::class, $method];
     $container->delegator('product', $specification);
     $original = $container->get('product');
+    expect($original)->toEqual(new Product('base:' . $method));
     $replacement = static fn(Product $entry): Product => new Product($entry->value . ':replacement');
 
     $container->set(StaticDecorator::class, new \stdClass());
@@ -270,6 +273,7 @@ test('native static alias strings do not depend on an unused delimiter prefix', 
     expect(is_callable($specification))->toBeTrue()
         ->and($container->resolve($specification))->toBe($specification);
     $original = $container->get('product');
+    expect($original)->toEqual(new Product('base:' . $method));
 
     $container->set($prefix, new \stdClass());
 
@@ -348,6 +352,7 @@ test('a late native static route drops the unused owner dependency and keeps exa
     class_alias(StaticDecorator::class, $class);
 
     $original = $container->get('product');
+    expect($original)->toEqual(new Product('base:declared'));
     $container->set($prefix, new \stdClass());
 
     expect($container->get('product'))->toBe($original)

@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Delegator\DelegatorCallableBoundaryContract;
 
-use Componenta\DI\CallableResolverInterface;
+use Componenta\DI\CallableExecutorInterface;
+use Componenta\DI\Container;
 use Componenta\DI\Exception\DelegatorException;
 use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\Internal\AliasResolver;
-use Componenta\DI\Internal\ContainerConstruction;
-use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -155,7 +153,12 @@ test('a supplied delegator resolver handles deferred ids while native callables 
             throw new NotFoundException($id);
         }
     };
-    $resolver = new class () implements CallableResolverInterface {
+    $resolver = new class () implements CallableExecutorInterface {
+        public function call(mixed $callable, array $params = []): never
+        {
+            throw new LogicException('Delegators invoke their resolved native callable directly.');
+        }
+
         public function resolve(mixed $callable): callable
         {
             if ($callable !== 'application.decorator') {
@@ -164,12 +167,7 @@ test('a supplied delegator resolver handles deferred ids while native callables 
             return static fn(Product $entry): Product => new Product($entry->value . ':deferred');
         }
     };
-    $container = ContainerConstruction::create(
-        $entries,
-        new AliasResolver(),
-        (new ContainerBuilder())->build(),
-        delegators: new DelegatorRegistry($resolver),
-    );
+    $container = new Container($entries, $resolver);
     $container->set('product', new Product('base'));
     $native = new NativeDecorator();
     $container->delegator('product', static fn(Product $entry): Product => new Product($entry->value . ':closure'));

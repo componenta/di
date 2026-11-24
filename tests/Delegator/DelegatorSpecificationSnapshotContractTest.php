@@ -92,6 +92,10 @@ test('deferred delegator snapshots keep routing aligned with warm cache invalida
 
     expect($cold)->toEqual(new Result('initial', $original, 'decorate', 'original'))
         ->and($container->get('base'))->toBe($cold);
+    if (!$cold instanceof Result) {
+        throw new \LogicException('Expected the decorated result.');
+    }
+    expect($cold->owner)->toBe($original);
 
     $container->set('decorator.owner', $replacement);
     $fresh = $container->get('base');
@@ -101,6 +105,10 @@ test('deferred delegator snapshots keep routing aligned with warm cache invalida
         ->and($container->get('base'))->toBe($fresh)
         ->and($owner)->toBe('different.owner')
         ->and($method)->toBe('alternative');
+    if (!$fresh instanceof Result) {
+        throw new \LogicException('Expected the refreshed decorated result.');
+    }
+    expect($fresh->owner)->toBe($replacement);
 })->with(['bootstrap' => false, 'runtime' => true]);
 
 final class StaticDecorator

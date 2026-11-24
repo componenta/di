@@ -11,6 +11,8 @@ use Componenta\DI\ContainerFactory;
 
 final class PipelineFirstDecorator
 {
+    public function __construct(private readonly string $methodSuffix = 'method') {}
+
     public function __invoke(string $entry): string
     {
         return $entry . ':first';
@@ -18,7 +20,7 @@ final class PipelineFirstDecorator
 
     public function decorate(string $entry): string
     {
-        return $entry . ':method';
+        return $entry . ':' . $this->methodSuffix;
     }
 }
 
@@ -79,7 +81,7 @@ test('nested service and object method pairs remain individual pipeline entries'
         {
             return [
                 'pipeline.product' => 'base',
-                PipelineFirstDecorator::class => new PipelineFirstDecorator(),
+                PipelineFirstDecorator::class => new PipelineFirstDecorator('service-method'),
             ];
         }
 
@@ -88,7 +90,7 @@ test('nested service and object method pairs remain individual pipeline entries'
             return [
                 'pipeline.product' => [
                     [PipelineFirstDecorator::class, 'decorate'],
-                    [new PipelineFirstDecorator(), 'decorate'],
+                    [new PipelineFirstDecorator('object-method'), 'decorate'],
                 ],
             ];
         }
@@ -96,5 +98,5 @@ test('nested service and object method pairs remain individual pipeline entries'
     $composition = (new ConfigFactory())->create(new Environment([]), $provider);
     $container = (new ContainerFactory())->create($composition->config, $composition->dependencies)->container;
 
-    expect($container->get('pipeline.product'))->toBe('base:method:method');
+    expect($container->get('pipeline.product'))->toBe('base:service-method:object-method');
 });

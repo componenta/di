@@ -14,6 +14,13 @@ final class DelegatorAutoloadFailure extends RuntimeException {}
 
 test('failed delegator registration leaves no partial pipeline entry', function (): void {
     $container = container(['services' => ['decorated' => 'base']]);
+    $calls = 0;
+    $container->delegator('decorated', static function (string $entry) use (&$calls): string {
+        ++$calls;
+        return $entry . ':original';
+    });
+    expect($container->get('decorated'))->toBe('base:original')
+        ->and($calls)->toBe(1);
     $missing = __NAMESPACE__ . '\\RejectedAutoloadDecorator';
     $failure = new DelegatorAutoloadFailure('Decorator autoload failed.');
     $autoload = static function (string $class) use ($missing, $failure): void {
@@ -34,7 +41,12 @@ test('failed delegator registration leaves no partial pipeline entry', function 
         spl_autoload_unregister($autoload);
     }
 
+    expect($container->get('decorated'))->toBe('base:original')
+        ->and($calls)->toBe(1);
+
     $container->delegator('decorated', static fn(string $entry): string => $entry . ':accepted');
 
-    expect($container->get('decorated'))->toBe('base:accepted');
+    expect($container->get('decorated'))->toBe('base:original:accepted')
+        ->and($container->get('decorated'))->toBe('base:original:accepted')
+        ->and($calls)->toBe(2);
 });

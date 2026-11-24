@@ -21,6 +21,7 @@ use function Componenta\DI\Tests\Support\container;
 final class AliasDelegatorState
 {
     public bool $reenter = true;
+    public int $attempts = 0;
 }
 
 test('alias delegators can read the shared source regardless of previous lookups', function (
@@ -73,7 +74,13 @@ test('alias decoration still rejects real cycles and releases the guard after fa
     $container->delegator(
         'second',
         static function (string $entry, ContainerInterface $container) use ($state, $crossAlias): mixed {
-            return $state->reenter ? $container->get($crossAlias ? 'first' : 'second') : $entry . ':done';
+            if (!$state->reenter) {
+                return $entry . ':done';
+            }
+            if (++$state->attempts > 1) {
+                throw new \LogicException('The cyclic delegator was invoked recursively.');
+            }
+            return $container->get($crossAlias ? 'first' : 'second');
         },
     );
 
@@ -85,14 +92,32 @@ test('alias decoration still rejects real cycles and releases the guard after fa
 })->with(['self cycle' => false, 'cross alias cycle' => true]);
 
 test('aliases cannot reenter a shared source factory before it returns', function (): void {
+    $source = new stdClass();
+    $reenter = true;
+    $attempts = 0;
     $container = container([
         ConfigKey::FACTORIES => [
-            'source' => static fn(ContainerValue $container): mixed => $container->get('second'),
+            'source' => static function (ContainerValue $container) use ($source, &$reenter, &$attempts): mixed {
+                ++$attempts;
+                if (!$reenter) {
+                    return $source;
+                }
+                if ($attempts > 1) {
+                    throw new \LogicException('The cyclic source factory was invoked recursively.');
+                }
+                return $container->get('second');
+            },
         ],
         ConfigKey::ALIASES => ['first' => 'source', 'second' => 'source'],
     ]);
 
-    expect(fn() => $container->get('first'))->toThrow(CircularDependencyException::class);
+    expect(fn() => $container->get('first'))->toThrow(CircularDependencyException::class)
+        ->and($attempts)->toBe(1);
+
+    $reenter = false;
+    expect($container->get('first'))->toBe($source)
+        ->and($container->get('second'))->toBe($source)
+        ->and($attempts)->toBe(2);
 });
 
 test('a suspended source factory cannot run twice through different aliases', function (): void {
