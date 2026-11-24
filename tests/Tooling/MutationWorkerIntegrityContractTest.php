@@ -52,8 +52,21 @@ test('mutation generation rebuilds stale artifacts while retaining prior scores'
         $regenerated = new Mutation($file, 'regenerated', 'fixture', 1, 1, '', $replacement);
         $cache->set('generated-mutation', [$regenerated]);
         expect($cache->has('generated-mutation'))->toBeTrue()
-            ->and($cache->get('generated-mutation'))->toEqual([$regenerated])
             ->and($cache->get('previous-run-result'))->toBe(['mutation' => 'tested']);
+
+        $restored = $cache->get('generated-mutation');
+        Assert::assertIsArray($restored);
+        Assert::assertCount(1, $restored);
+        $mutation = $restored[0] ?? null;
+        Assert::assertInstanceOf(Mutation::class, $mutation);
+        expect($mutation->id)->toBe($regenerated->id)
+            ->and($mutation->file->getRealPath())->toBe($file->getRealPath())
+            ->and($mutation->mutator)->toBe($regenerated->mutator)
+            ->and($mutation->startLine)->toBe($regenerated->startLine)
+            ->and($mutation->endLine)->toBe($regenerated->endLine)
+            ->and($mutation->diff)->toBe($regenerated->diff)
+            ->and($mutation->modifiedSourcePath)->toBe($replacement)
+            ->and($mutation->modifiedSource())->toBe($contents);
     } finally {
         new Filesystem()->remove($directory);
         if ($active) {
