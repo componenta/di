@@ -10,23 +10,25 @@ All interfaces below belong to `Componenta\DI`. The package requires PHP 8.5.13+
 | `ProxyFactory` | `makeLazy()`, `makeProxy()` | Default implementation using `ReflectionClass::newLazyGhost()` and `newLazyProxy()`. |
 | `LazyServiceFactoryInterface` | `lazy(ContainerInterface $container, ProxyFactoryInterface $proxyFactory, array $context = []): object` | Allows a custom factory entry to construct and own its lazy wrapper. |
 
+The following examples use `Catalog` from the [guide](../guide/lazy-objects.md).
+
 ```php
 $ghost = $container->makeLazy(
-    CachedData::class,
-    static function (CachedData $instance): void {
+    Catalog::class,
+    static function (Catalog $instance): void {
         $instance->__construct();
     },
 );
 
 $proxy = $container->makeProxy(
-    CachedData::class,
-    static fn(CachedData $proxy): CachedData => new CachedData(),
+    Catalog::class,
+    static fn(Catalog $proxy): Catalog => new Catalog(),
 );
 ```
 
-Callbacks are **deferred**: object allocation does not call the initializer or backing factory. For the default adapter, eligible classes need a non-static backed instance property; an inherited private property qualifies. Propertyless classes fail before allocation with `ResolutionException`. The backing object must be a suitable non-lazy class instance, not the proxy itself, and follow PHP's native class/parent restrictions.
+Neither callback runs during allocation. The initializer receives the object to initialize and must return no value; the proxy factory receives the proxy and must return a compatible non-lazy real instance distinct from it.
 
-At a `#[Proxy]` injection point, DI imposes the additional requirement that the backing object be an instance of the explicitly selected proxy class. Custom adapters may use other mechanisms but must preserve deferred initialization. A class-level `#[Lazy]` or `#[Proxy]` affects reflection creation, not arbitrary application factory products.
+The default `ProxyFactory` rejects otherwise eligible classes with no stored instance properties before allocation (`ResolutionException`), rather than returning an object whose initializer or factory never runs. For the reason, initialization triggers, and restrictions on proxy backing types, see the [lazy objects guide](../guide/lazy-objects.md). Custom implementations may use a different mechanism while preserving deferred initialization.
 
 ## Factory-owned laziness
 

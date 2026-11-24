@@ -76,7 +76,7 @@ The caster named `trim` and the required services must be available in the confi
 | `Lazy` | C | None | Select native lazy-ghost creation for reflection-created instances. |
 | `Proxy` | C, P, A | `?string $class = null` | Select a native virtual proxy; at injection points optionally supply the concrete proxy class. |
 
-`Lazy` and `Proxy` require a class eligible for the selected factory. The default PHP-native adapter requires at least one backed instance property and a compatible proxy backing object. `ClassDefinition` and application factories do not execute these target attributes. See [Lazy objects](lazy-objects.md).
+The default factory requires a declared non-static property with storage; class-level attributes are not applied automatically to explicit factory products or by `ClassDefinition`. See [Lazy objects](lazy-objects.md) for initialization triggers, the reason for the property requirement and proxy compatibility rules.
 
 ```php
 use Componenta\DI\Attribute\{Inject, SetUp};
