@@ -48,4 +48,50 @@ final class CallableReflector
             ? $reflection
             : null;
     }
+
+    /**
+     * Restores named argument binding for a captured magic method without
+     * reading the receiver from the caller's potentially rebound array.
+     *
+     * @return (array{object|class-string,string}&callable)|null
+     */
+    public static function nativeMagicMethod(mixed $source, Closure $resolved): ?array
+    {
+        if (is_array($source)) {
+            $method = $source[1] ?? null;
+            if (!is_string($method) || str_contains($method, '::')) {
+                // An unqualified pair may select a different declaration.
+                return null;
+            }
+        } elseif (!is_string($source) || !str_contains($source, '::')) {
+            return null;
+        }
+
+        $reflection = new ReflectionFunction($resolved);
+        if (!is_magic_closure_trampoline($reflection)) {
+            return null;
+        }
+
+        $receiver = $reflection->getClosureThis();
+        $class = $reflection->getClosureCalledClass();
+        $method = $reflection->getName();
+        if ($class === null || str_contains($method, '::')) {
+            return null;
+        }
+
+        // A diagnostic handler can rebind the source method after PHP selects
+        // qualified dispatch. Use an unqualified pair only for the same hook.
+        $hook = $receiver === null ? '__callStatic' : '__call';
+        if (($receiver !== null && $receiver::class !== $class->getName())
+            || !$class->hasMethod($hook)
+            || $class->getMethod($hook)->getDeclaringClass()->getName() !== $reflection->getClosureScopeClass()?->getName()
+            || ($class->hasMethod($method) && $class->getMethod($method)->isPublic())
+        ) {
+            return null;
+        }
+
+        /** @var array{object|class-string,string}&callable $target */
+        $target = [$receiver ?? $class->getName(), $method];
+        return $target;
+    }
 }

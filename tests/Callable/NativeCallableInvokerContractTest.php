@@ -4,11 +4,49 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Callable\NativeCallableInvokerContract;
 
+use Closure;
 use Componenta\DI\CallableInvoker;
 use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use Error;
 use LogicException;
 use WeakReference;
+
+/** @method array{string,class-string,string,array<array-key,mixed>} Unused(mixed ...$arguments) */
+class NativeMagicOwner
+{
+    /**
+     * @param array<array-key,mixed> $arguments
+     * @return array{string,class-string,string,array<array-key,mixed>}
+     */
+    public function __call(string $method, array $arguments): array
+    {
+        return ['instance', static::class, $method, $arguments];
+    }
+
+    /**
+     * @param array<array-key,mixed> $arguments
+     * @return array{string,class-string,string,array<array-key,mixed>}
+     */
+    public static function __callStatic(string $method, array $arguments): array
+    {
+        return ['static', static::class, $method, $arguments];
+    }
+}
+
+final class NativeMagicChild extends NativeMagicOwner {}
+
+final class NativeMagicReplacement extends NativeMagicOwner
+{
+    /**
+     * @param array<array-key,mixed> $arguments
+     * @return array{string,class-string,string,array<array-key,mixed>}
+     */
+    public static function __callStatic(string $method, array $arguments): array
+    {
+        return ['replacement', static::class, $method, $arguments];
+    }
+}
 
 test('native callable invoker preserves named variadic arguments', function (): void {
     $result = (new CallableInvoker())->call(
@@ -17,6 +55,108 @@ test('native callable invoker preserves named variadic arguments', function (): 
     );
 
     expect($result)->toBe(['start', ['first' => 'one', 'second' => 'two']]);
+});
+
+test('native invoker preserves arguments and reference cells for raw magic callables', function (callable $target, string $kind): void {
+    $named = 'original';
+    $parameters = [7 => 'positional', 'named' => &$named];
+
+    $native = call_user_func_array($target, $parameters);
+    $resolved = new CallableInvoker()->call($target, $parameters);
+
+    expect($native)->toBe([$kind, NativeMagicChild::class, 'Unused', ['positional', 'named' => 'original']])
+        ->and($resolved)->toBe($native);
+
+    $named = 'changed';
+    expect($resolved)->toBe([$kind, NativeMagicChild::class, 'Unused', ['positional', 'named' => 'changed']]);
+})->with([
+    'instance pair' => [[new NativeMagicChild(), 'Unused'], 'instance'],
+    'static pair' => [[NativeMagicChild::class, 'Unused'], 'static'],
+    'static string' => [NativeMagicChild::class . '::Unused', 'static'],
+]);
+
+test('native magic binding retains its PHP-selected route after an autoloader rebinds the source', function (): void {
+    $invoke = static function (bool $native): array {
+        $class = __NAMESPACE__ . '\\LateMagic_' . bin2hex(random_bytes(5));
+        $owner = $class;
+        $method = 'beforeLoad';
+        /** @var array{string,string}&callable(string $label):array<array-key,mixed> $target */
+        $target = [&$owner, &$method];
+        $loads = 0;
+        $loader = static function (string $name) use ($class, &$owner, &$method, &$loads): void {
+            if ($name === $class) {
+                ++$loads;
+                class_alias(NativeMagicChild::class, $class);
+                $owner = NativeMagicReplacement::class;
+                $method = 'afterLoad';
+            }
+        };
+        spl_autoload_register($loader);
+        try {
+            $result = $native
+                ? \call_user_func_array($target, ['label' => 'native'])
+                : new CallableInvoker()->call($target, ['label' => 'native']);
+            return [$result, $owner, $method, $loads];
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+    };
+
+    $native = $invoke(true);
+
+    expect($native)->toBe([
+        ['static', NativeMagicChild::class, 'afterLoad', ['label' => 'native']],
+        NativeMagicReplacement::class,
+        'afterLoad',
+        1,
+    ])->and($invoke(false))->toBe($native);
+});
+
+test('a caller-supplied magic closure keeps the behavior of its native capture', function (): void {
+    $target = Closure::fromCallable([new NativeMagicChild(), 'Unused']);
+    $parameters = ['named' => 'value'];
+    $invoker = new CallableInvoker();
+
+    try {
+        $native = call_user_func_array($target, $parameters);
+    } catch (Error $failure) {
+        expect(fn() => $invoker->call($target, $parameters))->toThrow($failure::class, $failure->getMessage());
+        return;
+    }
+
+    expect($invoker->call($target, $parameters))->toBe($native);
+});
+
+test('a qualification diagnostic can rebind the source without changing the selected magic hook', function (): void {
+    $qualified = NativeMagicOwner::class . '::Unused';
+    $invoke = static function (bool $native, string $qualified): array {
+        $method = $qualified;
+        /** @var array{NativeMagicReplacement,string}&callable $target */
+        $target = [new NativeMagicReplacement(), &$method];
+        $warnings = [];
+        set_error_handler(static function (int $severity) use (&$warnings, &$method): bool {
+            $warnings[] = $severity;
+            $method = 'Unused';
+            return true;
+        });
+        try {
+            $arguments = [3 => 'positional'];
+            $result = $native
+                ? \call_user_func_array($target, $arguments)
+                : new CallableInvoker()->call($target, $arguments);
+            if (!is_array($result)) {
+                throw new LogicException('Expected the selected native magic hook.');
+            }
+            return [$result[0], $result[1], $result[3], $warnings, $method];
+        } finally {
+            restore_error_handler();
+        }
+    };
+
+    $native = $invoke(true, $qualified);
+
+    expect($native)->toBe(['static', NativeMagicReplacement::class, ['positional'], [E_DEPRECATED], 'Unused'])
+        ->and($invoke(false, $qualified))->toBe($native);
 });
 
 test('native invoker reports the rejected callable shape', function (
