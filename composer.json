@@ -93,11 +93,11 @@
         ],
         "bench": [
             "Composer\\Config::disableProcessTimeout",
-            "@php vendor/bin/phpbench run --report=aggregate --report=env"
+            "@php vendor/bin/phpbench run --config=phpbench.json.dist --report=aggregate --report=env"
         ],
         "bench-smoke": [
             "Composer\\Config::disableProcessTimeout",
-            "@php vendor/bin/phpbench run --iterations=1 --report=aggregate"
+            "@php benchmarks/smoke.php"
         ]
     },
     "minimum-stability": "stable",

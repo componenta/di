@@ -70,8 +70,10 @@ final class RequestBench
     public function verify(array $params): void
     {
         $valid = match ($params['method']) {
-            'plain', 'callback' => $this->result === $this->data,
-            'dto', 'dtoCallback', 'dtoCastValidated' => $this->result instanceof MappedDto && $this->result->value === 'mapped',
+            'plain' => $this->result === $this->data,
+            'callback' => $this->result === array_replace($this->data, ['value' => 'mapped-callback']),
+            'dto', 'dtoCastValidated' => $this->result instanceof MappedDto && $this->result->value === 'mapped',
+            'dtoCallback' => $this->result instanceof MappedDto && $this->result->value === 'mapped-callback',
             'extract' => $this->result === [
                 $this->request, $this->request->getUri(), 'q', 'mapped', 'trace', 'c', 'r', 's',
                 $this->request->getUploadedFiles()['upload'],

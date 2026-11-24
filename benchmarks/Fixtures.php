@@ -285,6 +285,7 @@ final class Callbacks
 
     public static function map(array $data, Leaf $leaf): array
     {
+        $data['value'] .= '-callback';
         return $data;
     }
 }

@@ -9,8 +9,8 @@ Use the PHP version required by composer.json and install development dependenci
 ```sh
 composer install
 composer bench
-vendor/bin/phpbench run --filter=ContainerBench --report=aggregate --report=env
-vendor/bin/phpbench run --filter=benchFirstGet --report=aggregate
+vendor/bin/phpbench run --config=phpbench.json.dist --filter=ContainerBench --report=aggregate --report=env
+vendor/bin/phpbench run --config=phpbench.json.dist --filter=benchFirstGet --report=aggregate
 ```
 
 Revolution and iteration defaults are declared on benchmark classes, with method-level overrides. Do not put `runner.revs` or `runner.iterations` in the main PHPBench configuration: PHPBench 1.x treats these as overrides of method metadata. Do not pass `--revs` when running the mixed suite or first-operation subjects. A first operation is measured once in each isolated PHPBench iteration; repeating it on the same container would measure a different operation. A quick discovery/execution check can reduce iterations (not revolutions):
@@ -18,6 +18,8 @@ Revolution and iteration defaults are declared on benchmark classes, with method
 ```sh
 composer bench-smoke
 ```
+
+The smoke command uses the committed configuration, checks the actual PHPBench XML report against the declared subjects and parameter counts, and verifies revolutions, warmup and the single successful iteration for every variant. It rejects accidental global overrides and silent discovery omissions. The temporary report is deleted after verification.
 
 To compare revisions, use separate checkouts with the same PHP build, extensions, Composer dependency versions, CPU/power settings and PHP configuration. Record OPcache/JIT and Xdebug settings. For example, store the first result with `vendor/bin/phpbench run --tag=baseline --report=aggregate` and use PHPBench's stored baseline comparison on the same machine. Keep local results out of version control.
 
