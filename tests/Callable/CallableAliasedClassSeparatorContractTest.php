@@ -60,7 +60,7 @@ test('separator aliases preserve native magic argument binding', function (bool 
 
     expect($expected)->toBe(['dynamic', $arguments])
         ->and($container->call($callable, $arguments))->toBe($expected)
-        ->and($container->call($callable, $arguments))->toBe($expected);
+        ->and($container->call($callable, ['next', 'named' => 'current']))->toBe(['dynamic', ['next', 'named' => 'current']]);
 })->with(['method string' => false, 'method array' => true]);
 
 test('exact callable service ids still precede separator alias method syntax', function (): void {

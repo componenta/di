@@ -14,9 +14,9 @@ use Componenta\DI\Attribute\Composition\AttributeSet;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\Config as ConfigValue;
 use Componenta\DI\Container;
+use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\ResolutionRuntime;
-use Componenta\DI\Internal\Resolver\Parameter\ParameterExecutionAccess;
 use Componenta\DI\PreparedCallable;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
@@ -231,10 +231,14 @@ test('cache parity control reclassifies every parameter and preserves the resolv
     $results = [];
     $fixedDefault = new \stdClass();
     foreach ([false, true] as $uncached) {
+        DefaultToken::$created = 0;
         [$container, $probe] = auditContainer($uncached);
-        $results[] = $container->call($function, ['explicit' => 1, 'default' => $fixedDefault]);
+        $result = $container->call($function, ['explicit' => 1, 'default' => $fixedDefault]);
+        expect($result)->toBe(['dependency' => 'first', 'source' => 'configured', 'explicit' => 1, 'nullable' => null, 'default' => $fixedDefault, 'tail' => []]);
+        $results[] = $result;
         $first = $probe->calls[$function];
-        $container->call($function, ['explicit' => 2]);
+        $next = $container->call($function, ['explicit' => 2]);
+        expect($next)->toBe(['dependency' => 'first', 'source' => 'configured', 'explicit' => 2, 'nullable' => null, 'default' => 1, 'tail' => []]);
         $second = $probe->calls[$function];
 
         expect(array_keys($first))->toBe([0, 1, 2, 3, 4, 5]);
@@ -245,18 +249,18 @@ test('cache parity control reclassifies every parameter and preserves the resolv
     expect($results[0])->toBe($results[1]);
 });
 
-test('full prepared parameter plans match fresh resolution through mutation defaults null and variadics', function (bool $prepared): void {
+test('DI calls and explicitly resolved arguments preserve defaults null variadics and current services', function (bool $direct): void {
     $reports = [];
     foreach ([false, true] as $uncached) {
         DefaultToken::$created = 0;
         [$container, , $runtime] = auditContainer($uncached);
         $resolver = $runtime->parameters;
-        $reflection = new ReflectionFunction(__NAMESPACE__ . '\\signature');
-        $parameters = $reflection->getParameters();
-        $plan = ParameterExecutionAccess::for($resolver)->prepare($parameters);
-        $call = static function (array $provided) use ($container, $resolver, $parameters, $plan, $prepared): array {
-            $arguments = $prepared ? ParameterExecutionAccess::for($resolver)->resolvePrepared($plan, $provided) : $resolver->resolve($parameters, $provided);
-            $result = $container->call(new PreparedCallable(__NAMESPACE__ . '\\signature'), $arguments);
+        $function = __NAMESPACE__ . '\\signature';
+        $parameters = new ReflectionFunction($function)->getParameters();
+        $call = static function (array $provided) use ($container, $resolver, $parameters, $function, $direct): array {
+            $result = $direct
+                ? $container->call($function, $provided)
+                : $container->call(new PreparedCallable($function), $resolver->resolve($parameters, $provided));
             if (!is_array($result)) {
                 throw new \LogicException('The complete signature must return its argument snapshot.');
             }
@@ -272,10 +276,14 @@ test('full prepared parameter plans match fresh resolution through mutation defa
         $reports[] = $report;
         expect($report[0])->toBe(['dependency' => 'first', 'source' => 'configured', 'explicit' => 1, 'nullable' => null, 'default' => 1, 'tail' => ['first', 'named' => 'second']])
             ->and($report[1])->toBe(['dependency' => 'second', 'source' => 'explicit', 'explicit' => 2, 'nullable' => null, 'default' => 2, 'tail' => ['tail']])
-            ->and($report[2]['default'])->toBe(3);
+            ->and($report[2])->toBe(['dependency' => 'second', 'source' => 'configured', 'explicit' => 3, 'nullable' => null, 'default' => 3, 'tail' => []])
+            ->and($report[3][0])->toBe(ResolutionException::class)
+            ->and($report[3][1])->toContain('$explicit')
+            ->and($report[4][0])->toBe(ResolutionException::class)
+            ->and($report[4][1])->toContain('variadic argument "source" would overwrite a preceding parameter');
     }
     expect($reports[0])->toBe($reports[1]);
-})->with(['resolve' => false, 'resolvePrepared' => true]);
+})->with(['explicitly resolved arguments' => false, 'DI call' => true]);
 
 test('warm callable cache preserves binding and complete native signatures across all callable forms', function (): void {
     $reports = [];
@@ -320,13 +328,34 @@ test('warm callable cache preserves binding and complete native signatures acros
                 $report[$round][] = $container->call($callable, $provided);
             }
         }
-        expect($report[0][0])->toBe(['first-object', 'first', 'one', [1, 'named' => 2]])
-            ->and($report[0][1])->toBe(['second-object', 'first', 'two', [3]])
-            ->and($report[0][3])->toBe(['override', 'first', 'renamed', []])
-            ->and($report[1][16])->toBe(['magic', 'second'])
-            ->and($report[0][20])->toBe(['one', 'nil'])
-            ->and($report[0][21])->toBe(['nil'])
-            ->and($report[0][22])->toBe([1 => 'b', 2 => 'c']);
+        foreach (['first', 'second'] as $round => $dependency) {
+            expect($report[$round])->toBe([
+                ['first-object', $dependency, 'one', [1, 'named' => 2]],
+                ['second-object', $dependency, 'two', [3]],
+                ['inherited', $dependency, 'native', []],
+                ['override', $dependency, 'renamed', []],
+                ['first-object', $dependency, 'invoke', [4]],
+                ['second-object', $dependency, 'invoke', []],
+                ['first-object', $dependency, 'native', [5]],
+                ['second-object', $dependency, 'native', [6]],
+                ['second-object', 'captured'],
+                ['second-object', 'method'],
+                [$dependency, 7],
+                [$dependency, 9],
+                [$dependency, 9],
+                ['magic', 'hidden', [true, 'named' => 8]],
+                ['magic', 'missing', ['named' => 9]],
+                ['magic', 'missing', [10, 'named' => 11]],
+                ['magic', $dependency],
+                ['missing', [12, 'named' => 13]],
+                ['missing', [14]],
+                ['missing', [15]],
+                ['one', 'nil'],
+                ['nil'],
+                [1 => 'b', 2 => 'c'],
+                'empty',
+            ]);
+        }
         $reports[] = $report;
     }
     expect($reports[0])->toBe($reports[1]);
@@ -386,6 +415,8 @@ test('warmed callable plans preserve native name casing and current service alia
             ->and($report[10])->toBe(['right', 'first', 'right-label', []])
             ->and($report[11])->toBe(['service', 42])
             ->and($report[12])->toBe('default')
+            ->and($report[13][0])->toBe(InvalidCallableException::class)
+            ->and($report[13][1])->toContain('is not invokable')
             ->and($report[14])->toBe('default');
         $reports[] = $report;
     }
@@ -456,9 +487,11 @@ test('warm and fresh invocation preserve failure ownership native omission and r
             $report[] = $container->call('array_keys', ['array' => ['a' => 1, 'nil' => null]]);
             $report[] = $container->call('php_sapi_name', ['unused' => 'ignored']);
         }
-        expect($report[1])->toBe(['first', 17])
-            ->and($report[4])->toBe(['a', 'nil'])
-            ->and($report[5])->toBe(PHP_SAPI);
+        foreach ([0, 6] as $offset) {
+            expect($report[$offset + 1])->toBe(['first', 17])
+                ->and($report[$offset + 4])->toBe(['a', 'nil'])
+                ->and($report[$offset + 5])->toBe(PHP_SAPI);
+        }
         $reports[] = $report;
     }
     expect($reports[0])->toBe($reports[1]);
@@ -474,12 +507,12 @@ test('warm callable metadata does not retain supplied owners closures or prepare
     $prepared = new PreparedCallable($closure);
     $references = array_map(WeakReference::create(...), [$owner, $magic, $capture, $closure, $bound, $prepared]);
 
-    $container->call([$owner, 'read']);
-    $container->call($owner);
-    $container->call($closure);
-    $container->call([$closure, '__invoke']);
-    $container->call($bound);
-    $container->call($prepared, [new Dependency('prepared')]);
+    expect($container->call([$owner, 'read']))->toBe(['owner', 'first', 'native', []])
+        ->and($container->call($owner))->toBe(['owner', 'first', 'invoke', []])
+        ->and($container->call($closure))->toBe(['first', $capture])
+        ->and($container->call([$closure, '__invoke']))->toBe(['first', $capture])
+        ->and($container->call($bound))->toBe(['magic', 'first'])
+        ->and($container->call($prepared, [new Dependency('prepared')]))->toBe(['prepared', $capture]);
     unset($owner, $magic, $capture, $closure, $bound, $prepared);
     gc_collect_cycles();
 

@@ -85,6 +85,11 @@ final class ExtensionFactory
 
 final class InaccessibleNativeFactory
 {
+    public static function nativeRoute(ContainerInterface $container): never
+    {
+        self::materialize($container);
+    }
+
     private static function materialize(ContainerInterface $container): never
     {
         throw new LogicException('An inaccessible native method must not be invoked.');
@@ -252,6 +257,8 @@ test('extension discovery selects a public service method over an inaccessible n
         ConfigKey::SERVICES => [InaccessibleNativeFactory::class => $factory],
     ]);
 
-    expect($di->call(static fn(#[SelectedValue] string $selected): string => $selected))->toBe('service:materialize')
+    expect(fn() => InaccessibleNativeFactory::nativeRoute($di))
+        ->toThrow(LogicException::class, 'An inaccessible native method must not be invoked.')
+        ->and($di->call(static fn(#[SelectedValue] string $selected): string => $selected))->toBe('service:materialize')
         ->and($di->get(InaccessibleNativeFactory::class))->toBe($factory);
 })->with(['parameter resolver' => false, 'attribute definition' => true]);

@@ -19,14 +19,15 @@ use Psr\Http\Message\UriInterface;
 final class CallableDependency {}
 
 test('CallableExecutor exposes the DI-aware call API', function (): void {
-    $container = (new ContainerBuilder())->build();
+    $dependency = new CallableDependency();
+    $container = (new ContainerBuilder())->addService(CallableDependency::class, $dependency)->build();
     $executor = $container->get(CallableExecutorInterface::class);
     Assert::assertInstanceOf(CallableExecutorInterface::class, $executor);
 
     expect($executor)->toBeInstanceOf(CallableInvokerInterface::class)
         ->and($executor->call(
             static fn(CallableDependency $dependency): CallableDependency => $dependency,
-        ))->toBeInstanceOf(CallableDependency::class)
+        ))->toBe($dependency)
         ->and($executor->call(
             static fn(int $left, int $right): int => $left - $right,
             ['left' => 10, 'right' => 3],
@@ -43,7 +44,8 @@ test('reflected zero-argument callables ignore unrelated provided parameters', f
 });
 
 test('container CallableInvokerInterface remains DI-aware', function (): void {
-    $container = (new ContainerBuilder())->build();
+    $dependency = new CallableDependency();
+    $container = (new ContainerBuilder())->addService(CallableDependency::class, $dependency)->build();
     $invoker = $container->get(CallableInvokerInterface::class);
     Assert::assertInstanceOf(CallableInvokerInterface::class, $invoker);
 
@@ -51,7 +53,7 @@ test('container CallableInvokerInterface remains DI-aware', function (): void {
         ->and($container)->toBeInstanceOf(Container::class)
         ->and($invoker->call(
             static fn(CallableDependency $dependency): CallableDependency => $dependency,
-        ))->toBeInstanceOf(CallableDependency::class);
+        ))->toBe($dependency);
 });
 
 test('request stays in the ordinary parameter array while request resolvers consume it', function (): void {

@@ -59,6 +59,9 @@ test('magic invocation does not retain an unbounded history of dynamic method na
     for ($index = 0; $index < 512; ++$index) {
         $method = str_pad('dynamic_' . $prefix . '_' . $index, 4096, '_');
         $last = $call($method, $index);
+        if ($last !== [$method, ['value' => $index]]) {
+            throw new \LogicException('Magic dispatch returned an earlier invocation.');
+        }
     }
     expect($last)->toBe([$method, ['value' => 511]]);
     unset($prefix, $method, $last);

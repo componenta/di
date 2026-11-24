@@ -39,8 +39,8 @@ test('case variants of one native static callable do not retain duplicate execut
                 }
             }
             $result = $container->call($callable($name), [$variant]);
-            if (!is_int($result)) {
-                throw new \LogicException('The native callable must return the integer argument.');
+            if ($result !== $variant) {
+                throw new \LogicException('The native callable must return the current integer argument.');
             }
             $total += $result;
         }

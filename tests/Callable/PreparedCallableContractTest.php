@@ -47,7 +47,22 @@ test('prepared calls preserve omitted defaults and the target exception instance
     } catch (\DomainException $actual) {
         $caught = $actual;
     }
-    expect($caught)->toBe($failure);
+    expect($caught)->toBe($failure)
+        ->and($container->call($prepared, ['right' => 'recovered']))->toBe('default:recovered');
+});
+
+final class PreparedDependency {}
+
+test('prepared calls do not autowire missing required arguments', function (): void {
+    $di = container();
+    $dependency = new PreparedDependency();
+    $di->set(PreparedDependency::class, $dependency);
+    $target = static fn(PreparedDependency $value): PreparedDependency => $value;
+    $prepared = new PreparedCallable($target);
+
+    expect($di->call($target))->toBe($dependency)
+        ->and(fn() => $di->call($prepared))->toThrow(\ArgumentCountError::class)
+        ->and($di->call($prepared, [$dependency]))->toBe($dependency);
 });
 
 final class ReferencedOwner

@@ -81,13 +81,21 @@ test('public call resolves every documented callable form with DI-aware paramete
 
 test('public resolve preserves native callable identity and opaque service-id precedence', function (): void {
     $closure = static fn(): string => 'closure';
-    $serviceCallable = static fn(): string => 'service';
+    $calls = 0;
+    $serviceCallable = static function () use (&$calls): string {
+        ++$calls;
+        return 'service';
+    };
     $container = (new ContainerBuilder())
         ->addService('strlen', $serviceCallable)
         ->build();
 
+    $resolved = $container->resolve('strlen');
     expect($container->resolve($closure))->toBe($closure)
-        ->and($container->resolve('strlen'))->toBe($serviceCallable)
+        ->and($resolved)->toBe($serviceCallable)
+        ->and($calls)->toBe(0)
+        ->and($resolved())->toBe('service')
+        ->and($calls)->toBe(1)
         ->and(($container->resolve([CallableResolutionService::class, 'staticMethod']))('value'))
         ->toBe('VALUE');
 });

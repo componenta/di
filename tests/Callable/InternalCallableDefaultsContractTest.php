@@ -35,9 +35,14 @@ test('internal methods and constructors keep native defaults', function (): void
     $container = container();
     $engine = $container->make(Mt19937::class);
     Assert::assertInstanceOf(Mt19937::class, $engine);
-    expect($engine)->toBeInstanceOf(Mt19937::class)
-        ->and($engine->generate())->toBeString()
+    expect($engine->generate())->toBeString()
         ->and($container->call([$engine, 'generate']))->toBeString();
+
+    $seeded = $container->make(Mt19937::class, ['seed' => 123]);
+    Assert::assertInstanceOf(Mt19937::class, $seeded);
+    $native = new Mt19937(123);
+    expect($seeded->generate())->toBe($native->generate())
+        ->and($container->call([$seeded, 'generate']))->toBe($native->generate());
 });
 
 test('internal optional non-nullable parameters can use unavailable native defaults', function (): void {

@@ -54,7 +54,8 @@ test('magic closures receive the supplied positional arguments', function (bool 
     $container = container();
 
     expect($container->call($callable, ['value', 42]))->toBe([$method, ['value', 42]])
-        ->and($container->call($callable, ['next']))->toBe([$method, ['next']]);
+        ->and($container->call($callable, ['next']))->toBe([$method, ['next']])
+        ->and($container->call($callable, ['position', 'named' => 42]))->toBe([$method, ['position', 'named' => 42]]);
 })->with(['instance' => false, 'static' => true])
     ->with(['fromCallable' => false, 'first class' => true]);
 
