@@ -6,13 +6,15 @@
 
 | Тип | Открытые методы и свойства | Назначение |
 | --- | --- | --- |
-| `Definition` | `static factory(callable $factory): FactoryDefinition`; `static reference(string $entryId): ReferenceDefinition`; `static invokable(string $className): InvokableDefinition` | Создание описаний различных видов. |
+| `Definition` | `static factory(callable\|array $factory): FactoryDefinition`<br>`static reference(string $entryId): ReferenceDefinition`<br>`static invokable(string $className): InvokableDefinition` | Создание описаний различных видов. |
 | `DefinitionInterface` | Без методов | Общий признак определений, поддерживаемых зарегистрированными стратегиями. |
-| `FactoryDefinition` | `__construct(callable $value)`; свойство `$value` | Описание фабрики для создания значения по запросу. |
+| `FactoryDefinition` | `__construct(callable\|array $value)` и свойство `$value` | Описание фабрики для создания значения по запросу. |
 | `InvokableDefinition` | `__construct(string $value)`; свойство `$value` | Описание класса, конструктор которого вызывается без явных аргументов. |
 | `ReferenceDefinition` | `__construct(string $value)`; свойство `$value` | Ссылка на идентификатор другой службы **внутри настроенного аргумента**. Не поддерживается встроенными стратегиями как самостоятельная запись. |
 
 Фабрика может объявлять первые аргументы последовательности `(ContainerValue $context, array $params)` и сама отвечает за создание значения. Для класса из `InvokableDefinition` не передаются аргументы конструктора и не исполняются его атрибуты внедрения зависимостей.
+
+Оба способа создания описания фабрики копируют получателя и имя метода из массива до проверки его вызываемости в PHP. Описание сохраняет выбранный метод и идентичность объекта-получателя. Недопустимый массив вызывает `TypeError`.
 
 ## ClassDefinition
 

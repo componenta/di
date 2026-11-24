@@ -33,6 +33,32 @@ final class Factory
     }
 }
 
+final class StaticFactory
+{
+    public static function create(): object
+    {
+        return self::hidden();
+    }
+
+    public static function alternate(): object
+    {
+        return (object) ['route' => 'selected alternate'];
+    }
+
+    private static function hidden(): object
+    {
+        return (object) ['route' => 'selected'];
+    }
+}
+
+final class ReplacementStaticFactory
+{
+    public static function alternate(): object
+    {
+        return (object) ['route' => 'replacement'];
+    }
+}
+
 test('factory definitions own their callable route before registration', function (): void {
     $original = new Factory('original');
     $replacement = new Factory('replacement');
@@ -60,6 +86,55 @@ test('factory definitions own their callable route before registration', functio
     expect($product->owner)->toBe($original)
         ->and($product)->toEqual(new Product($original, 'create', 'updated business state'));
 });
+
+test('factory definition entry points capture callable slots before native autoloading', function (
+    bool $facade,
+    bool $invalidate,
+): void {
+    $requested = __NAMESPACE__ . '\\PendingFactory_' . bin2hex(random_bytes(5));
+    $owner = $requested;
+    $method = 'create';
+    /** @var callable-array $route */
+    $route = [&$owner, &$method];
+    $replacement = $invalidate ? $requested . '_Missing' : ReplacementStaticFactory::class;
+    $loads = 0;
+    $loader = static function (string $class) use ($requested, $replacement, &$owner, &$method, &$loads): void {
+        if ($class === $requested) {
+            ++$loads;
+            $owner = $replacement;
+            $method = 'alternate';
+            class_alias(StaticFactory::class, $class, autoload: false);
+        }
+    };
+    spl_autoload_register($loader);
+
+    try {
+        $definition = $facade ? Definition::factory(factory: $route) : new FactoryDefinition(value: $route);
+        $container = (new ContainerBuilder())->addDefinition('product', $definition)->build();
+
+        expect($definition->value)->toBe([$requested, 'create'])
+            ->and($container->get('product'))->toEqual((object) ['route' => 'selected'])
+            ->and($owner)->toBe($replacement)
+            ->and($method)->toBe('alternate')
+            ->and($loads)->toBe(1);
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['constructor' => false, 'facade' => true])
+    ->with(['replaced route' => false, 'invalidated route' => true]);
+
+test('factory definition entry points reject invalid callable arrays', function (bool $facade, array $route): void {
+    $create = static function () use ($facade, $route): FactoryDefinition {
+        // @phpstan-ignore argument.type, argument.type (Intentionally invalid native callable arrays.)
+        return $facade ? Definition::factory(factory: $route) : new FactoryDefinition(value: $route);
+    };
+
+    expect($create)->toThrow(\TypeError::class);
+})->with(['constructor' => false, 'facade' => true])
+    ->with([
+        'malformed array' => [[StaticFactory::class]],
+        'private method' => [[StaticFactory::class, 'hidden']],
+    ]);
 
 test('cold factory definition creation retains the supplied route through its own autoloading', function (string $route): void {
     $root = dirname(__DIR__, 2);

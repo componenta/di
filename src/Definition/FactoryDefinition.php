@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Definition;
 
+use function Componenta\DI\Internal\require_public_callable;
+
 /**
  * Entry produced by a factory callable.
  *
@@ -20,9 +22,12 @@ final readonly class FactoryDefinition implements DefinitionInterface
     /** @var callable */
     public mixed $value;
 
-    public function __construct(callable $value)
+    /** @param callable $value */
+    public function __construct(callable|array $value)
     {
-        // Copy callable slots without invoking an autoloader before the copy.
-        $this->value = is_array($value) ? array_map(static fn(mixed $slot): mixed => $slot, $value) : $value;
+        // The array branch defers callable validation until its slots are copied.
+        $this->value = is_array($value)
+            ? require_public_callable(array_map(static fn(mixed $slot): mixed => $slot, $value))
+            : $value;
     }
 }

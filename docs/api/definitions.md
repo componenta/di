@@ -6,13 +6,15 @@ Explicit definitions can be passed to `Container::set()` or configured through a
 
 | Type | Public API | Purpose |
 | --- | --- | --- |
-| `Definition` | `static factory(callable $factory): FactoryDefinition`; `static reference(string $entryId): ReferenceDefinition`; `static invokable(string $className): InvokableDefinition` | Convenient descriptor constructors. |
+| `Definition` | `static factory(callable\|array $factory): FactoryDefinition`<br>`static reference(string $entryId): ReferenceDefinition`<br>`static invokable(string $className): InvokableDefinition` | Convenient descriptor constructors. |
 | `DefinitionInterface` | No methods | Marker interface accepted by registered definition strategies. |
-| `FactoryDefinition` | `__construct(callable $value)`; readable `$value` | Callable factory descriptor, created on demand. |
+| `FactoryDefinition` | `__construct(callable\|array $value)` and readable `$value` | Callable factory descriptor, created on demand. |
 | `InvokableDefinition` | `__construct(string $value)`; readable `$value` | Class created with a zero-argument constructor call. |
 | `ReferenceDefinition` | `__construct(string $value)`; readable `$value` | Reference to another container ID **inside configured arguments**. Not a standalone definition handled by built-in strategies. |
 
 Factory callables may declare a compatible prefix of `(ContainerValue $context, array $params)` and own the creation of their products. Invokables use no explicit constructor parameters and do not run DI attributes on their target.
+
+Both factory descriptor entry points copy the receiver and method of a callable array before PHP validates it. The descriptor keeps the selected route and the identity of an object receiver. An invalid callable array raises `TypeError`.
 
 ## ClassDefinition
 

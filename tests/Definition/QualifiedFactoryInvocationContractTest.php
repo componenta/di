@@ -6,6 +6,7 @@ namespace Componenta\DI\Tests\Definition\QualifiedFactoryInvocationContract;
 
 use Closure;
 use Componenta\Config\ContainerValue;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Definition\FactoryDefinition;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -109,6 +110,30 @@ function nativeCallable(mixed $callable): callable
     }
     return $callable;
 }
+
+test('factory definition entry points emit the qualified callable diagnostic once', function (bool $facade): void {
+    $owner = new Child();
+    $method = Ancestor::class . '::create';
+    $route = [&$owner, &$method];
+    $deprecations = 0;
+    set_error_handler(static function (int $severity, string $message, string $file, int $line) use (&$deprecations): bool {
+        if ($severity === E_DEPRECATED && str_starts_with($message, 'Callables of the form ')) {
+            ++$deprecations;
+            return true;
+        }
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
+
+    try {
+        // @phpstan-ignore argument.type, argument.type (PHP accepts the deprecated qualified array.)
+        $definition = $facade ? Definition::factory(factory: $route) : new FactoryDefinition(value: $route);
+    } finally {
+        restore_error_handler();
+    }
+
+    expect($definition->value)->toBe([$owner, $method])
+        ->and($deprecations)->toBe(1);
+})->with(['constructor' => false, 'facade' => true]);
 
 test('qualified factory arrays invoke their selected ancestor with reference parameters', function (string $route): void {
     allowingQualifiedCallable(static function () use ($route): void {
