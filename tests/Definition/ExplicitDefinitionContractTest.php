@@ -103,10 +103,15 @@ it('uses autowiring only as an explicit fallback for constructor and method argu
     $override = $di->make(FallbackProduct::class, ['dependency' => $explicit]);
     Assert::assertInstanceOf(FallbackProduct::class, $override);
 
+    $explicitNull = $di->make(FallbackProduct::class, ['dependency' => null]);
+    Assert::assertInstanceOf(FallbackProduct::class, $explicitNull);
+
     expect($defaults->dependency)->toBe($enabled ? $shared : null)
         ->and($defaults->configured)->toBe($enabled ? $shared : null)
         ->and($override->dependency)->toBe($explicit)
-        ->and($override->configured)->toBe($enabled ? $shared : null);
+        ->and($override->configured)->toBe($enabled ? $shared : null)
+        ->and($explicitNull->dependency)->toBeNull()
+        ->and($explicitNull->configured)->toBe($enabled ? $shared : null);
 })->with(['enabled' => true, 'disabled' => false]);
 
 final class VariadicProduct

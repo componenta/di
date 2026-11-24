@@ -151,12 +151,14 @@ final class DeferredDefinitionParameterObserver implements \Componenta\DI\Resolv
 {
     /** @var array<string|int,mixed> */
     public array $parameters = [];
+    public int $calls = 0;
 
     public function handle(
         object $attribute,
         \Reflector $target,
         \Componenta\DI\Resolver\Entry\ObjectCreationContext $context,
     ): void {
+        ++$this->calls;
         $this->parameters = $context->parameters;
     }
 }
@@ -180,8 +182,23 @@ test('ClassDefinition resolves references and preserves literal overrides withou
     $target = $container->make(InspectedDefinitionTarget::class, ['options' => ['nested' => $literal]]);
     Assert::assertInstanceOf(InspectedDefinitionTarget::class, $target);
 
-    expect($observer->parameters)->toBe([])
+    expect($observer->calls)->toBe(0)
+        ->and(new \ReflectionClass(InspectedDefinitionTarget::class)->isUninitializedLazyObject($target))->toBeFalse()
         ->and($target->dependency)->toBe($dependency)
         ->and($target->options)->toBe(['nested' => $literal])
-        ->and($observer->parameters)->toBe([]);
+        ->and($observer->calls)->toBe(0);
+
+    $control = (new ContainerBuilder())
+        ->addService(DeferredDefinitionDependency::class, $dependency)
+        ->addAttributeDefinition(new \Componenta\DI\Attribute\Composition\AttributeDefinition(
+            DeferredDefinitionParameterInspection::class,
+            $observer,
+        ))
+        ->build();
+    $implicit = $control->make(InspectedDefinitionTarget::class, ['options' => ['nested' => $literal]]);
+    Assert::assertInstanceOf(InspectedDefinitionTarget::class, $implicit);
+    expect(new \ReflectionClass(InspectedDefinitionTarget::class)->isUninitializedLazyObject($implicit))->toBeTrue()
+        ->and($implicit->dependency)->toBe($dependency)
+        ->and($implicit->options)->toBe(['nested' => $literal])
+        ->and($observer->calls)->toBe(1);
 });

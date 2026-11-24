@@ -73,7 +73,8 @@ test('failed creation retries dependencies at the selected construction boundary
     $container->set(RetryDefinitionDependency::class, $replacement);
 
     expect($container->get(RetryDefinitionDependency::class))->toBe($replacement)
-        ->and($entry->value)->toBe('good');
+        ->and($entry->value)->toBe('good')
+        ->and($container->get($class))->toBe($entry);
 })->with([
     'lazy autowiring' => [RetryLazyDefinition::class, false],
     'lazy ClassDefinition' => [RetryLazyDefinition::class, true],

@@ -10,8 +10,6 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\MutationRetirementException;
 use Componenta\DI\Exception\NotFoundException;
-use Componenta\DI\Internal\AliasResolver;
-use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\DefinitionResolverInterface;
 use Componenta\DI\Resolver\Entry\EntryParameters;
@@ -142,8 +140,15 @@ test('definition rejection neither changes the current binding nor tries a later
         throw $failure;
     };
 
-    expect(fn() => $resolver->setDefinition('entry', new ValueDefinition('rejected')))->toThrow($failure)
-        ->and($resolver->resolve('entry'))->toBe('original')
+    try {
+        $resolver->setDefinition('entry', new ValueDefinition('rejected'));
+        throw new \LogicException('Expected the selected strategy to reject the definition.');
+    } catch (InvalidConfigurationException $exception) {
+        expect($exception)->toBe($failure);
+    }
+
+    expect($resolver->resolve('entry'))->toBe('original')
+        ->and($later->supportsCalls)->toBe(0)
         ->and($later->validationCalls)->toBe(0);
 });
 
@@ -206,7 +211,7 @@ test('standalone registration cannot publish after validation attaches the compo
     };
     $strategy->onValidate = static function (string $id, ValueDefinition $definition) use ($root, $executor, $state): void {
         if ($definition->value === 'outer') {
-            $state->container = ContainerConstruction::create($root, new AliasResolver(), $executor);
+            $state->container = new Container($root, $executor);
             $state->container->set($id, new ValueDefinition('nested'));
         }
     };
@@ -270,6 +275,7 @@ test('standalone replacement reports retirement failure only after committing it
     } catch (MutationRetirementException $exception) {
         expect($exception->id)->toBe('entry')
             ->and($exception->causes)->toHaveCount(1)
+            ->and($exception->getPrevious())->toBe($exception->causes[0])
             ->and($exception->getPrevious()?->getMessage())->toBe('Standalone retired value failed.')
             ->and($state->calls)->toBe(1)
             ->and($resolver->resolve('entry'))->toBe('new');

@@ -121,8 +121,10 @@ test('failed ClassDefinition calls stop creation and a later get creates a fresh
     $target = $container->get($class);
     Assert::assertInstanceOf($class, $target);
     expect($target->state)->toBe('constructed')
+        ->and($container->get($class))->toBe($target)
         ->and($events->steps)->toBe(['constructor', 'configure', 'constructor', 'configure', 'finished']);
 })->with([
+    'eager' => [EagerDefinitionLifecycle::class],
     'lazy' => [LazyDefinitionLifecycle::class],
     'proxy' => [ProxyDefinitionLifecycle::class],
 ]);

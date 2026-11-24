@@ -42,9 +42,10 @@ test('ClassDefinition fallback uses container services while request attributes 
 ): void {
     $class = $attributeSource ? ConfiguredRequestSourceTarget::class : ServiceRequestSourceTarget::class;
     $selected = new ServerRequest('GET', '/selected');
+    $configured = new ServerRequest('GET', '/configured');
     $current = new ServerRequest('GET', '/current', ['X-Context' => 'current-context']);
     $container = (new ContainerFactory())->create(
-        new Config(['selected.request' => $selected], new Environment([])),
+        new Config(['selected.request' => $configured], new Environment([])),
         new DependencyDefinitions([
             'services' => [ServerRequestInterface::class => $selected],
             'factories' => [
@@ -93,7 +94,8 @@ test('ClassDefinition still accepts explicit request arguments by name or positi
     Assert::assertInstanceOf(ConfiguredRequestSourceTarget::class, $target);
 
     expect($target->request)->toBe($explicit)
-        ->and($target->context)->toBe('explicit-context');
+        ->and($target->context)->toBe('explicit-context')
+        ->and($target->label)->toBe('configured');
 })->with([
     'name' => ['request'],
     'position' => [0],

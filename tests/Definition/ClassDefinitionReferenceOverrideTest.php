@@ -71,10 +71,10 @@ test('only named and positional runtime arguments replace configured references'
 })->with([
     'name replaces name' => ['dependency', 'dependency'],
     'position replaces name' => ['dependency', 0],
-    'type replaces name' => ['dependency', OverrideDependency::class],
+    'type key does not replace name' => ['dependency', OverrideDependency::class],
     'name replaces position' => [0, 'dependency'],
     'position replaces position' => [0, 0],
-    'type replaces position' => [0, OverrideDependency::class],
+    'type key does not replace position' => [0, OverrideDependency::class],
 ]);
 
 test('runtime name wins over position and type without resolving an unavailable default', function (): void {
