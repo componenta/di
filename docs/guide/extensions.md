@@ -1,35 +1,38 @@
 # Extension points
 
-## Registering extensions
+Custom resolvers and attribute handlers are registered through configuration providers **before** `ContainerFactory::create()`. The parameter-resolver and attribute pipelines are not mutable after assembly.
 
-Custom parameter resolvers implement `ParameterResolverInterface` and are registered with an integer priority. Custom attributes use `AttributeDefinition`; its `before` and `after` selectors define composition order. `CapabilityPolicy` sets the maximum number of attributes with a capability on one target. These extensions must be supplied in `DependencyDefinitions` before the container is built because the parameter and attribute pipelines are sealed after construction.
+## Parameter resolvers
 
-`AttributeDefinition` owns its capability, selector and rule arrays from construction, before validation can invoke an autoloader. Rebinding a caller's referenced array member cannot change registered semantics, handler ordering or rule selection. Handler and rule objects retain their identity and current application state; they are not cloned.
+Implement `ParameterResolverInterface`:
 
-Extension factories may resolve ordinary dependencies from the existing container. Attribute definitions are materialized in registration order, followed by parameter resolvers. Register any required attribute extension before the factory that consumes it. `ContainerFactory::create()` throws `InvalidConfigurationException` when bootstrap detects incompatible attribute metadata or finds a newly applicable resolver ahead of the one used for a completed resolution. The check examines attribute metadata and rechecks `supports()` on targets that are still available. Completed calls keep their results and side effects. Unrelated extensions and lower-priority resolvers are allowed.
+- `supports(ParameterTarget $target): bool` selects applicable parameters.
+- `resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): ?array` returns `[position, value]` or `null` to continue the chain.
 
-Make classes and aliases that affect custom parameter classification available before the first resolution that uses them. This also covers aliases queried on temporary closures whose targets may be released before the final check. Resolve a dependency that needs a custom parameter resolver from a later factory when its resolver and metadata are ready, or defer the dependency until they are available.
+For attributes that only need a value provider, use the built-in `AttributeMatchingParameterResolver`:
 
-For a resolver whose applicability is one attribute match, register `AttributeMatchingParameterResolver($attribute, $resolve)` with its normal priority. It selects parameters using `ParameterTarget::hasAttribute()`. The callback receives the target and resolution context and returns `[$target->position, $value]` or `null` to continue the chain. Bootstrap can recheck this predicate with already loaded declarations after a temporary target has been released.
+```php
+use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 
-For a parameter with declared attributes, a custom `supports()` predicate that reads native reflection can call `$target->watchAttributeAvailability($name)` before checking a class, interface or alias that may be declared later. The method records the missing name during classification without invoking an autoloader. The next resolution of an affected cached target checks classification again once the name becomes available.
+#[\Attribute(\Attribute::TARGET_PARAMETER)]
+final class TenantId {}
 
-The container snapshots each `[owner, method]` extension factory specification when that extension starts materializing, before callable inspection or owner lookup. Rebinding caller references cannot redirect that invocation; changes made before a later extension starts remain visible. Factory objects keep their identity and current application state.
+$resolver = new AttributeMatchingParameterResolver(
+    TenantId::class,
+    static fn($target, $context): array => [$target->position, 'tenant-1'],
+);
+```
 
-## Attribute composition and lifecycle
+Register `$resolver` with an integer priority in the provider's `getParameterResolvers()` hook. Extensions must not mutate the resolver chain during `supports()`.
 
-`AttributePlan::all()` and `attributes()` preserve the order of the composed plan, including inherited capabilities and interleaved repeated attribute classes.
+## Attribute handlers
 
-Composition rules receive read-only `AttributeUsage` metadata: the declared attribute class and arguments, its semantic definition, target, and declaration order. Reading `arguments` evaluates the declared expressions on each access; object arguments are not stored in the shared plan. A `new` expression can therefore run a constructor when a rule explicitly reads the arguments. Applicable user composition rules run during each resolution, so repeated calls observe current arguments and rule state. DI can cache plans that are independent of user rules. A fresh attribute instance is created when execution reaches its handler; shared plans never retain that runtime instance.
+Register custom attribute behavior with `AttributeDefinition`. Its capabilities, `requires`, `forbids`, `before` and `after` selectors define composition constraints and handler order. `CapabilityPolicy` limits the number of attributes with a capability on one target.
 
-If construction makes another declared attribute available, the execution order is recomputed without reconstructing the pending instance. Newly discovered handlers must preserve the already executed order across the current object phase. A late change to parameter input policy or to a completed property composition throws `AttributeCompositionException`; constructors and handlers are not replayed. Completed parameter compositions remain checked while subsequent parameters resolve, so an incompatible late source cannot reach the callable body. Object creation checks the completed before-instantiation phase before invoking the constructor, and preserves both completed object phases through final configuration and return. This includes the empty after phase when no handler was initially available. If the constructor, a lifecycle hook or the final configuration callback reveals an incompatible policy, its already completed side effects are not rolled back and the object is not returned as a successfully resolved service. Loading unrelated attributes is allowed.
+Register required attribute definitions before the container is built. Their extension factories can resolve dependencies from the container, but a newly applicable extension discovered after a resolution has completed may be rejected to preserve the completed result's semantics.
 
-Lazy objects and virtual proxies retain the policies selected during their initial before-instantiation phase. If those policies later become incompatible, initialization fails without replaying that phase. A fresh `make()` uses the now-available attributes; an existing deferred object is not reconfigured.
+## Definitions and external containers
 
-Eager `ObjectPipeline::create(resolveParameters: ...)` checks attributes discovered while releasing arguments owned by the creation attempt before returning its result. Native lazy objects and virtual proxies check policies through completion of the DI initializer or backing factory callback. PHP can release captured values after that callback completes.
+Custom explicit-definition strategies implement `DefinitionResolverInterface`; fallback entry resolvers implement `EntryResolverInterface` and accept `EntryParameters`. Consult the [DI 6 migration guide](../migrations/di6-definitions.md) before updating their implementations.
 
-## External containers and fallback resolvers
-
-External PSR-11 containers may be registered with `Container::addContainer()`. External entries participate in cycle protection and cannot shadow protected core services.
-
-Custom fallback resolvers receive runtime arguments through `EntryParameters`. Use it to forward the same construction across resolvers and deferred initialization. See the [fallback resolver migration guide](../migrations/di6-definitions.md#custom-fallback-resolvers).
+`Container::addContainer()` adds an external PSR-11 container. It cannot override protected internal DI entries; external providers control the sharing of the values they return. See [Runtime behavior](runtime.md).
