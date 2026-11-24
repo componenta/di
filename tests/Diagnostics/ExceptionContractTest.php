@@ -36,6 +36,8 @@ final class SyntheticValidationFailure extends RuntimeException implements Valid
 
 final readonly class ThrowingParameterResolver implements ParameterResolverInterface
 {
+    public function __construct(private ForeignDiFailure $failure) {}
+
     public function supports(ParameterTarget $target): bool
     {
         return $target->name === 'value';
@@ -45,7 +47,7 @@ final readonly class ThrowingParameterResolver implements ParameterResolverInter
         ParameterTarget $target,
         ParameterResolutionContext $context,
     ): ?array {
-        throw new ForeignDiFailure('parameter failure');
+        throw $this->failure;
     }
 }
 
@@ -176,8 +178,9 @@ function exceptionFrom(callable $operation): Throwable
 }
 
 test('foreign parameter resolver failures normalize identically for make and call', function (): void {
+    $cause = new ForeignDiFailure('parameter failure');
     $container = (new ContainerBuilder())
-        ->addParameterResolver(new ThrowingParameterResolver(), 2000)
+        ->addParameterResolver(new ThrowingParameterResolver($cause), 2000)
         ->build();
 
     $make = exceptionFrom(fn() => $container->make(ExceptionResolutionTarget::class));
@@ -185,28 +188,26 @@ test('foreign parameter resolver failures normalize identically for make and cal
 
     expect($make)->toBeInstanceOf(ResolutionException::class)
         ->and($make)->toBeInstanceOf(ExceptionInterface::class)
-        ->and($make->getPrevious())->toBeInstanceOf(ForeignDiFailure::class)
+        ->and($make->getPrevious())->toBe($cause)
         ->and($call)->toBeInstanceOf(ResolutionException::class)
         ->and($call)->toBeInstanceOf(ExceptionInterface::class)
-        ->and($call->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
+        ->and($call->getPrevious())->toBe($cause);
 });
 
-test('foreign resolver failures have the same contract for every container build', function (): void {
-    $errors = [];
-    foreach ([1, 2] as $_build) {
-        $container = (new ContainerBuilder())
-            ->addParameterResolver(new ThrowingParameterResolver(), 2000)
+test('independently built containers keep the original cause of their own resolver failures', function (): void {
+    $causes = [new ForeignDiFailure('first container'), new ForeignDiFailure('second container')];
+    $containers = [];
+    foreach ($causes as $cause) {
+        $containers[] = (new ContainerBuilder())
+            ->addParameterResolver(new ThrowingParameterResolver($cause), 2000)
             ->build();
-        $errors[] = exceptionFrom(
-            fn() => $container->make(ExceptionResolutionTarget::class),
-        );
     }
 
-    expect($errors[0])->toBeInstanceOf(ResolutionException::class)
-        ->and($errors[1])->toBeInstanceOf(ResolutionException::class)
-        ->and($errors[1]::class)->toBe($errors[0]::class)
-        ->and($errors[0]->getPrevious())->toBeInstanceOf(ForeignDiFailure::class)
-        ->and($errors[1]->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
+    foreach ([0, 1, 0, 1] as $index) {
+        $error = exceptionFrom(fn() => $containers[$index]->make(ExceptionResolutionTarget::class));
+        expect($error)->toBeInstanceOf(ResolutionException::class)
+            ->and($error->getPrevious())->toBe($causes[$index]);
+    }
 });
 
 test('exceptions thrown by the explicit user callable body propagate unchanged', function (): void {
@@ -307,17 +308,18 @@ test('constructor failures keep their cause and recover without a completed fail
 ]);
 
 test('foreign delegator failures become DelegatorException with their cause preserved', function (): void {
+    $cause = new ForeignDiFailure('delegator failure');
     $container = (new ContainerBuilder())
         ->addService('decorated', new \stdClass())
-        ->addDelegator('decorated', static function (): never {
-            throw new ForeignDiFailure('delegator failure');
+        ->addDelegator('decorated', static function () use ($cause): never {
+            throw $cause;
         })
         ->build();
 
     $error = exceptionFrom(fn() => $container->get('decorated'));
 
     expect($error)->toBeInstanceOf(DelegatorException::class)
-        ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
+        ->and($error->getPrevious())->toBe($cause);
 });
 
 test('foreign external container failures are normalized to Componenta exceptions', function (): void {
@@ -404,11 +406,6 @@ test('container factory reclassifies runtime DI extension failures as configurat
 });
 
 test('attribute composition failures are a specialized configuration failure', function (): void {
-    $parent = (new \ReflectionClass(AttributeCompositionException::class))->getParentClass();
-
-    if (!$parent instanceof \ReflectionClass) {
-        throw new RuntimeException('Expected AttributeCompositionException to have a parent class.');
-    }
-
-    expect($parent->getName())->toBe(InvalidConfigurationException::class);
+    expect(new AttributeCompositionException('incompatible attributes'))
+        ->toBeInstanceOf(InvalidConfigurationException::class);
 });

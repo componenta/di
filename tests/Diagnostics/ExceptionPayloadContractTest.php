@@ -115,7 +115,8 @@ test('missing-service failures use a neutral exception code and preserve the req
     try {
         $container->get('missing.payload.service');
     } catch (NotFoundException $error) {
-        expect($error->getCode())->toBe(0)
+        expect($error->id)->toBe('missing.payload.service')
+            ->and($error->getCode())->toBe(0)
             ->and($error->getPrevious())->toBeNull()
             ->and($error->getMessage())->toBe('Service "missing.payload.service" is not defined in the container.');
         return;
@@ -131,7 +132,8 @@ test('delegator failures retain the cause without inheriting its application err
     try {
         $container->get('entry');
     } catch (DelegatorException $error) {
-        expect($error->getCode())->toBe(0)
+        expect($error->entryId)->toBe('entry')
+            ->and($error->getCode())->toBe(0)
             ->and($error->getPrevious())->toBe($cause);
         return;
     }
@@ -145,7 +147,11 @@ test('property diagnostic factories preserve declared types and format reason an
     expect($error->property?->name)->toBe($name)
         ->and($error->property?->class)->toBe(ExceptionPayloadProperties::class)
         ->and($error->property?->type)->toBe($type)
+        ->and($error->propertyName)->toBe($name)
+        ->and($error->propertyClass)->toBe(ExceptionPayloadProperties::class)
         ->and($error->propertyType)->toBe($type)
+        ->and($error->parameter)->toBeNull()
+        ->and($error->serviceId)->toBeNull()
         ->and($error->getPrevious())->toBe($cause)
         ->and($error->getMessage())->toBe(
             'Cannot resolve property "' . ExceptionPayloadProperties::class . '::$' . $name . '": source failed'

@@ -69,6 +69,9 @@ test('failed parameter resolution does not persist closure or request state in t
         throw new \LogicException('Expected parameter resolution to fail.');
     }
 
+    expect($probe->target)->toBeInstanceOf(WeakReference::class)
+        ->and($probe->reflection)->toBeInstanceOf(WeakReference::class);
+
     $diagnostic = [
         $error->parameterName,
         $error->parameterPosition,
@@ -93,6 +96,8 @@ test('failed parameter resolution does not persist closure or request state in t
             'Closure',
             [ServerRequestInterface::class => ServerRequest::class],
         ]);
+    expect($container->call(static fn(string $value): string => $value, ['value' => 'recovered']))
+        ->toBe('recovered');
 });
 
 test('failed callable resolution does not persist rejected objects in the container', function (): void {
@@ -120,4 +125,5 @@ test('failed callable resolution does not persist rejected objects in the contai
             AuditInvalidCallableProbe::class,
             'object ' . AuditInvalidCallableProbe::class,
         ]);
+    expect($container->call(static fn(): string => 'recovered'))->toBe('recovered');
 });

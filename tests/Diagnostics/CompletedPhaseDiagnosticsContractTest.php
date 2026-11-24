@@ -62,7 +62,7 @@ test('late parameter policies identify both free functions and class methods', f
     $alias = 'CompletedParameterAlias_' . $suffix;
     $name = 'CompletedParameterProduct_' . $suffix;
     $function = 'completedParameter_' . $suffix;
-    $declaration = 'function ' . $function . '(#[' . $alias . '("settings")] string $value, #[\Componenta\DI\Attribute\EntryId("loader")] object $loader): string { return $value; }';
+    $declaration = 'function ' . $function . '(#[' . $alias . '("settings")] string $value, #[\Componenta\DI\Attribute\EntryId("loader")] object $loader, \\Closure $onInvoke): string { $onInvoke(); return $value; }';
     if ($method) {
         $declaration = 'final class ' . $name . ' { public static ' . $declaration . ' }';
     }
@@ -75,9 +75,14 @@ test('late parameter policies identify both free functions and class methods', f
             return new \stdClass();
         })->build();
 
-    expect(fn() => $container->call($callable, ['value' => 'provided']))
+    $calls = 0;
+    $onInvoke = static function () use (&$calls): void {
+        ++$calls;
+    };
+
+    expect(fn() => $container->call($callable, ['value' => 'provided', 'onInvoke' => $onInvoke]))
         ->toThrow(
             AttributeCompositionException::class,
             'Attribute composition for parameter $value of ' . $callable . '() changed after parameter resolution completed. Load its attributes before execution.',
-        );
+        )->and($calls)->toBe(0);
 })->with(['free function' => false, 'class method' => true]);

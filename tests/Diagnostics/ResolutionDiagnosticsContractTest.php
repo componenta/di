@@ -13,9 +13,12 @@ use RuntimeException;
 
 final class DiagnosticCallable
 {
+    public static int $calls = 0;
+
     /** @return array{int,string} */
     public static function invoke(int $count, string $value): array
     {
+        ++self::$calls;
         return [$count, $value];
     }
 }
@@ -41,6 +44,7 @@ final class DiagnosticFailingResolver implements ParameterResolverInterface
 }
 
 test('resolution diagnostics preserve supplied and completed parameter types and the original cause', function (): void {
+    DiagnosticCallable::$calls = 0;
     $cause = new RuntimeException('extension unavailable');
     $resolver = new DiagnosticFailingResolver($cause);
     $container = (new ContainerBuilder())->addParameterResolver($resolver, 2100)->build();
@@ -49,7 +53,11 @@ test('resolution diagnostics preserve supplied and completed parameter types and
         $container->call([DiagnosticCallable::class, 'invoke'], [3, 'provided']);
         \PHPUnit\Framework\Assert::fail('The failing extension must interrupt resolution.');
     } catch (ResolutionException $exception) {
-        expect($exception->parameterName)->toBe('value')
+        expect($exception->parameter?->name)->toBe('value')
+            ->and($exception->parameter?->position)->toBe(1)
+            ->and($exception->parameter?->type)->toBe('string')
+            ->and($exception->parameter?->context)->toBe(DiagnosticCallable::class . '::invoke()')
+            ->and($exception->parameterName)->toBe('value')
             ->and($exception->parameterPosition)->toBe(1)
             ->and($exception->parameterType)->toBe('string')
             ->and($exception->parameterContext)->toBe(DiagnosticCallable::class . '::invoke()')
@@ -60,6 +68,9 @@ test('resolution diagnostics preserve supplied and completed parameter types and
             ->and($exception->getCode())->toBe(0);
     }
 
+    expect(DiagnosticCallable::$calls)->toBe(0);
+
     $resolver->fail = false;
-    expect($container->call([DiagnosticCallable::class, 'invoke'], [3, 'provided']))->toBe([3, 'provided']);
+    expect($container->call([DiagnosticCallable::class, 'invoke'], [3, 'provided']))->toBe([3, 'provided'])
+        ->and(DiagnosticCallable::$calls)->toBe(1);
 });
