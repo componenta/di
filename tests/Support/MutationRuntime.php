@@ -43,6 +43,7 @@ final class MutationRuntime
         if (extension_loaded('mbstring') && !self::loadsMbstring($command)) {
             array_push($command, '-d', 'extension=mbstring');
         }
+        array_push($command, '-d', 'memory_limit=' . ini_get('memory_limit'));
 
         return $command;
     }

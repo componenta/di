@@ -51,7 +51,7 @@ test('mutation workers inherit the selected PHP configuration', function (): voi
     }
 });
 
-test('mutation workers preserve mbstring without startup diagnostics', function (bool $withIni, bool $extensionInIni): void {
+test('mutation workers preserve mbstring and the effective memory limit', function (bool $withIni, bool $extensionInIni, string $memoryLimit): void {
     $active = getenv('PEST_MUTATION_TESTING') !== false;
     if ($active) {
         StreamWrapper::disable();
@@ -71,20 +71,21 @@ test('mutation workers preserve mbstring without startup diagnostics', function 
                 throw new \RuntimeException('Cannot create PHP configuration fixture.');
             }
             $ini = $created;
-            file_put_contents($ini, "precision=9\nopcache.enable_cli=0\n"
+            file_put_contents($ini, "precision=9\nopcache.enable_cli=0\nmemory_limit=128M\n"
                 . ($extensionInIni && $bareRuntime->getExitCode() === 1 ? "extension=mbstring\n" : ''));
             array_push($command, '-c', $ini);
         } else {
             $command[] = '-n';
         }
-        array_push($command, '-d', 'extension_dir=' . ini_get('extension_dir'));
+        array_push($command, '-d', 'extension_dir=' . ini_get('extension_dir'), '-d', 'memory_limit=' . $memoryLimit);
         if ($bareRuntime->getExitCode() === 1 && !$extensionInIni) {
             array_push($command, '-d', 'extension=mbstring');
         }
         $root = dirname(__DIR__, 2);
         $vendor = is_file($root . '/vendor/autoload.php') ? $root . '/vendor' : dirname($root) . '/var-export/vendor';
         $worker = 'echo json_encode([php_ini_loaded_file(), extension_loaded("mbstring"),'
-            . 'mb_strtoupper("été", "UTF-8"), filter_var(ini_get("opcache.enable_cli"), FILTER_VALIDATE_BOOL)], JSON_THROW_ON_ERROR);';
+            . 'mb_strtoupper("été", "UTF-8"), filter_var(ini_get("opcache.enable_cli"), FILTER_VALIDATE_BOOL),'
+            . 'ini_get("memory_limit")], JSON_THROW_ON_ERROR);';
         $script = 'require ' . var_export($vendor . '/autoload.php', true) . ';'
             . 'require ' . var_export($root . '/tests/Support/MutationRuntime.php', true) . ';'
             . '$command = Componenta\\DI\\Tests\\Support\\MutationRuntime::command();'
@@ -101,7 +102,7 @@ test('mutation workers preserve mbstring without startup diagnostics', function 
         expect($process->getExitCode())->toBe(0, $process->getErrorOutput())
             ->and($process->getErrorOutput())->toBe('')
             ->and($process->getOutput())->toBe(json_encode([
-                $ini === null ? false : realpath($ini), true, 'ÉTÉ', false,
+                $ini === null ? false : realpath($ini), true, 'ÉTÉ', false, $memoryLimit,
             ], JSON_THROW_ON_ERROR));
     } finally {
         if ($ini !== null) {
@@ -112,7 +113,7 @@ test('mutation workers preserve mbstring without startup diagnostics', function 
         }
     }
 })->with([
-    'without an ini' => [false, false],
-    'with an ini and CLI extension' => [true, false],
-    'with an ini extension' => [true, true],
+    'without an ini' => [false, false, '4G'],
+    'with an ini and CLI extension' => [true, false, '768M'],
+    'with an ini extension and unlimited memory' => [true, true, '-1'],
 ]);
