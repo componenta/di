@@ -102,7 +102,7 @@ final class BootstrapResolutionGuard
         $this->attributeUses[] = [
             'source' => $source,
             'phase' => $phase,
-            'usages' => CompletedAttributeGuard::semantics($plan, $phase),
+            'usages' => CompletedAttributeGuard::semantics($plan, $phase, $source->target instanceof ReflectionProperty),
             'observed' => $declared,
         ];
     }
@@ -268,7 +268,7 @@ final class BootstrapResolutionGuard
                 $source = $use['source'];
                 $target = $source->target;
                 $plan = $this->plans->build($target, $source->attributeOverride($use['observed']));
-                $current = CompletedAttributeGuard::semantics($plan, $use['phase']);
+                $current = CompletedAttributeGuard::semantics($plan, $use['phase'], $target instanceof ReflectionProperty);
                 if ($current !== $use['usages']) {
                     throw new InvalidConfigurationException(sprintf(
                         'DI bootstrap used %s before its required attribute extensions were registered. Register these extensions before factories that resolve this dependency.',

@@ -29,14 +29,12 @@ use Componenta\DI\Resolver\Parameter\Request\MapperInterface;
 use Componenta\DI\Resolver\Parameter\Request\ParameterNameAwareExtractorInterface;
 use Componenta\DI\Resolver\Parameter\Request\RequestDataExtractorInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
-use Componenta\DI\Resolver\TypeHints;
 use Componenta\Validation\Context;
 use Componenta\Validation\ContextInterface;
 use Componenta\Validation\Provider\ValidationProviderInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
-use ReflectionParameter;
 use ReflectionType;
 use ReflectionUnionType;
 
@@ -75,7 +73,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         }
 
         $sourceChecks = [];
-        $result = $this->extractValue($request, $attribute, $target->reflection, $sourceChecks);
+        $result = $this->extractValue($request, $attribute, $target, $sourceChecks);
         if ($sourceChecks !== [] && is_object($result)) {
             MappedRequestResultCapture::record($result, $sourceChecks);
         }
@@ -89,23 +87,23 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
     private function extractValue(
         ServerRequestInterface $request,
         object $attribute,
-        ReflectionParameter $parameter,
+        ParameterTarget $target,
         array &$sourceChecks,
     ): mixed {
         if ($attribute instanceof RequestDataExtractorInterface && $attribute instanceof MapperInterface) {
-            return $this->processMapping($request, $attribute, $parameter, $sourceChecks);
+            return $this->processMapping($request, $attribute, $target, $sourceChecks);
         }
 
         if ($attribute instanceof ExtractorInterface) {
             $value = $attribute instanceof ParameterNameAwareExtractorInterface
-                ? $attribute->extractForParameter($request, $parameter->getName())
+                ? $attribute->extractForParameter($request, $target->name)
                 : $attribute->extract($request);
 
             if ($attribute instanceof CastableInterface && $attribute->cast !== null) {
                 $caster = $this->casterProvider->provide($attribute->cast);
                 if ($caster === null) {
                     throw ResolutionException::forParameter(
-                        $parameter,
+                        $target->reflection,
                         reason: sprintf('caster "%s" is not registered', $attribute->cast),
                     );
                 }
@@ -115,7 +113,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         }
 
         throw ResolutionException::forParameter(
-            $parameter,
+            $target->reflection,
             reason: sprintf(
                 'request attribute "%s" must implement %s + %s or %s',
                 $attribute::class,
@@ -141,12 +139,12 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
     private function processMapping(
         ServerRequestInterface $request,
         RequestDataExtractorInterface&MapperInterface $mapper,
-        ReflectionParameter $parameter,
+        ParameterTarget $target,
         array &$sourceChecks,
     ): array|object {
         $publication = null;
         try {
-            $result = $this->mapInput($request, $mapper, $parameter, $publication);
+            $result = $this->mapInput($request, $mapper, $target, $publication);
         } finally {
             // The mapping frame has released the input it owned.
             $sourceChecks = $publication?->finish(is_object($result ?? null) ? $result : null) ?? [];
@@ -161,7 +159,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
     private function mapInput(
         ServerRequestInterface $request,
         RequestDataExtractorInterface&MapperInterface $mapper,
-        ReflectionParameter $parameter,
+        ParameterTarget $target,
         ?MappedRequestPublication &$publication,
     ): array|object {
         $afterMap = $mapper instanceof CallbackMapperInterface ? $mapper->afterMap : null;
@@ -173,9 +171,9 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
             $mapper->provider = $this->casterProvider;
         }
 
-        $typeName = $this->resolveTypeName($parameter);
+        $typeName = $this->resolveTypeName($target);
         $rawData = $mapper->extract($request);
-        $this->assertNamedDtoData($typeName, $rawData, $parameter);
+        $this->assertNamedDtoData($typeName, $rawData, $target);
         $this->validateData($typeName, $rawData);
         $data = $mapper->transform($rawData);
         if ($afterMap !== null) {
@@ -188,12 +186,12 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
             $data = $callbacks($afterMap, array_replace($data, $argument));
             if (!is_array($data)) {
                 throw ResolutionException::forParameter(
-                    $parameter,
+                    $target->reflection,
                     reason: 'request mapping afterMap must return an array',
                 );
             }
         }
-        $this->assertNamedDtoData($typeName, $data, $parameter);
+        $this->assertNamedDtoData($typeName, $data, $target);
 
         if ($typeName === null) {
             $publication = null;
@@ -209,17 +207,17 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
     }
 
     /** @return class-string|null */
-    private function resolveTypeName(ReflectionParameter $parameter): ?string
+    private function resolveTypeName(ParameterTarget $target): ?string
     {
-        $type = $parameter->getType();
+        $type = $target->type;
         if ($type === null || self::containsBuiltinType($type, 'array')) {
             return null;
         }
 
-        $classTypes = TypeHints::classNames($type, $parameter->getDeclaringClass());
+        $classTypes = $target->typeNames;
         if (count($classTypes) > 1) {
             throw ResolutionException::forParameter(
-                $parameter,
+                $target->reflection,
                 reason: sprintf(
                     'request DTO mapping requires exactly one class type; got %s',
                     implode('|', $classTypes),
@@ -261,7 +259,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
     private function assertNamedDtoData(
         ?string $typeName,
         array $data,
-        ReflectionParameter $parameter,
+        ParameterTarget $target,
     ): void {
         if ($typeName === null) {
             return;
@@ -269,7 +267,7 @@ final readonly class RequestAttributeHandler implements ParameterAttributeHandle
         foreach ($data as $key => $_value) {
             if (!is_string($key)) {
                 throw ResolutionException::forParameter(
-                    $parameter,
+                    $target->reflection,
                     reason: 'HTTP DTO mapping accepts only named string keys',
                 );
             }

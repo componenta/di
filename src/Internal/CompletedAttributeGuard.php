@@ -108,7 +108,9 @@ final class CompletedAttributeGuard
                     $source = $completed['source'];
                     $target = $source->target;
                     $current = $this->plans->build($target, $source->attributeOverride($completed['observed']));
-                    if (self::semantics($completed['plan'], $completed['phase']) !== self::semantics($current, $completed['phase'])) {
+                    $phase = $completed['phase'];
+                    $property = $target instanceof ReflectionProperty;
+                    if (self::semantics($completed['plan'], $phase, $property) !== self::semantics($current, $phase, $property)) {
                         self::throwChanged($target, $completed['phase']);
                     }
                 }
@@ -274,7 +276,7 @@ final class CompletedAttributeGuard
     }
 
     /** @return list<array{AttributeDefinition,class-string,int}> */
-    public static function semantics(AttributePlan $plan, ?AttributePhase $phase): array
+    public static function semantics(AttributePlan $plan, ?AttributePhase $phase, bool $property): array
     {
         return array_map(
             static fn(AttributeUsage $usage): array => [
@@ -282,21 +284,21 @@ final class CompletedAttributeGuard
                 $usage->attributeClass,
                 $usage->declarationOrder,
             ],
-            self::usages($plan, $phase),
+            self::usages($plan, $phase, $property),
         );
     }
 
     /** @return list<AttributeUsage> */
-    private static function usages(AttributePlan $plan, ?AttributePhase $phase): array
+    private static function usages(AttributePlan $plan, ?AttributePhase $phase, bool $property): array
     {
-        if ($phase === null) {
+        if ($phase === null || $plan->usages === []) {
             return $plan->usages;
         }
         return array_values(array_filter($plan->usages, static fn(AttributeUsage $usage): bool => self::appliesToPhase(
             $usage->definition,
             $usage->attributeClass,
             $phase,
-            $plan->target instanceof ReflectionProperty,
+            $property,
         )));
     }
 
