@@ -50,6 +50,6 @@ Missing arguments use PHP defaults; `autowire()` additionally resolves available
 
 ## Other public contracts
 
-`Componenta\DI\FactoryInterface` declares `make(string $entry, array $params = []): object` and is implemented by `Container`. The definition strategy contracts `DefinitionResolverInterface` and `EntryResolverInterface` are documented in [Extension contracts](extensions.md).
+`Componenta\DI\FactoryInterface` declares `make(string $entry, array $params = []): object` and is implemented by `Container`. The definition strategy contracts `DefinitionResolverInterface` and `EntryResolverInterface` are documented in [Extension contracts](../guide/extensions.md).
 
 See [Definition guide](../guide/definitions.md) and [Migration](../migrations/di6-definitions.md).

@@ -83,4 +83,4 @@ public function create(
 
 ## Другие разделы
 
-[Вызов функций](callables.md) · [Определения](definitions.md) · [Отложенное создание](lazy.md) · [Расширения](extensions.md).
+[Вызов функций](callables.md) · [Определения](definitions.md) · [Отложенное создание](lazy.md) · [Расширения](../guide/extensions.md).

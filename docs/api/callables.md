@@ -12,7 +12,7 @@ The classes below are in `Componenta\DI`. The container exposes the high-level m
 | `CallableInvoker` | `call(mixed $callable, array $params = []): mixed` | Invoke without further dependency resolution, using native call semantics. |
 | `CallableExecutorInterface` | Extends both interfaces above | Combined resolution and invocation contract. |
 | `CallableExecutor` | `__construct(CallableResolverInterface $callableResolver, ParametersResolver $parameters)`; `resolve()`; `call()` | Resolve callable parameters through DI, then invoke the target. |
-| `PreparedCallable` | `__construct(callable|array $callable)`; `__invoke(mixed ...$arguments): mixed`; public `$callable` | Adapt an already prepared callable so `CallableExecutor::call()` does not repeat parameter injection. |
+| `PreparedCallable` | `__construct(callable\|array $callable)`; `__invoke(mixed ...$arguments): mixed`; public `$callable` | Adapt an already prepared callable so `CallableExecutor::call()` does not repeat parameter injection. |
 
 ## Supported callable inputs
 

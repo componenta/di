@@ -83,4 +83,4 @@ It builds objects through constructor resolution and attribute handling. `prepar
 
 ## See also
 
-[Callable API](callables.md) · [Definitions](definitions.md) · [Lazy factories](lazy.md) · [Extension contracts](extensions.md).
+[Callable API](callables.md) · [Definitions](definitions.md) · [Lazy factories](lazy.md) · [Extension contracts](../guide/extensions.md).

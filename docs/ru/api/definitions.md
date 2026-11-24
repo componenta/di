@@ -50,6 +50,6 @@ $container->set(Client::class, $definition);
 
 ## Другие открытые интерфейсы
 
-`Componenta\DI\FactoryInterface` объявляет `make(string $entry, array $params = []): object` и реализуется контейнером. Контракты `DefinitionResolverInterface` и `EntryResolverInterface` описаны в [справочнике расширений](extensions.md).
+`Componenta\DI\FactoryInterface` объявляет `make(string $entry, array $params = []): object` и реализуется контейнером. Контракты `DefinitionResolverInterface` и `EntryResolverInterface` описаны в [справочнике расширений](../guide/extensions.md).
 
 Дополнительные сведения: [Определения](../guide/definitions.md) и [Переход с версии 5](../migrations/di6-definitions.md).

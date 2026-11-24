@@ -34,10 +34,10 @@ new AttributeDefinition(
 
 | Тип | Открытые методы и свойства | Назначение |
 | --- | --- | --- |
-| `AttributePlanBuilder` | `__construct(AttributeDefinitionRegistry $registry)`, `build(Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target): AttributePlan` | Построение последовательности обработки объявлений у цели. |
-| `AttributePlan` | `__construct($target, array $usages)`, `all(string $capability): array`, `one(string $capability): ?AttributeUsage`, `has(string $capability): bool`, `attributes(string $attributeClass): array`; `$usages` | Получение записей по возможности или классу с сохранением порядка плана. |
+| `AttributePlanBuilder` | `__construct(AttributeDefinitionRegistry $registry)`, `build(Closure\|ReflectionClass\|ReflectionMethod\|ReflectionParameter\|ReflectionProperty $target): AttributePlan` | Построение последовательности обработки объявлений у цели. |
+| `AttributePlan` | `__construct($target, array $usages)`, `all(string $capability): array`, `one(string $capability): ?AttributeUsage`, `has(string $capability): bool`, `attributes(string $attributeClass): array`; `$usages`, `$target` | Получение записей по возможности или классу с сохранением порядка плана. |
 | `AttributeSet` | `__construct(array $attributes)`, `all(string $selector): array`, `one(string $selector): ?AttributeUsage`, `has(string $selector): bool`; `$attributes` | Представление набора атрибутов для проверки правил сочетания. |
-| `AttributeUsage` | `__construct(ReflectionAttribute $reflection, AttributeDefinition $definition, $target, int $declarationOrder)`, `newInstance(): object`, `is(string $attribute): bool`, `hasCapability(string $capability): bool`, `matches(string $selector): bool`; `$attributeClass`, `$arguments`, `$definition`, `$declarationOrder` | Одно объявление атрибута и его смысловые характеристики. |
+| `AttributeUsage` | `__construct(ReflectionAttribute $reflection, AttributeDefinition $definition, $target, int $declarationOrder)`, `newInstance(): object`, `is(string $attribute): bool`, `hasCapability(string $capability): bool`, `matches(string $selector): bool`; `$reflection`, `$attributeClass`, `$target`, `$arguments`, `$definition`, `$declarationOrder` | Одно объявление атрибута и его смысловые характеристики. |
 | `AttributeProcessor` | `__construct(AttributePlanBuilder $plans)`, `prepare(ReflectionClass $class): void`, `hasHandlers(ReflectionClass $class): bool` | Подготовка и проверка обработки атрибутов объекта. |
 
 Обращение к `AttributeUsage::$arguments` вычисляет аргументы объявления заново; выражения, создающие объекты, могут возвращать различные экземпляры. `newInstance()` создаёт экземпляр атрибута для текущего выполнения. Правила сочетания получают сведения об объявлении, а не общий изменяемый экземпляр атрибута.
@@ -62,4 +62,4 @@ new AttributeDefinition(
 
 Передавайте определения через `ConfigProvider::getAttributeDefinitions()`, а ограничения возможностей — через `getAttributeCapabilities()` до сборки контейнера. Уже завершённые этапы создания объектов и разрешения параметров не повторяются молча при появлении ранее неизвестных классов атрибутов; несовместимое позднее обнаружение может привести к `AttributeCompositionException`.
 
-См. [Интерфейсы расширения](extensions.md), [Справочник всех атрибутов](../guide/attribute-reference.md) и [Обработчики](attribute-handlers.md).
+См. [Интерфейсы расширения](../guide/extensions.md), [Справочник всех атрибутов](../guide/attribute-reference.md) и [Обработчики](attribute-handlers.md).

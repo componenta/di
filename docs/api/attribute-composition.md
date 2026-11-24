@@ -34,10 +34,10 @@ The `handler` implements `AttributeHandlerInterface` for object targets, `Parame
 
 | Type | Public methods and properties | Role |
 | --- | --- | --- |
-| `AttributePlanBuilder` | `__construct(AttributeDefinitionRegistry $registry)`, `build(Closure|ReflectionClass|ReflectionMethod|ReflectionParameter|ReflectionProperty $target): AttributePlan` | Compose declarations for a target. |
-| `AttributePlan` | `__construct($target, array $usages)`, `all(string $capability): array`, `one(string $capability): ?AttributeUsage`, `has(string $capability): bool`, `attributes(string $attributeClass): array`; `$usages` | Retrieve composed attributes by capability or class in plan order. |
+| `AttributePlanBuilder` | `__construct(AttributeDefinitionRegistry $registry)`, `build(Closure\|ReflectionClass\|ReflectionMethod\|ReflectionParameter\|ReflectionProperty $target): AttributePlan` | Compose declarations for a target. |
+| `AttributePlan` | `__construct($target, array $usages)`, `all(string $capability): array`, `one(string $capability): ?AttributeUsage`, `has(string $capability): bool`, `attributes(string $attributeClass): array`; `$usages`, `$target` | Retrieve composed attributes by capability or class in plan order. |
 | `AttributeSet` | `__construct(array $attributes)`, `all(string $selector): array`, `one(string $selector): ?AttributeUsage`, `has(string $selector): bool`; `$attributes` | Read-only composition-rule view. |
-| `AttributeUsage` | `__construct(ReflectionAttribute $reflection, AttributeDefinition $definition, $target, int $declarationOrder)`, `newInstance(): object`, `is(string $attribute): bool`, `hasCapability(string $capability): bool`, `matches(string $selector): bool`; `$attributeClass`, `$arguments`, `$definition`, `$declarationOrder` | One declared attribute and its semantic metadata. |
+| `AttributeUsage` | `__construct(ReflectionAttribute $reflection, AttributeDefinition $definition, $target, int $declarationOrder)`, `newInstance(): object`, `is(string $attribute): bool`, `hasCapability(string $capability): bool`, `matches(string $selector): bool`; `$reflection`, `$attributeClass`, `$target`, `$arguments`, `$definition`, `$declarationOrder` | One declared attribute and its semantic metadata. |
 | `AttributeProcessor` | `__construct(AttributePlanBuilder $plans)`, `prepare(ReflectionClass $class): void`, `hasHandlers(ReflectionClass $class): bool` | Prepare and inspect object attribute handling. |
 
 The `AttributeUsage::$arguments` getter evaluates declaration arguments when accessed; object-valued expressions need not be stable across reads. `newInstance()` creates an attribute instance for the current execution. Composition rules receive metadata rather than a cached mutable runtime attribute.
@@ -62,4 +62,4 @@ These public marker interfaces live under `Attribute\Composition\Capability`:
 
 Register definitions through `ConfigProvider::getAttributeDefinitions()` and capability policies through `getAttributeCapabilities()` before container assembly. Completed object/parameter phases must not be silently replayed when newly loaded attribute classes become available; incompatible late discovery can raise `AttributeCompositionException`.
 
-See [Extension contracts](extensions.md), [All built-in attributes](../guide/attribute-reference.md), and [Composition hooks](attribute-handlers.md).
+See [Extension contracts](../guide/extensions.md), [All built-in attributes](../guide/attribute-reference.md), and [Composition hooks](attribute-handlers.md).

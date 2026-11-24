@@ -12,7 +12,7 @@
 | `CallableInvoker` | `call(mixed $callable, array $params = []): mixed` | Вызов без дополнительного разрешения зависимостей. |
 | `CallableExecutorInterface` | Объединяет два предыдущих интерфейса | Общий договор на разрешение и выполнение вызовов. |
 | `CallableExecutor` | `__construct(CallableResolverInterface $callableResolver, ParametersResolver $parameters)`; `resolve()`; `call()` | Разрешение параметров через контейнер и выполнение вызова. |
-| `PreparedCallable` | `__construct(callable|array $callable)`; `__invoke(mixed ...$arguments): mixed`; свойство `$callable` | Вызов с уже подготовленными аргументами без повторного внедрения зависимостей. |
+| `PreparedCallable` | `__construct(callable\|array $callable)`; `__invoke(mixed ...$arguments): mixed`; свойство `$callable` | Вызов с уже подготовленными аргументами без повторного внедрения зависимостей. |
 
 ## Поддерживаемые описания вызова
 
