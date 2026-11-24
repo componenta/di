@@ -30,13 +30,20 @@ final readonly class AuditMappedFactoryEnvelope
 final class AuditLazyFactory implements LazyServiceFactoryInterface
 {
     public ?ContainerInterface $seenContainer = null;
+    public ?ProxyFactoryInterface $seenProxyFactory = null;
+    /** @var array<string|int,mixed> */
+    public array $seenContext = [];
+    public int $calls = 0;
 
     public function lazy(
         ContainerInterface $container,
         ProxyFactoryInterface $proxyFactory,
         array $context = [],
     ): object {
+        ++$this->calls;
         $this->seenContainer = $container;
+        $this->seenProxyFactory = $proxyFactory;
+        $this->seenContext = $context;
         return new \stdClass();
     }
 
@@ -74,15 +81,7 @@ test('mapped request provenance stays internal when a DTO is created by a user f
     Assert::assertInstanceOf(AuditMappedFactoryEnvelope::class, $envelope);
 
     expect($envelope->dto->value)->toBe('payload')
-        ->and($captured)->not->toBeNull();
-
-    $internalKeys = array_values(array_filter(
-        array_keys($captured ?? []),
-        static fn(int|string $key): bool => is_string($key)
-            && str_starts_with($key, "\0componenta.di."),
-    ));
-
-    expect($internalKeys)->toBe([]);
+        ->and($captured)->toBe(['value' => 'payload', ServerRequestInterface::class => $request]);
 });
 
 test('lazy service factories use the current ContainerValue runtime ABI', function (): void {
@@ -91,7 +90,18 @@ test('lazy service factories use the current ContainerValue runtime ABI', functi
         ->addFactory('audit.lazy', $factory)
         ->build();
 
-    expect($container->make('audit.lazy'))->toBeInstanceOf(\stdClass::class)
+    $first = $container->get('audit.lazy');
+    expect($first)->toBeInstanceOf(\stdClass::class)
+        ->and($container->get('audit.lazy'))->toBe($first)
+        ->and($factory->calls)->toBe(1)
+        ->and($factory->seenContext)->toBe([]);
+
+    $fresh = $container->make('audit.lazy', ['label' => 'caller']);
+    expect($fresh)->toBeInstanceOf(\stdClass::class)
+        ->and($fresh)->not->toBe($first)
+        ->and($factory->calls)->toBe(2)
+        ->and($factory->seenContext)->toBe(['label' => 'caller'])
+        ->and($factory->seenProxyFactory)->toBe($container->get(ProxyFactoryInterface::class))
         ->and($factory->seenContainer)->toBeInstanceOf(ContainerValue::class);
 
     if (!$factory->seenContainer instanceof ContainerValue) {

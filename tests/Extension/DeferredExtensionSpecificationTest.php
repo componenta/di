@@ -9,10 +9,13 @@ use Componenta\Config\Config;
 use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
+use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
 use Componenta\DI\ContainerFactory;
+use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
+use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
 use Componenta\DI\Resolver\Parameter\ParameterResolverInterface;
 use Componenta\DI\Resolver\Target\ParameterTarget;
@@ -82,7 +85,26 @@ final readonly class DeferredExtensionFactoryService
     }
 }
 
-final readonly class DeferredAutowiredDependency {}
+final class DeferredAutowiredDependency
+{
+    public int $factoryCalls = 0;
+    public string $value = 'autowired';
+}
+
+final readonly class DeferredAutowiredHandler implements ParameterAttributeHandlerInterface
+{
+    public function __construct(private DeferredAutowiredDependency $dependency) {}
+
+    public function resolveParameter(
+        object $attribute,
+        ParameterTarget $target,
+        ParameterResolutionContext $context,
+        AttributePlan $plan,
+        ParameterAttributeValue $value,
+    ): ParameterAttributeValue {
+        return ParameterAttributeValue::resolved($this->dependency->value);
+    }
+}
 
 final readonly class DeferredAutowiredAttributeFactory
 {
@@ -90,7 +112,12 @@ final readonly class DeferredAutowiredAttributeFactory
 
     public function attribute(ContainerInterface $container): AttributeDefinition
     {
-        return new AttributeDefinition(DeferredAutowiredValue::class);
+        ++$this->dependency->factoryCalls;
+        return new AttributeDefinition(
+            DeferredAutowiredValue::class,
+            new DeferredAutowiredHandler($this->dependency),
+            [ValueProvider::class],
+        );
     }
 }
 
@@ -139,8 +166,13 @@ test('deferred extension factories can use constructor autowiring during bootstr
     $factory = $container->get(DeferredAutowiredAttributeFactory::class);
     Assert::assertInstanceOf(DeferredAutowiredAttributeFactory::class, $factory);
 
-    expect($factory)->toBeInstanceOf(DeferredAutowiredAttributeFactory::class)
-        ->and($factory->dependency)->toBeInstanceOf(DeferredAutowiredDependency::class);
+    expect($factory->dependency)->toBe($container->get(DeferredAutowiredDependency::class))
+        ->and($factory->dependency->factoryCalls)->toBe(1)
+        ->and($container->call(static fn(#[DeferredAutowiredValue] string $value): string => $value))->toBe('autowired');
+
+    $factory->dependency->value = 'updated';
+    expect($container->call(static fn(#[DeferredAutowiredValue] string $value): string => $value))->toBe('updated')
+        ->and($factory->dependency->factoryCalls)->toBe(1);
 });
 
 test('container factory accepts deferred extension service method forms', function (): void {
@@ -171,14 +203,16 @@ test('container factory accepts deferred extension service method forms', functi
 
 test('container factory materializes closure function and service-id extension forms', function (): void {
     $attributeFactoryCalls = 0;
+    $receivedContainer = null;
     $config = new Config([], new Environment([]));
     $dependencies = new DependencyDefinitions([
         ConfigKey::SERVICES => [
             'deferred.resolver.service' => new DeferredConventionResolver(),
         ],
         ConfigKey::ATTRIBUTE_DEFINITIONS => [
-            static function (ContainerInterface $container) use (&$attributeFactoryCalls): AttributeDefinition {
+            static function (ContainerInterface $container) use (&$attributeFactoryCalls, &$receivedContainer): AttributeDefinition {
                 ++$attributeFactoryCalls;
+                $receivedContainer = $container;
                 return new AttributeDefinition(
                     DeferredValue::class,
                     capabilities: [ValueProvider::class],
@@ -199,9 +233,13 @@ test('container factory materializes closure function and service-id extension f
     $dto = $container->make(DeferredExtensionDto::class);
     Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
 
+    $second = $container->make(DeferredExtensionDto::class);
     expect($attributeFactoryCalls)->toBe(1)
+        ->and($receivedContainer)->toBe($container)
         ->and($dto->value)->toBe('from-service-method')
-        ->and($dto->fallback)->toBe('from-deferred-resolver');
+        ->and($dto->fallback)->toBe('from-deferred-resolver')
+        ->and($second)->toEqual($dto)
+        ->and($second)->not->toBe($dto);
 });
 
 test(

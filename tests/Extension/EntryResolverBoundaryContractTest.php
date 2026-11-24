@@ -17,6 +17,11 @@ use LogicException;
 
 abstract class AbstractProduct {}
 
+final readonly class AvailableProduct
+{
+    public function __construct(public string $label = 'ready') {}
+}
+
 final readonly class ForeignFactoryDefinition implements DefinitionInterface
 {
     /** @param Closure():object $factory */
@@ -31,7 +36,15 @@ test('direct reflection resolution rejects unavailable entries without a precedi
     }
     $resolver = new ReflectionResolver($objects, [\stdClass::class]);
 
-    expect(fn() => $resolver->resolve($id))->toThrow(NotFoundException::class);
+    try {
+        $resolver->resolve($id);
+        throw new LogicException('Expected the unavailable entry to be rejected.');
+    } catch (NotFoundException $exception) {
+        expect($exception->id)->toBe($id);
+    }
+
+    expect($resolver->can($id))->toBeFalse()
+        ->and($resolver->resolve(AvailableProduct::class))->toEqual(new AvailableProduct('ready'));
 })->with([
     'unknown class' => __NAMESPACE__ . '\\MissingProduct',
     'abstract class' => AbstractProduct::class,
@@ -40,8 +53,13 @@ test('direct reflection resolution rejects unavailable entries without a precedi
 
 test('direct factory validation rejects foreign descriptors even when they expose a callable factory', function (): void {
     $strategy = new FactoryResolver((new ContainerBuilder())->build(), new ProxyFactory());
-    $definition = new ForeignFactoryDefinition(static fn(): object => new \stdClass());
+    $calls = 0;
+    $definition = new ForeignFactoryDefinition(static function () use (&$calls): object {
+        ++$calls;
+        return new \stdClass();
+    });
 
     expect(fn() => $strategy->validateDefinition('product', $definition))
-        ->toThrow(InvalidConfigurationException::class);
+        ->toThrow(InvalidConfigurationException::class)
+        ->and($calls)->toBe(0);
 });

@@ -10,7 +10,6 @@ use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\ConfigKey;
 use Componenta\DI\Container;
-use Componenta\DI\Internal\ExtensionFactory as ExtensionMaterializer;
 use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Parameter\ParameterAttributeValue;
 use Componenta\DI\Resolver\Parameter\ParameterResolutionContext;
@@ -81,6 +80,14 @@ final class ExtensionFactory
         return $this->attribute
             ? new AttributeDefinition(SelectedValue::class, new SelectedHandler($this, $method), [ValueProvider::class])
             : new SelectedResolver($this, $method);
+    }
+}
+
+final class InaccessibleNativeFactory
+{
+    private static function materialize(ContainerInterface $container): never
+    {
+        throw new LogicException('An inaccessible native method must not be invoked.');
     }
 }
 
@@ -241,10 +248,10 @@ test('native static extension factories retain their callable owner when a same-
 
 test('extension discovery selects a public service method over an inaccessible native method', function (bool $attribute): void {
     $factory = new ExtensionFactory($attribute, 'service');
-    $di = extensionContainer($attribute, [ExtensionMaterializer::class, 'materialize'], [
-        ConfigKey::SERVICES => [ExtensionMaterializer::class => $factory],
+    $di = extensionContainer($attribute, [InaccessibleNativeFactory::class, 'materialize'], [
+        ConfigKey::SERVICES => [InaccessibleNativeFactory::class => $factory],
     ]);
 
     expect($di->call(static fn(#[SelectedValue] string $selected): string => $selected))->toBe('service:materialize')
-        ->and($di->get(ExtensionMaterializer::class))->toBe($factory);
+        ->and($di->get(InaccessibleNativeFactory::class))->toBe($factory);
 })->with(['parameter resolver' => false, 'attribute definition' => true]);

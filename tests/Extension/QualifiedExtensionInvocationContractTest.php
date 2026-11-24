@@ -164,6 +164,7 @@ test('extension factories invoke the selected qualified ancestor with the bootst
         expect($native($nativeContainer))->toBeInstanceOf($attribute ? AttributeDefinition::class : ParameterResolverInterface::class)
             ->and($owner->received)->toBe($nativeContainer);
         $owner->calls = 0;
+        $owner->received = null;
         $loads = 0;
         $specification = [$service ? 'extension.owner' : $owner, $method];
         $container = builder($attribute, $specification)

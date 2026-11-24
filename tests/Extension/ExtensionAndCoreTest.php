@@ -45,8 +45,17 @@ final readonly class MessageParameterResolver implements ParameterResolverInterf
 test('get remains shared while make remains fresh', function (): void {
     $container = (new ContainerBuilder())->build();
 
-    expect($container->get(CoreService::class))->toBe($container->get(CoreService::class))
-        ->and($container->make(CoreService::class))->not->toBe($container->make(CoreService::class));
+    $shared = $container->get(CoreService::class);
+    $first = $container->make(CoreService::class);
+    $second = $container->make(CoreService::class);
+
+    expect($shared)->toBeInstanceOf(CoreService::class)
+        ->and($first)->toBeInstanceOf(CoreService::class)
+        ->and($second)->toBeInstanceOf(CoreService::class)
+        ->and($first)->not->toBe($shared)
+        ->and($second)->not->toBe($shared)
+        ->and($second)->not->toBe($first)
+        ->and($container->get(CoreService::class))->toBe($shared);
 });
 
 test('aliases preserve normal container resolution', function (): void {
@@ -54,7 +63,13 @@ test('aliases preserve normal container resolution', function (): void {
         ->addAlias('core.service', CoreService::class)
         ->build();
 
-    expect($container->get('core.service'))->toBeInstanceOf(CoreService::class);
+    $canonical = $container->get(CoreService::class);
+    expect($canonical)->toBeInstanceOf(CoreService::class)
+        ->and($container->get('core.service'))->toBe($canonical);
+
+    $replacement = new CoreService();
+    $container->set(CoreService::class, $replacement);
+    expect($container->get('core.service'))->toBe($replacement);
 });
 
 test('user factories receive the restored array parameter ABI', function (): void {
@@ -81,7 +96,7 @@ test('custom parameter resolvers participate in the same ordered pipeline', func
     expect(fixtureInstance($container->make(CustomResolverDto::class), CustomResolverDto::class)->message)->toBe('from-resolver');
 });
 
-test('explicit caller parameters keep their v4 precedence over lower-priority custom resolvers', function (): void {
+test('explicit caller parameters take precedence over lower-priority custom resolvers', function (): void {
     $container = (new ContainerBuilder())
         ->addParameterResolver(new MessageParameterResolver(), 350)
         ->build();

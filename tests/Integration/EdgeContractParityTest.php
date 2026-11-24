@@ -83,18 +83,24 @@ test('request validation retries a transient provider lookup failure on the next
             return null;
         }
     };
-    $external = new class ($validation) implements ContainerInterface {
+    $cause = new \RuntimeException('transient validation lookup');
+    $external = new class ($validation, $cause) implements ContainerInterface {
         public bool $fail = true;
+        public int $lookups = 0;
 
-        public function __construct(private readonly ValidationProviderInterface $validation) {}
+        public function __construct(
+            private readonly ValidationProviderInterface $validation,
+            private readonly \RuntimeException $failure,
+        ) {}
 
         public function get(string $id): mixed
         {
             if ($id !== ValidationProviderInterface::class) {
                 throw new \RuntimeException('missing ' . $id);
             }
+            ++$this->lookups;
             if ($this->fail) {
-                throw new \RuntimeException('transient validation lookup');
+                throw $this->failure;
             }
 
             return $this->validation;
@@ -111,12 +117,19 @@ test('request validation retries a transient provider lookup failure on the next
     $callable = static fn(#[MapRequestPayload] TransientValidationDto $dto): string => $dto->value;
     $params = [ServerRequestInterface::class => $request];
 
-    expect(fn() => $container->call($callable, $params))
-        ->toThrow(ResolutionException::class, 'transient validation lookup');
+    try {
+        $container->call($callable, $params);
+        throw new \LogicException('Expected the validation provider lookup to fail.');
+    } catch (ResolutionException $exception) {
+        expect($exception->getMessage())->toContain('transient validation lookup')
+            ->and($exception->getPrevious())->toBe($cause);
+    }
+    expect($external->lookups)->toBe(1);
 
     $external->fail = false;
 
-    expect($container->call($callable, $params))->toBe('ok');
+    expect($container->call($callable, $params))->toBe('ok')
+        ->and($external->lookups)->toBe(2);
 });
 
 test('ServerParam preserves an explicitly present null instead of using its missing default', function (): void {
