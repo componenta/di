@@ -1,6 +1,6 @@
 # DI 6 migration: callbacks and union autowiring
 
-[Русская версия](di6-callbacks.ru.md)
+[Русская версия](/ru/migrations/di6-callbacks)
 
 This guide describes the implementation on the DI 6 development branch, following the DI 5.0.6 baseline. It is not a DI 6 release announcement. The library retains PHP `^8.4`; inline callbacks and first-class callable references written directly in attribute arguments require PHP 8.5.
 

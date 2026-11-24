@@ -1,6 +1,6 @@
 # Migrating definition extensions to DI 6
 
-**Status: next-major development, unreleased.** This guide describes the definition and mutation APIs implemented on the DI 6 development branch. These changes are not part of the released 5.0.6 package. The corresponding design is [Definition ownership and mutation retirement](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/definition-owner-lifecycle.md). [Русская версия](di6-definitions.ru.md).
+**Status: next-major development, unreleased.** This guide describes the definition and mutation APIs implemented on the DI 6 development branch. These changes are not part of the released 5.0.6 package. The corresponding design is [Definition ownership and mutation retirement](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/definition-owner-lifecycle.md). [Русская версия](/ru/migrations/di6-definitions).
 
 ## Who needs to change code
 
@@ -20,13 +20,13 @@ Applications using `ContainerFactory`, public definitions and `Container::set()`
 | Every `InvalidConfigurationException` treated as rejected registration | Handle `MutationRetirementException` first: the mutation already committed |
 | `DependencyConfiguration::normalize()` used to validate factory ABI or class eligibility | Admission during `ContainerFactory::create()`, standalone `setDefinition()`, or direct strategy validation |
 
-The mutable leaf interface is removed. There is no compatibility adapter that preserves a hidden leaf registration map. Ordinary fallback resolvers continue implementing [`EntryResolverInterface`](../../src/Resolver/Entry/EntryResolverInterface.php); reflection fallback keeps that role.
+The mutable leaf interface is removed. There is no compatibility adapter that preserves a hidden leaf registration map. Ordinary fallback resolvers continue implementing [`EntryResolverInterface`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/EntryResolverInterface.php); reflection fallback keeps that role.
 
 `setDefinition()` and `Container::set()` perform real registration, including publication on successful admission; do not use them as dry runs. `can($id)` reports entry availability, not whether an arbitrary descriptor would be accepted. A strategy you own can classify its input kinds through `DefinitionResolverInterface::supportsDefinition()`, but that answer does not predict admission by another composite's ordered provider chain. Handle actual registration failures using the publication and retirement boundaries described below.
 
 ## Registration ownership and application behavior
 
-[`CompositeResolver`](../../src/Resolver/Entry/CompositeResolver.php) exposes registration and resolution through a single binding table owned by its internal `EntryBindings`. Each binding captures its ID, chosen strategy and validated descriptor. Bootstrap definitions and later registrations enter this same table. Factory and invokable strategies hold no per-ID configuration map.
+[`CompositeResolver`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/CompositeResolver.php) exposes registration and resolution through a single binding table owned by its internal `EntryBindings`. Each binding captures its ID, chosen strategy and validated descriptor. Bootstrap definitions and later registrations enter this same table. Factory and invokable strategies hold no per-ID configuration map.
 
 This corrects the former retention of a factory after switching definition strategies. It also gives the container a single publication point before retiring old configuration and cached values. Shared and fresh resolution therefore agree on the committed definition even if releasing an old value throws.
 
@@ -83,7 +83,7 @@ Keep existing protected-ID and alias rules. For a definition registered through 
 
 ## Bootstrap normalization and validation timing
 
-[`DependencyConfiguration`](../../src/Configuration/DependencyConfiguration.php) validates configuration shape and factory identifiers, normalizes aliases/invokables, and validates the other configuration sections. It preserves factory-section values, including public definition objects. It no longer unwraps `FactoryDefinition` to its callable or validates factory ABI and `ClassDefinition` eligibility during normalization.
+[`DependencyConfiguration`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Configuration/DependencyConfiguration.php) validates configuration shape and factory identifiers, normalizes aliases/invokables, and validates the other configuration sections. It preserves factory-section values, including public definition objects. It no longer unwraps `FactoryDefinition` to its callable or validates factory ABI and `ClassDefinition` eligibility during normalization.
 
 ```php
 use Componenta\DI\Configuration\DependencyConfiguration;
@@ -105,7 +105,7 @@ If an integration previously called `normalize()` as its complete semantic valid
 
 ## Direct built-in strategy users
 
-[`FactoryResolver`](../../src/Resolver/Entry/FactoryResolver.php) now takes the container and proxy factory only. Its container must provide the normal `ContainerValue` bootstrap service. [`InvokableResolver`](../../src/Resolver/Entry/InvokableResolver.php) takes no constructor arguments. Both implement `DefinitionResolverInterface`, not `EntryResolverInterface`.
+[`FactoryResolver`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/FactoryResolver.php) now takes the container and proxy factory only. Its container must provide the normal `ContainerValue` bootstrap service. [`InvokableResolver`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/InvokableResolver.php) takes no constructor arguments. Both implement `DefinitionResolverInterface`, not `EntryResolverInterface`.
 
 Direct users own the validated descriptor and pass it back to the same strategy with the same ID. Treat the result of validation as opaque configuration; it can be a different definition kind than the input. Do not pass an internal prepared descriptor back into fresh registration. The following continues the application example above:
 
@@ -134,7 +134,7 @@ A direct call has no shared entry cache. Use a standalone composite when IDs sho
 
 ## Custom definition strategies
 
-Implement the three methods of [`DefinitionResolverInterface`](../../src/Resolver/Entry/DefinitionResolverInterface.php):
+Implement the three methods of [`DefinitionResolverInterface`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/DefinitionResolverInterface.php):
 
 1. `supportsDefinition()` classifies the input kind without loading services, executing factories or invoking application callbacks.
 2. `validateDefinition()` returns stable configuration for later execution. It does not publish a registration or retain an ID-to-definition map. A separate immutable normalized descriptor is often useful.
@@ -259,7 +259,7 @@ To forward the same construction, pass `$params` to the next entry resolver or `
 
 All four public registration mutations follow validation, publication, complete affected invalidation, then native release of retired roots: `set()`, `alias()`, `delegator()` and `addContainer()`. A standalone composite applies the corresponding sequence to its own binding table. No mutation writes follow the start of final retirement.
 
-[`MutationRetirementException`](../../src/Exception/MutationRetirementException.php) extends `InvalidConfigurationException` and means that the registration already committed. Handle this subtype before a broader invalid-configuration catch:
+[`MutationRetirementException`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Exception/MutationRetirementException.php) extends `InvalidConfigurationException` and means that the registration already committed. Handle this subtype before a broader invalid-configuration catch:
 
 ```php
 use Componenta\DI\Exception\MutationRetirementException;

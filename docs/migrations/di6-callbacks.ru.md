@@ -1,6 +1,6 @@
 # Миграция на DI 6: callback-функции и autowiring union-типов
 
-[English version](di6-callbacks.md)
+[English version](/migrations/di6-callbacks)
 
 Этот документ описывает реализацию в ветке разработки DI 6 после базового релиза DI 5.0.6. Это не объявление о выпуске DI 6. Библиотека сохраняет PHP `^8.4`; встроенные callback-функции и ссылки first-class callable непосредственно в аргументах атрибутов требуют PHP 8.5.
 

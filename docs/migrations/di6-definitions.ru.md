@@ -1,6 +1,6 @@
 # Миграция расширений определений на DI 6
 
-**Статус: разработка следующей major-версии, релиза ещё нет.** Руководство описывает API определений и мутаций, реализованный в ветке разработки DI 6. Эти изменения не входят в выпущенный пакет 5.0.6. Соответствующая спецификация — [Владение определениями и освобождение после мутаций](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/definition-owner-lifecycle.ru.md). [English version](di6-definitions.md).
+**Статус: разработка следующей major-версии, релиза ещё нет.** Руководство описывает API определений и мутаций, реализованный в ветке разработки DI 6. Эти изменения не входят в выпущенный пакет 5.0.6. Соответствующая спецификация — [Владение определениями и освобождение после мутаций](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/definition-owner-lifecycle.ru.md). [English version](/migrations/di6-definitions).
 
 ## Кому нужно менять код
 
@@ -20,13 +20,13 @@
 | Любой `InvalidConfigurationException` считается отклонённой регистрацией | Сначала обрабатывается `MutationRetirementException`: мутация уже зафиксирована |
 | `DependencyConfiguration::normalize()` используется для проверки ABI фабрики или допустимости класса | Проверка при допуске во время `ContainerFactory::create()`, standalone `setDefinition()` либо прямой проверки стратегией |
 
-Интерфейс изменяемого листового резолвера удалён. Адаптера совместимости, сохраняющего скрытую карту регистраций в листовом резолвере, нет. Обычные fallback-резолверы по-прежнему реализуют [`EntryResolverInterface`](../../src/Resolver/Entry/EntryResolverInterface.php); reflection fallback сохраняет эту роль.
+Интерфейс изменяемого листового резолвера удалён. Адаптера совместимости, сохраняющего скрытую карту регистраций в листовом резолвере, нет. Обычные fallback-резолверы по-прежнему реализуют [`EntryResolverInterface`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/EntryResolverInterface.php); reflection fallback сохраняет эту роль.
 
 `setDefinition()` и `Container::set()` выполняют настоящую регистрацию с публикацией после успешного допуска; не используйте их как пробный вызов без изменения состояния. `can($id)` сообщает о доступности entry, а не о допустимости произвольного дескриптора. Собственная стратегия может классифицировать поддерживаемые виды через `DefinitionResolverInterface::supportsDefinition()`, но её ответ не предсказывает допуск упорядоченной цепочкой провайдеров другого composite. Обрабатывайте ошибки настоящей регистрации с учётом описанных ниже границ публикации и освобождения старого состояния.
 
 ## Владение регистрациями и поведение приложения
 
-[`CompositeResolver`](../../src/Resolver/Entry/CompositeResolver.php) регистрирует и разрешает определения через одну таблицу привязок. Таблицей владеет внутренний `EntryBindings`. Каждая привязка фиксирует ID, выбранную стратегию и проверенный дескриптор. Начальные определения и последующие регистрации попадают в одну таблицу. Стратегии фабрик и invokable-классов не хранят конфигурацию в картах по ID.
+[`CompositeResolver`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/CompositeResolver.php) регистрирует и разрешает определения через одну таблицу привязок. Таблицей владеет внутренний `EntryBindings`. Каждая привязка фиксирует ID, выбранную стратегию и проверенный дескриптор. Начальные определения и последующие регистрации попадают в одну таблицу. Стратегии фабрик и invokable-классов не хранят конфигурацию в картах по ID.
 
 Это исправляет прежнее удержание фабрики после смены стратегии определения. Кроме того, контейнер получает единую точку публикации перед освобождением старой конфигурации и значений кеша. Поэтому shared- и fresh-разрешение согласованы с зафиксированным определением, даже если освобождение старого значения выбрасывает исключение.
 
@@ -83,7 +83,7 @@ assert($current !== $fresh);
 
 ## Нормализация bootstrap-конфигурации и момент проверки
 
-[`DependencyConfiguration`](../../src/Configuration/DependencyConfiguration.php) проверяет форму конфигурации и идентификаторы фабрик, нормализует aliases/invokables и проверяет остальные секции. Значения секции фабрик сохраняются, включая публичные объекты определений. Нормализация больше не разворачивает `FactoryDefinition` в callable и не проверяет ABI фабрики или допустимость `ClassDefinition`.
+[`DependencyConfiguration`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Configuration/DependencyConfiguration.php) проверяет форму конфигурации и идентификаторы фабрик, нормализует aliases/invokables и проверяет остальные секции. Значения секции фабрик сохраняются, включая публичные объекты определений. Нормализация больше не разворачивает `FactoryDefinition` в callable и не проверяет ABI фабрики или допустимость `ClassDefinition`.
 
 ```php
 use Componenta\DI\Configuration\DependencyConfiguration;
@@ -105,7 +105,7 @@ assert($normalized['factories']['message'] === $definition);
 
 ## Прямое использование встроенных стратегий
 
-[`FactoryResolver`](../../src/Resolver/Entry/FactoryResolver.php) теперь принимает только контейнер и proxy factory. В контейнере должен быть обычный bootstrap-сервис `ContainerValue`. [`InvokableResolver`](../../src/Resolver/Entry/InvokableResolver.php) создаётся без аргументов конструктора. Оба реализуют `DefinitionResolverInterface`, а не `EntryResolverInterface`.
+[`FactoryResolver`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/FactoryResolver.php) теперь принимает только контейнер и proxy factory. В контейнере должен быть обычный bootstrap-сервис `ContainerValue`. [`InvokableResolver`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/InvokableResolver.php) создаётся без аргументов конструктора. Оба реализуют `DefinitionResolverInterface`, а не `EntryResolverInterface`.
 
 Прямой потребитель владеет проверенным дескриптором и передаёт его той же стратегии с тем же ID. Считайте результат проверки непрозрачной конфигурацией: его вид определения может отличаться от входного. Не передавайте внутренний подготовленный дескриптор повторно на вход новой регистрации. Следующий фрагмент продолжает пример приложения выше:
 
@@ -134,7 +134,7 @@ assert($invokableStrategy->resolveDefinition('empty-object', $validatedInvokable
 
 ## Пользовательские стратегии определений
 
-Реализуйте три метода [`DefinitionResolverInterface`](../../src/Resolver/Entry/DefinitionResolverInterface.php):
+Реализуйте три метода [`DefinitionResolverInterface`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Resolver/Entry/DefinitionResolverInterface.php):
 
 1. `supportsDefinition()` классифицирует входной вид без загрузки сервисов, исполнения фабрик и вызовов callback-функций приложения.
 2. `validateDefinition()` возвращает стабильную конфигурацию для последующего исполнения. Метод не публикует регистрацию и не хранит карту ID → определение. Часто удобен отдельный неизменяемый нормализованный дескриптор.
@@ -259,7 +259,7 @@ $container = new Container(
 
 Все четыре публичные мутации регистраций выполняют проверку, публикацию, полную инвалидацию затронутого состояния, затем нативное освобождение удержанных корней: `set()`, `alias()`, `delegator()` и `addContainer()`. Standalone composite применяет соответствующую последовательность к собственной таблице привязок. После начала окончательного освобождения мутация больше не записывает состояние.
 
-[`MutationRetirementException`](../../src/Exception/MutationRetirementException.php) расширяет `InvalidConfigurationException` и означает, что регистрация уже зафиксирована. Обрабатывайте этот подтип раньше общего перехвата некорректной конфигурации:
+[`MutationRetirementException`](https://github.com/componenta/di/blob/dbbcd95929bd94cab30a6912a2c5ab6cdf3b922f/src/Exception/MutationRetirementException.php) расширяет `InvalidConfigurationException` и означает, что регистрация уже зафиксирована. Обрабатывайте этот подтип раньше общего перехвата некорректной конфигурации:
 
 ```php
 use Componenta\DI\Exception\MutationRetirementException;
