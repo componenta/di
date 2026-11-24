@@ -407,6 +407,9 @@ final class TrimCaster implements CasterInterface, CasterProviderInterface
 
 final class DtoValidator implements ValidationProviderInterface, ValidatorInterface
 {
+    public int $calls = 0;
+    public mixed $lastInput = null;
+
     public function provide(string $entryId): ?ValidatorInterface
     {
         return $entryId === MappedDto::class ? $this : null;
@@ -415,7 +418,8 @@ final class DtoValidator implements ValidationProviderInterface, ValidatorInterf
     public function validate(iterable $data, ?ContextInterface $context = null): true|ErrorMessageCollectorInterface
     {
         $values = is_array($data) ? $data : iterator_to_array($data);
-        Fixtures::check(($values['value'] ?? null) === ' mapped ', 'Validator must receive raw input.');
+        ++$this->calls;
+        $this->lastInput = $values['value'] ?? null;
         return true;
     }
 }

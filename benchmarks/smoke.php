@@ -90,13 +90,16 @@ try {
 
             $provider = $method->getAttributes(ParamProviders::class)[0] ?? null;
             $expectedVariants = 1;
+            $expectedNames = null;
             if ($provider !== null) {
                 $providers = $provider->newInstance()->providers;
                 if (count($providers) !== 1) {
                     throw new RuntimeException('Smoke verification expects one parameter provider: ' . $key);
                 }
                 $parameters = $instance->{$providers[0]}();
-                $expectedVariants = is_array($parameters) ? count($parameters) : iterator_count($parameters);
+                $sets = is_array($parameters) ? $parameters : iterator_to_array($parameters);
+                $expectedVariants = count($sets);
+                $expectedNames = array_map('strval', array_keys($sets));
             }
 
             $results = $xpath->query('./variant', $subject);
@@ -112,7 +115,19 @@ try {
                 ) {
                     throw new RuntimeException('Invalid executed benchmark variant: ' . $key);
                 }
+                if ($expectedNames !== null) {
+                    $parameterSet = $xpath->query('./parameter-set', $variant)->item(0);
+                    $name = $parameterSet instanceof DOMElement ? $parameterSet->getAttribute('name') : '';
+                    $index = array_search($name, $expectedNames, true);
+                    if ($index === false) {
+                        throw new RuntimeException('Unexpected or duplicate parameter set: ' . $key . ' / ' . $name);
+                    }
+                    unset($expectedNames[$index]);
+                }
                 ++$variants;
+            }
+            if ($expectedNames !== null && $expectedNames !== []) {
+                throw new RuntimeException('Missing named parameter sets: ' . $key);
             }
             ++$verified;
         }
