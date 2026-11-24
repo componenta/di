@@ -23,4 +23,4 @@ composer require componenta/di
 - [Расширение контейнера](docs/ru/guide/extensions.md) · [Поведение и исключения](docs/ru/guide/runtime.md).
 - [Миграция определений](docs/ru/migrations/di6-definitions.md) · [Миграция функций обратного вызова и объединений типов](docs/ru/migrations/di6-callbacks.md).
 
-[Оглавление](docs/ru/index.md) · [Лицензия](https://github.com/componenta/di/blob/main/LICENSE) · [Сообщить об ошибке](https://github.com/componenta/di/issues)
+[Оглавление](docs/ru/index.md) · [Сообщить об ошибке](https://github.com/componenta/di/issues)

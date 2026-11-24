@@ -20,7 +20,7 @@ Native closures and first-class callable expressions written directly in attribu
 - [Dependency definitions](docs/guide/definitions.md) — services, factories, aliases, and decorators.
 - [Container API](docs/guide/container.md) — lookup, object creation, invocation, and mutations.
 - [Attributes and request mapping](docs/guide/attributes.md) · [Lazy objects](docs/guide/lazy-objects.md).
-- [Extension points](docs/guide/extensions.md) · [Runtime behavior and errors](docs/guide/runtime.md).
+- [Extension points](docs/guide/extensions.md) · [Runtime behavior and exceptions](docs/guide/runtime.md).
 - [Migrating definitions](docs/migrations/di6-definitions.md) · [Migrating callbacks and unions](docs/migrations/di6-callbacks.md).
 
-[Documentation index](docs/index.md) · [License](https://github.com/componenta/di/blob/main/LICENSE) · [Issues](https://github.com/componenta/di/issues)
+[Documentation index](docs/index.md) · [Issues](https://github.com/componenta/di/issues)
