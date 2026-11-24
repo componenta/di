@@ -179,17 +179,17 @@ All mapper attributes target **parameters only**, return an array or construct a
 `MapRequest` constructor (all arguments are optional):
 
 ```php
-new MapRequest(
-    sources: [RequestDataSource::Payload],
-    map: [],
-    exclude: [],
-    conflictPolicy: RequestDataConflictPolicy::Reject,
-    defaults: [],
-    cast: [],
-    sortMap: [],
-    attributes: [],
-    files: [],
-    afterMap: null,
+public function __construct(
+    array $sources = [RequestDataSource::Payload],
+    array $map = [],
+    array $exclude = [],
+    RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject,
+    array $defaults = [],
+    array $cast = [],
+    array $sortMap = [],
+    array $attributes = [],
+    array $files = [],
+    ?Closure $afterMap = null,
 );
 ```
 

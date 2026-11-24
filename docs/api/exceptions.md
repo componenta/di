@@ -41,4 +41,74 @@ try {
 
 Handle `MutationRetirementException` before a general `InvalidConfigurationException` catch. Failed validation before publication does not replace the old binding; independently committed nested changes are not rolled back.
 
+## Exact exception signatures
+
+
+```php
+// ResolutionException
+public function __construct(
+    string $message,
+    ?ParameterDiagnostic $parameter = null,
+    ?PropertyDiagnostic $property = null,
+    ?string $parameterName = null,
+    ?int $parameterPosition = null,
+    ?string $parameterType = null,
+    ?string $parameterContext = null,
+    ?string $propertyName = null,
+    ?string $propertyClass = null,
+    ?string $propertyType = null,
+    ?string $serviceId = null,
+    array $providedParameterTypes = [],
+    array $resolvedParameterTypes = [],
+    ?string $actualType = null,
+    ?Throwable $previous = null,
+);
+public static function forParameter(
+    ReflectionParameter $parameter,
+    ?string $reason = null,
+    array $providedParameters = [],
+    array $resolvedParameters = [],
+    ?Throwable $previous = null,
+): self;
+public static function forProperty(
+    ReflectionProperty $property,
+    ?string $reason = null,
+    ?Throwable $previous = null,
+): self;
+public static function forService(string $id, Throwable $previous): self;
+public static function forMissingService(string $id): self;
+public static function forNonObject(string $id, string $actualType): self;
+```
+
+
+| Type | Constructor |
+| --- | --- |
+| `NotFoundException` | `__construct(string $id, string $message = '', ?Throwable $previous = null)` |
+| `CircularDependencyException` | `__construct(array $chain, string $message = '', ?Throwable $previous = null)` |
+| `DelegatorException` | `__construct(string $message, ?string $entryId = null, ?Throwable $previous = null)` |
+| `InvalidCallableException` | `__construct(mixed $callable, string $message = '', ?Throwable $previous = null)` |
+| `MutationRetirementException` | `__construct(?string $id, array $causes)` |
+| `RequestDataConflictException` | `__construct(string\|int $key, string $existingSource, string $incomingSource, ?Throwable $previous = null)` |
+| `RequestParameterSourceConflictException` | `__construct(string $dtoClass, string $key, string $source, ?string $parameter = null)` |
+| `ParameterDiagnostic` | `__construct(string $name, int $position, ?string $type, string $context)` |
+| `PropertyDiagnostic` | `__construct(string $name, string $class, ?string $type)` |
+
+Exception classes without their own constructor inherit PHP's standard constructor. Additional configuration and callable exception factories:
+
+```php
+// InvalidConfigurationException
+public static function forSelfReferencingAlias(string $alias): self;
+public static function forInvalidDefinition(DefinitionInterface $definition): self;
+public static function forUnsupportedDefinition(
+    DefinitionInterface $definition,
+    string $resolverClass,
+): self;
+
+// InvalidCallableException
+public static function forValue(mixed $callable, ?Throwable $previous = null): self;
+public static function forMethod(string $class, string $method): self;
+public static function forNonInvokable(string $class): self;
+public static function forMissingService(string $id, ?Throwable $previous = null): self;
+```
+
 See [Runtime behavior](../guide/runtime.md) and [Request mapping](../guide/request-mapping.md).

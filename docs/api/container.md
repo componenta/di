@@ -57,6 +57,26 @@ Direct use requires explicitly assembled collaborators. `ContainerFactory` is th
 
 `normalize()` alone does not verify whether a factory can execute. `Config`, `DependencyDefinitions`, `Environment`, and `ConfigProvider` are public types provided by the separate `componenta/config` package.
 
+### Configuration keys
+
+`ConfigKey` inherits the shared string constants from Componenta Config:
+
+| Constant | Value |
+| --- | --- |
+| `DEPENDENCIES` | `dependencies` |
+| `FACTORIES` | `factories` |
+| `INVOKABLES` | `invokables` |
+| `ALIASES` | `aliases` |
+| `DELEGATORS` | `delegators` |
+| `SERVICES` | `services` |
+| `PARAMETER_RESOLVERS` | `parameter_resolvers` |
+| `PARAMETER_RESOLVERS_REPLACE` | `parameter_resolvers_replace` |
+| `ATTRIBUTE_DEFINITIONS` | `attribute_definitions` |
+| `ATTRIBUTE_DEFINITIONS_REPLACE` | `attribute_definitions_replace` |
+| `ATTRIBUTE_CAPABILITIES` | `attribute_capabilities` |
+
+The inherited static `ConfigKey::dependencyKeys(): array` returns the dependency-section keys, excluding the root key `DEPENDENCIES`. The attribute constant `Componenta\DI\Attribute\Config::KEY` is `'config'`, a protected alias for `Componenta\Config\Config`.
+
 ## Lower-level object creation
 
 `Componenta\DI\Object\ObjectPipeline` exposes:

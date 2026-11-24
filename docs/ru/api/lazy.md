@@ -28,4 +28,34 @@ $proxy = $container->makeProxy(
 
 При использовании `#[Proxy]` в точке внедрения контейнер дополнительно требует, чтобы основной объект был экземпляром выбранного класса заместителя. Пользовательская реализация фабрики может применять другой механизм, но должна сохранять отложенную инициализацию. Атрибут класса `#[Lazy]` или `#[Proxy]` действует при создании через отражение и не изменяет результат произвольной прикладной фабрики.
 
+## Отложенное создание под управлением фабрики
+
+Объект фабрики с интерфейсом `LazyServiceFactoryInterface` не обязан быть вызываемым. Зарегистрируйте его непосредственно в `getFactories()`. Вместо обычного вызова фабрики контейнер вызывает `lazy()` с объектом `ContainerValue` (контейнер PSR-11), фабрикой заместителей и переданными аргументами. Класс в примере должен удовлетворять ограничениям встроенного механизма.
+
+```php
+use Componenta\DI\LazyServiceFactoryInterface;
+use Componenta\DI\ProxyFactoryInterface;
+use Psr\Container\ContainerInterface;
+
+final class CatalogFactory implements LazyServiceFactoryInterface
+{
+    public function lazy(
+        ContainerInterface $container,
+        ProxyFactoryInterface $proxyFactory,
+        array $context = [],
+    ): object {
+        return $proxyFactory->makeProxy(
+            Catalog::class,
+            static fn(Catalog $proxy): Catalog => new Catalog(),
+        );
+    }
+}
+
+// В классе поставщика конфигурации:
+protected function getFactories(): array
+{
+    return [Catalog::class => new CatalogFactory()];
+}
+```
+
 См. [Отложенное создание объектов](../guide/lazy-objects.md) и [Справочник атрибутов](../guide/attribute-reference.md).

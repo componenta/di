@@ -41,4 +41,74 @@ try {
 
 `MutationRetirementException` следует перехватывать раньше общего `InvalidConfigurationException`. Ошибка проверки до применения изменений сохраняет предыдущую привязку. Независимо завершённые вложенные изменения не отменяются.
 
+## Точные сигнатуры исключений
+
+
+```php
+// ResolutionException
+public function __construct(
+    string $message,
+    ?ParameterDiagnostic $parameter = null,
+    ?PropertyDiagnostic $property = null,
+    ?string $parameterName = null,
+    ?int $parameterPosition = null,
+    ?string $parameterType = null,
+    ?string $parameterContext = null,
+    ?string $propertyName = null,
+    ?string $propertyClass = null,
+    ?string $propertyType = null,
+    ?string $serviceId = null,
+    array $providedParameterTypes = [],
+    array $resolvedParameterTypes = [],
+    ?string $actualType = null,
+    ?Throwable $previous = null,
+);
+public static function forParameter(
+    ReflectionParameter $parameter,
+    ?string $reason = null,
+    array $providedParameters = [],
+    array $resolvedParameters = [],
+    ?Throwable $previous = null,
+): self;
+public static function forProperty(
+    ReflectionProperty $property,
+    ?string $reason = null,
+    ?Throwable $previous = null,
+): self;
+public static function forService(string $id, Throwable $previous): self;
+public static function forMissingService(string $id): self;
+public static function forNonObject(string $id, string $actualType): self;
+```
+
+
+| Тип | Конструктор |
+| --- | --- |
+| `NotFoundException` | `__construct(string $id, string $message = '', ?Throwable $previous = null)` |
+| `CircularDependencyException` | `__construct(array $chain, string $message = '', ?Throwable $previous = null)` |
+| `DelegatorException` | `__construct(string $message, ?string $entryId = null, ?Throwable $previous = null)` |
+| `InvalidCallableException` | `__construct(mixed $callable, string $message = '', ?Throwable $previous = null)` |
+| `MutationRetirementException` | `__construct(?string $id, array $causes)` |
+| `RequestDataConflictException` | `__construct(string\|int $key, string $existingSource, string $incomingSource, ?Throwable $previous = null)` |
+| `RequestParameterSourceConflictException` | `__construct(string $dtoClass, string $key, string $source, ?string $parameter = null)` |
+| `ParameterDiagnostic` | `__construct(string $name, int $position, ?string $type, string $context)` |
+| `PropertyDiagnostic` | `__construct(string $name, string $class, ?string $type)` |
+
+У остальных исключений без собственного конструктора действуют унаследованные сигнатуры PHP. Методы создания исключений конфигурации и вызова:
+
+```php
+// InvalidConfigurationException
+public static function forSelfReferencingAlias(string $alias): self;
+public static function forInvalidDefinition(DefinitionInterface $definition): self;
+public static function forUnsupportedDefinition(
+    DefinitionInterface $definition,
+    string $resolverClass,
+): self;
+
+// InvalidCallableException
+public static function forValue(mixed $callable, ?Throwable $previous = null): self;
+public static function forMethod(string $class, string $method): self;
+public static function forNonInvokable(string $class): self;
+public static function forMissingService(string $id, ?Throwable $previous = null): self;
+```
+
 См. [Поведение контейнера](../guide/runtime.md) и [Обработка HTTP-запросов](../guide/request-mapping.md).

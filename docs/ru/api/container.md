@@ -57,6 +57,26 @@ public function __construct(
 
 Одна лишь нормализация не доказывает, что фабрика может создать объект. Типы `Config`, `DependencyDefinitions`, `Environment` и `ConfigProvider` предоставляет отдельный пакет `componenta/config`.
 
+### Ключи конфигурации
+
+`ConfigKey` наследует общие строковые константы из Componenta Config:
+
+| Константа | Значение |
+| --- | --- |
+| `DEPENDENCIES` | `dependencies` |
+| `FACTORIES` | `factories` |
+| `INVOKABLES` | `invokables` |
+| `ALIASES` | `aliases` |
+| `DELEGATORS` | `delegators` |
+| `SERVICES` | `services` |
+| `PARAMETER_RESOLVERS` | `parameter_resolvers` |
+| `PARAMETER_RESOLVERS_REPLACE` | `parameter_resolvers_replace` |
+| `ATTRIBUTE_DEFINITIONS` | `attribute_definitions` |
+| `ATTRIBUTE_DEFINITIONS_REPLACE` | `attribute_definitions_replace` |
+| `ATTRIBUTE_CAPABILITIES` | `attribute_capabilities` |
+
+Статический метод `ConfigKey::dependencyKeys(): array` возвращает ключи раздела зависимостей, исключая сам корневой ключ `DEPENDENCIES`. Константа атрибута `Componenta\DI\Attribute\Config::KEY` равна `'config'`: это защищённый псевдоним записи `Componenta\Config\Config`.
+
 ## Низкоуровневое создание объектов
 
 `Componenta\DI\Object\ObjectPipeline` содержит:

@@ -179,17 +179,17 @@ $handler = static function (
 Полная сигнатура конструктора `MapRequest` с исходными значениями по умолчанию:
 
 ```php
-new MapRequest(
-    sources: [RequestDataSource::Payload],
-    map: [],
-    exclude: [],
-    conflictPolicy: RequestDataConflictPolicy::Reject,
-    defaults: [],
-    cast: [],
-    sortMap: [],
-    attributes: [],
-    files: [],
-    afterMap: null,
+public function __construct(
+    array $sources = [RequestDataSource::Payload],
+    array $map = [],
+    array $exclude = [],
+    RequestDataConflictPolicy $conflictPolicy = RequestDataConflictPolicy::Reject,
+    array $defaults = [],
+    array $cast = [],
+    array $sortMap = [],
+    array $attributes = [],
+    array $files = [],
+    ?Closure $afterMap = null,
 );
 ```
 

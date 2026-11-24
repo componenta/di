@@ -85,4 +85,21 @@ matches(?ReflectionType $type, mixed $value, ?ReflectionClass $declaringClass = 
 
 The helpers support class-name normalization and type checks, including unions and intersection matching. `ParameterTarget` is the preferred extension-facing description when the reflected parameter is already available.
 
+## Default resolver order
+
+The default container assembles these priorities (higher values execute first):
+
+| Resolver | Priority |
+| --- | --- |
+| `AttributeParameterResolver` | 1200 |
+| `ArrayResolver` | 1100 |
+| `ArrayTypedResolver` | 1000 |
+| `AutowireByTypeResolver` | 300 |
+| `DefaultValueResolver` | 200 |
+| `NullableResolver` | 100 |
+
+A provider's `getParameterResolvers()` returns an integer-keyed map of resolver instances, service IDs, callable factories or deferred service-method pairs. A factory receives the PSR-11 container and must return a `ParameterResolverInterface`. Returning `true` from `shouldReplaceParameterResolvers()` disables registration of the default resolver chain; the custom chain must then provide all required resolution behavior. `null` leaves the preceding provider's flag unchanged. Equal-priority registrations preserve their order in the assembled chain.
+
+Cloning a `ParameterTarget` detaches its active attribute-availability observation (`__clone()`), preserving its declaration metadata.
+
 See [Attribute handlers](attribute-handlers.md), [Callable invocation](callables.md), and [Custom extensions](../guide/extensions.md).
