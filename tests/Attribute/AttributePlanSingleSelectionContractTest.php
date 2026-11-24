@@ -19,6 +19,9 @@ use ReflectionFunction;
 #[Attribute(Attribute::TARGET_PARAMETER | Attribute::IS_REPEATABLE)]
 final class PlanSelectionTag {}
 
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class PlanSelectionOtherTag {}
+
 function planSelectionNone(mixed $value): mixed
 {
     return $value;
@@ -28,6 +31,11 @@ function planSelectionOne(#[PlanSelectionTag] mixed $value): mixed
     return $value;
 }
 function planSelectionTwo(#[PlanSelectionTag, PlanSelectionTag] mixed $value): mixed
+{
+    return $value;
+}
+
+function planSelectionMixed(#[PlanSelectionTag, PlanSelectionOtherTag] mixed $value): mixed
 {
     return $value;
 }
@@ -85,6 +93,71 @@ test('singular plan selection refuses two usages even when the capability permit
         ->and(fn() => (new AttributeSet($plan->usages))->one(ValueTransformer::class))
         ->toThrow(AttributeCompositionException::class, 'Selector "' . ValueTransformer::class . '" is not singular in this attribute set.');
 });
+
+test('set selection accounts for every match when a selector becomes available during the call', function (
+    string $query,
+    bool $capability,
+    string $mode,
+): void {
+    $registry = new AttributeDefinitionRegistry();
+    $registry->register(new AttributeDefinition(PlanSelectionTag::class, capabilities: [PlanSelectionDerivedCapability::class]));
+    $registry->register(new AttributeDefinition(PlanSelectionOtherTag::class));
+    $function = $mode === 'only prefix' ? 'planSelectionMixed' : 'planSelectionTwo';
+    $parameter = new ReflectionFunction(__NAMESPACE__ . '\\' . $function)->getParameters()[0];
+    $set = new AttributeSet(new AttributePlanBuilder($registry)->build($parameter)->usages);
+    $matches = match ($mode) {
+        'absent' => [],
+        'only prefix' => [$set->attributes[0]],
+        default => $set->attributes,
+    };
+
+    /** @var class-string $alias */
+    $alias = __NAMESPACE__ . '\\LateSetSelector' . bin2hex(random_bytes(8));
+    $source = $capability ? PlanSelectionRootCapability::class : PlanSelectionTag::class;
+    if ($mode === 'preloaded') {
+        class_alias($source, $alias, false);
+    }
+
+    $autoloads = 0;
+    $declareAt = match ($mode) {
+        'first probe' => 1,
+        'second probe', 'only prefix' => 2,
+        default => null,
+    };
+    $loader = static function (string $requested) use ($alias, $source, $declareAt, &$autoloads): void {
+        if ($requested === $alias && ++$autoloads === $declareAt) {
+            class_alias($source, $alias, false);
+        }
+    };
+    spl_autoload_register($loader, prepend: true);
+
+    try {
+        $expectedAutoloads = match ($mode) {
+            'preloaded' => 0,
+            'first probe' => 1,
+            default => 2,
+        };
+        foreach ([1, 2] as $invocation) {
+            if ($query === 'all') {
+                expect($set->all($alias))->toBe($matches);
+            } elseif ($query === 'has') {
+                expect($set->has($alias))->toBe($matches !== []);
+            } elseif (count($matches) > 1) {
+                expect(fn() => $set->one($alias))->toThrow(
+                    AttributeCompositionException::class,
+                    'Selector "' . $alias . '" is not singular in this attribute set.',
+                );
+            } else {
+                expect($set->one($alias))->toBe($matches[0] ?? null);
+            }
+            expect($autoloads)->toBe($mode === 'absent' ? $expectedAutoloads * $invocation : $expectedAutoloads);
+        }
+    } finally {
+        spl_autoload_unregister($loader);
+    }
+})->with(['all', 'one', 'has'])
+    ->with(['attribute alias' => false, 'capability alias' => true])
+    ->with(['preloaded', 'first probe', 'second probe', 'only prefix', 'absent']);
 
 test('extension phases retain their stable serialized identifiers', function (): void {
     expect([

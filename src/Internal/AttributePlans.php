@@ -186,6 +186,7 @@ final class AttributePlans
             }
 
             $awaitsDiscovery = false;
+            $unselected = [];
             $validatedUserRules = false;
             $attributes = $observed ?? $metadata?->attributeOverride($previous)
                 ?? $closureDeclaration?->getAttributes() ?? $target->getAttributes();
@@ -197,6 +198,7 @@ final class AttributePlans
                 $attributes,
                 awaitsDiscovery: $awaitsDiscovery,
                 closure: $closure,
+                unselected: $unselected,
             );
             unset($attributes);
             // Loading a later attribute may reveal one skipped earlier. Validate
@@ -210,11 +212,13 @@ final class AttributePlans
                 $this->assertInvocationOnlyComposition($target, $usages);
                 $this->assertParameterHandlerComposition($target, $usages);
                 $this->assertDependencies($target, $usages);
-                $validatedUserRules = $this->assertCustomRules($usages);
+                $validatedUserRules = $this->assertCustomRules($usages, $unselected, $revision);
 
                 // Rules may evaluate native arguments that load another attribute.
                 // Revalidate before publishing, while no handlers have run.
-                if ($validatedUserRules && $revision !== $this->registry->refreshAvailability()) {
+                if ($validatedUserRules === null
+                    || ($validatedUserRules && $revision !== $this->registry->refreshAvailability())
+                ) {
                     continue;
                 }
             }
@@ -248,6 +252,7 @@ final class AttributePlans
     /**
      * @param ReflectionClass<covariant object>|ReflectionMethod|ReflectionParameter|ReflectionProperty $target
      * @param array<int,ReflectionAttribute<object>> $attributes
+     * @param list<class-string> $unselected
      * @return list<AttributeUsage>
      */
     private function discoverUsages(
@@ -256,6 +261,7 @@ final class AttributePlans
         bool $autoload = true,
         bool &$awaitsDiscovery = false,
         ?Closure $closure = null,
+        array &$unselected = [],
     ): array {
         $usages = [];
         foreach ($attributes as $index => $reflectionAttribute) {
@@ -264,8 +270,11 @@ final class AttributePlans
             $attributeClass = $reflectionAttribute->getName();
             $definition = $autoload ? $this->registry->definition($attributeClass) : $this->loadedDefinition($attributeClass);
             if ($definition === null) {
-                if ($autoload && $this->registry->awaitsDiscovery($attributeClass)) {
-                    $awaitsDiscovery = true;
+                if ($autoload) {
+                    if ($this->registry->hasCustomRules) {
+                        $unselected[] = $attributeClass;
+                    }
+                    $awaitsDiscovery = $awaitsDiscovery || $this->registry->awaitsDiscovery($attributeClass);
                 }
                 continue;
             }
@@ -571,9 +580,10 @@ final class AttributePlans
 
     /**
      * @param list<AttributeUsage> $usages
-     * @return bool Whether a user rule ran and may have changed attribute availability.
+     * @param list<class-string> $unselected
+     * @return bool|null Whether a user rule ran, or null when a rejection used an incomplete selection.
      */
-    private function assertCustomRules(array $usages): bool
+    private function assertCustomRules(array $usages, array $unselected, int $revision): ?bool
     {
         if ($usages === []) {
             return false;
@@ -589,6 +599,14 @@ final class AttributePlans
                         $validatedUserRules = true;
                     }
                 } catch (AttributeCompositionException $e) {
+                    // The rule may have revealed a missing declaration while reading its arguments.
+                    // Retry only when the current target can now select a new definition.
+                    if ($unselected !== []
+                        && $revision !== $this->registry->refreshLoaded()
+                        && array_any($unselected, fn(string $attribute): bool => $this->loadedDefinition($attribute) !== null)
+                    ) {
+                        return null;
+                    }
                     throw $e;
                 } catch (Throwable $e) {
                     throw new AttributeCompositionException(

@@ -17,6 +17,8 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use LogicException;
 use ReflectionClass;
 use Reflector;
+use RuntimeException;
+use Throwable;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class DiscoveredMarker {}
@@ -26,10 +28,11 @@ final class RequiredMarker {}
 
 final class NativeArgument
 {
-    public function __construct(string $alias)
+    /** @param class-string|null $source */
+    public function __construct(string $alias, ?string $source = DiscoveredMarker::class)
     {
-        if (!class_exists($alias, false)) {
-            class_alias(DiscoveredMarker::class, $alias);
+        if ($source !== null && !class_exists($alias, false)) {
+            class_alias($source, $alias);
         }
     }
 }
@@ -52,6 +55,32 @@ final class ArgumentReadingRule implements AttributeCompositionRuleInterface
     }
 }
 
+final class RequireDiscoveredMarker implements AttributeCompositionRuleInterface
+{
+    public bool $enabled = true;
+
+    /** @var list<bool> */
+    public array $observed = [];
+
+    public function __construct(private readonly Throwable $failure) {}
+
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void
+    {
+        if (!$this->enabled) {
+            return;
+        }
+        if (!($attribute->arguments[0] ?? null) instanceof NativeArgument) {
+            throw new LogicException('Expected the native argument fixture.');
+        }
+
+        $companion = $set->has(DiscoveredMarker::class);
+        $this->observed[] = $companion;
+        if (!$companion) {
+            throw $this->failure;
+        }
+    }
+}
+
 final class CountingHandler implements AttributeHandlerInterface
 {
     public int $calls = 0;
@@ -62,17 +91,21 @@ final class CountingHandler implements AttributeHandlerInterface
     }
 }
 
-/** @return ReflectionClass<object> */
-function target(): ReflectionClass
+/**
+ * @param class-string|null $source
+ * @return ReflectionClass<object>
+ */
+function target(?string $source = DiscoveredMarker::class): ReflectionClass
 {
     $suffix = bin2hex(random_bytes(6));
     $alias = 'LateMarker_' . $suffix;
     $class = 'Target_' . $suffix;
     eval(sprintf(
-        'namespace %s; #[%s, LoadingMarker(new NativeArgument(%s))] final class %s {}',
+        'namespace %s; #[%s, LoadingMarker(new NativeArgument(%s, %s))] final class %s {}',
         __NAMESPACE__,
         $alias,
         var_export(__NAMESPACE__ . '\\' . $alias, true),
+        var_export($source, true),
         $class,
     ));
     $name = __NAMESPACE__ . '\\' . $class;
@@ -107,6 +140,67 @@ test('direct plans include metadata discovered while a rule reads native argumen
     expect($builder->build($target)->attributes(DiscoveredMarker::class))->toHaveCount(1)
         ->and($handler->calls)->toBe(0);
 })->with(['cold metadata' => false, 'previously inspected metadata' => true]);
+
+test('the first usable plan rechecks a rule that discloses its required companion', function (bool $targeted, string $state): void {
+    $handler = new CountingHandler();
+    $rule = new RequireDiscoveredMarker(new AttributeCompositionException('Expected a discovered companion.'));
+    $registry = new AttributeDefinitionRegistry(targetedDiscovery: $targeted);
+    $registry->register(new AttributeDefinition(DiscoveredMarker::class, $handler));
+    $registry->register(new AttributeDefinition(LoadingMarker::class, $handler, rules: [$rule]));
+    $registry->seal();
+    $builder = new AttributePlanBuilder($registry);
+    $target = target();
+    if ($state === 'warm') {
+        $rule->enabled = false;
+        expect($builder->build($target)->attributes(DiscoveredMarker::class))->toBe([]);
+        $rule->enabled = true;
+    } elseif ($state === 'preloaded') {
+        class_alias(DiscoveredMarker::class, $target->getAttributes()[0]->getName(), false);
+    }
+
+    $plan = $builder->build($target);
+
+    expect($plan->attributes(DiscoveredMarker::class))->toHaveCount(1)
+        ->and($plan->attributes(LoadingMarker::class)[0]->definition->rules)->toBe([$rule])
+        ->and($rule->observed)->toBe($state === 'preloaded' ? [true] : [false, true])
+        ->and($handler->calls)->toBe(0);
+})->with(['default discovery' => false, 'targeted discovery' => true])
+    ->with(['cold', 'warm', 'preloaded']);
+
+test('rule failures survive absent and unrelated declarations and preserve a foreign cause', function (bool $targeted, string $scenario): void {
+    $source = match ($scenario) {
+        'absent' => null,
+        'unregistered' => RequiredMarker::class,
+        'foreign failure' => DiscoveredMarker::class,
+        default => throw new LogicException('Expected a rule failure fixture.'),
+    };
+    $failure = $scenario === 'foreign failure'
+        ? new RuntimeException('Foreign rule failure.')
+        : new AttributeCompositionException('Expected a discovered companion.');
+    $rule = new RequireDiscoveredMarker($failure);
+    $registry = new AttributeDefinitionRegistry(targetedDiscovery: $targeted);
+    $registry->register(new AttributeDefinition(DiscoveredMarker::class));
+    $registry->register(new AttributeDefinition(LoadingMarker::class, rules: [$rule]));
+    $registry->seal();
+    $builder = new AttributePlanBuilder($registry);
+    $target = target($source);
+    $alias = $target->getAttributes()[0]->getName();
+
+    try {
+        $builder->build($target);
+        \PHPUnit\Framework\Assert::fail('Expected the original rule failure.');
+    } catch (AttributeCompositionException $error) {
+        if ($scenario === 'foreign failure') {
+            expect($error->getPrevious())->toBe($failure);
+        } else {
+            expect($error)->toBe($failure);
+        }
+    }
+
+    expect($rule->observed)->toBe([false])
+        ->and(class_exists($alias, false))->toBe($scenario !== 'absent');
+})->with(['default discovery' => false, 'targeted discovery' => true])
+    ->with(['absent', 'unregistered', 'foreign failure']);
 
 test('direct plans include attributes discovered during cold plan materialization', function (
     string $mode,
