@@ -113,9 +113,9 @@ final class ObjectCreation
         ?Closure $configure = null,
         ?Closure $resolveParameters = null,
     ): object {
-        $entry = $this->createWithArguments($class, $params, $configure, $resolveParameters, $completion);
+        $entry = $this->createWithArguments($class, $params, $configure, $resolveParameters, $complete);
         // The inner frame has released the deferred arguments it owned.
-        $completion?->assertLoadedAfterArgumentRetirement();
+        $complete?->__invoke($entry);
         return $entry;
     }
 
@@ -125,14 +125,14 @@ final class ObjectCreation
      * @param array<string|int,mixed>|EntryParameters $params
      * @param Closure(object):void|null $configure
      * @param (Closure(): (array<string|int,mixed>|EntryParameters))|null $resolveParameters
-     * @param-out ?CompletedAttributeGuard $completion
+     * @param-out (Closure(object,?int=):void)|null $complete
      */
     private function createWithArguments(
         string|ReflectionClass $class,
         array|EntryParameters $params,
         ?Closure $configure,
         ?Closure $resolveParameters,
-        ?CompletedAttributeGuard &$completion,
+        ?Closure &$complete,
     ): object {
         if ($resolveParameters !== null && $params !== []) {
             throw new InvalidConfigurationException('Supply one source of construction parameters.');
@@ -186,12 +186,12 @@ final class ObjectCreation
                 $this->parametersStore->assertSetupSourcesUnchanged($creation);
             }
             $setupChecks = isset($creation) ? $this->parametersStore->setupSourceChecks($creation) : [];
-            self::recordMappedPublication($entry, $completed, $metadata->constructor, $provenance, $setupChecks);
-            $completion = $resolveParameters === null ? null : $completed->withRetirementSourceChecks(
-                $metadata->constructor,
-                $provenance,
-                $setupChecks,
-            );
+            $complete = null;
+            if ($resolveParameters === null) {
+                self::recordMappedPublication($entry, $completed, $metadata->constructor, $provenance, $setupChecks);
+            } else {
+                $complete = self::completionAfterRetirement($metadata, $completed, $provenance, $setupChecks);
+            }
             return $entry;
         }
 
@@ -217,9 +217,9 @@ final class ObjectCreation
             ? $this->objectPlans->constructorPlan($metadata)
             : $this->parameters->prepareTargets([]);
 
-        $completion = null;
-        $recordCompletion = $resolveParameters === null ? null : static function (CompletedAttributeGuard $proof) use (&$completion): void {
-            $completion = $proof;
+        $complete = null;
+        $recordCompletion = $resolveParameters === null ? null : static function (Closure $completion) use (&$complete): void {
+            $complete = $completion;
         };
         return match ($creation->strategy) {
             CreationStrategy::Eager => $this->eager($metadata, $constructorPlan, $attempt, $completed, $configure, $recordCompletion),
@@ -230,7 +230,7 @@ final class ObjectCreation
 
     /**
      * @param Closure(object):void|null $configure
-     * @param (Closure(CompletedAttributeGuard):void)|null $recordCompletion
+     * @param (Closure(Closure(object,?int=):void):void)|null $recordCompletion
      */
     private function eager(
         ObjectMetadata $metadata,
@@ -275,12 +275,11 @@ final class ObjectCreation
 
         $provenance = $this->parametersStore->resolvedProvenance($creation);
         $setupChecks = $this->parametersStore->setupSourceChecks($creation);
-        self::recordMappedPublication($publishedAs ?? $entry, $completed, $metadata->constructor, $provenance, $setupChecks);
-        $recordCompletion?->__invoke($completed->withRetirementSourceChecks(
-            $metadata->constructor,
-            $provenance,
-            $setupChecks,
-        ));
+        if ($recordCompletion === null) {
+            self::recordMappedPublication($publishedAs ?? $entry, $completed, $metadata->constructor, $provenance, $setupChecks);
+        } else {
+            $recordCompletion(self::completionAfterRetirement($metadata, $completed, $provenance, $setupChecks));
+        }
         return $entry;
     }
 
@@ -330,14 +329,18 @@ final class ObjectCreation
                     $attemptCompleted->assertUnchanged();
                     $constructorProof?->assertParameterSourcesUnchanged();
                     $this->parametersStore->assertSetupSourcesUnchanged($context);
-                    EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
-                    self::recordMappedPublication(
-                        $entry,
-                        $attemptCompleted,
-                        $metadata->constructor,
-                        $this->parametersStore->resolvedProvenance($context),
-                        $this->parametersStore->setupSourceChecks($context),
-                    );
+                    $provenance = $this->parametersStore->resolvedProvenance($context);
+                    $setupChecks = $this->parametersStore->setupSourceChecks($context);
+                    if ($resolveParameters === null) {
+                        EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
+                        self::recordMappedPublication($entry, $attemptCompleted, $metadata->constructor, $provenance, $setupChecks);
+                    } else {
+                        $complete = self::completionAfterRetirement($metadata, $attemptCompleted, $provenance, $setupChecks);
+                        unset($parameters, $context, $attempt);
+                        // Retire the shared memoized supplier before PHP commits the lazy object.
+                        $creation = $this->freshAttempt($creation, $resolveParameters);
+                        $complete($entry, $lookupRevision);
+                    }
                     $succeeded = true;
                 } finally {
                     if (!$succeeded) {
@@ -367,15 +370,25 @@ final class ObjectCreation
                 $lookupRevision = EntryLookupRevision::current();
                 $succeeded = false;
                 try {
+                    $complete = null;
+                    $recordCompletion = $resolveParameters === null ? null : static function (Closure $completion) use (&$complete): void {
+                        $complete = $completion;
+                    };
                     $entry = $this->eager(
                         $metadata,
                         $constructorPlan,
                         $this->freshAttempt($creation),
                         $completed,
                         $configure,
+                        $recordCompletion,
                         publishedAs: $proxy,
                     );
-                    EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
+                    if ($complete === null) {
+                        EntryLookupRevision::assertCompleteSince($lookupRevision, $metadata->class->getName());
+                    } else {
+                        $creation = $this->freshAttempt($creation, $resolveParameters);
+                        $complete($proxy, $lookupRevision);
+                    }
                     $succeeded = true;
                     return $entry;
                 } finally {
@@ -385,6 +398,29 @@ final class ObjectCreation
                 }
             },
         );
+    }
+
+    /**
+     * @param list<Closure():void> $setupChecks
+     * @return Closure(object,?int=):void
+     */
+    private static function completionAfterRetirement(
+        ObjectMetadata $metadata,
+        CompletedAttributeGuard $completed,
+        ?MappedRequestContext $provenance,
+        array $setupChecks,
+    ): Closure {
+        $class = $metadata->class->getName();
+        $constructor = $metadata->constructor;
+        $completion = $completed->withRetirementSourceChecks($constructor, $provenance, $setupChecks);
+
+        return static function (object $entry, ?int $lookupRevision = null) use ($class, $constructor, $completion, $provenance, $setupChecks): void {
+            $completion->assertLoadedAfterArgumentRetirement();
+            if ($lookupRevision !== null) {
+                EntryLookupRevision::assertCompleteSince($lookupRevision, $class);
+            }
+            self::recordMappedPublication($entry, $completion, $constructor, $provenance, $setupChecks);
+        };
     }
 
     /** @param list<Closure():void> $setupChecks */

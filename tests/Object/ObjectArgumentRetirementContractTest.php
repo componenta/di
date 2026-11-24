@@ -32,7 +32,6 @@ use Componenta\DI\Resolver\Attribute\ParameterAttributeHandlerInterface;
 use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryParametersFactoryInterface;
 use Componenta\DI\Resolver\Entry\ObjectCreationContext;
-use Componenta\DI\Resolver\Parameter\ArrayResolver;
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
 use Componenta\DI\Resolver\Parameter\AttributeParameterResolver;
 use Componenta\DI\Resolver\Parameter\DefaultValueResolver;
@@ -47,8 +46,10 @@ use LogicException;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use ReflectionClass;
 use Reflector;
 
+use function Componenta\DI\Tests\Support\assembledContainer;
 use function Componenta\DI\Tests\Support\fixtureInstance;
 
 abstract class Product
@@ -151,6 +152,72 @@ test('eager creation checks attributes revealed while releasing arguments owned 
 })->with(['compatibility' => false, 'targeted' => true])
     ->with(['no active handlers' => false, 'with after-phase handler' => true])
     ->with(['related', 'unrelated', 'retained']);
+
+test('deferred initialization checks attributes revealed while releasing its owned arguments', function (string $strategy, bool $targeted, string $retirement): void {
+    $suffix = bin2hex(random_bytes(5));
+    $class = __NAMESPACE__ . '\\DeferredProduct_' . $suffix;
+    $alias = __NAMESPACE__ . '\\DeferredPolicy_' . $suffix;
+    eval(sprintf(
+        'namespace %s; #[\\Componenta\\DI\\Attribute\\%s, DeferredPolicy_%s] final class DeferredProduct_%s extends Product {}',
+        __NAMESPACE__,
+        $strategy,
+        $suffix,
+        $suffix,
+    ));
+    if (!is_a($class, Product::class, true)) {
+        throw new LogicException('Expected the deferred retirement fixture.');
+    }
+    if ($retirement === 'preloaded') {
+        class_alias(NoConstructor::class, $alias);
+    }
+    [, $runtime] = assembledContainer(targetedDiscovery: $targeted);
+    Product::$events = [];
+    $retained = null;
+    $entry = fixtureInstance($runtime->objects->create(
+        $class,
+        configure: static function (): void {
+            Product::$events[] = 'configure';
+        },
+        resolveParameters: static function () use ($alias, $retirement, &$retained): array {
+            Product::$events[] = 'resolve';
+            $argument = new Argument('released', $alias, $retirement === 'unrelated' ? Note::class : NoConstructor::class);
+            if ($retirement === 'retained') {
+                $retained = $argument;
+            }
+            return ['unused' => $argument];
+        },
+    ), Product::class);
+
+    $reflection = new ReflectionClass($class);
+    expect(Product::$events)->toBe([])
+        ->and($reflection->isUninitializedLazyObject($entry))->toBeTrue();
+    $initialize = static fn(): bool => $entry->constructed;
+
+    if ($retirement === 'preloaded') {
+        expect($initialize())->toBeFalse()
+            ->and(Product::$events)->toBe(['configure']);
+        return;
+    }
+    if ($retirement === 'related') {
+        expect($initialize)->toThrow(AttributeCompositionException::class, 'BeforeInstantiation completed')
+            ->and($reflection->isUninitializedLazyObject($entry))->toBeTrue()
+            ->and($initialize)->toThrow(AttributeCompositionException::class, 'BeforeInstantiation completed');
+    } else {
+        expect($initialize())->toBeTrue();
+    }
+
+    if ($retirement === 'retained') {
+        expect(class_exists($alias, false))->toBeFalse()
+            ->and(Product::$events)->toBe(['resolve', 'constructor', 'configure']);
+        $retained = null;
+    }
+
+    expect(class_exists($alias, false))->toBeTrue()
+        ->and(Product::$events)->toBe(['resolve', 'constructor', 'configure', 'released'])
+        ->and(fixtureInstance($runtime->objects->create($class), Product::class)->constructed)->toBe($retirement === 'unrelated');
+})->with(['Lazy', 'Proxy'])
+    ->with(['compatibility' => false, 'targeted' => true])
+    ->with(['related', 'unrelated', 'retained', 'preloaded']);
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class Label {}
@@ -283,13 +350,15 @@ final readonly class StagedInput
     public function __construct(public EntryParameters $parameters) {}
 }
 
-test('eager return cannot publish a mapped constructor argument whose source was revealed by input retirement', function (bool $targeted, bool $related): void {
+test('object construction cannot publish a mapped constructor argument whose source was revealed by input retirement', function (string $strategy, bool $targeted, bool $related): void {
     $suffix = bin2hex(random_bytes(5));
     $class = __NAMESPACE__ . '\\Mapped_' . $suffix;
     $alias = __NAMESPACE__ . '\\Source_' . $suffix;
+    $attribute = $strategy === 'eager' ? '' : '#[\\Componenta\\DI\\Attribute\\' . $strategy . ']';
     $stage = eval(sprintf(
         <<<'PHP'
         namespace %s;
+        %s
         final class Mapped_%s extends ClassifiedProduct {
             public function __construct(#[Source_%s] string $label) {
                 $this->label = $label;
@@ -299,6 +368,7 @@ test('eager return cannot publish a mapped constructor argument whose source was
         return static fn(#[RetirementMapping(%s, %s)] StagedInput $input): StagedInput => $input;
         PHP,
         __NAMESPACE__,
+        $attribute,
         $suffix,
         $suffix,
         var_export($alias, true),
@@ -324,25 +394,26 @@ test('eager return cannot publish a mapped constructor argument whose source was
         [ValueProvider::class],
     ))->build();
     $request = new ServerRequest('GET', '/')->withQueryParams(['label' => 'mapped']);
-    $plans = new AttributePlanBuilder(new AttributeDefinitionRegistry($targeted));
-    $parameters = new ParametersResolver($plans);
-    $parameters->add(new ArrayResolver());
-    $parameters->seal();
-    $pipeline = new ObjectPipeline(new AttributeProcessor($plans), $parameters, new ProxyFactory());
+    [, $runtime] = assembledContainer(targetedDiscovery: $targeted);
+    $pipeline = $runtime->objects;
     $resolve = static fn(): EntryParameters => fixtureInstance(
         $mapping->call($stage, [ServerRequestInterface::class => $request]),
         StagedInput::class,
     )->parameters;
-    $make = static fn(): ClassifiedProduct => fixtureInstance($pipeline->create($class, resolveParameters: $resolve), ClassifiedProduct::class);
+    $read = static fn(): string => fixtureInstance(
+        $pipeline->create($class, resolveParameters: $resolve),
+        ClassifiedProduct::class,
+    )->label;
 
     Product::$events = [];
     if ($related) {
-        expect($make)->toThrow(RequestParameterSourceConflictException::class, 'label');
+        expect($read)->toThrow(RequestParameterSourceConflictException::class, 'label');
     } else {
-        expect($make()->label)->toBe('mapped');
+        expect($read())->toBe('mapped');
     }
     expect(Product::$events)->toBe(['mapped', 'released mapped input']);
-})->with(['compatibility' => false, 'targeted' => true])
+})->with(['eager', 'Lazy', 'Proxy'])
+    ->with(['compatibility' => false, 'targeted' => true])
     ->with(['explicit source' => true, 'unrelated' => false]);
 
 test('request mapping checks consumed DTO sources after releasing the mapped input', function (
