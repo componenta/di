@@ -2,7 +2,7 @@
 
 [Русская версия](../ru/migrations/di6-callbacks.md)
 
-The package requires PHP 8.4+. Native static closures and first-class callable expressions written directly in attribute arguments require PHP 8.5. Runtime callables supported by earlier versions remain available.
+Version 6 requires PHP 8.5.13 or later within PHP 8.x. Native static closures and first-class callable expressions may be written directly in attribute arguments. Runtime callables supported by earlier versions remain available.
 
 ## Value transformation with Transform
 
@@ -88,6 +88,6 @@ Existing `MapRequest` arguments, source-specific mapping attributes, custom `tra
 
 PHP 8.5 constant expressions in attributes accept capture-free static closures and first-class references to declared functions or static methods. Arrow functions, closure variable capture, dynamic callable expressions and object-method references cannot be used in this syntax. These restrictions do not remove ordinary runtime callables.
 
-Some PHP 8.5 patch versions exhibit native trait-callable scope issues. The affected first-class trait references have been verified against PHP 8.5.13; use a sufficiently tested PHP version or a valid static closure instead.
+The minimum PHP version is 8.5.13 because earlier PHP 8.5 releases can incorrectly resolve scope and visibility for first-class callable references in trait attributes. The package preserves PHP's native callable scope.
 
 See [Attributes and request mapping](../guide/attributes.md) for request-source configuration.

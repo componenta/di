@@ -1,6 +1,6 @@
 # Lazy objects and virtual proxies
 
-The container supports PHP 8.4 native lazy objects. `makeLazy(string $class, callable $initializer)` creates a lazy ghost; `makeProxy(string $class, callable $factory)` creates a virtual proxy.
+The container supports PHP's native lazy objects. `makeLazy(string $class, callable $initializer)` creates a lazy ghost; `makeProxy(string $class, callable $factory)` creates a virtual proxy.
 
 Reflection-created services may opt in through class-level `#[Lazy]` and `#[Proxy]`; `#[Proxy]` is also supported at injection points.
 

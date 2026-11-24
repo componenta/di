@@ -2,13 +2,13 @@
 
 ## Requirements and installation
 
-Componenta DI requires PHP 8.4+ and installs through Composer:
+Componenta DI requires PHP 8.5.13+ and installs through Composer:
 
 ```bash
 composer require componenta/di
 ```
 
-The package dependencies are listed in the repository's [composer.json](../../composer.json). PHP 8.5 is required only for native callback expressions written directly in attribute arguments.
+The package dependencies are listed in the repository's [composer.json](../../composer.json). The PHP 8.5.13 minimum includes the engine fix for scope and visibility of native first-class callable expressions in trait attributes.
 
 ## Create a container
 
