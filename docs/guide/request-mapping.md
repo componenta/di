@@ -62,7 +62,7 @@ The `sources` argument is an ordered list of `RequestDataSource` cases:
 | `Server` | `getServerParams()` |
 | `Files` | `getUploadedFiles()` |
 
-Duplicate declarations of one source are rejected. With `conflictPolicy: RequestDataConflictPolicy::Reject`, duplicate keys with different values raise `RequestDataConflictException`; equal values are accepted. `FirstWins` keeps the first source's value without comparing the later value.
+If nonempty `attributes` or `files` selections are provided without their source in `sources`, the selected attributes and then files are merged before the explicitly ordered sources. If their source is listed, its declared position is respected. Duplicate declarations of one source are rejected. With `conflictPolicy: RequestDataConflictPolicy::Reject`, duplicate keys with different values raise `RequestDataConflictException`; equal values are accepted. `FirstWins` keeps the first source's value without comparing the later value.
 
 ## MapRequest options
 
@@ -91,7 +91,7 @@ Duplicate declarations of one source are rejected. With `conflictPolicy: Request
 
 Processing order is: **source extraction and conflict handling → validation of raw data for a class-typed DTO (when a validation provider exists) → mapping/renaming → casting → defaults → sorting → exclusion → optional `afterMap` → DTO creation**. The source-conflict rules of explicit DI attributes are checked before data is given to the DTO constructor and after relevant late discoveries. Side effects from callbacks that already ran are not rolled back.
 
-For DTOs, keys must be named. A parameter declared as `array` receives the mapped array without DTO construction. The mapper uses the standard `FactoryInterface::make()` construction route for DTOs, with no automatic validation when no validator is registered.
+For DTOs, keys must be named strings before and after transformation. A target containing an `array` type arm receives an array; otherwise mapping to a class requires at most one class/interface name in its declared type. A parameter declared as `array` receives the mapped array without DTO construction. The mapper uses the standard `FactoryInterface::make()` construction route for DTOs, with no automatic validation when no validator is registered.
 
 ## Single-source mapper attributes
 
