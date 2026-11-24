@@ -105,11 +105,12 @@ test('native invoker binds named arguments for an invokable object', function ()
     expect(new CallableInvoker()->call($callback, ['value' => 'named']))->toBe('invoked:named');
 });
 
-test('native invoker selects the declared method when its receiver also has a magic hook', function (): void {
+test('native invoker selects the declared method when its receiver also has a magic hook', function (bool $named): void {
     $callback = [new NativeMagicChild(), 'declared'];
+    $arguments = $named ? ['value' => 'supplied'] : ['supplied'];
 
-    expect(new CallableInvoker()->call($callback, ['value' => 'named']))->toBe('declared:named');
-});
+    expect(new CallableInvoker()->call($callback, $arguments))->toBe('declared:supplied');
+})->with(['named arguments' => true, 'position-only arguments' => false]);
 
 test('native invoker releases the original positional argument when a method replaces its reference', function (bool $magic): void {
     $receiver = new ArgumentLifetimeProbe();
