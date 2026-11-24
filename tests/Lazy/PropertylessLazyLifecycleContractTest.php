@@ -10,11 +10,10 @@ use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\NoConstructor;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Attribute\SetUp;
+use Componenta\DI\Container;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
-use Componenta\DI\Internal\AliasResolver;
-use Componenta\DI\Internal\ContainerConstruction;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
@@ -62,6 +61,7 @@ function propertylessLifecycleRejection(callable $resolve): ResolutionException
     try {
         $resolve();
     } catch (ResolutionException $exception) {
+        expect($exception->getMessage())->toContain('no backed instance properties');
         return $exception;
     }
 
@@ -281,7 +281,7 @@ test('container delegates propertyless targets and callbacks to its supplied pro
             throw new NotFoundException('This test only requests the supplied proxy factory.');
         }
     };
-    $container = ContainerConstruction::create($resolver, new AliasResolver(), (new ContainerBuilder())->build(), proxyFactory: $factory);
+    $container = new Container($resolver, (new ContainerBuilder())->build(), proxyFactory: $factory);
     $calls = [];
 
     $ghost = $container->makeLazy(PropertylessCustomFactoryTarget::class, static function (PropertylessCustomFactoryTarget $target) use (&$calls, $returned): void {

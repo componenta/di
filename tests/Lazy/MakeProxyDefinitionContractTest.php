@@ -72,6 +72,7 @@ it('does not activate an unregistered Proxy beside Make', function (bool $proper
     }
 
     expect(new ReflectionClass(SelectedMakeProduct::class)->isUninitializedLazyObject($product))->toBeFalse()
+        ->and($product->value)->toBe('ready')
         ->and(SelectedMakeProduct::$constructions)->toBe(1);
 })->with(['property' => true, 'parameter' => false]);
 
@@ -329,5 +330,6 @@ it('does not read an unregistered Make or evaluate its arguments beside Proxy', 
         ->and(SelectedMakeProduct::$constructions)->toBe(0)
         ->and(UnusedMakeArgument::$constructions)->toBe(0)
         ->and($product->value)->toBe('ready')
-        ->and(SelectedMakeProduct::$constructions)->toBe(1);
+        ->and(SelectedMakeProduct::$constructions)->toBe(1)
+        ->and(UnusedMakeArgument::$constructions)->toBe(0);
 })->with(['property' => true, 'parameter' => false]);

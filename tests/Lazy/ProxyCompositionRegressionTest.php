@@ -14,6 +14,7 @@ use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use PHPUnit\Framework\Assert;
+use ReflectionClass;
 
 final class ProxyCompositionValue
 {
@@ -23,6 +24,7 @@ final class ProxyCompositionValue
 final class ProxyCompositionSuffixCaster implements CasterInterface
 {
     public string $name { get => 'suffix-object'; }
+    public ?bool $receivedDeferred = null;
 
     public function cast(mixed $value): mixed
     {
@@ -30,16 +32,19 @@ final class ProxyCompositionSuffixCaster implements CasterInterface
             throw new \LogicException('The suffix caster requires the supplied proxy value.');
         }
 
+        $this->receivedDeferred = new ReflectionClass(ProxyCompositionValue::class)->isUninitializedLazyObject($value);
         return new ProxyCompositionValue($value->label . ':cast');
     }
 }
 
 final readonly class ProxyCompositionCasterProvider implements CasterProviderInterface
 {
+    public function __construct(public ProxyCompositionSuffixCaster $caster = new ProxyCompositionSuffixCaster()) {}
+
     public function provide(string $name): ?CasterInterface
     {
         return $name === 'suffix-object'
-            ? new ProxyCompositionSuffixCaster()
+            ? $this->caster
             : null;
     }
 }
@@ -90,14 +95,16 @@ PHP);
 }
 
 test('Proxy supplies its value before Cast transforms it', function (): void {
+    $provider = new ProxyCompositionCasterProvider();
     $container = (new ContainerBuilder())
-        ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
+        ->addService(CasterProviderInterface::class, $provider)
         ->build();
 
     $target = $container->make(ProxyCastParameterTarget::class);
     Assert::assertInstanceOf(ProxyCastParameterTarget::class, $target);
 
-    expect($target->value->label)->toBe('source:cast');
+    expect($target->value->label)->toBe('source:cast')
+        ->and($provider->caster->receivedDeferred)->toBeTrue();
 });
 
 final class ProxyConflictingPropertyTarget
@@ -123,8 +130,9 @@ test('Proxy values can be transformed before initializing a readonly property', 
     $onConstruct = static function () use (&$constructorCalls): void {
         ++$constructorCalls;
     };
+    $provider = new ProxyCompositionCasterProvider();
     $container = (new ContainerBuilder())
-        ->addService(CasterProviderInterface::class, new ProxyCompositionCasterProvider())
+        ->addService(CasterProviderInterface::class, $provider)
         ->build();
 
     $entry = $container->make(proxyReadonlyTransformerTarget(), ['onConstruct' => $onConstruct]);
@@ -133,5 +141,6 @@ test('Proxy values can be transformed before initializing a readonly property', 
         throw new \LogicException('Expected the transformed proxy value.');
     }
     expect($entry->value->label)->toBe('source:cast')
-        ->and($constructorCalls)->toBe(1);
+        ->and($constructorCalls)->toBe(1)
+        ->and($provider->caster->receivedDeferred)->toBeTrue();
 });
