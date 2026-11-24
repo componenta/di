@@ -31,6 +31,8 @@ Register `$resolver` under an integer priority in `ConfigProvider::getParameterR
 
 Attribute and parameter-resolver factories may obtain their dependencies from the container while it is being assembled. Required extension classes must be available in time for their use; late discovery of incompatible behavior can fail validation rather than replay an already completed operation.
 
+`ContainerFactory::createWithTargetedAttributeDiscovery($config, $dependencies)` is an alternative construction method that restricts autoload probes to attributes declared on the current target. The normal `create()` method remains the default.
+
 ## Definition strategies and external containers
 
 A custom explicit-definition strategy implements `DefinitionResolverInterface`: classify, validate, then execute a supplied definition without retaining its own registration map. A fallback entry resolver implements `EntryResolverInterface` and receives `EntryParameters`. See [Definition migration](../migrations/di6-definitions.md) for interfaces and constructors.

@@ -58,6 +58,20 @@ $name = $container->call($handler, [
 ]);
 ```
 
+For multiple request sources, choose their order and conflict policy explicitly:
+
+```php
+use Componenta\DI\Attribute\RequestDataSource;
+use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
+
+$handler = static fn(
+    #[MapRequest(
+        sources: [RequestDataSource::Payload, RequestDataSource::Query],
+        conflictPolicy: RequestDataConflictPolicy::FirstWins,
+    )] CreateUserInput $input
+): string => $input->name;
+```
+
 The mapper supports source selection, field renaming and exclusion, default values, casting, and configured validation. If two sources supply the same key with different values, the default conflict policy rejects it; `RequestDataConflictPolicy::FirstWins` is an alternative. Only explicitly selected sources are read. Data from a request must not override a parameter that has an explicit DI source attribute such as `#[EntryId]`.
 
 `MapRequest(afterMap: ...)` optionally transforms the whole mapped array before object construction. Existing source-specific mappers and custom `transform()` implementations remain supported. See [Callbacks and union types](../migrations/di6-callbacks.md).

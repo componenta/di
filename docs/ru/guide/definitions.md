@@ -61,6 +61,18 @@ $definition = ClassDefinition::create(Client::class)
 
 `Definition::reference()` получает службу из контейнера при разрешении настроенного аргумента. Вложенные массивы таких аргументов обрабатываются рекурсивно; значения, переданные непосредственно в `make()`, не преобразуются. Неизвестные аргументы в настройке конструктора или метода с фиксированными параметрами отклоняются. Циклические массивы настроенных аргументов приводят к `InvalidConfigurationException`.
 
+Явные определения можно добавлять и после создания контейнера:
+
+```php
+use Componenta\DI\Definition\Definition;
+
+$container->set('answer', 42);
+$container->set(Service::class, Definition::factory(static fn(): Service => new Service()));
+$container->set(Utility::class, Definition::invokable(Utility::class));
+```
+
+`Definition::factory()` задаёт фабрику, а `Definition::invokable()` — класс, создаваемый без передачи аргументов конструктору.
+
 ## Классы с созданием без внедрения и псевдонимы
 
 ```php

@@ -58,6 +58,20 @@ $name = $container->call($handler, [
 ]);
 ```
 
+При чтении нескольких источников можно явно задать их порядок и правило разрешения конфликтов:
+
+```php
+use Componenta\DI\Attribute\RequestDataSource;
+use Componenta\DI\Resolver\Parameter\Request\RequestDataConflictPolicy;
+
+$handler = static fn(
+    #[MapRequest(
+        sources: [RequestDataSource::Payload, RequestDataSource::Query],
+        conflictPolicy: RequestDataConflictPolicy::FirstWins,
+    )] CreateUserInput $input
+): string => $input->name;
+```
+
 Преобразователь поддерживает выбор источников, переименование и исключение полей, значения по умолчанию, приведение типов и настроенную проверку данных. Если два источника передают разные значения под одним ключом, стандартная политика отклоняет такое сочетание. При необходимости можно выбрать `RequestDataConflictPolicy::FirstWins`: значение первого источника сохраняется. Читаются только явно выбранные источники. Данные запроса не могут заменять параметр с собственным атрибутом источника, например `#[EntryId]`.
 
 Необязательный аргумент `MapRequest(afterMap: ...)` позволяет преобразовать весь полученный массив перед созданием объекта. Прежние атрибуты отдельных источников и пользовательские реализации `transform()` сохраняются. Подробнее — в [разделе о функциях обратного вызова](../migrations/di6-callbacks.md).

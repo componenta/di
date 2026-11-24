@@ -61,6 +61,18 @@ By default, only explicitly configured arguments, runtime constructor overrides 
 
 `Definition::reference()` performs a container lookup when its configured argument is resolved; nested configured arrays are processed recursively. Runtime overrides remain literal. Unknown configured arguments in fixed constructor/method signatures are rejected. Cyclic configured arrays are rejected with `InvalidConfigurationException`.
 
+Explicit definitions may also be registered at runtime:
+
+```php
+use Componenta\DI\Definition\Definition;
+
+$container->set('answer', 42);
+$container->set(Service::class, Definition::factory(static fn(): Service => new Service()));
+$container->set(Utility::class, Definition::invokable(Utility::class));
+```
+
+`Definition::factory()` registers a factory definition; `Definition::invokable()` registers a class created without supplied constructor arguments.
+
 ## Invokable classes and aliases
 
 ```php
