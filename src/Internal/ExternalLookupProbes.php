@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal;
 
 use Closure;
+use Componenta\DI\Container;
 use Fiber;
 use Psr\Container\ContainerInterface;
 use WeakMap;
@@ -15,12 +16,19 @@ use WeakMap;
  * A scope starts with just its ID. Nested reads and matching notifications
  * extend it only while the operation is in flight.
  *
- * @phpstan-type ObservedLookup array{id:?string,registryRevision:?int,reads:array<string,int>,notified:bool}
+ * @phpstan-type ReadRevisions array{value:array<string,int>,availability:array<string,int>}
+ * @phpstan-type LookupReads array{psr:ReadRevisions,resolvable:ReadRevisions}
+ * @phpstan-type LookupIds array{psr:array<array-key,true>,resolvable:array<array-key,true>}
+ * @phpstan-type ObservedLookup array{id:?string,registryRevision:?int,reads:LookupReads,superseded:bool,retrieval:bool}
  * @phpstan-type LookupObservation string|ObservedLookup|null
  * @internal
  */
 final class ExternalLookupProbes
 {
+    private const array EMPTY_REVISIONS = ['value' => [], 'availability' => []];
+    public const array EMPTY_READS = ['psr' => self::EMPTY_REVISIONS, 'resolvable' => self::EMPTY_REVISIONS];
+    public const array EMPTY_IDS = ['psr' => [], 'resolvable' => []];
+
     /** @var array<string,ExternalProbeState> */
     private array $main = [];
     /** @var WeakMap<object,array<string,ExternalProbeState>> */
@@ -30,16 +38,18 @@ final class ExternalLookupProbes
     /** @var WeakMap<object,list<LookupObservation>> */
     private readonly WeakMap $fiberObservations;
     private int $activeRegistrations = 0;
-    /** @var array<string,int> Mutation revisions for IDs read by live registrations. */
-    private array $registrationReads = [];
+    /** @var LookupReads Mutation revisions for IDs read by live registrations. */
+    private array $registrationReads = self::EMPTY_READS;
     /** Local changes and provider appends can invalidate any nested registry read. */
     private int $lastUnscopedChange = 0;
     public private(set) int $revision = 0;
     public private(set) int $confirmationRevision = 0;
     public private(set) int $membershipRevision = 0;
 
-    public function __construct(private readonly AliasResolver $aliases)
-    {
+    public function __construct(
+        private readonly AliasResolver $aliases,
+        private readonly DelegatorRegistry $delegators,
+    ) {
         $this->fibers = new WeakMap();
         $this->fiberObservations = new WeakMap();
     }
@@ -65,7 +75,7 @@ final class ExternalLookupProbes
         if ($state->finish()) {
             $this->release($id, $fiber);
         }
-        if ($skipped || (is_array($observation) && ($observation['notified']
+        if ($skipped || (is_array($observation) && ($observation['superseded']
             || ($observation['registryRevision'] !== null && $observation['registryRevision'] < $this->lastUnscopedChange)))
         ) {
             // The selected route can finish. A skipped or superseded ownership
@@ -78,21 +88,21 @@ final class ExternalLookupProbes
     {
         $fiber = Fiber::getCurrent();
         if ($fiber === null) {
-            $this->mainObservations[] = $id;
+            $this->mainObservations[] = self::observation($id, retrieval: true);
         } else {
-            $this->pushFiberObservation($fiber, $id);
+            $this->pushFiberObservation($fiber, self::observation($id, retrieval: true));
         }
         try {
             return $requireResolvable ? AvailableEntryLookup::get($container, $id) : $container->get($id);
         } finally {
             $observation = $fiber === null ? array_pop($this->mainObservations) : $this->popFiberObservation($fiber);
-            if (is_array($observation) && $observation['notified']) {
+            if (is_array($observation) && $observation['superseded']) {
                 EntryLookupRevision::markIncomplete();
             }
         }
     }
 
-    public function inspect(ContainerInterface $container, string $id): bool
+    public function inspect(ContainerInterface $container, string $id, bool $requireResolvable): bool
     {
         $fiber = Fiber::getCurrent();
         $state = $fiber === null ? ($this->main[$id] ??= new ExternalProbeState()) : $this->fiberState($id, $fiber);
@@ -100,8 +110,11 @@ final class ExternalLookupProbes
         try {
             return $state->inspect(
                 spl_object_id($container),
-                function () use ($container, $id, $confirmationRevision): array {
-                    $ownership = $this->observeLookup(static fn(): bool => AvailableEntryLookup::has($container, $id));
+                $requireResolvable || !$container instanceof Container,
+                function () use ($container, $id, $requireResolvable, $confirmationRevision): array {
+                    $ownership = $this->observeLookup(static fn(): bool => $requireResolvable
+                        ? AvailableEntryLookup::has($container, $id)
+                        : $container->has($id));
                     return [
                         'owns' => $ownership['result'],
                         'revision' => $confirmationRevision,
@@ -121,7 +134,7 @@ final class ExternalLookupProbes
      *
      * @template T
      * @param Closure():T $operation
-     * @return array{result:T,registryRevision:?int,reads:array<string,int>}
+     * @return array{result:T,registryRevision:?int,reads:LookupReads}
      */
     public function observeLookup(Closure $operation): array
     {
@@ -139,7 +152,7 @@ final class ExternalLookupProbes
         return [
             'result' => $result,
             'registryRevision' => $observation['registryRevision'] ?? null,
-            'reads' => $observation['reads'] ?? [],
+            'reads' => $observation['reads'] ?? self::EMPTY_READS,
         ];
     }
 
@@ -155,61 +168,84 @@ final class ExternalLookupProbes
             return $operation();
         } finally {
             if (--$this->activeRegistrations === 0) {
-                $this->registrationReads = [];
+                $this->registrationReads = self::EMPTY_READS;
             }
         }
     }
 
-    /** @param array<string,int> $reads */
+    /** @param LookupReads $reads */
     public function readsStillCurrent(array $reads): bool
     {
-        foreach ($reads as $id => $revision) {
-            if (($this->registrationReads[$id] ?? 0) > $revision) {
-                return false;
+        foreach ($reads as $mode => $byKind) {
+            foreach ($byKind as $kind => $revisions) {
+                foreach ($revisions as $id => $revision) {
+                    if (($this->registrationReads[$mode][$kind][$id] ?? 0) > $revision) {
+                        return false;
+                    }
+                }
             }
         }
         return true;
     }
 
-    public function trackLookup(string $id): void
+    public function observesReads(): bool
+    {
+        return $this->registrationReads !== self::EMPTY_READS
+            || $this->mainObservations !== []
+            || count($this->fiberObservations) !== 0;
+    }
+
+    public function trackLookup(string $id, bool $availability = false, bool $requireResolvable = false): void
     {
         if ($this->mainObservations === [] && count($this->fiberObservations) === 0) {
             return;
         }
         $fiber = Fiber::getCurrent();
         if ($fiber === null) {
-            $this->recordLookup($this->mainObservations, $id);
+            $this->recordLookup($this->mainObservations, $id, $availability, $requireResolvable);
         } elseif (isset($this->fiberObservations[$fiber])) {
-            $this->recordLookup($this->fiberObservations[$fiber], $id);
+            $this->recordLookup($this->fiberObservations[$fiber], $id, $availability, $requireResolvable);
         }
     }
 
     /** @param list<LookupObservation> $observations */
-    private function recordLookup(array &$observations, string $id): void
+    private function recordLookup(array &$observations, string $id, bool $availability, bool $requireResolvable): void
     {
         // A nested read also supplies evidence to the enclosing observers.
+        $kind = $availability ? 'availability' : 'value';
+        $mode = $requireResolvable ? 'resolvable' : 'psr';
         foreach ($observations as &$observation) {
             if (!is_array($observation)) {
-                $observation = [
-                    'id' => $observation,
-                    'registryRevision' => $this->revision,
-                    'reads' => [],
-                    'notified' => false,
-                ];
+                $observation = self::observation($observation);
             }
             $observation['registryRevision'] ??= $this->revision;
-            $observation['reads'][$id] ??= $this->revision;
+            $observation['reads'][$mode][$kind][$id] ??= $this->revision;
             if ($observation['id'] === null && $this->activeRegistrations !== 0) {
-                $this->registrationReads[$id] ??= 0;
+                $this->registrationReads[$mode][$kind][$id] ??= 0;
             }
         }
     }
 
-    /** @param Fiber<mixed,mixed,mixed,mixed> $fiber */
-    private function pushFiberObservation(Fiber $fiber, ?string $id): void
+    /** @return ObservedLookup */
+    private static function observation(?string $id, bool $retrieval = false, bool $superseded = false): array
+    {
+        return [
+            'id' => $id,
+            'registryRevision' => null,
+            'reads' => self::EMPTY_READS,
+            'superseded' => $superseded,
+            'retrieval' => $retrieval,
+        ];
+    }
+
+    /**
+     * @param Fiber<mixed,mixed,mixed,mixed> $fiber
+     * @param LookupObservation $observation
+     */
+    private function pushFiberObservation(Fiber $fiber, string|array|null $observation): void
     {
         $this->fiberObservations[$fiber] ??= [];
-        $this->fiberObservations[$fiber][] = $id;
+        $this->fiberObservations[$fiber][] = $observation;
     }
 
     /**
@@ -254,12 +290,16 @@ final class ExternalLookupProbes
     /**
      * @param list<string> $invalidated
      * @param array<array-key,int|true> $directChanges
+     * @param LookupIds $ownerChanges
      */
     public function invalidate(
         bool $appending = false,
         array $invalidated = [],
         array $directChanges = [],
         ?string $canonicalBinding = null,
+        bool $availabilityChanged = true,
+        bool $baseValueChanged = true,
+        array $ownerChanges = self::EMPTY_IDS,
     ): void {
         $this->lastUnscopedChange = ++$this->revision;
         if ($appending) {
@@ -267,15 +307,15 @@ final class ExternalLookupProbes
         } else {
             $this->confirmationRevision = $this->revision;
         }
-        if ($this->registrationReads !== []) {
-            $this->recordChangedReads($invalidated, $directChanges, $canonicalBinding);
+        if ($this->observesReads()) {
+            $this->recordChangedReads($invalidated, $directChanges, $canonicalBinding, $availabilityChanged, $baseValueChanged, $ownerChanges);
         }
     }
 
     /** @param list<string> $invalidated */
     public function noteInvalidatedEntries(array $invalidated): void
     {
-        if ($this->registrationReads !== []) {
+        if ($this->observesReads()) {
             $this->recordChangedReads($invalidated);
         }
     }
@@ -283,16 +323,97 @@ final class ExternalLookupProbes
     /**
      * @param list<string> $invalidated
      * @param array<array-key,int|true> $directChanges
+     * @param LookupIds $ownerChanges
      */
     private function recordChangedReads(
         array $invalidated,
         array $directChanges = [],
         ?string $canonicalBinding = null,
+        bool $availabilityChanged = true,
+        bool $baseValueChanged = true,
+        array $ownerChanges = self::EMPTY_IDS,
     ): void {
-        $changed = $directChanges + array_fill_keys($invalidated, true);
-        foreach ($this->registrationReads as $id => $_) {
-            if (isset($changed[$id]) || ($canonicalBinding !== null && $this->aliases->resolve((string) $id) === $canonicalBinding)) {
-                $this->registrationReads[$id] = $this->revision;
+        $results = array_fill_keys($invalidated, true);
+        $changed = fn(string $id, bool $availability, string $mode): bool => isset($directChanges[$id])
+            || isset($ownerChanges[$mode][$id])
+            || (!$availability && isset($results[$id]))
+            || ($canonicalBinding !== null
+                && ($availability ? $availabilityChanged : ($baseValueChanged || $this->delegators->hasPipeline($id)))
+                && $this->aliases->resolve($id) === $canonicalBinding);
+        foreach ($this->registrationReads as $mode => $byKind) {
+            foreach ($byKind as $kind => $reads) {
+                foreach ($reads as $id => $_) {
+                    if ($changed((string) $id, $kind === 'availability', $mode)) {
+                        $this->registrationReads[$mode][$kind][$id] = $this->revision;
+                    }
+                }
+            }
+        }
+        self::invalidateRetrievalReads($this->mainObservations, $changed);
+        foreach ($this->fiberObservations as $fiber => $_) {
+            self::invalidateRetrievalReads($this->fiberObservations[$fiber], $changed);
+        }
+    }
+
+    /**
+     * @param list<LookupObservation> $observations
+     * @param Closure(string,bool,'psr'|'resolvable'):bool $changed
+     */
+    private static function invalidateRetrievalReads(array &$observations, Closure $changed): void
+    {
+        foreach ($observations as &$observation) {
+            if (is_array($observation) && $observation['retrieval'] && !$observation['superseded']
+                && self::readWasChanged($observation['reads'], $changed)
+            ) {
+                $observation['superseded'] = true;
+            }
+        }
+    }
+
+    /**
+     * @param LookupReads $reads
+     * @param Closure(string,bool,'psr'|'resolvable'):bool $changed
+     */
+    private static function readWasChanged(array $reads, Closure $changed): bool
+    {
+        foreach ($reads as $mode => $byKind) {
+            foreach ($byKind as $kind => $revisions) {
+                foreach ($revisions as $id => $_) {
+                    if ($changed((string) $id, $kind === 'availability', $mode)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** @return LookupIds */
+    public function pendingRetrievalDependencies(): array
+    {
+        $ids = self::EMPTY_IDS;
+        self::recordPendingReadIds($this->mainObservations, $ids);
+        foreach ($this->fiberObservations as $observations) {
+            self::recordPendingReadIds($observations, $ids);
+        }
+        return $ids;
+    }
+
+    /**
+     * @param list<LookupObservation> $observations
+     * @param LookupIds $ids
+     */
+    private static function recordPendingReadIds(array $observations, array &$ids): void
+    {
+        foreach ($observations as $observation) {
+            if (is_array($observation) && $observation['retrieval'] && !$observation['superseded']) {
+                foreach ($observation['reads'] as $mode => $byKind) {
+                    foreach ($byKind as $revisions) {
+                        foreach ($revisions as $id => $_) {
+                            $ids[$mode][$id] = true;
+                        }
+                    }
+                }
             }
         }
     }
@@ -301,11 +422,11 @@ final class ExternalLookupProbes
     public function notify(array $ids): void
     {
         $this->confirmationRevision = ++$this->revision;
-        $this->noteInvalidatedEntries($ids);
-        if ($this->mainObservations === [] && count($this->fiberObservations) === 0) {
+        if (!$this->observesReads()) {
             return;
         }
         $notifiedIds = array_fill_keys($ids, true);
+        $this->recordChangedReads([], $notifiedIds);
         $this->notifyLookups($this->mainObservations, $notifiedIds);
         foreach ($this->fiberObservations as $fiber => $_) {
             $this->notifyLookups($this->fiberObservations[$fiber], $notifiedIds);
@@ -321,16 +442,13 @@ final class ExternalLookupProbes
         foreach ($observations as &$observation) {
             if (is_array($observation)) {
                 $id = $observation['id'];
-                if (($id !== null && isset($ids[$id])) || array_intersect_key($observation['reads'], $ids) !== []) {
-                    $observation['notified'] = true;
+                if (($id !== null && isset($ids[$id]))
+                    || self::readWasChanged($observation['reads'], static fn(string $readId): bool => isset($ids[$readId]))
+                ) {
+                    $observation['superseded'] = true;
                 }
             } elseif ($observation !== null && isset($ids[$observation])) {
-                $observation = [
-                    'id' => $observation,
-                    'registryRevision' => null,
-                    'reads' => [],
-                    'notified' => true,
-                ];
+                $observation = self::observation($observation, superseded: true);
             }
         }
     }

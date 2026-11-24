@@ -176,7 +176,7 @@ final class Container extends ContainerEntryOperations implements
     {
         try {
             $delegatorObservation = $this->delegatorLookups?->beginLookup($id);
-            $this->providerProbes?->trackLookup($id);
+            $this->providerProbes?->trackLookup($id, requireResolvable: $requireResolvable);
             $entryId = null;
             if ($this->externalContainers !== null) {
                 $entryId = $this->aliases->resolve($id);
@@ -397,7 +397,7 @@ final class Container extends ContainerEntryOperations implements
     {
         try {
             $delegatorObservation = $this->delegatorLookups?->beginLookup($id);
-            $this->providerProbes?->trackLookup($id);
+            $this->providerProbes?->trackLookup($id, availability: true, requireResolvable: $requireResolvable);
             $entryId = $this->aliases->resolve($id);
             // A callback may retarget this alias to an existing core service.
             // Its availability is known without entering another lookup cycle.
@@ -554,6 +554,13 @@ final class Container extends ContainerEntryOperations implements
         $affected = $this->deferredDependenciesResolvingTo($canonical);
         // Invalidate the requested pipeline only if it still reads the selected binding.
         $affectedId = $this->aliases->resolve($id) === $canonical ? $id : $canonical;
+        $observing = $this->providerProbes?->observesReads() === true;
+        // The previous binding may already be known without creating its value.
+        $availabilityChanged = $observing
+            && !$this->cache->hasBase($canonical)
+            && !$this->resolver->hasBinding($canonical);
+        $sameScalarBase = $observing && (is_scalar($entry) || $entry === null)
+            && $this->cache->hasSameScalarBase($canonical, $entry);
         if ($binding !== null) {
             $this->resolver->publish($binding, $retirement);
             $this->cache->removeBase($canonical, $retirement, $this->runtimeAuthority);
@@ -562,7 +569,12 @@ final class Container extends ContainerEntryOperations implements
         }
         $this->invalidate($affectedId, $canonical, $retirement);
         $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
-        $this->providerProbes?->invalidate(invalidated: $invalidated, canonicalBinding: $canonical);
+        $this->providerProbes?->invalidate(
+            invalidated: $invalidated,
+            canonicalBinding: $canonical,
+            availabilityChanged: $availabilityChanged,
+            baseValueChanged: !$sameScalarBase,
+        );
         $retirement->release();
     }
 
@@ -656,8 +668,8 @@ final class Container extends ContainerEntryOperations implements
         }
 
         ($this->externalContainers ??= $externalContainers)->register($container, $this->runtimeAuthority);
-        $invalidated = $this->invalidateDeferredDelegators($affected, $retirement);
-        $this->providerProbes?->invalidate(appending: true, invalidated: $invalidated);
+        $invalidated = $this->invalidateDeferredDelegators($affected['delegators'], $retirement);
+        $this->providerProbes?->invalidate(appending: true, invalidated: $invalidated, ownerChanges: $affected['lookups']);
         $retirement->release();
     }
 
@@ -767,7 +779,7 @@ final class Container extends ContainerEntryOperations implements
         $this->delegators->register($id, $prepared, $retirement, $this->runtimeAuthority);
         $this->invalidateRequested($id, $canonical, $retirement);
         $invalidated = $this->invalidateDeferredDelegators([$id], $retirement);
-        $this->providerProbes?->invalidate(invalidated: $invalidated, directChanges: [$id => true]);
+        $this->providerProbes?->invalidate(invalidated: [$id, ...$invalidated]);
         $retirement->release();
     }
 
@@ -795,7 +807,7 @@ final class Container extends ContainerEntryOperations implements
 
     private function externalLookupProbes(): ExternalLookupProbes
     {
-        $probes = $this->providerProbes ??= new ExternalLookupProbes($this->aliases);
+        $probes = $this->providerProbes ??= new ExternalLookupProbes($this->aliases, $this->delegators);
         $this->recordSharedLookup ??= $probes->trackLookup(...);
         return $probes;
     }

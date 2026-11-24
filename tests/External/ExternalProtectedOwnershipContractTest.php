@@ -379,6 +379,50 @@ test('final proof revisits an alias that becomes public again without replaying 
         ->and($inspection['trigger'] ?? 0)->toBe(1);
 });
 
+test('registration rechecks a candidate miss that protected its alias before it reopened', function (bool $ownsAfterReopening): void {
+    $local = new Lookup('local');
+    $external = new Lookup('external');
+    $container = (new ContainerBuilder())->addServices([
+        'local.lookup' => $local,
+        'trigger' => new Lookup('trigger'),
+    ])->build();
+    $container->alias('lookup', 'local.lookup');
+    installProduct($container, 'product', 'lookup');
+    installProduct($container, 'trigger.product', 'trigger');
+    expect(product($container)->source)->toBe($local);
+    $state = new class () {
+        public bool $protectedAlias = false;
+        public ?Product $warmed = null;
+    };
+    $candidate = new External(['lookup' => $external], static function (string $id) use ($container, $state, $ownsAfterReopening): bool {
+        if ($id === 'lookup') {
+            if (!$state->protectedAlias) {
+                $state->protectedAlias = true;
+                $container->alias('lookup', Config::class);
+                return false;
+            }
+            return $state->warmed !== null && $ownsAfterReopening;
+        }
+        if ($id === 'trigger' && $state->protectedAlias && $state->warmed === null) {
+            $container->alias('lookup', 'local.lookup');
+            $state->warmed = product($container);
+        }
+        return false;
+    });
+
+    $container->addContainer($candidate);
+
+    $checks = array_count_values($candidate->queries);
+    $current = product($container);
+    expect($state->warmed?->source)->toBe($local)
+        ->and($container->get('lookup'))->toBe($ownsAfterReopening ? $external : $local)
+        ->and($current->source)->toBe($ownsAfterReopening ? $external : $local)
+        ->and($current === $state->warmed)->toBe(!$ownsAfterReopening)
+        ->and(product($container))->toBe($current)
+        ->and($checks['lookup'] ?? 0)->toBe(2)
+        ->and($checks['trigger'] ?? 0)->toBe(1);
+})->with(['new owner' => true, 'stable miss' => false]);
+
 test('lookups stop external inspection when an earlier provider retargets an alias to protected core', function (bool $availability, bool $claims): void {
     $container = (new ContainerBuilder())->addService('local.lookup', new Lookup('local'))->build();
     $container->alias('lookup', 'local.lookup');

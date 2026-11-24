@@ -48,6 +48,11 @@ final class DelegatorRegistry
         get => $this->raw !== [];
     }
 
+    public function hasPipeline(string $id): bool
+    {
+        return isset($this->raw[$id]);
+    }
+
     /** @param (Closure():DelegatorLookupScope)|null $selectionLookups */
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,

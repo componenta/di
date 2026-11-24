@@ -8,6 +8,8 @@
 
 Reflection metadata, parameter plans and alias paths are cached in container memory. Binding mutations invalidate affected entries rather than rebuilding the entire container. The same construction and validation pipeline is used in development and production.
 
+During `addContainer()`, the container may check the new provider's availability for deferred delegator dependencies and dependencies observed by an in-progress external read. These ownership checks happen before the new provider is published.
+
 A custom callable executor supplied to `new Container(...)` can read the same container when selecting a delegator. The container tracks direct `get()` and `has()` calls made during that selection. Changes to those bindings invalidate the selected callable and its cached entry. An in-flight resolution can finish with the callable it already selected.
 
 ## Exceptions

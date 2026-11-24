@@ -11,6 +11,7 @@ use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Make;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Container;
+use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -666,6 +667,45 @@ test('registration preserves a negative ownership answer when its observed IDs s
     expect($checks)->toBe(1)
         ->and($container->get('entry'))->toBe($warm);
 })->with(['stable miss' => false, 'changes an unrelated ID in its callback' => true]);
+
+test('republishing a known binding keeps an observed availability check current', function (bool $write, bool $deferred): void {
+    $original = static fn(Product $entry): Product => new Product('local');
+    $external = static fn(Product $entry): Product => new Product('external');
+    $container = (new ContainerBuilder())
+        ->addServices(['entry' => new Product('base'), 'owner' => $original])
+        ->addDelegator('entry', 'owner')
+        ->build();
+    $binding = $deferred ? Definition::factory(static fn(): bool => true) : true;
+    $container->set('feature', $binding);
+    $warm = $container->get('entry');
+    $state = new class () {
+        public int $checks = 0;
+        public bool $registering = true;
+    };
+    $candidate = new OwnershipContainer(['owner' => $external], static function (string $id) use ($container, $binding, $write, $state): bool {
+        if ($id !== 'owner') {
+            return false;
+        }
+        if ($state->registering && ++$state->checks > 2) {
+            throw new LogicException('An unchanged availability must not reopen the inspection.');
+        }
+        $known = $container->has('feature');
+        if ($write) {
+            $container->set('feature', $binding);
+        }
+        return $known;
+    });
+
+    $container->addContainer($candidate);
+    $state->registering = false;
+
+    expect($state->checks)->toBe(1)
+        ->and($container->get('feature'))->toBeTrue()
+        ->and($container->get('owner'))->toBe($external)
+        ->and($container->get('entry'))->toEqual(new Product('external'))
+        ->and($container->get('entry'))->not->toBe($warm);
+})->with(['pure ownership check' => false, 'publishes the same binding' => true])
+    ->with(['scalar' => false, 'unresolved definition' => true]);
 
 test('registration rechecks ownership when an observed decorated value changes', function (bool $deferred): void {
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');

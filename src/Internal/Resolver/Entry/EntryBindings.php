@@ -86,6 +86,11 @@ final class EntryBindings
         $this->strategies = array_values($strategies);
     }
 
+    public function hasBinding(string $id): bool
+    {
+        return isset($this->bindings[$id]);
+    }
+
     /** @param (Closure():bool)|null $hasSharedValue */
     public function can(string $id, ?Closure $hasSharedValue = null): bool
     {

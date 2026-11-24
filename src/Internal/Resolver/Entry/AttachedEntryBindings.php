@@ -29,6 +29,11 @@ final readonly class AttachedEntryBindings
         private Closure $retire,
     ) {}
 
+    public function hasBinding(string $id): bool
+    {
+        return $this->resolver->hasBinding($id);
+    }
+
     /** @param Closure():bool $hasSharedValue */
     public function can(string $id, Closure $hasSharedValue): bool
     {

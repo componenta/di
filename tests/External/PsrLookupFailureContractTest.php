@@ -14,8 +14,10 @@ use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use DomainException;
+use Fiber;
 use LogicException;
 use PHPUnit\Framework\Assert;
+use Psr\Container\ContainerInterface;
 
 final readonly class Label
 {
@@ -100,6 +102,168 @@ test('a native external container does not offer an invalid autowiring candidate
 
     expect($parent->call($lookup))->toBe($value)
         ->and(fn() => $parent->get(ConflictingEntry::class))->toThrow(AttributeCompositionException::class);
+});
+
+#[Lazy, Proxy]
+final readonly class InFlightNativeEntry
+{
+    public function __construct(public string $value) {}
+
+    public function decorate(Label $entry): Label
+    {
+        return new Label($entry->value . ':' . $this->value);
+    }
+}
+
+final class CountingForeignEntry implements ContainerInterface
+{
+    public private(set) int $entryChecks = 0;
+
+    public function has(string $id): bool
+    {
+        if ($id !== InFlightNativeEntry::class) {
+            return false;
+        }
+        ++$this->entryChecks;
+        return true;
+    }
+
+    public function get(string $id): InFlightNativeEntry
+    {
+        if ($id !== InFlightNativeEntry::class) {
+            throw NotFoundException::forService($id);
+        }
+        return new InFlightNativeEntry('external');
+    }
+}
+
+test('registration uses the read mode for in-flight lookups and deferred delegates', function (string $provider): void {
+    $di = (new ContainerBuilder())
+        ->addServices([InFlightNativeEntry::class => new InFlightNativeEntry('local'), 'decorated' => new Label('entry')])
+        ->addFactory('public.consumer', static function (ContainerValue $context): Label {
+            $value = $context->container->get('public.source');
+            Assert::assertIsString($value);
+            return new Label($value);
+        })
+        ->addFactory('optional.consumer', static function (ContainerValue $context): Label {
+            $value = $context->container->get('optional.source');
+            Assert::assertIsString($value);
+            return new Label($value);
+        })
+        ->build();
+    $di->delegator('decorated', [InFlightNativeEntry::class, 'decorate']);
+    $warm = $di->get('decorated');
+    expect($warm)->toEqual(new Label('entry:local'));
+    $di->addContainer(new class ($di) implements ContainerInterface {
+        /** @var array<string, true> */
+        private array $paused = [];
+
+        public function __construct(private readonly Container $di) {}
+
+        public function has(string $id): bool
+        {
+            return $id === 'public.source' || $id === 'optional.source';
+        }
+
+        public function get(string $id): string
+        {
+            if (!$this->has($id)) {
+                throw NotFoundException::forService($id);
+            }
+            $entry = $id === 'public.source'
+                ? $this->di->get(InFlightNativeEntry::class)
+                : $this->di->call(static fn(?InFlightNativeEntry $entry = null): ?InFlightNativeEntry => $entry);
+            if (!$entry instanceof InFlightNativeEntry) {
+                throw new LogicException('Expected a native entry.');
+            }
+            if (!isset($this->paused[$id])) {
+                $this->paused[$id] = true;
+                Fiber::suspend($id);
+            }
+            return $entry->value;
+        }
+    });
+    $public = new Fiber(static fn(): mixed => $di->get('public.consumer'));
+    $optional = new Fiber(static fn(): mixed => $di->get('optional.consumer'));
+    expect($public->start())->toBe('public.source')->and($optional->start())->toBe('optional.source');
+
+    $candidate = $provider === 'foreign' ? new CountingForeignEntry() : new ContainerBuilder()->build();
+    if ($provider === 'explicit' && $candidate instanceof Container) {
+        $candidate->set(InFlightNativeEntry::class, new InFlightNativeEntry('external'));
+    }
+    $di->addContainer($candidate);
+    if ($candidate instanceof CountingForeignEntry) {
+        expect($candidate->entryChecks)->toBe(1);
+    }
+    $public->resume();
+    $optional->resume();
+
+    expect($public->getReturn())->toEqual(new Label('local'))
+        ->and($optional->getReturn())->toEqual(new Label('local'));
+    if ($provider !== 'implicit') {
+        expect($di->get('public.consumer'))->toEqual(new Label('external'))
+            ->and($di->get('optional.consumer'))->toEqual(new Label('external'))
+            ->and($di->get('decorated'))->toEqual(new Label('entry:external'));
+    } else {
+        expect($di->get('optional.consumer'))->toBe($optional->getReturn())
+            ->and($di->get('decorated'))->toBe($warm)
+            ->and(fn() => $di->get(InFlightNativeEntry::class))->toThrow(AttributeCompositionException::class)
+            ->and(fn() => $di->get('public.consumer'))->toThrow(AttributeCompositionException::class);
+    }
+})->with([
+    'known but unresolvable native entry' => 'implicit',
+    'explicit resolvable native entry' => 'explicit',
+    'entry from an ordinary PSR provider' => 'foreign',
+]);
+
+test('a native owner can keep the PSR route when an ordinary provider takes over optional resolution', function (): void {
+    $di = (new ContainerBuilder())
+        ->addServices([InFlightNativeEntry::class => new InFlightNativeEntry('local'), 'decorated' => new Label('entry')])
+        ->addFactory('consumer', static function (ContainerValue $context): Label {
+            return new Label($context->container->get('source') === true ? 'known' : 'unknown');
+        })
+        ->build();
+    $di->delegator('decorated', [InFlightNativeEntry::class, 'decorate']);
+    $source = new class ($di) implements ContainerInterface {
+        public private(set) int $entryChecks = 0;
+
+        public function __construct(private readonly Container $di) {}
+
+        public function has(string $id): bool
+        {
+            if ($id === InFlightNativeEntry::class) {
+                ++$this->entryChecks;
+            }
+            return $id === 'source';
+        }
+
+        public function get(string $id): bool
+        {
+            if ($id !== 'source') {
+                throw NotFoundException::forService($id);
+            }
+            $known = $this->di->has(InFlightNativeEntry::class);
+            Fiber::suspend('source');
+            return $known;
+        }
+    };
+    $di->addContainer($source);
+    $di->addContainer(new ContainerBuilder()->build());
+    expect($di->get('decorated'))->toEqual(new Label('entry:local'));
+    $flight = new Fiber(static fn(): mixed => $di->get('consumer'));
+    expect($flight->start())->toBe('source');
+
+    $candidate = new CountingForeignEntry();
+    $before = $source->entryChecks;
+    $di->addContainer($candidate);
+    expect($candidate->entryChecks)->toBe(1)
+        ->and($source->entryChecks - $before)->toBe(2);
+
+    $flight->resume();
+    expect($flight->getReturn())->toEqual(new Label('known'))
+        ->and($di->get('consumer'))->toBe($flight->getReturn())
+        ->and($di->get('decorated'))->toEqual(new Label('entry:external'))
+        ->and(fn() => $di->get(InFlightNativeEntry::class))->toThrow(AttributeCompositionException::class);
 });
 
 test('an external native container proxy offers entries from its backing container', function (): void {

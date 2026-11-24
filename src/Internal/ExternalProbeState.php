@@ -11,7 +11,7 @@ final class ExternalProbeState
 {
     /** @var array<int,array{activation:int,recursive:bool}> Active providers in call order. */
     private array $active = [];
-    /** @var array<int,array{owns:bool,revision:int,registryRevision:?int}> Results of fresh inspections of active providers. */
+    /** @var array<int,array{owns:bool,revision:int,registryRevision:?int,requireResolvable:bool}> Fresh inspections of active providers. */
     private array $confirmedOwnership = [];
     /** @var array<int,array<int,array<int,array{revision:int,activation:int}>>> Misses indexed by provider, lookup mode, and caller. */
     private array $recursiveMisses = [];
@@ -43,7 +43,7 @@ final class ExternalProbeState
     }
 
     /** @param Closure():array{owns:bool,revision:int,registryRevision:?int} $check */
-    public function inspect(int $provider, Closure $check): bool
+    public function inspect(int $provider, bool $requireResolvable, Closure $check): bool
     {
         // Registration gets fresh ownership evidence. Its nested lookups still
         // skip active providers, including the one being inspected here.
@@ -58,7 +58,7 @@ final class ExternalProbeState
         try {
             $result = $check();
             if (isset($active[$provider]) && EntryLookupRevision::current() === $lookupVersion) {
-                $confirmed = $result;
+                $confirmed = $result + ['requireResolvable' => $requireResolvable];
             }
             return $result['owns'];
         } finally {
@@ -73,11 +73,11 @@ final class ExternalProbeState
         }
     }
 
-    /** @return array{owns:bool,revision:int,registryRevision:?int}|null */
-    public function confirmedOwnership(int $provider, int $revision, int $registryRevision): ?array
+    /** @return array{owns:bool,revision:int,registryRevision:?int,requireResolvable:bool}|null */
+    public function confirmedOwnership(int $provider, bool $requireResolvable, int $revision, int $registryRevision): ?array
     {
         $confirmed = $this->confirmedOwnership[$provider] ?? null;
-        if ($confirmed === null || $confirmed['revision'] !== $revision
+        if ($confirmed === null || $confirmed['requireResolvable'] !== $requireResolvable || $confirmed['revision'] !== $revision
             || ($confirmed['registryRevision'] !== null && $confirmed['registryRevision'] !== $registryRevision)
         ) {
             return null;

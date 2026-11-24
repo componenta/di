@@ -58,6 +58,25 @@ final class EntryCache
         return true;
     }
 
+    public function hasBase(string $id): bool
+    {
+        return array_key_exists($id, $this->base);
+    }
+
+    public function hasSameScalarBase(string $id, bool|int|float|string|null $value): bool
+    {
+        if (!array_key_exists($id, $this->base)) {
+            return false;
+        }
+
+        $previous = $this->base[$id];
+        if (is_float($value)) {
+            // Signed zero has observable behavior despite PHP strict equality.
+            return is_float($previous) && pack('d', $previous) === pack('d', $value);
+        }
+        return ($previous === null || is_scalar($previous)) && $previous === $value;
+    }
+
     public function putBase(string $id, mixed $value, ?object $authority = null): void
     {
         RuntimeCollaboratorOwnership::assertWritable($this, $authority);
