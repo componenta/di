@@ -1,35 +1,33 @@
 # Componenta DI
 
-[English](README.md) · [Документация](docs/ru/index.md)
+[English](README.md)
 
-DI-контейнер для PHP 8.4+ с поддержкой PSR-11, autowiring, определений зависимостей, внедрения через атрибуты, вызова callable и ленивых объектов.
+DI-контейнер с поддержкой [PSR-11](https://www.php-fig.org/psr/psr-11/) для PHP 8.4+: autowiring, определения сервисов, внедрение через атрибуты, вызов callable и нативные ленивые объекты.
 
-**Статус:** DI 6 разрабатывается в ветке `refactor/di6-definitions-callbacks` и ещё не выпущена. Обычная установка через Composer загружает опубликованный релиз, а не эту ветку.
+**DI 6 ещё не выпущена.** Ветка `refactor/di6-definitions-callbacks` содержит API в разработке.
 
 ## Установка
+
+Опубликованный релиз:
 
 ```bash
 composer require componenta/di
 ```
 
-Для установки ветки DI 6 и полного примера см. [начало работы](docs/ru/guide/getting-started.md). Нативные callback-выражения в аргументах атрибутов требуют PHP 8.5; минимальная версия PHP пакета — 8.4.
+Ветка разработки DI 6:
+
+```bash
+composer require 'componenta/di:dev-refactor/di6-definitions-callbacks'
+```
+
+Нативные callback-выражения непосредственно в атрибутах требуют PHP 8.5; минимальная версия PHP для пакета — 8.4.
 
 ## Документация
 
-- [Начало работы](docs/ru/guide/getting-started.md) — установка, конфигурация, пример.
-- [Определения](docs/ru/guide/definitions.md) — сервисы, фабрики, aliases и delegators.
-- [API контейнера](docs/ru/guide/container.md) · [Ленивые объекты](docs/ru/guide/lazy-objects.md) · [Атрибуты и HTTP-запросы](docs/ru/guide/attributes.md).
-- [Расширение контейнера](docs/ru/guide/extensions.md) · [Поведение и исключения](docs/ru/guide/runtime.md).
-- [Миграция определений DI 6](docs/migrations/di6-definitions.ru.md) · [Миграция callbacks](docs/migrations/di6-callbacks.ru.md).
+- [Начало работы](docs/ru/guide/getting-started.md) — установка, провайдеры и пример.
+- [Определения](docs/ru/guide/definitions.md) · [API контейнера](docs/ru/guide/container.md).
+- [Ленивые объекты](docs/ru/guide/lazy-objects.md) · [Атрибуты и HTTP-запросы](docs/ru/guide/attributes.md).
+- [Расширения](docs/ru/guide/extensions.md) · [Поведение и исключения](docs/ru/guide/runtime.md).
+- [Миграция DI 6: определения](docs/ru/migrations/di6-definitions.md) · [Callbacks и union-типы](docs/ru/migrations/di6-callbacks.md).
 
-[Планы архитектуры и отчёты аудитов](docs/plans/README.ru.md) хранятся отдельно от пользовательского руководства.
-
-Локальный запуск VitePress (Node.js 22+):
-
-```bash
-cd docs
-npm install
-npm run dev
-```
-
-Сборка сайта: `npm run build` в каталоге `docs/`.
+[Оглавление](docs/ru/index.md) · [Сообщить об ошибке](https://github.com/componenta/di/issues)

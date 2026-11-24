@@ -1,25 +1,30 @@
 # Lazy objects and virtual proxies
 
-`makeLazy()` defers the supplied initializer; `makeProxy()` defers the supplied backing factory. Reflection-created services use these strategies through `#[Lazy]` or `#[Proxy]`, and `#[Proxy]` also supports explicit injection points. For supported targets, creation does not invoke the callback. Initialization retains the existing constructor, property-injection and setup order, callback failure identity, retry behavior, and native ghost/proxy identities. `#[NoConstructor]` suppresses only the constructor.
+`Container::makeLazy()` creates a native lazy ghost; `makeProxy()` creates a native virtual proxy. Reflection-created services can select them with `#[Lazy]` and `#[Proxy]`.
 
-## Injection-point proxies
+```php
+use Componenta\DI\Attribute\Lazy;
 
-At an injection point, `#[Make(...), Proxy]` supports concrete targets with private or protected constructors when the selected application factory can create the backing object. An attribute-driven backing class can instead use `#[NoConstructor]` and its ordinary setup lifecycle. The backing creation runs on initialization; its factory or reflection policy owns constructor invocation. The proxy class must still be concrete, compatible with the declared type, and supported by the selected proxy adapter.
+#[Lazy]
+final class Catalog
+{
+    private array $items = [];
 
-The default native adapter also requires a **non-lazy backing object** distinct from the proxy itself. PHP accepts a backing object of the same class, or a parent class only when the proxy subclass adds no properties and does not override `__destruct()` or `__clone()`. A backing subclass passing an `instanceof` check is not sufficient. For `#[Make('product'), Proxy]` injection whose declared type is a parent of the actual product, specify the concrete product class: `#[Make('product'), Proxy(ProductChild::class)] public ProductBase $product;`. Native backing restrictions are checked when the factory returns during initialization; their failures remain PHP errors. See [PHP's backing-object requirements](https://www.php.net/manual/en/reflectionclass.newlazyproxy.php).
+    public function count(): int { return count($this->items); }
+}
 
-At a `#[Proxy]` injection point, including `#[Make(...), Proxy]`, DI additionally requires the backing object to be an instance of the selected proxy class before returning it to the adapter. A backing object of that class's parent is therefore rejected with `ResolutionException`, even when PHP's native proxy would allow it. The native parent-class allowance does not relax this injection-point contract.
+$catalog = $container->get(Catalog::class);
+$count = $catalog->count(); // Initializes the lazy instance when required.
+```
 
-Avoid applying an injection-point `#[Proxy]` to a target already created lazily by class-level `#[Lazy]` or `#[Proxy]`: the inner creation then supplies a lazy backing object. Use `#[Inject]` for a shared target or `#[Make]` for a fresh target and let its class attribute select the strategy. If an outer proxy is needed, select an ordinary application factory or `ClassDefinition` that creates an eager backing object under its existing initialization contract. These restrictions belong to the native adapter; custom proxy factories retain their own supported mechanisms.
+The reflection pipeline runs constructor injection, property injection and `#[SetUp]` at initialization; `#[NoConstructor]` suppresses only the constructor.
 
-## Default native adapter restrictions
+## Restrictions
 
-The default native `ProxyFactory` requires at least one **non-static backed instance property**. An inherited private property, a backed get/set hook, or a readonly/promoted backed property qualifies. A class with no properties, only static properties, or only virtual hooks does not. Empty `stdClass` and empty descendants also fail this requirement; a user subclass of `stdClass` with a backed property can remain lazy.
+The default `ProxyFactory` requires at least one **non-static backed instance property** (an inherited private property also qualifies). Propertyless classes, and classes with only static/virtual properties, are rejected before allocation with `ResolutionException`. Other native PHP restrictions still apply.
 
-An otherwise native-eligible target without such a property throws `ResolutionException` before target allocation. Its `serviceId` is the canonical target class name; the message identifies `lazy ghost` or `virtual proxy`, the missing backed properties, and eager construction as the migration path. No initializer, factory, constructor, setup, setter or destructor runs because of target allocation, and no incomplete result is shared. This intentional rejection has no artificial previous exception. PHP's other allocation restrictions retain their existing error path and native previous exception, including interfaces, traits, abstract classes, enums, and unsupported internal classes or their descendants. Class autoload and earlier application extension effects are not rolled back.
+Virtual proxies require an appropriate eager backing object, not another lazy proxy. With `#[Proxy]` at an injection point, DI also requires the backing object to be an instance of the selected proxy class. Avoid placing an outer proxy around a target already marked `#[Lazy]` or `#[Proxy]`.
 
-## Eager construction and custom adapters
+An application factory owns its result's creation: class-level lazy attributes do not wrap factory products. Use reflection creation with attributes, an explicit supported proxy-injection path, or a custom lazy factory. For eager creation, remove the lazy marker or use an ordinary factory/`ClassDefinition`.
 
-For ordinary eager reflection creation, remove the relevant class or injection-point lazy/proxy marker. Calling `make()` instead of `get()` does not disable those attributes. An explicit ordinary factory or `ClassDefinition` provides another eager path under its existing contract: a factory owns its result's initialization, while `ClassDefinition` executes its constructor and explicit `call()` instructions and does not execute DI attributes such as `SetUp`. Configure any required initialization through that chosen path. A class-level `#[Proxy]` does not by itself wrap an opaque application factory's result.
-
-The property requirement belongs to the default native adapter. User-supplied `ProxyFactoryInterface` implementations can use other supported mechanisms and remain responsible for the deferred-callback contracts. Direct caller-supplied callbacks on supported targets still own their later exceptions unless they re-enter a DI resolution boundary. The adapter does not introduce an eager fallback or a container-wide capability check. The [implemented propertyless-lazy plan](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/propertyless-lazy-lifecycle.md) records the rationale and compatibility boundary.
+[Attribute guide](attributes.md) · [PHP native virtual proxy rules](https://www.php.net/manual/en/reflectionclass.newlazyproxy.php)

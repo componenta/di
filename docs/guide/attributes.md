@@ -1,34 +1,48 @@
-# Attributes and request mapping
+# Attributes and HTTP request mapping
 
-## Built-in attributes
+## Injection and configuration
 
-Built-in object and parameter attributes include:
+DI resolves constructor and callable parameters. Reflection-created services can also use property injection.
 
-```text
-#[Config] #[Env] #[EntryId] #[Inject] #[Make]
-#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast] #[Transform]
-#[CurrentRequest] #[CurrentUri]
-#[Header] #[Cookie] #[QueryParam] #[PayloadParam]
-#[RequestAttribute] #[ServerParam] #[UploadedFile]
-#[MapRequest] #[MapQueryString] #[MapRequestPayload]
-#[MapHeaders] #[MapCookies] #[MapRequestAttributes]
-#[MapServerParams] #[MapUploadedFiles]
+```php
+use Componenta\DI\Attribute\Config;
+use Componenta\DI\Attribute\Inject;
+
+final class ApiClient
+{
+    #[Inject]
+    public LoggerInterface $logger;
+
+    public function __construct(
+        #[Config('api.endpoint')] public string $endpoint,
+    ) {}
+}
 ```
 
-`#[CurrentRequest]` and `#[CurrentUri]` are explicit invocation-only sources. A bare PSR-7 request or URI type does not imply current-request semantics, and invocation-only values cannot be stored through constructor injection.
+`#[Config]` and `#[Env]` read settings; `#[EntryId]` loads a named service, `#[Make]` creates a fresh object and `#[Inject]` injects a property by type. Other attributes include `#[Cast]`, `#[Init]`, `#[SetUp]`, `#[NoConstructor]`, `#[Lazy]`, `#[Proxy]` and `#[Transform]`.
 
-## Request data and conflict policy
+Application factories and `ClassDefinition` own their results and do not execute the target's DI injection/lifecycle attributes. See [Definitions](definitions.md).
 
-Request mapping reads explicitly selected PSR-7 sources, detects source conflicts, applies configured casting and validation, and creates DTOs through the same `FactoryInterface::make()` pipeline.
+## HTTP request sources
 
-Mapped HTTP data is rejected when it would supply a parameter whose declared attribute is recognized as an explicit source, such as `#[EntryId]`. If metadata or dependency preparation discovers that source late, DI checks again before a pending resolver, attribute handler, `Transform` callback, or `Cast` caster receives the value. The check also runs between `Transform` callback dependency parameters.
+Explicit PSR-7 sources include `#[CurrentRequest]`, `#[CurrentUri]`, `#[Header]`, `#[Cookie]`, `#[QueryParam]`, `#[PayloadParam]`, `#[RequestAttribute]`, `#[ServerParam]` and `#[UploadedFile]`. The current-request/URI attributes are invocation-only; a plain PSR-7 type does not implicitly mean the current request.
 
-The checks cover the complete provided parameter bag, including values for sibling parameters, and run again after final parameter and constructor preparation, before a constructor or `SetUp` callable receives arguments. Every read of `ObjectCreationContext::parameters` checks the current creation attempt before exposing the bag; handlers that do not read it leave deferred parameter suppliers untouched.
+`#[MapRequest]` maps selected sources to an array or DTO, defaulting to parsed body. Alternatives: `#[MapRequestPayload]`, `#[MapQueryString]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]` and `#[MapUploadedFiles]`.
 
-Before returning a mapped DTO, DI rechecks the constructor and `SetUp` sources recorded for that result after releasing inputs owned by the mapper.
+```php
+use Componenta\DI\Attribute\MapRequest;
+use Psr\Http\Message\ServerRequestInterface;
 
-A callback or extension that has already started may have performed side effects: these are not rolled back or replayed, and an incompatible late change still prevents successful completion of the DTO or callable. Provenance stays internal and is not added to custom resolver or handler contexts.
+final readonly class CreateUserInput
+{
+    public function __construct(public string $name) {}
+}
 
-## Callbacks after request mapping
+$handler = static fn(#[MapRequest] CreateUserInput $input): string => $input->name;
+// $request has parsed body ['name' => 'Ada'].
+$name = $container->call($handler, [ServerRequestInterface::class => $request]);
+```
 
-`MapRequest(afterMap: ...)` optionally transforms the complete mapped array with DI suffix dependencies before DTO creation. Raw validation still runs first; the result must be an array and retains final source checks. `afterMap: null` preserves the original path. Existing source-specific attributes, custom mapper subclasses, declarative options, standalone `transform()`, array plus `Transform`, and application handler adapters are supported. Custom request adapters can resolve the configured `RequestAttributeHandler` by its class ID. See the [existing and callback alternatives](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/request-mapping-examples.md) ([Русский](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/request-mapping-examples.ru.md)) for complete PHP 8.4/8.5 examples and the custom mapper protocol.
+Mapping supports field selection, renaming, defaults, casting and configured validation. Conflicting values from multiple request sources are rejected by default. HTTP fields cannot replace parameters with recognized explicit DI sources such as `#[EntryId]`.
+
+DI 6 adds optional `MapRequest(afterMap: ...)`; see [Callback migration](../migrations/di6-callbacks.md).

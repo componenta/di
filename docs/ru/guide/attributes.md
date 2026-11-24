@@ -1,34 +1,48 @@
 # Атрибуты и HTTP-запросы
 
-## Встроенные атрибуты
+## Внедрение зависимостей и конфигурация
 
-Встроенные атрибуты объектов и параметров:
+DI разрешает параметры конструкторов и callable. Для сервисов, создаваемых через reflection, доступно также внедрение свойств.
 
-```text
-#[Config] #[Env] #[EntryId] #[Inject] #[Make]
-#[Lazy] #[Proxy] #[NoConstructor] #[Init] #[SetUp] #[Cast] #[Transform]
-#[CurrentRequest] #[CurrentUri]
-#[Header] #[Cookie] #[QueryParam] #[PayloadParam]
-#[RequestAttribute] #[ServerParam] #[UploadedFile]
-#[MapRequest] #[MapQueryString] #[MapRequestPayload]
-#[MapHeaders] #[MapCookies] #[MapRequestAttributes]
-#[MapServerParams] #[MapUploadedFiles]
+```php
+use Componenta\DI\Attribute\Config;
+use Componenta\DI\Attribute\Inject;
+
+final class ApiClient
+{
+    #[Inject]
+    public LoggerInterface $logger;
+
+    public function __construct(
+        #[Config('api.endpoint')] public string $endpoint,
+    ) {}
+}
 ```
 
-`#[CurrentRequest]` и `#[CurrentUri]` — явные источники, допустимые только во время вызова. Тип PSR-7 request или URI сам по себе не означает «текущий запрос», а такое значение нельзя сохранить через аргумент конструктора.
+`#[Config]` и `#[Env]` читают настройки; `#[EntryId]` получает сервис по ID, `#[Make]` создаёт новый объект, `#[Inject]` внедряет свойство по типу. Также доступны `#[Cast]`, `#[Init]`, `#[SetUp]`, `#[NoConstructor]`, `#[Lazy]`, `#[Proxy]` и `#[Transform]`.
 
-## Источники HTTP-данных и конфликты
+Фабрики приложения и `ClassDefinition` самостоятельно создают результат и не исполняют DI-атрибуты целевого класса. См. [Определения](definitions.md).
 
-Отображение запроса читает явно выбранные источники PSR-7, обнаруживает конфликты, применяет настроенные преобразования и проверку данных, затем создаёт DTO через тот же `FactoryInterface::make()`.
+## Источники HTTP-запроса
 
-HTTP-данные отклоняются, если они подставляют значение параметра, чей атрибут распознан как явный источник, например `#[EntryId]`. Если источник обнаружен поздно при подготовке метаданных или зависимостей, DI повторяет проверку до передачи значения ожидающему resolver, обработчику атрибута, callback `Transform` или caster в `Cast`. Проверка также выполняется между параметрами зависимостей callback `Transform`.
+Явные источники PSR-7: `#[CurrentRequest]`, `#[CurrentUri]`, `#[Header]`, `#[Cookie]`, `#[QueryParam]`, `#[PayloadParam]`, `#[RequestAttribute]`, `#[ServerParam]`, `#[UploadedFile]`. Текущий запрос/URI доступны при вызове callable; обычный PSR-7 type hint не означает выбор текущего запроса.
 
-Проверяется весь переданный массив, включая значения соседних параметров; после завершающей подготовки параметров и конструктора проверка повторяется до передачи аргументов конструктору или вызову `SetUp`. Каждое чтение `ObjectCreationContext::parameters` проверяет текущую попытку создания до выдачи массива; обработчики, которые его не читают, не запускают отложенные поставщики параметров.
+`#[MapRequest]` отображает выбранные источники в массив или DTO, по умолчанию используя разобранное тело. Альтернативы: `#[MapRequestPayload]`, `#[MapQueryString]`, `#[MapHeaders]`, `#[MapCookies]`, `#[MapRequestAttributes]`, `#[MapServerParams]`, `#[MapUploadedFiles]`.
 
-Перед возвратом DTO DI освобождает входные данные, принадлежавшие мапперу, и перепроверяет источники, которые использовали конструктор и `SetUp` этого DTO.
+```php
+use Componenta\DI\Attribute\MapRequest;
+use Psr\Http\Message\ServerRequestInterface;
 
-Уже начавший работу callback или расширение может выполнить побочные эффекты: они не откатываются и не повторяются, а несовместимое позднее изменение по-прежнему препятствует успешному завершению DTO или callable. Сведения о происхождении данных остаются внутренними и не добавляются в контексты пользовательских resolver-ов или обработчиков.
+final readonly class CreateUserInput
+{
+    public function __construct(public string $name) {}
+}
 
-## Callbacks после обработки запроса
+$handler = static fn(#[MapRequest] CreateUserInput $input): string => $input->name;
+// У $request разобранное body ['name' => 'Ada'].
+$name = $container->call($handler, [ServerRequestInterface::class => $request]);
+```
 
-`MapRequest(afterMap: ...)` позволяет дополнительно преобразовать весь отображённый массив до создания DTO, разрешая зависимости остальных параметров callback через DI. Проверка исходных данных по-прежнему выполняется первой; результат должен быть массивом и проходит итоговые проверки источников. `afterMap: null` сохраняет прежний путь. Атрибуты отдельных источников, пользовательские подклассы mapper, декларативные опции, отдельный вызов `transform()`, массив вместе с `Transform` и прикладные адаптеры обработчиков поддерживаются. Пользовательские адаптеры запросов получают настроенный `RequestAttributeHandler` по имени его класса. Полные примеры для PHP 8.4/8.5 и протокол пользовательского mapper приведены в [сравнении существующих и callback-вариантов](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/request-mapping-examples.ru.md) ([English](https://github.com/componenta/di/blob/2b4f1ae44a29a3bc7c47d74c52e6990af9160b11/docs/plans/request-mapping-examples.md)).
+Mapping поддерживает выбор и переименование полей, значения по умолчанию, приведение типов и настроенную валидацию. Конфликтующие значения разных HTTP-источников по умолчанию отклоняются. HTTP-поля не могут подменять параметры с явным DI-источником вроде `#[EntryId]`.
+
+DI 6 добавляет необязательный `MapRequest(afterMap: ...)`; см. [Миграцию callbacks](../migrations/di6-callbacks.md).
