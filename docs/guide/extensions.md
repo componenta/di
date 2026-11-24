@@ -1,15 +1,15 @@
-# Extension points
+# Extending the container
 
-Custom resolvers and attribute handlers are registered through configuration providers **before** `ContainerFactory::create()`. The parameter-resolver and attribute pipelines are not mutable after assembly.
+Register parameter resolvers and attribute definitions through configuration providers before calling `ContainerFactory::create()`. The parameter and attribute pipelines are sealed after assembly.
 
-## Parameter resolvers
+## Custom parameter resolvers
 
-Implement `ParameterResolverInterface`:
+A `ParameterResolverInterface` implementation provides two methods:
 
-- `supports(ParameterTarget $target): bool` selects applicable parameters.
-- `resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): ?array` returns `[position, value]` or `null` to continue the chain.
+- `supports(ParameterTarget $target): bool` decides whether the resolver can handle the parameter.
+- `resolveParameter(ParameterTarget $target, ParameterResolutionContext $context): ?array` returns `[position, value]` or `null` to continue the resolver chain.
 
-For attributes that only need a value provider, use the built-in `AttributeMatchingParameterResolver`:
+For one attribute-based value source, use `AttributeMatchingParameterResolver`:
 
 ```php
 use Componenta\DI\Resolver\Parameter\AttributeMatchingParameterResolver;
@@ -23,16 +23,16 @@ $resolver = new AttributeMatchingParameterResolver(
 );
 ```
 
-Register `$resolver` with an integer priority in the provider's `getParameterResolvers()` hook. Extensions must not mutate the resolver chain during `supports()`.
+Register `$resolver` under an integer priority in `ConfigProvider::getParameterResolvers()`. `supports()` must not mutate the resolver chain or retain per-invocation resolution state.
 
-## Attribute handlers
+## Attribute definitions and composition
 
-Register custom attribute behavior with `AttributeDefinition`. Its capabilities, `requires`, `forbids`, `before` and `after` selectors define composition constraints and handler order. `CapabilityPolicy` limits the number of attributes with a capability on one target.
+`AttributeDefinition` describes an attribute class and its optional handler. Its `capabilities`, `requires`, `forbids`, `before` and `after` metadata controls compatibility and execution order. `CapabilityPolicy` limits the count of a capability on a target.
 
-Register required attribute definitions before the container is built. Their extension factories can resolve dependencies from the container, but a newly applicable extension discovered after a resolution has completed may be rejected to preserve the completed result's semantics.
+Attribute and parameter-resolver factories may obtain their dependencies from the container while it is being assembled. Required extension classes must be available in time for their use; late discovery of incompatible behavior can fail validation rather than replay an already completed operation.
 
-## Definitions and external containers
+## Definition strategies and external containers
 
-Custom explicit-definition strategies implement `DefinitionResolverInterface`; fallback entry resolvers implement `EntryResolverInterface` and accept `EntryParameters`. Consult the [DI 6 migration guide](../migrations/di6-definitions.md) before updating their implementations.
+A custom explicit-definition strategy implements `DefinitionResolverInterface`: classify, validate, then execute a supplied definition without retaining its own registration map. A fallback entry resolver implements `EntryResolverInterface` and receives `EntryParameters`. See [Definition migration](../migrations/di6-definitions.md) for interfaces and constructors.
 
-`Container::addContainer()` adds an external PSR-11 container. It cannot override protected internal DI entries; external providers control the sharing of the values they return. See [Runtime behavior](runtime.md).
+`Container::addContainer()` registers another PSR-11 container. External entries cannot shadow protected internal services; the external provider owns sharing of its results. If its registered entries subsequently change, `notifyExternalEntriesChanged()` can report affected IDs. See [Container API](container.md).
