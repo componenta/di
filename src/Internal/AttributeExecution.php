@@ -7,6 +7,7 @@ namespace Componenta\DI\Internal;
 use Closure;
 use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Attribute\Composition\AttributeUsage;
+use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -33,19 +34,20 @@ use Throwable;
  * exclusively through AttributeParameterResolver. Runtime handlers receive
  * isolated attribute instances so mutable attribute state cannot leak between
  * object creations or concurrent execution contexts.
+ *
+ * @phpstan-type ExecutionPlan array{
+ *     revision:int,
+ *     cacheRevision:int,
+ *     hasHandlers:bool,
+ *     hasBeforeConstructorPolicy:bool,
+ *     requiresFreshValidation:bool,
+ *     before:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>,
+ *     after:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>
+ * }
  */
 final class AttributeExecution
 {
-    /**
-     * @var array<class-string,array{
-     *     revision:int,
-     *     cacheRevision:int,
-     *     hasHandlers:bool,
-     *     requiresFreshValidation:bool,
-     *     before:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>,
-     *     after:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>
-     * }>
-     */
+    /** @var array<class-string,ExecutionPlan> */
     private array $cache = [];
 
     public function __construct(
@@ -288,24 +290,21 @@ final class AttributeExecution
     /**
      * @internal
      * @param ReflectionClass<covariant object> $class
-     * @return array{hasHandlers:bool,requiresFreshValidation:bool}
+     * @return array{hasHandlers:bool,hasBeforeConstructorPolicy:bool,requiresFreshValidation:bool}
      */
     public function metadataState(ReflectionClass $class): array
     {
         $plan = $this->executionPlan($class);
-        return ['hasHandlers' => $plan['hasHandlers'], 'requiresFreshValidation' => $plan['requiresFreshValidation']];
+        return [
+            'hasHandlers' => $plan['hasHandlers'],
+            'hasBeforeConstructorPolicy' => $plan['hasBeforeConstructorPolicy'],
+            'requiresFreshValidation' => $plan['requiresFreshValidation'],
+        ];
     }
 
     /**
      * @param ReflectionClass<covariant object> $class
-     * @return array{
-     *     revision:int,
-     *     cacheRevision:int,
-     *     hasHandlers:bool,
-     *     requiresFreshValidation:bool,
-     *     before:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>,
-     *     after:list<ReflectionClass<covariant object>|ReflectionProperty|ReflectionMethod>
-     * }
+     * @return ExecutionPlan
      */
     private function executionPlan(ReflectionClass $class): array
     {
@@ -341,14 +340,25 @@ final class AttributeExecution
                 $after = array_values(array_filter([...$properties, $class, ...$methods], $hasAttributes));
             }
             $hasHandlers = false;
+            $hasBeforeConstructorPolicy = false;
             $requiresFreshValidation = false;
             foreach ($before as $target) {
                 $plan = $this->plans->build($target);
                 $requiresFreshValidation = $requiresFreshValidation || $this->plans->requiresFreshValidation($plan);
                 foreach ($plan->usages as $usage) {
-                    if ($usage->definition->handler instanceof AttributeHandlerInterface) {
-                        $hasHandlers = true;
+                    $definition = $usage->definition;
+                    if (!$definition->handler instanceof AttributeHandlerInterface) {
+                        continue;
                     }
+                    $hasHandlers = true;
+                    $hasBeforeConstructorPolicy = $hasBeforeConstructorPolicy || (
+                        $usage->hasCapability(ConstructorPolicy::class) && CompletedAttributeGuard::appliesToPhase(
+                            $definition,
+                            $usage->attributeClass,
+                            AttributePhase::BeforeInstantiation,
+                            $target instanceof ReflectionProperty,
+                        )
+                    );
                 }
             }
             // A member's autoload may reveal handlers on an earlier target.
@@ -359,6 +369,7 @@ final class AttributeExecution
             'revision' => $revision,
             'cacheRevision' => $this->plans->cacheRevision,
             'hasHandlers' => $hasHandlers,
+            'hasBeforeConstructorPolicy' => $hasBeforeConstructorPolicy,
             'requiresFreshValidation' => $requiresFreshValidation,
             'before' => $before,
             'after' => $after,

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Internal\Resolver\Entry;
 
-use Componenta\DI\Attribute\Composition\AttributePlan;
 use Componenta\DI\Resolver\Target\ParameterTarget;
 use ReflectionClass;
 use ReflectionMethod;
@@ -30,10 +29,10 @@ final class ObjectMetadata
      */
     public function __construct(
         public readonly ReflectionClass $class,
-        public readonly AttributePlan $classPlan,
         public readonly ?ReflectionMethod $constructor,
         public readonly array $constructorTargets,
         public readonly bool $hasAttributeHandlers,
+        public readonly bool $hasBeforeConstructorPolicy,
         private readonly ?ReflectionClass $attributeSource,
         public readonly bool $nativeConstructorMetadata,
     ) {}

@@ -101,10 +101,10 @@ final class ObjectPlans
 
             $metadata = new ObjectMetadata(
                 $reflection,
-                $classPlan,
                 $constructor,
                 $constructorTargets,
                 $attributePlan['hasHandlers'],
+                $attributePlan['hasBeforeConstructorPolicy'],
                 $attributeSource,
                 nativeConstructorMetadata: $attributeTarget === $reflection,
             );

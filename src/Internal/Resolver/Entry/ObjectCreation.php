@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Internal\Resolver\Entry;
 
 use Closure;
-use Componenta\DI\Attribute\Composition\Capability\ConstructorPolicy;
 use Componenta\DI\CallableInvokerInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AttributeCallbackInvoker;
@@ -81,23 +80,7 @@ final class ObjectCreation
         if (!is_entry_class_eligible($metadata->class)) {
             return false;
         }
-        if ($metadata->class->isInstantiable()) {
-            return true;
-        }
-
-        foreach ($metadata->classPlan->all(ConstructorPolicy::class) as $usage) {
-            $definition = $usage->definition;
-            if (!$definition->handler instanceof AttributeHandlerInterface) {
-                continue;
-            }
-            if ($definition->phase === AttributePhase::BeforeInstantiation
-                || $definition->phase === AttributePhase::Both
-            ) {
-                return true;
-            }
-        }
-
-        return false;
+        return $metadata->class->isInstantiable() || $metadata->hasBeforeConstructorPolicy;
     }
 
     /**
