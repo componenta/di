@@ -35,3 +35,7 @@ Types in `Componenta\DI\Internal` are implementation details, not extension cont
 
 - [Definitions and extension interfaces](migrations/di6-definitions.md)
 - [Callbacks and union autowiring](migrations/di6-callbacks.md)
+
+## Public API reference
+
+[All public classes, interfaces, attributes, methods and exceptions](api/index.md)
