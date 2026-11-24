@@ -1,5 +1,7 @@
 # Extension points
 
+## Registering extensions
+
 Custom parameter resolvers implement `ParameterResolverInterface` and are registered with an integer priority. Custom attributes use `AttributeDefinition`; its `before` and `after` selectors define composition order. `CapabilityPolicy` sets the maximum number of attributes with a capability on one target. These extensions must be supplied in `DependencyDefinitions` before the container is built because the parameter and attribute pipelines are sealed after construction.
 
 `AttributeDefinition` owns its capability, selector and rule arrays from construction, before validation can invoke an autoloader. Rebinding a caller's referenced array member cannot change registered semantics, handler ordering or rule selection. Handler and rule objects retain their identity and current application state; they are not cloned.
@@ -14,6 +16,8 @@ For a parameter with declared attributes, a custom `supports()` predicate that r
 
 The container snapshots each `[owner, method]` extension factory specification when that extension starts materializing, before callable inspection or owner lookup. Rebinding caller references cannot redirect that invocation; changes made before a later extension starts remain visible. Factory objects keep their identity and current application state.
 
+## Attribute composition and lifecycle
+
 `AttributePlan::all()` and `attributes()` preserve the order of the composed plan, including inherited capabilities and interleaved repeated attribute classes.
 
 Composition rules receive read-only `AttributeUsage` metadata: the declared attribute class and arguments, its semantic definition, target, and declaration order. Reading `arguments` evaluates the declared expressions on each access; object arguments are not stored in the shared plan. A `new` expression can therefore run a constructor when a rule explicitly reads the arguments. Applicable user composition rules run during each resolution, so repeated calls observe current arguments and rule state. DI can cache plans that are independent of user rules. A fresh attribute instance is created when execution reaches its handler; shared plans never retain that runtime instance.
@@ -23,6 +27,8 @@ If construction makes another declared attribute available, the execution order 
 Lazy objects and virtual proxies retain the policies selected during their initial before-instantiation phase. If those policies later become incompatible, initialization fails without replaying that phase. A fresh `make()` uses the now-available attributes; an existing deferred object is not reconfigured.
 
 Eager `ObjectPipeline::create(resolveParameters: ...)` checks attributes discovered while releasing arguments owned by the creation attempt before returning its result. Native lazy objects and virtual proxies check policies through completion of the DI initializer or backing factory callback. PHP can release captured values after that callback completes.
+
+## External containers and fallback resolvers
 
 External PSR-11 containers may be registered with `Container::addContainer()`. External entries participate in cycle protection and cannot shadow protected core services.
 

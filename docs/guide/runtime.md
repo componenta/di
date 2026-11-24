@@ -1,4 +1,4 @@
-# Runtime behavior
+# Runtime behavior and exceptions
 
 ## Runtime behavior
 

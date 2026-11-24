@@ -17,9 +17,13 @@ When a pipeline has already resolved arguments, pass a PreparedCallable adapter 
 
 The prepared adapter forwards arguments by value and does not support by-reference parameters. For a native callable that requires references, pass the original callable directly to `CallableInvoker` with an argument array containing those references.
 
+## Resolution and autowiring
+
 Reflection autowiring is used for a concrete class when no explicit binding exists. An explicit factory takes precedence.
 
 `has()` returns `true` for a known entry whose configuration would fail during resolution. `get()` reports that failure. If a provider fails while checking whether it owns an identifier, both methods report the failure as a PSR-11 container exception. Autowiring can still use an optional parameter's default when the container cannot resolve its type.
+
+## Variadic arguments
 
 Reflection-based constructor injection, `call()`, and `SetUp` support variadic parameters without a separate context argument:
 
@@ -42,6 +46,8 @@ For internal PHP functions and methods, unsupplied optional arguments are left t
 `#[Env]` on a variadic parameter reads an array for the whole collection, then validates its elements against the declared type. The same applies to environment descriptors in `SetUp`; element types are not inferred by converting the collection to one scalar.
 
 String `Class::method` specifications and `[Class::class, 'method']` both support instance `__call()`. Magic methods receive the supplied arguments using native binding, without reflection-based parameter injection. An exact string service ID retains precedence over callable syntax.
+
+## Runtime mutations
 
 The runtime mutation methods `set()`, `alias()`, `delegator()`, and `addContainer()` remain available. They invalidate affected shared entries and delegator results without rebuilding the whole container. Core DI services, `Config`, `Environment`, `ContainerValue`, and `DependencyDefinitions` cannot be replaced or shadowed.
 

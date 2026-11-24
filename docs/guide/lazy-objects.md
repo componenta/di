@@ -2,6 +2,8 @@
 
 `makeLazy()` defers the supplied initializer; `makeProxy()` defers the supplied backing factory. Reflection-created services use these strategies through `#[Lazy]` or `#[Proxy]`, and `#[Proxy]` also supports explicit injection points. For supported targets, creation does not invoke the callback. Initialization retains the existing constructor, property-injection and setup order, callback failure identity, retry behavior, and native ghost/proxy identities. `#[NoConstructor]` suppresses only the constructor.
 
+## Injection-point proxies
+
 At an injection point, `#[Make(...), Proxy]` supports concrete targets with private or protected constructors when the selected application factory can create the backing object. An attribute-driven backing class can instead use `#[NoConstructor]` and its ordinary setup lifecycle. The backing creation runs on initialization; its factory or reflection policy owns constructor invocation. The proxy class must still be concrete, compatible with the declared type, and supported by the selected proxy adapter.
 
 The default native adapter also requires a **non-lazy backing object** distinct from the proxy itself. PHP accepts a backing object of the same class, or a parent class only when the proxy subclass adds no properties and does not override `__destruct()` or `__clone()`. A backing subclass passing an `instanceof` check is not sufficient. For `#[Make('product'), Proxy]` injection whose declared type is a parent of the actual product, specify the concrete product class: `#[Make('product'), Proxy(ProductChild::class)] public ProductBase $product;`. Native backing restrictions are checked when the factory returns during initialization; their failures remain PHP errors. See [PHP's backing-object requirements](https://www.php.net/manual/en/reflectionclass.newlazyproxy.php).
@@ -10,9 +12,13 @@ At a `#[Proxy]` injection point, including `#[Make(...), Proxy]`, DI additionall
 
 Avoid applying an injection-point `#[Proxy]` to a target already created lazily by class-level `#[Lazy]` or `#[Proxy]`: the inner creation then supplies a lazy backing object. Use `#[Inject]` for a shared target or `#[Make]` for a fresh target and let its class attribute select the strategy. If an outer proxy is needed, select an ordinary application factory or `ClassDefinition` that creates an eager backing object under its existing initialization contract. These restrictions belong to the native adapter; custom proxy factories retain their own supported mechanisms.
 
+## Default native adapter restrictions
+
 The default native `ProxyFactory` requires at least one **non-static backed instance property**. An inherited private property, a backed get/set hook, or a readonly/promoted backed property qualifies. A class with no properties, only static properties, or only virtual hooks does not. Empty `stdClass` and empty descendants also fail this requirement; a user subclass of `stdClass` with a backed property can remain lazy.
 
 An otherwise native-eligible target without such a property throws `ResolutionException` before target allocation. Its `serviceId` is the canonical target class name; the message identifies `lazy ghost` or `virtual proxy`, the missing backed properties, and eager construction as the migration path. No initializer, factory, constructor, setup, setter or destructor runs because of target allocation, and no incomplete result is shared. This intentional rejection has no artificial previous exception. PHP's other allocation restrictions retain their existing error path and native previous exception, including interfaces, traits, abstract classes, enums, and unsupported internal classes or their descendants. Class autoload and earlier application extension effects are not rolled back.
+
+## Eager construction and custom adapters
 
 For ordinary eager reflection creation, remove the relevant class or injection-point lazy/proxy marker. Calling `make()` instead of `get()` does not disable those attributes. An explicit ordinary factory or `ClassDefinition` provides another eager path under its existing contract: a factory owns its result's initialization, while `ClassDefinition` executes its constructor and explicit `call()` instructions and does not execute DI attributes such as `SetUp`. Configure any required initialization through that chosen path. A class-level `#[Proxy]` does not by itself wrap an opaque application factory's result.
 
