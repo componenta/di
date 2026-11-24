@@ -282,8 +282,8 @@ test('nested unmapped construction of the same DTO keeps its explicit parameters
 
     expect(fn() => mapRequest($container, $parameter, $request))
         ->toThrow(RequestParameterSourceConflictException::class, 'value')
-        ->and($nested === null ? null : $nested::class)->toBe($class)
-        ->and($reflection->resolve($class, $entryResolver->arguments))->toEqual($nested);
+        ->and($nested)->toEqual(new $class('body'))
+        ->and($reflection->resolve($class, $entryResolver->arguments))->toEqual(new $class('body'));
 });
 
 test('mapped provenance is private to an entry resolution suspended in a fiber', function (): void {
@@ -298,7 +298,8 @@ test('mapped provenance is private to an entry resolution suspended in a fiber',
         'namespace %s; final readonly class FiberDto { public function __construct(#[FiberSource] public string $value) {} } return static fn(FiberDto $dto): object => $dto;',
         __NAMESPACE__,
     ));
-    if (!$target instanceof Closure) {
+    $class = __NAMESPACE__ . '\\FiberDto';
+    if (!$target instanceof Closure || !class_exists($class, false)) {
         throw new LogicException('Expected the mapped DTO target.');
     }
     $parameter = new ReflectionParameter($target, 0);
@@ -306,7 +307,7 @@ test('mapped provenance is private to an entry resolution suspended in a fiber',
 
     expect($fiber->start())->toBe('mapped resolution');
     class_alias(Source::class, __NAMESPACE__ . '\\FiberSource');
-    expect($reflection->resolve(__NAMESPACE__ . '\\FiberDto', $entryResolver->arguments))->toBeObject()
+    expect($reflection->resolve($class, $entryResolver->arguments))->toEqual(new $class('body'))
         ->and(fn() => $fiber->resume())->toThrow(RequestParameterSourceConflictException::class, 'value')
         ->and($fiber->isTerminated())->toBeTrue();
 });

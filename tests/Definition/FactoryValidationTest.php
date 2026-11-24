@@ -161,13 +161,21 @@ test('standalone lazy service factories do not need to be callable', function ()
         ->and($deferred->seenContext)->toBe(['source' => 'service']);
 });
 
-test('internal factories that cannot accept both runtime arguments fail before first resolution', function (): void {
+test('a native function string validates the runtime ABI on first resolution', function (): void {
     $container = (new ContainerBuilder())
-        ->addFactories(['bad.internal' => 'strlen'])
+        ->addFactories(['bad.internal' => 'get_debug_type'])
         ->build();
 
     expect(fn() => $container->make('bad.internal'))
-        ->toThrow(InvalidConfigurationException::class);
+        ->toThrow(
+            InvalidConfigurationException::class,
+            'Factory "bad.internal" internal callable accepts at most 1 arguments, but the factory runtime supplies 2.',
+        );
+
+    $product = new \stdClass();
+    $container->set('get_debug_type', static fn(): object => $product);
+
+    expect($container->make('bad.internal'))->toBe($product);
 });
 
 test('ClassDefinition validates target eligibility and configured method visibility', function (): void {

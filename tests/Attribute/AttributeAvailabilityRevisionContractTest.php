@@ -15,6 +15,7 @@ use Componenta\DI\Internal\AttributeRegistryAccess;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
 use LogicException;
+use ReflectionClass;
 use ReflectionProperty;
 use RuntimeException;
 
@@ -64,7 +65,7 @@ function addUnavailableAttributes(AttributeDefinitionRegistry $registry): array
     return $attributes;
 }
 
-test('cached and uncached availability observes a class declared during the same autoload poll', function (bool $uncached, string $form, int $readyOnAttempt): void {
+test('availability observes a class declared during the same autoload poll', function (bool $customRule, string $form, int $readyOnAttempt): void {
     $suffix = bin2hex(random_bytes(6));
     $shortName = 'LateNoConstructor_' . $suffix;
     $target = 'Target_' . $suffix;
@@ -80,13 +81,18 @@ test('cached and uncached availability observes a class declared during the same
         throw new LogicException('Expected the availability fixture.');
     }
     $builder = new ContainerBuilder();
-    if ($uncached) {
+    if ($customRule) {
         $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
     }
-    $container = $builder->build();
+    [$container, $runtime] = $builder->assemble();
     ConstructionCounter::$calls = 0;
     expect($container->has($class))->toBeFalse()
         ->and(class_exists($attribute, false))->toBeFalse();
+
+    $reflection = new ReflectionClass($class);
+    $pendingPlan = $runtime->plans->build($reflection);
+
+    expect($runtime->plans->build($reflection) === $pendingPlan)->toBe(!$customRule);
 
     $loads = 0;
     $loader = static function (string $requested) use ($attribute, $shortName, $form, $readyOnAttempt, &$loads): void {
@@ -108,7 +114,7 @@ test('cached and uncached availability observes a class declared during the same
     } finally {
         spl_autoload_unregister($loader);
     }
-})->with(['cached plans' => false, 'uncached plans' => true])
+})->with(['default discovery' => false, 'revalidate pending declarations' => true])
     ->with(['class declaration' => 'class', 'class alias' => 'alias'])
     ->with(['first attempt' => 1, 'fallback attempt' => 2]);
 
@@ -236,9 +242,12 @@ test('loaded-only availability tracks aliases that PHP omits from its declaratio
     expect(AttributeRegistryAccess::refreshAvailability($registry))->toBe(0);
 
     $aliased = class_alias(UnusedMarker::class, $attribute, autoload: false);
+    expect($aliased)->toBeTrue()
+        ->and(array_map(strtolower(...), get_declared_classes()))->not->toContain(strtolower($attribute));
+
     $revisions = [AttributeRegistryAccess::refreshAvailability($registry), AttributeRegistryAccess::refreshAvailability($registry)];
 
-    expect($aliased)->toBeTrue()->and($revisions)->toBe([1, 1]);
+    expect($revisions)->toBe([1, 1]);
 });
 
 test('targeted definition lookup releases the declaration snapshot with the last pending name', function (): void {

@@ -77,11 +77,8 @@ test('constructor variadics preserve preceding autowiring and defaults', functio
     $dependency = new Dependency();
     $di = (new ContainerBuilder())->addService(Dependency::class, $dependency)->build();
 
-    $entry = $di->make($class, [2 => 'one', 3 => 'two', Dependency::class => $dependency]);
-    expect($entry)->toBeInstanceOf(Product::class);
-    if (!$entry instanceof Product) {
-        throw new \LogicException('Expected a product.');
-    }
+    $entry = fixtureInstance($di->make($class, [2 => 'one', 3 => 'two']), $class);
+
     expect([$entry->dependency, $entry->prefix, $entry->parts])->toBe([$dependency, 'default', ['one', 'two']]);
 })->with([Product::class, LazyProduct::class, ProxyProduct::class]);
 

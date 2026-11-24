@@ -28,7 +28,6 @@ use LogicException;
 use PHPUnit\Framework\Assert;
 use ReflectionMethod;
 use ReflectionParameter;
-use stdClass;
 use WeakReference;
 
 use function Componenta\DI\Tests\Support\assembledContainer;
@@ -84,7 +83,9 @@ test('bootstrap verifies declarations made visible while releasing its proof', f
     } else {
         $di = $build();
         $target = $di->get($class);
-        expect($target)->not->toBeInstanceOf(stdClass::class)
+        Assert::assertIsObject($target);
+        expect($target::class)->toBe($class)
+            ->and(get_object_vars($target))->toBe(['value' => null])
             ->and($di->get($class))->toBe($target);
     }
     expect($events)->toBe(['retained for proof', 'released']);

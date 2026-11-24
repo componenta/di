@@ -19,6 +19,9 @@ use PHPUnit\Framework\Assert;
 #[Attribute]
 final class NeutralMetadata {}
 
+#[Attribute]
+final class AdditionalMetadata {}
+
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
     public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
@@ -68,17 +71,15 @@ test('configuration cannot silently change a completed after phase or retain fai
     $known = $strategy === 'eager' ? '#[\\Componenta\\DI\\Attribute\\SetUp("known")]' : '';
     $deferred = in_array($strategy, ['Lazy', 'Proxy'], true);
     $policy = $deferred ? '#[\\Componenta\\DI\\Attribute\\' . $strategy . ']' : '';
-    eval(sprintf('namespace %s; %s %s #[%s("late")] final class %s extends State {}', __NAMESPACE__, $known, $policy, $alias, $name));
+    eval(sprintf('namespace %s; #[NeutralMetadata] %s %s #[%s("late")] final class %s extends State {}', __NAMESPACE__, $known, $policy, $alias, $name));
     $class = __NAMESPACE__ . '\\' . $name;
     $fullAlias = __NAMESPACE__ . '\\' . $alias;
     if (!is_a($class, State::class, true)) {
         throw new \LogicException('Expected the object-phase fixture.');
     }
-    $builder = new ContainerBuilder();
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: [new NoOpRule()]));
-    }
-    [$container, $runtime] = $builder->assemble();
+    [$container, $runtime] = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
+        ->assemble();
     $pipeline = $runtime->objects;
     Assert::assertInstanceOf(ObjectPipeline::class, $pipeline);
     $factories = 0;
@@ -148,7 +149,7 @@ test('configuration may load unrelated metadata without rejecting a completed ob
         ->and($configures)->toBe(1);
 });
 
-test('handlerless after phases retain validated metadata on every object target', function (bool $uncached): void {
+test('handlerless after phases accept unchanged metadata on every object target', function (bool $uncached): void {
     $pipeline = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->assemble()[1]->objects;
@@ -168,3 +169,43 @@ test('handlerless after phases retain validated metadata on every object target'
         expect($entry->value)->toBe('configured');
     }
 })->with(['cached' => false, 'non-memoized' => true]);
+
+test('handlerless after phases reject additional metadata revealed by configuration', function (string $target, bool $uncached): void {
+    $suffix = bin2hex(random_bytes(5));
+    $alias = 'LateMetadata_' . $suffix;
+    $name = 'MetadataProduct_' . $suffix;
+    $late = '#[' . $alias . ']';
+    eval(sprintf(
+        <<<'PHP'
+        namespace %s;
+        #[NeutralMetadata] %s
+        final class %s {
+            #[NeutralMetadata] %s
+            public string $value = 'default';
+
+            #[NeutralMetadata] %s
+            public function marker(): void {}
+        }
+        PHP,
+        __NAMESPACE__,
+        $target === 'class' ? $late : '',
+        $name,
+        $target === 'property' ? $late : '',
+        $target === 'method' ? $late : '',
+    ));
+    $class = __NAMESPACE__ . '\\' . $name;
+    $fullAlias = __NAMESPACE__ . '\\' . $alias;
+    if (!class_exists($class, false)) {
+        throw new \LogicException('Expected the metadata fixture.');
+    }
+    $pipeline = (new ContainerBuilder())
+        ->addAttributeDefinition(new AttributeDefinition(NeutralMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
+        ->addAttributeDefinition(new AttributeDefinition(AdditionalMetadata::class))
+        ->assemble()[1]->objects;
+
+    expect(fn() => $pipeline->create($class, configure: static function () use ($fullAlias): void {
+        class_alias(AdditionalMetadata::class, $fullAlias);
+    }))->toThrow(AttributeCompositionException::class, 'AfterInstantiation completed')
+        ->and($pipeline->create($class))->toBeInstanceOf($class);
+})->with(['class', 'property', 'method'])
+    ->with(['cached' => false, 'non-memoized' => true]);

@@ -9,7 +9,13 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\ContainerConstruction;
+use Componenta\DI\Internal\CycleGuard;
+use Componenta\DI\Internal\DelegatorRegistry;
+use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\MutationRetirement;
+use Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings;
+use Componenta\DI\Internal\Resolver\Entry\CompositeAttachment;
+use Componenta\DI\Internal\RuntimeCollaboratorOwnership;
 use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\DefinitionResolverInterface;
 use Componenta\DI\Resolver\Entry\EntryParameters;
@@ -222,29 +228,33 @@ test('prepared bindings cannot be published into another composite', function ()
     $first = new CompositeResolver($strategy);
     $second = new CompositeResolver($strategy);
     $executor = (new ContainerBuilder())->build();
-    $firstContainer = new Container($first, $executor);
-    $secondContainer = new Container($second, $executor);
-    $port = new \ReflectionProperty($firstContainer, 'resolver');
-    $firstWriter = $port->getValue($firstContainer);
-    $secondWriter = $port->getValue($secondContainer);
-    if (!$firstWriter instanceof \Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings
-        || !$secondWriter instanceof \Componenta\DI\Internal\Resolver\Entry\AttachedEntryBindings
-    ) {
-        throw new \LogicException('Expected attached entry bindings for both containers.');
-    }
+    $attach = static function (CompositeResolver $resolver) use ($executor): AttachedEntryBindings {
+        $aliases = new AliasResolver();
+
+        return CompositeAttachment::toContainer($resolver, new RuntimeCollaboratorOwnership(
+            $aliases,
+            new EntryCache(),
+            new DelegatorRegistry($executor),
+            new CycleGuard(),
+            null,
+            $aliases->validateProtectedRoutes(),
+        ));
+    };
+    $firstWriter = $attach($first);
+    $secondWriter = $attach($second);
     $binding = $firstWriter->prepare('entry', new SnapshotDefinition('foreign'));
     $retirement = new MutationRetirement('entry');
 
-    expect(fn() => $secondWriter->publish($binding, $retirement))->toThrow(InvalidConfigurationException::class)
+    expect(fn() => $secondWriter->publish($binding, $retirement))
+        ->toThrow(InvalidConfigurationException::class, 'A prepared definition belongs to another composite.')
         ->and($second->can('entry'))->toBeFalse()
-        ->and($secondContainer->has('entry'))->toBeFalse()
-        ->and($firstContainer->has('entry'))->toBeFalse();
+        ->and($first->can('entry'))->toBeFalse();
 
     $firstWriter->publish($binding, $retirement);
     $retirement->release();
 
-    expect($firstContainer->get('entry'))->toBe('foreign')
-        ->and($secondContainer->has('entry'))->toBeFalse();
+    expect($first->resolve('entry'))->toBe('foreign')
+        ->and($second->can('entry'))->toBeFalse();
 });
 
 test('an attached resolver keeps write operations private and issues its writer once', function (): void {

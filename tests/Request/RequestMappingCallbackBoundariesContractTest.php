@@ -221,8 +221,16 @@ test('afterMap follows raw validation and the raw validator is not reused for th
         ->and($journal->events)->toBe(['extract', 'validate', 'extract', 'validate', 'transform', 'callback', 'factory']);
 });
 
-test('afterMap applies the common semantic-argument ABI before entering the callback', function (Closure $callback, string $exception, string $reason): void {
+/** @param Closure(Closure():void):Closure $createCallback */
+test('afterMap applies the common semantic-argument ABI before entering the callback', function (Closure $createCallback, string $exception, string $reason): void {
+    $callbackCalls = 0;
     $factoryCalls = 0;
+    $callback = $createCallback(static function () use (&$callbackCalls): void {
+        ++$callbackCalls;
+    });
+    if (!$callback instanceof Closure) {
+        throw new \LogicException('Expected the dataset to supply a callback.');
+    }
     $container = builder(new MapRequest(sources: [RequestDataSource::Query], afterMap: $callback))
         ->addFactory(Data::class, static function () use (&$factoryCalls): Data {
             ++$factoryCalls;
@@ -232,15 +240,27 @@ test('afterMap applies the common semantic-argument ABI before entering the call
 
     expect(fn() => $container->call(static fn(#[Input] Data $data): Data => $data, [ServerRequestInterface::class => $request]))
         ->toThrow($exception, $reason)
+        ->and($callbackCalls)->toBe(0)
         ->and($factoryCalls)->toBe(0);
 })->with([
-    'first by reference' => [static function (array &$data): array {
+    'first by reference' => [static fn(Closure $enter): Closure => static function (array &$data) use ($enter): array {
+        $enter();
         return $data;
     }, InvalidConfigurationException::class, 'must not be passed by reference or variadic'],
-    'first variadic' => [static fn(array ...$data): array => $data, InvalidConfigurationException::class, 'must not be passed by reference or variadic'],
-    'first DI source' => [static fn(#[EntryId('reserved')] array $data): array => $data, InvalidConfigurationException::class, 'must not declare DI attributes'],
-    'incompatible first type' => [static fn(string $data): array => [], ResolutionException::class, 'semantic callback argument does not satisfy'],
-    'suffix by reference' => [static function (array $data, string &$suffix = 'fallback'): array {
+    'first variadic' => [static fn(Closure $enter): Closure => static function (array ...$data) use ($enter): array {
+        $enter();
+        return $data;
+    }, InvalidConfigurationException::class, 'must not be passed by reference or variadic'],
+    'first DI source' => [static fn(Closure $enter): Closure => static function (#[EntryId('reserved')] array $data) use ($enter): array {
+        $enter();
+        return $data;
+    }, InvalidConfigurationException::class, 'must not declare DI attributes'],
+    'incompatible first type' => [static fn(Closure $enter): Closure => static function (string $data) use ($enter): array {
+        $enter();
+        return [$data];
+    }, ResolutionException::class, 'semantic callback argument does not satisfy'],
+    'suffix by reference' => [static fn(Closure $enter): Closure => static function (array $data, string &$suffix = 'fallback') use ($enter): array {
+        $enter();
         return $data;
     }, ResolutionException::class, 'By-reference parameters are not supported'],
 ]);

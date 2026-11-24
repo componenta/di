@@ -32,6 +32,7 @@ test('native Init expressions preserve legacy callables lexical scope state and 
     expect($result['code'])->toBe(0, $result['stdout'] . $result['stderr']);
     expect(json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR))->toBe([
         'source_map' => ['class' => true, 'functions' => true],
+        'plan_reused' => $mode === 'cached',
         'values' => [
             [1, 1, 1, 1, 'one', 'one', 'one', 'one'],
             [1, 2, 2, 2, 'two', 'two', 'two', 'two'],
@@ -67,6 +68,7 @@ test('native setup callbacks preserve scope state lazy retries and runtime lifet
     expect($result['code'])->toBe(0, $result['stdout'] . $result['stderr']);
     expect(json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR))->toBe([
         'source_map' => ['class' => true, 'functions' => true],
+        'plan_reused' => $mode === 'cached',
         'values' => [
             [[1, 'one', 'one', 1, 1, 1], true],
             [[1, 'two', 'two', 2, 2, 2], true],

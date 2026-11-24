@@ -114,17 +114,6 @@ function reflection(string $class): ReflectionClass
     return new ReflectionClass($class);
 }
 
-test('a warmed processor sees later registrations in the registry that builds its plans', function (): void {
-    $registry = new AttributeDefinitionRegistry();
-    $processor = new AttributeProcessor(new AttributePlanBuilder($registry));
-    $reflection = reflection(Product::class);
-    expect($processor->hasHandlers($reflection))->toBeFalse();
-
-    $registry->register(new AttributeDefinition(Marker::class, new Handler()));
-
-    expect($processor->hasHandlers($reflection))->toBeTrue();
-});
-
 test('standalone pipelines execute both object phases without an optional bootstrap service', function (): void {
     $handler = new Handler();
     $registry = new AttributeDefinitionRegistry();

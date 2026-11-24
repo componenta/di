@@ -44,8 +44,8 @@ use ReflectionParameter;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
 
-#[Attribute]
-final class UnusedMarker {}
+#[Attribute(Attribute::TARGET_CLASS)]
+final class UncachedMarker {}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
@@ -56,7 +56,7 @@ function setupBuilder(bool $uncached): ContainerBuilder
 {
     $builder = new ContainerBuilder();
     if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
+        $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
     }
     return $builder;
 }
@@ -78,7 +78,7 @@ readonly class CallbackHook extends SetUp
     }
 }
 
-#[CallbackHook('first'), SetUp('middle'), CallbackHook('last')]
+#[UncachedMarker, CallbackHook('first'), SetUp('middle'), CallbackHook('last')]
 class HookTarget
 {
     /** @var list<string> */
@@ -100,11 +100,15 @@ test('callback setup runs after committed properties in declaration order and ig
     $container = setupBuilder($uncached)->build();
     $entry = $container->get(HookTarget::class);
     Assert::assertInstanceOf(HookTarget::class, $entry);
+    $steps = ['first:dependency:dependency', 'middle:dependency', 'last:dependency:dependency'];
 
-    expect($entry)->toBeInstanceOf(HookTarget::class)
-        ->and($entry->steps)->toBe(['first:dependency:dependency', 'middle:dependency', 'last:dependency:dependency'])
+    expect($entry->steps)->toBe($steps)
         ->and($container->get(HookTarget::class))->toBe($entry)
-        ->and($container->make(HookTarget::class))->not->toBe($entry);
+        ->and($entry->steps)->toBe($steps);
+
+    $fresh = fixtureInstance($container->make(HookTarget::class), HookTarget::class);
+    expect($fresh)->not->toBe($entry)
+        ->and($fresh->steps)->toBe($steps);
 })->with(['cached' => false, 'non-memoized' => true]);
 
 test('callback setup respects lazy object initialization', function (): void {

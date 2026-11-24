@@ -122,20 +122,24 @@ final readonly class ValidationEnvelope
 
 final readonly class ThrowingValidator implements ValidatorInterface
 {
+    public function __construct(private SyntheticValidationFailure $failure) {}
+
     /** @param iterable<array-key,mixed> $data */
     public function validate(
         iterable $data,
         ?ContextInterface $context = null,
     ): true|ErrorMessageCollectorInterface {
-        throw new SyntheticValidationFailure('validation failure');
+        throw $this->failure;
     }
 }
 
 final readonly class ThrowingValidationProvider implements ValidationProviderInterface
 {
+    public function __construct(private SyntheticValidationFailure $failure) {}
+
     public function provide(string $entryId): ?ValidatorInterface
     {
-        return $entryId === ValidationDto::class ? new ThrowingValidator() : null;
+        return $entryId === ValidationDto::class ? new ThrowingValidator($this->failure) : null;
     }
 }
 
@@ -359,8 +363,9 @@ test('has and get preserve failures while checking external ownership', function
 });
 
 test('request validation failures are preserved as the cause of a parameter ResolutionException', function (): void {
+    $cause = new SyntheticValidationFailure('validation failure');
     $container = (new ContainerBuilder())
-        ->addService(ValidationProviderInterface::class, new ThrowingValidationProvider())
+        ->addService(ValidationProviderInterface::class, new ThrowingValidationProvider($cause))
         ->build();
     $request = (new ServerRequest('POST', '/'))->withParsedBody(['name' => 'Ada']);
 
@@ -371,23 +376,19 @@ test('request validation failures are preserved as the cause of a parameter Reso
         throw new RuntimeException('Expected a parameter ResolutionException.');
     }
 
-    expect($error)->toBeInstanceOf(ResolutionException::class)
-        ->and($error->parameter?->name)->toBe('dto')
-        ->and($error->getPrevious())->toBeInstanceOf(SyntheticValidationFailure::class);
+    expect($error->parameter?->name)->toBe('dto')
+        ->and($error->getPrevious())->toBe($cause);
 });
 
 test('extension factory failures are configuration failures with the original cause', function (): void {
-    $builder = (new ContainerBuilder())->addParameterResolver(
-        static function (ContainerInterface $_container): object {
-            throw new ForeignDiFailure('extension factory failure');
-        },
-        2100,
-    );
+    $cause = new ForeignDiFailure('extension factory failure');
+    $builder = (new ContainerBuilder())
+        ->addParameterResolver(static fn(ContainerInterface $_container): never => throw $cause, 2100);
 
     $error = exceptionFrom(fn() => $builder->build());
 
     expect($error)->toBeInstanceOf(InvalidConfigurationException::class)
-        ->and($error->getPrevious())->toBeInstanceOf(ForeignDiFailure::class);
+        ->and($error->getPrevious())->toBe($cause);
 });
 
 test('container factory reclassifies runtime DI extension failures as configuration failures', function (): void {

@@ -46,26 +46,19 @@ final class WriteOnlyHookTarget
     }
 }
 
-test('virtual and write-only property set hooks behave identically for every container build', function (): void {
+test('Inject passes a dependency once to virtual and write-only property set hooks', function (): void {
     $dependency = new VirtualHookDependency();
-    $containers = [
-        (new ContainerBuilder())
-            ->addService(VirtualHookDependency::class, $dependency)
-            ->build(),
-        (new ContainerBuilder())
-            ->addService(VirtualHookDependency::class, $dependency)
-            ->build(),
-    ];
+    $container = (new ContainerBuilder())
+        ->addService(VirtualHookDependency::class, $dependency)
+        ->build();
 
-    foreach ($containers as $container) {
-        $virtual = $container->make(VirtualHookTarget::class);
-        Assert::assertInstanceOf(VirtualHookTarget::class, $virtual);
-        $writeOnly = $container->make(WriteOnlyHookTarget::class);
-        Assert::assertInstanceOf(WriteOnlyHookTarget::class, $writeOnly);
+    $virtual = $container->make(VirtualHookTarget::class);
+    Assert::assertInstanceOf(VirtualHookTarget::class, $virtual);
+    $writeOnly = $container->make(WriteOnlyHookTarget::class);
+    Assert::assertInstanceOf(WriteOnlyHookTarget::class, $writeOnly);
 
-        expect($virtual->dependency)->toBe($dependency)
-            ->and($virtual->writes)->toBe(1)
-            ->and($writeOnly->injected())->toBe($dependency)
-            ->and($writeOnly->writes)->toBe(1);
-    }
+    expect($virtual->dependency)->toBe($dependency)
+        ->and($virtual->writes)->toBe(1)
+        ->and($writeOnly->injected())->toBe($dependency)
+        ->and($writeOnly->writes)->toBe(1);
 });

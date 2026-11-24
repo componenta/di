@@ -189,7 +189,7 @@ test('late native method arrays retain shared results unless a delegate consumes
     'second delegate uses the owner' => 'uses-owner',
 ]);
 
-test('standalone native method pairs leave an unused owner independent while custom resolution keeps its dependencies', function (
+test('standalone native method pairs ignore owner replacement unless another delegator uses that owner', function (
     ?string $custom,
     bool $loaded,
 ): void {

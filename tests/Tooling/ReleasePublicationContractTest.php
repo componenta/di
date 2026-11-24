@@ -138,7 +138,10 @@ test('release publication validates the tested tag and published release state',
                 ->and($runGit('--git-dir', $bare, 'rev-parse', "refs/tags/$tag^{commit}"))->toBe($tested)
                 ->and($filesystem->readFile($creations))->toBe('.');
             $flags = explode("\n", trim($filesystem->readFile($arguments)));
-            expect($flags)->toContain('--verify-tag', '--target', $tested)
+            $target = array_search('--target', $flags, true);
+            Assert::assertIsInt($target);
+            expect($flags)->toContain('--verify-tag')
+                ->and($flags[$target + 1] ?? null)->toBe($tested)
                 ->and(in_array('--prerelease', $flags, true))->toBe($prerelease);
             if ($scenario === 'concurrent-annotated') {
                 expect($runGit('--git-dir', $bare, 'cat-file', '-t', "refs/tags/$tag"))->toBe('tag');

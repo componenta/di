@@ -7,6 +7,8 @@ namespace Componenta\DI\Tests\Callable\NativeCallableInvokerContract;
 use Componenta\DI\CallableInvoker;
 use Componenta\DI\Exception\InvalidCallableException;
 use Componenta\DI\Exception\InvalidConfigurationException;
+use LogicException;
+use WeakReference;
 
 test('native callable invoker preserves named variadic arguments', function (): void {
     $result = (new CallableInvoker())->call(
@@ -17,7 +19,7 @@ test('native callable invoker preserves named variadic arguments', function (): 
     expect($result)->toBe(['start', ['first' => 'one', 'second' => 'two']]);
 });
 
-test('native invoker reports the rejected callable shape without retaining the input', function (
+test('native invoker reports the rejected callable shape', function (
     mixed $value,
     string $type,
     string $description,
@@ -43,6 +45,31 @@ test('native invoker reports the rejected callable shape without retaining the i
     'one item' => [[\stdClass::class], 'array', 'array'],
     'three items' => [[\stdClass::class, 'missing', 'extra'], 'array', 'array'],
 ]);
+
+test('a rejected native callable is released while its diagnostic remains available', function (bool $array): void {
+    $previous = ini_set('zend.exception_ignore_args', '1');
+    if ($previous === false) {
+        throw new LogicException('The test must isolate DI metadata from native exception trace arguments.');
+    }
+    $invoker = new CallableInvoker();
+    $owner = new \stdClass();
+    $reference = WeakReference::create($owner);
+
+    try {
+        try {
+            $invoker->call($array ? [$owner, 'missing'] : $owner);
+            \PHPUnit\Framework\Assert::fail('The rejected callable must produce a diagnostic.');
+        } catch (InvalidCallableException $error) {
+            unset($owner);
+            gc_collect_cycles();
+
+            expect($reference->get())->toBeNull()
+                ->and($error->callableDescription)->toBe($array ? 'stdClass::missing' : 'object stdClass');
+        }
+    } finally {
+        ini_set('zend.exception_ignore_args', $previous);
+    }
+})->with(['rejected object' => false, 'rejected object method' => true]);
 
 test('native invoker normalizes autoload failures before invocation begins', function (bool $array): void {
     $class = __NAMESPACE__ . '\\NativeInvokerUnavailable';

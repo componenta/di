@@ -39,15 +39,21 @@ final class PlanAuditTarget
 
 function planAuditFunction(#[PlanAuditMarker] string $value): void {}
 
-test('stable targets reuse the same semantic attribute plan', function (
+test('stable targets expose matching attribute metadata on repeat builds', function (
     ReflectionClass|ReflectionMethod|ReflectionProperty|ReflectionParameter $target,
 ): void {
     $registry = new AttributeDefinitionRegistry();
-    $registry->register(new AttributeDefinition(PlanAuditMarker::class));
+    $definition = new AttributeDefinition(PlanAuditMarker::class);
+    $registry->register($definition);
     $builder = new AttributePlanBuilder($registry);
-    $first = $builder->build($target);
-    expect($first->attributes(PlanAuditMarker::class))->toHaveCount(1)
-        ->and($builder->build($target))->toBe($first);
+
+    foreach ([1, 2] as $_attempt) {
+        $usages = $builder->build($target)->attributes(PlanAuditMarker::class);
+
+        expect($usages)->toHaveCount(1)
+            ->and($usages[0]->attributeClass)->toBe(PlanAuditMarker::class)
+            ->and($usages[0]->definition)->toBe($definition);
+    }
 })->with([
     'class' => [new ReflectionClass(PlanAuditTarget::class)],
     'method' => [new ReflectionMethod(PlanAuditTarget::class, 'run')],

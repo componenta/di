@@ -88,6 +88,7 @@ test('a composition rule leaves an unrelated callable classification reusable', 
 
     expect($container->call(__NAMESPACE__ . '\\withoutRule'))->toBe('ok');
     $checks = $observer->checks;
+    expect($checks)->toBeGreaterThan(0);
 
     expect($container->call(__NAMESPACE__ . '\\withoutRule'))->toBe('ok')
         ->and($observer->checks)->toBe($checks);

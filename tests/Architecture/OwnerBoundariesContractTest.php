@@ -193,6 +193,7 @@ final class CompatibleFactory
 
 test('cold and warmed containers reflect the actual requested callable independently of a dependency cache', function (): void {
     $name = __NAMESPACE__ . '\\requestedDefault';
+    $other = __NAMESPACE__ . '\\otherDefault';
     $warm = new ContainerBuilder()->build();
     $cold = new ContainerBuilder()->build();
     expect($warm->call($name))->toBe('requested');
@@ -202,12 +203,18 @@ test('cold and warmed containers reflect the actual requested callable independe
         throw new LogicException('Expected a named function reflector.');
     }
     try {
+        $reflectedName = $name;
         try {
-            new ReflectionMethod($borrowed, '__construct')->invoke($borrowed, __NAMESPACE__ . '\\otherDefault');
+            new ReflectionMethod($borrowed, '__construct')->invoke($borrowed, $other);
+            $reflectedName = $other;
         } catch (LogicException) {
             // Updated reflection providers guard shared handles at their own boundary.
         }
-        expect($cold->call($name))->toBe('requested')->and($warm->call($name))->toBe('requested');
+
+        expect($borrowed->getName())->toBe($reflectedName)
+            ->and($cold->call($name))->toBe('requested')
+            ->and($warm->call($name))->toBe('requested')
+            ->and($cold->call($other))->toBe('other');
     } finally {
         Reflection::clearReflectors();
     }
@@ -220,15 +227,22 @@ test('factory ABI admission reflects the selected declaration independently of a
         throw new LogicException('Expected a named factory method reflector.');
     }
     try {
+        $reflectedClass = IncompatibleFactory::class;
         try {
             new ReflectionMethod($borrowed, '__construct')->invoke($borrowed, CompatibleFactory::class, 'create');
+            $reflectedClass = CompatibleFactory::class;
         } catch (LogicException) {
             // Updated reflection providers guard shared handles at their own boundary.
         }
+
         $container = new ContainerBuilder()->build();
-        expect(fn() => $container->set('factory', new FactoryDefinition($callable)))
+        expect($borrowed->getDeclaringClass()->getName())->toBe($reflectedClass)
+            ->and(fn() => $container->set('factory', new FactoryDefinition($callable)))
             ->toThrow(InvalidConfigurationException::class, 'incompatible')
             ->and($container->has('factory'))->toBeFalse();
+
+        $container->set('factory', new FactoryDefinition([CompatibleFactory::class, 'create']));
+        expect($container->get('factory'))->toBeInstanceOf(EmptyProduct::class);
     } finally {
         Reflection::clearReflectors();
     }

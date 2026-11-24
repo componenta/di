@@ -198,14 +198,14 @@ function customValue(#[CacheControl] string $custom = 'default'): string
 }
 
 /** @return array{Container,ClassificationProbe,ResolutionRuntime} */
-function auditContainer(bool $uncached, ?MutableResolution $mutable = null): array
+function auditContainer(bool $withRule = false, ?MutableResolution $mutable = null): array
 {
     $probe = new ClassificationProbe();
     $builder = (new ContainerBuilder(new Config(['label' => 'configured'], new Environment([]))))
         ->addService(Dependency::class, new Dependency('first'))
         ->addAttributeDefinition(new AttributeDefinition(
             CacheControl::class,
-            rules: $uncached ? [new NoOpCompositionRule()] : [],
+            rules: $withRule ? [new NoOpCompositionRule()] : [],
         ))
         ->addParameterResolver($probe, -1000);
     if ($mutable !== null) {
@@ -285,80 +285,80 @@ test('DI calls and explicitly resolved arguments preserve defaults null variadic
     expect($reports[0])->toBe($reports[1]);
 })->with(['explicitly resolved arguments' => false, 'DI call' => true]);
 
-test('warm callable cache preserves binding and complete native signatures across all callable forms', function (): void {
-    $reports = [];
-    foreach ([false, true] as $uncached) {
-        [$container] = auditContainer($uncached);
-        $first = new MethodOwner('first-object');
-        $second = new MethodOwner('second-object');
-        $inherited = new InheritedOwner('inherited');
-        $override = new OverrideOwner('override');
-        $magic = new MagicOwner('magic');
-        $captured = static fn(string $value = 'captured'): array => [$second->id, $value];
-        $calls = [
-            [[$first, 'read'], ['label' => 'one', 'values' => [1, 'named' => 2]]],
-            [[$second, 'READ'], ['label' => 'two', 2 => 3]],
-            [[$inherited, 'read'], []],
-            [[$override, 'read'], ['renamed' => 'renamed', 'label' => 'ignored']],
-            [$first, ['values' => [4]]],
-            [$second, []],
-            [$first->read(...), ['values' => [5]]],
-            [[$second->read(...), '__INVOKE'], ['values' => [6]]],
-            [$captured, []],
-            [[$captured, '__invoke'], ['value' => 'method']],
-            [MethodOwner::class . '::staticRead', ['number' => 7]],
-            [[MethodOwner::class, 'STATICREAD'], []],
-            [MethodOwner::staticRead(...), []],
-            [[$magic, 'hidden'], [true, 'named' => 8]],
-            [[$magic, 'missing'], ['named' => 9]],
-            [$magic->missing(...), [10, 'named' => 11]],
-            [$magic->privateCallback(), []],
-            [MagicOwner::class . '::missing', [12, 'named' => 13]],
-            [[MagicOwner::class, 'missing'], [14]],
-            [MagicOwner::missing(...), [15]],
-            ['array_keys', [['one' => 1, 'nil' => null]]],
-            [array_keys(...), [['one' => 1, 'nil' => null], null]],
-            ['array_slice', ['array' => ['a', 'b', 'c'], 'offset' => 1, 'preserve_keys' => true]],
-            [static fn(): string => 'empty', ['unused' => 'ignored']],
-        ];
-        $report = [];
-        for ($round = 0; $round < 2; ++$round) {
-            $container->set(Dependency::class, new Dependency($round === 0 ? 'first' : 'second'));
-            foreach ($calls as [$callable, $provided]) {
-                $report[$round][] = $container->call($callable, $provided);
-            }
+test('reused and fresh containers preserve binding and complete native signatures', function (): void {
+    [$reused] = auditContainer();
+    $first = new MethodOwner('first-object');
+    $second = new MethodOwner('second-object');
+    $inherited = new InheritedOwner('inherited');
+    $override = new OverrideOwner('override');
+    $magic = new MagicOwner('magic');
+    $captured = static fn(string $value = 'captured'): array => [$second->id, $value];
+    $calls = [
+        [[$first, 'read'], ['label' => 'one', 'values' => [1, 'named' => 2]]],
+        [[$second, 'READ'], ['label' => 'two', 2 => 3]],
+        [[$inherited, 'read'], []],
+        [[$override, 'read'], ['renamed' => 'renamed', 'label' => 'ignored']],
+        [$first, ['values' => [4]]],
+        [$second, []],
+        [$first->read(...), ['values' => [5]]],
+        [[$second->read(...), '__INVOKE'], ['values' => [6]]],
+        [$captured, []],
+        [[$captured, '__invoke'], ['value' => 'method']],
+        [MethodOwner::class . '::staticRead', ['number' => 7]],
+        [[MethodOwner::class, 'STATICREAD'], []],
+        [MethodOwner::staticRead(...), []],
+        [[$magic, 'hidden'], [true, 'named' => 8]],
+        [[$magic, 'missing'], ['named' => 9]],
+        [$magic->missing(...), [10, 'named' => 11]],
+        [$magic->privateCallback(), []],
+        [MagicOwner::class . '::missing', [12, 'named' => 13]],
+        [[MagicOwner::class, 'missing'], [14]],
+        [MagicOwner::missing(...), [15]],
+        ['array_keys', [['one' => 1, 'nil' => null]]],
+        [array_keys(...), [['one' => 1, 'nil' => null], null]],
+        ['array_slice', ['array' => ['a', 'b', 'c'], 'offset' => 1, 'preserve_keys' => true]],
+        [static fn(): string => 'empty', ['unused' => 'ignored']],
+    ];
+
+    foreach (['first', 'second'] as $dependency) {
+        $service = new Dependency($dependency);
+        $reused->set(Dependency::class, $service);
+        $reusedResults = [];
+        $freshResults = [];
+        foreach ($calls as [$callable, $provided]) {
+            [$fresh] = auditContainer();
+            $fresh->set(Dependency::class, $service);
+            $reusedResults[] = $reused->call($callable, $provided);
+            $freshResults[] = $fresh->call($callable, $provided);
         }
-        foreach (['first', 'second'] as $round => $dependency) {
-            expect($report[$round])->toBe([
-                ['first-object', $dependency, 'one', [1, 'named' => 2]],
-                ['second-object', $dependency, 'two', [3]],
-                ['inherited', $dependency, 'native', []],
-                ['override', $dependency, 'renamed', []],
-                ['first-object', $dependency, 'invoke', [4]],
-                ['second-object', $dependency, 'invoke', []],
-                ['first-object', $dependency, 'native', [5]],
-                ['second-object', $dependency, 'native', [6]],
-                ['second-object', 'captured'],
-                ['second-object', 'method'],
-                [$dependency, 7],
-                [$dependency, 9],
-                [$dependency, 9],
-                ['magic', 'hidden', [true, 'named' => 8]],
-                ['magic', 'missing', ['named' => 9]],
-                ['magic', 'missing', [10, 'named' => 11]],
-                ['magic', $dependency],
-                ['missing', [12, 'named' => 13]],
-                ['missing', [14]],
-                ['missing', [15]],
-                ['one', 'nil'],
-                ['nil'],
-                [1 => 'b', 2 => 'c'],
-                'empty',
-            ]);
-        }
-        $reports[] = $report;
+
+        expect($reusedResults)->toBe([
+            ['first-object', $dependency, 'one', [1, 'named' => 2]],
+            ['second-object', $dependency, 'two', [3]],
+            ['inherited', $dependency, 'native', []],
+            ['override', $dependency, 'renamed', []],
+            ['first-object', $dependency, 'invoke', [4]],
+            ['second-object', $dependency, 'invoke', []],
+            ['first-object', $dependency, 'native', [5]],
+            ['second-object', $dependency, 'native', [6]],
+            ['second-object', 'captured'],
+            ['second-object', 'method'],
+            [$dependency, 7],
+            [$dependency, 9],
+            [$dependency, 9],
+            ['magic', 'hidden', [true, 'named' => 8]],
+            ['magic', 'missing', ['named' => 9]],
+            ['magic', 'missing', [10, 'named' => 11]],
+            ['magic', $dependency],
+            ['missing', [12, 'named' => 13]],
+            ['missing', [14]],
+            ['missing', [15]],
+            ['one', 'nil'],
+            ['nil'],
+            [1 => 'b', 2 => 'c'],
+            'empty',
+        ])->and($freshResults)->toBe($reusedResults);
     }
-    expect($reports[0])->toBe($reports[1]);
 });
 
 test('warm classification does not cache mutable resolver results or null continuation', function (): void {
@@ -423,49 +423,50 @@ test('warmed callable plans preserve native name casing and current service alia
     expect($reports[0])->toBe($reports[1]);
 });
 
-test('cached contextual types keep declaration and rebound scopes across complete signatures', function (): void {
-    $reports = [];
-    foreach ([false, true] as $uncached) {
-        [$container] = auditContainer($uncached);
-        $container->set(TypeScope::class, new TypeScope());
-        $container->set(TypeAncestor::class, new TypeAncestor());
-        $container->set(ReboundScope::class, new ReboundScope());
-        $owner = new TypeChild();
-        $rebound = TypeScope::callback()->bindTo(null, ReboundScope::class);
-        if ($rebound === null) {
-            throw new \LogicException('The contextual fixture must be rebound.');
-        }
-        $calls = [[$owner, 'contextual'], $owner->contextual(...), TypeScope::callback(), TypeChild::callback()];
-        $report = [];
-        for ($round = 0; $round < 2; ++$round) {
-            $expected = $round === 0 ? TypeScope::class : TypeChild::class;
-            foreach ($calls as $callable) {
-                $result = $container->call($callable);
-                expect($result)->toBe([$expected, TypeAncestor::class]);
-                $report[] = $result;
-                $error = failure(static fn(): mixed => $container->call($callable, ['value' => new TypeAncestor()]));
-                expect($error[0])->toBe(ResolutionException::class);
-                $report[] = $error;
-            }
-            $report[] = $container->call($rebound);
-            expect($report[array_key_last($report)])->toBe([ReboundScope::class, TypeAncestor::class]);
-            $container->set(TypeScope::class, new TypeChild());
-        }
-        $reports[] = $report;
+test('reused and fresh containers preserve declaration and rebound scopes for contextual types', function (): void {
+    $fixture = new ContainerBuilder()->addServices([
+        TypeAncestor::class => new TypeAncestor(),
+        ReboundScope::class => new ReboundScope(),
+    ]);
+    $reused = $fixture->build();
+    $owner = new TypeChild();
+    $rebound = TypeScope::callback()->bindTo(null, ReboundScope::class);
+    if ($rebound === null) {
+        throw new \LogicException('The contextual fixture must be rebound.');
     }
-    expect($reports[0])->toBe($reports[1]);
+    $calls = [[$owner, 'contextual'], $owner->contextual(...), TypeScope::callback(), TypeChild::callback()];
+
+    foreach ([new TypeScope(), new TypeChild()] as $current) {
+        $fixture->addService(TypeScope::class, $current);
+        $reused->set(TypeScope::class, $current);
+        foreach ($calls as $callable) {
+            $expected = [$current::class, TypeAncestor::class];
+            $error = failure(static fn(): mixed => $reused->call($callable, ['value' => new TypeAncestor()]));
+            $freshError = failure(static fn(): mixed => $fixture->build()->call($callable, ['value' => new TypeAncestor()]));
+
+            expect($reused->call($callable))->toBe($expected)
+                ->and($fixture->build()->call($callable))->toBe($expected)
+                ->and($error[0])->toBe(ResolutionException::class)
+                ->and($freshError)->toBe($error);
+        }
+
+        expect($reused->call($rebound))->toBe([ReboundScope::class, TypeAncestor::class])
+            ->and($fixture->build()->call($rebound))->toBe([ReboundScope::class, TypeAncestor::class]);
+    }
 });
 
 test('warm and fresh invocation preserve failure ownership native omission and recovery', function (): void {
-    $reports = [];
-    foreach ([false, true] as $uncached) {
-        [$container] = auditContainer($uncached);
-        $original = new \DomainException('Target body failed.');
-        $target = static function (Dependency $dependency) use ($original): never {
-            throw $original;
-        };
-        $report = [];
-        for ($round = 0; $round < 2; ++$round) {
+    [$reused] = auditContainer();
+    $original = new \DomainException('Target body failed.');
+    $target = static function (Dependency $dependency) use ($original): never {
+        throw $original;
+    };
+
+    for ($round = 0; $round < 2; ++$round) {
+        [$fresh] = auditContainer();
+        $reports = [];
+        foreach ([$reused, $fresh] as $container) {
+            $report = [];
             foreach ([$target, new PreparedCallable($target)] as $callable) {
                 try {
                     $container->call($callable, [new Dependency('explicit')]);
@@ -486,19 +487,18 @@ test('warm and fresh invocation preserve failure ownership native omission and r
             $report[] = $nativeOmission;
             $report[] = $container->call('array_keys', ['array' => ['a' => 1, 'nil' => null]]);
             $report[] = $container->call('php_sapi_name', ['unused' => 'ignored']);
+
+            expect($report[1])->toBe(['first', 17])
+                ->and($report[4])->toBe(['a', 'nil'])
+                ->and($report[5])->toBe(PHP_SAPI);
+            $reports[] = $report;
         }
-        foreach ([0, 6] as $offset) {
-            expect($report[$offset + 1])->toBe(['first', 17])
-                ->and($report[$offset + 4])->toBe(['a', 'nil'])
-                ->and($report[$offset + 5])->toBe(PHP_SAPI);
-        }
-        $reports[] = $report;
+        expect($reports[0])->toBe($reports[1]);
     }
-    expect($reports[0])->toBe($reports[1]);
 });
 
-test('warm callable metadata does not retain supplied owners closures or prepared adapters', function (bool $uncached): void {
-    [$container] = auditContainer($uncached);
+test('callable metadata does not retain supplied owners closures or prepared adapters', function (bool $withRule): void {
+    [$container, $probe] = auditContainer($withRule);
     $owner = new MethodOwner('owner');
     $magic = new MagicOwner('magic');
     $capture = new \stdClass();
@@ -507,7 +507,12 @@ test('warm callable metadata does not retain supplied owners closures or prepare
     $prepared = new PreparedCallable($closure);
     $references = array_map(WeakReference::create(...), [$owner, $magic, $capture, $closure, $bound, $prepared]);
 
-    expect($container->call([$owner, 'read']))->toBe(['owner', 'first', 'native', []])
+    expect($container->call([$owner, 'read']))->toBe(['owner', 'first', 'native', []]);
+    $first = $probe->calls['read'][0];
+    expect($container->call([$owner, 'read']))->toBe(['owner', 'first', 'native', []]);
+    $second = $probe->calls['read'][0];
+    expect($first)->toBeGreaterThan(0)
+        ->and($second > $first)->toBe($withRule)
         ->and($container->call($owner))->toBe(['owner', 'first', 'invoke', []])
         ->and($container->call($closure))->toBe(['first', $capture])
         ->and($container->call([$closure, '__invoke']))->toBe(['first', $capture])
@@ -519,7 +524,7 @@ test('warm callable metadata does not retain supplied owners closures or prepare
     foreach ($references as $reference) {
         expect($reference->get())->toBeNull();
     }
-})->with(['cached' => false, 'fresh' => true]);
+})->with(['memoized method plan' => false, 'method plan with a composition rule' => true]);
 
 test('repeated named reflectors reuse stable targets while caller-owned targets remain collectable', function (bool $uncached): void {
     [, , $runtime] = auditContainer($uncached);

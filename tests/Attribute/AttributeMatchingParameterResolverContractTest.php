@@ -43,13 +43,25 @@ test('an attribute matching resolver receives the actual target and invocation c
 })->with(['exact declaration' => Label::class, 'base class' => LabelBase::class, 'interface' => IdentifiesLabel::class]);
 
 test('null from a matching resolver lets the next resolver supply the parameter', function (): void {
-    $resolver = new AttributeMatchingParameterResolver(
+    $calls = [];
+    $decline = new AttributeMatchingParameterResolver(
         Label::class,
-        static fn(ParameterTarget $target, ParameterResolutionContext $context): ?array => null,
+        static function (ParameterTarget $target, ParameterResolutionContext $context) use (&$calls): ?array {
+            $calls[] = 'decline';
+            return null;
+        },
     );
-    $di = container([ConfigKey::PARAMETER_RESOLVERS => [1000 => $resolver]]);
+    $supply = new AttributeMatchingParameterResolver(
+        Label::class,
+        static function (ParameterTarget $target, ParameterResolutionContext $context) use (&$calls): array {
+            $calls[] = 'supply';
+            return [$target->position, 'following'];
+        },
+    );
+    $di = container([ConfigKey::PARAMETER_RESOLVERS => [1000 => $decline, 999 => $supply]]);
 
-    expect($di->call(static fn(#[Label] string $label = 'fallback'): string => $label))->toBe('fallback');
+    expect($di->call(static fn(#[Label] string $label = 'fallback'): string => $label))->toBe('following')
+        ->and($calls)->toBe(['decline', 'supply']);
 });
 
 test('a matching resolver result is validated by the normal parameter chain', function (): void {

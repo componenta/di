@@ -127,6 +127,7 @@ test('bootstrap finalization permits unrelated metadata loaded by later resolver
             ],
             ConfigKey::PARAMETER_RESOLVERS => [500 => new BootstrapFinalizationClassifier($marker)],
         ]);
+        expect(class_exists(__NAMESPACE__ . '\\' . $attribute, false))->toBeTrue();
         $cached = $di->get($class);
         if (!$cached instanceof BootstrapFinalizationState) {
             throw new LogicException('Expected the bootstrap dependency.');

@@ -15,6 +15,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use DomainException;
 use LogicException;
+use PHPUnit\Framework\Assert;
 
 final readonly class Label
 {
@@ -49,12 +50,21 @@ test('get distinguishes a missing requested entry from a missing dependency of a
     expect($container->get('theme.label'))->toEqual(new Label('blue'));
 });
 
-test('a selected delegator may fail because its own entry is missing', function (): void {
+test('get preserves a missing dependency of a selected delegator as its cause', function (): void {
     $container = (new ContainerBuilder())->addService('product', new \stdClass())->build();
     $container->delegator('product', static fn(): mixed => $container->get('missing.decorator.dependency'));
 
-    expect($container->has('product'))->toBeTrue()
-        ->and(fn() => $container->get('product'))->toThrow(ResolutionException::class, 'missing.decorator.dependency');
+    expect($container->has('product'))->toBeTrue();
+    try {
+        $container->get('product');
+    } catch (ResolutionException $error) {
+        $cause = $error->getPrevious();
+        Assert::assertInstanceOf(NotFoundException::class, $cause);
+        expect($error->serviceId)->toBe('product')
+            ->and($cause->id)->toBe('missing.decorator.dependency');
+        return;
+    }
+    throw new LogicException('Expected the selected delegator to fail to resolve its dependency.');
 });
 
 #[Lazy, Proxy]
@@ -149,13 +159,21 @@ test('get wraps an initialization failure of a native container proxy', function
 test('an unavailable native provider proxy leaves a local autowiring route available', function (): void {
     $local = new Label('local');
     $owner = new ContainerBuilder()->addService(Label::class, $local)->build();
-    $provider = $owner->makeProxy(Container::class, static fn(): never => throw new DomainException('unavailable'));
+    $attempts = 0;
+    $provider = $owner->makeProxy(Container::class, static function () use (&$attempts): never {
+        ++$attempts;
+        throw new DomainException('unavailable');
+    });
     if (!$provider instanceof Container) {
         throw new LogicException('Expected a container proxy.');
     }
     $owner->addContainer($provider);
 
-    expect($owner->call(static fn(?Label $value = null): ?Label => $value))->toBe($local);
+    $beforeLookup = $attempts;
+    $value = $owner->call(static fn(?Label $value = null): ?Label => $value);
+
+    expect($value)->toBe($local)
+        ->and($attempts)->toBeGreaterThan($beforeLookup);
 });
 
 test('an invalid implicit entry does not mask a valid named function or factory', function (): void {

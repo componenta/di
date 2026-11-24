@@ -4,26 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Callable\CallableTypeScopeContract;
 
-use Attribute;
 use Closure;
-use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
-use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeSet;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
-use Componenta\DI\Container;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Resolver\TypeHints;
-use Componenta\DI\Tests\Support\ContainerBuilder;
 
+use function Componenta\DI\Tests\Support\container;
 use function Componenta\DI\Tests\Support\fixtureInstance;
-
-#[Attribute(Attribute::TARGET_PARAMETER)]
-final class CacheControl {}
-
-final class NoOpRule implements AttributeCompositionRuleInterface
-{
-    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
-}
 
 class Scope
 {
@@ -131,17 +117,8 @@ final class ConstructorScope
     }
 }
 
-function container(bool $uncached): Container
-{
-    $builder = new ContainerBuilder();
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(CacheControl::class, rules: [new NoOpRule()]));
-    }
-    return $builder->build();
-}
-
-test('callable parameters use their declaring scope with cold and warm plans', function (bool $uncached): void {
-    $container = container($uncached);
+test('callable parameters use their declaring scope on the first and subsequent calls', function (): void {
+    $container = container();
     $private = [Scope::class, 'hidden'];
     $protected = [ChildScope::class, 'inherited'];
     $targets = [
@@ -169,24 +146,24 @@ test('callable parameters use their declaring scope with cold and warm plans', f
             ->and($container->call([Scope::class, 'variadic'], ['values' => $values]))
             ->toBe(['private', 'named' => 'protected']);
     }
-})->with(['cached' => false, 'non-memoized' => true]);
+});
 
-test('constructor callable parameters retain native private visibility', function (bool $uncached): void {
-    $container = container($uncached);
+test('constructor callable parameters retain native private visibility', function (): void {
+    $container = container();
     $value = ConstructorScope::argument();
 
     expect((new ConstructorScope($value))->result)->toBe('constructor');
     foreach ([1, 2] as $_attempt) {
         expect(fixtureInstance($container->make(ConstructorScope::class, ['value' => $value]), ConstructorScope::class)->result)->toBe('constructor');
     }
-})->with(['cached' => false, 'non-memoized' => true]);
+});
 
 test('rebound callable parameters use the new scope and reject the previous one', function (): void {
     $target = Scope::closure()->bindTo(null, OtherScope::class);
     if ($target === null) {
         throw new \LogicException('The anonymous fixture must support rebinding.');
     }
-    $container = container(false);
+    $container = container();
     $value = [OtherScope::class, 'hidden'];
 
     expect(call_user_func_array($target, [$value]))->toBe('rebound')
@@ -196,7 +173,7 @@ test('rebound callable parameters use the new scope and reject the previous one'
 });
 
 test('callable checks do not inherit private access from child or DI implementation scopes', function (): void {
-    $container = container(false);
+    $container = container();
     $global = static fn(callable $value): mixed => $value;
     $cases = [
         [[ChildScope::class, 'accept'], [ChildScope::class, 'child']],
@@ -211,7 +188,7 @@ test('callable checks do not inherit private access from child or DI implementat
 });
 
 test('internal callable parameters accept public callbacks without an internal class binding', function (): void {
-    $container = container(false);
+    $container = container();
     $values = new \ArrayObject(['b' => 2, 'a' => 1]);
     $compare = static fn(int $left, int $right): int => $left <=> $right;
 

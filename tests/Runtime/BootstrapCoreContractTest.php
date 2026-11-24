@@ -16,7 +16,9 @@ use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Config;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Attribute\Env;
+use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\Make;
+use Componenta\DI\Attribute\MapQueryString;
 use Componenta\DI\Attribute\SetUp;
 use Componenta\DI\Container;
 use Componenta\DI\Exception\AttributeCompositionException;
@@ -100,7 +102,7 @@ test('the object pipeline preserves surrounding parameters for configured setup 
         ->and($resolved->label)->toBe('container');
 });
 
-test('all built-in value providers participate in the single-source capability policy', function (Closure $callback, string $attribute): void {
+test('configuration and request attributes conflict when both provide the same parameter', function (Closure $callback, string $attribute): void {
     $container = (new ContainerBuilder())->build();
 
     expect(fn() => $container->call($callback))->toThrow(
@@ -112,4 +114,6 @@ test('all built-in value providers participate in the single-source capability p
     [static fn(#[Config('value'), Env('VALUE')] mixed $value): mixed => $value, Env::class],
     [static fn(#[Config('value'), EntryId('value')] mixed $value): mixed => $value, EntryId::class],
     [static fn(#[Config('value'), Make('value')] mixed $value): mixed => $value, Make::class],
+    [static fn(#[Config('value'), Header('X-Value')] mixed $value): mixed => $value, Header::class],
+    [static fn(#[Config('value'), MapQueryString] mixed $value): mixed => $value, MapQueryString::class],
 ]);

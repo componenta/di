@@ -8,6 +8,7 @@ use Componenta\DI\Attribute\Lazy;
 use Componenta\DI\Attribute\Proxy;
 use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
+use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use PHPUnit\Framework\Assert;
 
@@ -72,10 +73,10 @@ final class ProxyDefinitionOwner extends DeferredDefinitionOwner {}
 
 final class DeferredDefinitionBackReference
 {
-    public function __construct(public DeferredDefinitionOwner $owner) {}
+    public function __construct(public ?DeferredDefinitionOwner $owner) {}
 }
 
-test('ClassDefinition detects explicit dependency cycles without enabling deferred attributes', function (string $class): void {
+test('ClassDefinition detects explicit dependency cycles eagerly and recovers after the cycle is removed', function (string $class): void {
     if (!is_a($class, DeferredDefinitionOwner::class, true)) {
         throw new \LogicException('Expected a deferred definition owner.');
     }
@@ -87,8 +88,20 @@ test('ClassDefinition detects explicit dependency cycles without enabling deferr
         ]))
         ->build();
 
-    expect(fn() => $container->get($class))->toThrow(\Componenta\DI\Exception\CircularDependencyException::class)
-        ->and(fn() => $container->get($class))->toThrow(\Componenta\DI\Exception\CircularDependencyException::class);
+    try {
+        $container->get($class);
+        Assert::fail('The explicit constructor cycle must fail during get().');
+    } catch (CircularDependencyException $exception) {
+        expect($exception->chain)->toBe([$class, DeferredDefinitionBackReference::class, $class]);
+    }
+
+    $replacement = new DeferredDefinitionBackReference(null);
+    $container->set(DeferredDefinitionBackReference::class, $replacement);
+    $target = $container->get($class);
+    Assert::assertInstanceOf($class, $target);
+
+    expect($target->dependency)->toBe($replacement)
+        ->and($container->get($class))->toBe($target);
 })->with([
     'lazy' => [LazyDefinitionOwner::class],
     'proxy' => [ProxyDefinitionOwner::class],

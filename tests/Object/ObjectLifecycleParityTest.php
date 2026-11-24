@@ -131,29 +131,42 @@ abstract class LifecyclePrivateInjectedParent
 final class LifecyclePrivateInjectedChild extends LifecyclePrivateInjectedParent {}
 
 test('Proxy keeps explicit concrete implementation for interface targets', function (): void {
+    $backingCreations = 0;
     $container = (new ContainerBuilder())
         ->addFactory(
             LifecycleProxyContract::class,
-            static fn(): LifecycleProxyContract => new LifecycleProxyService(),
+            static function () use (&$backingCreations): LifecycleProxyContract {
+                ++$backingCreations;
+                return new LifecycleProxyService();
+            },
         )
         ->build();
     $consumer = $container->make(LifecycleProxyConsumer::class);
     Assert::assertInstanceOf(LifecycleProxyConsumer::class, $consumer);
 
     expect($consumer->service)->toBeInstanceOf(LifecycleProxyService::class)
-        ->and($consumer->service->value())->toBe('proxied');
+        ->and($backingCreations)->toBe(0)
+        ->and($consumer->service->value())->toBe('proxied')
+        ->and($backingCreations)->toBe(1);
 });
 
 test('Make service id and Proxy concrete class remain independent', function (): void {
+    $backingCreations = 0;
     $container = (new ContainerBuilder())
         ->addFactory(
             'lifecycle.proxy.service',
-            static fn(): LifecycleProxyContract => new LifecycleProxyService('service-id'),
+            static function () use (&$backingCreations): LifecycleProxyContract {
+                ++$backingCreations;
+                return new LifecycleProxyService('service-id');
+            },
         )
         ->build();
 
-    expect(fixtureInstance($container->make(LifecycleServiceIdProxyConsumer::class), LifecycleServiceIdProxyConsumer::class)->service->value())
-        ->toBe('service-id');
+    $consumer = fixtureInstance($container->make(LifecycleServiceIdProxyConsumer::class), LifecycleServiceIdProxyConsumer::class);
+    expect($consumer->service)->toBeInstanceOf(LifecycleProxyService::class)
+        ->and($backingCreations)->toBe(0)
+        ->and($consumer->service->value())->toBe('service-id')
+        ->and($backingCreations)->toBe(1);
 });
 
 test('Proxy rejects an interface target without a concrete proxy class', function (): void {

@@ -49,6 +49,19 @@ final class MissingCollisionServices implements ContainerInterface
     }
 }
 
+final class ScopedResolver extends CallableResolver
+{
+    protected function hiddenTarget(): string
+    {
+        return 'instance';
+    }
+
+    protected static function hiddenStaticTarget(): string
+    {
+        return 'static';
+    }
+}
+
 test('callable parameter plans distinguish class and method boundaries in similar names', function (): void {
     $container = (new ContainerBuilder())->build();
 
@@ -71,17 +84,17 @@ test('callable method classification distinguishes similar combined class and me
 
 test('callable resolution requires visibility from application scope', function (): void {
     $container = (new ContainerBuilder())->build();
-    $resolver = new CallableResolver($container);
-    $container->set('internal.specification', [$resolver, 'resolveString']);
-    $container->set('internal.receiver', $resolver);
+    $resolver = new ScopedResolver($container);
+    $container->set('scoped.specification', [$resolver, 'hiddenTarget']);
+    $container->set('scoped.receiver', $resolver);
 
     $specifications = [
-        [$resolver, 'resolveString'],
-        [$resolver, 'isStaticMethod'],
-        [CallableResolver::class, 'classOrInterfaceExists'],
-        CallableResolver::class . '::classOrInterfaceExists',
-        ['internal.receiver', 'resolveString'],
-        'internal.specification',
+        [$resolver, 'hiddenTarget'],
+        [$resolver, 'hiddenStaticTarget'],
+        [ScopedResolver::class, 'hiddenStaticTarget'],
+        ScopedResolver::class . '::hiddenStaticTarget',
+        ['scoped.receiver', 'hiddenTarget'],
+        'scoped.specification',
     ];
 
     foreach ($specifications as $specification) {

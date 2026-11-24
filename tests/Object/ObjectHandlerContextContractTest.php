@@ -233,7 +233,12 @@ test('object handlers may select the same creation strategy repeatedly', functio
         ->addAttributeDefinition(new AttributeDefinition(CreationContextExtension::class, $handler, phase: AttributePhase::BeforeInstantiation))
         ->build();
 
-    expect(fixtureInstance($container->make(CreationContextProduct::class, ['value' => 9]), CreationContextProduct::class)->value)->toBe(9);
+    $entry = fixtureInstance($container->make(CreationContextProduct::class, ['value' => 9]), CreationContextProduct::class);
+    $reflection = new ReflectionClass($entry);
+
+    expect($reflection->isUninitializedLazyObject($entry))->toBe($strategy !== CreationStrategy::Eager)
+        ->and($reflection->initializeLazyObject($entry) === $entry)->toBe($strategy !== CreationStrategy::Proxy)
+        ->and($entry->value)->toBe(9);
 })->with(CreationStrategy::cases());
 
 test('a creation strategy cannot change after a handler selects deferred construction', function (CreationStrategy $first, CreationStrategy $second): void {

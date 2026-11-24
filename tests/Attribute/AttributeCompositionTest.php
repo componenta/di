@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeCapabilityInterface;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Attribute\Composition\AttributePlan;
+use Componenta\DI\Attribute\Composition\Capability\CreationStrategy;
 use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Composition\Capability\ValueTransformer;
 use Componenta\DI\Attribute\Composition\CapabilityPolicy;
@@ -84,17 +85,29 @@ test('all value providers share one exclusive semantic slot', function (): void 
     $container = (new ContainerBuilder())->build();
 
     expect(fn() => $container->make(ConflictingSourcesDto::class))
-        ->toThrow(AttributeCompositionException::class);
+        ->toThrow(
+            AttributeCompositionException::class,
+            'accepts at most 1 attribute(s) with capability ' . ValueProvider::class
+                . '; found #[' . Header::class . '], #[' . ConfigAttribute::class . '].',
+        );
 
     expect(fn() => $container->make(ConflictingPropertyProviders::class))
-        ->toThrow(AttributeCompositionException::class);
+        ->toThrow(
+            AttributeCompositionException::class,
+            'accepts at most 1 attribute(s) with capability ' . ValueProvider::class
+                . '; found #[' . Inject::class . '], #[' . Init::class . '].',
+        );
 });
 
 test('creation strategies are exclusive independently of value providers', function (): void {
     $container = (new ContainerBuilder())->build();
 
     expect(fn() => $container->make(ConflictingCreationStrategies::class))
-        ->toThrow(AttributeCompositionException::class);
+        ->toThrow(
+            AttributeCompositionException::class,
+            'accepts at most 1 attribute(s) with capability ' . CreationStrategy::class
+                . '; found #[' . Lazy::class . '], #[' . Proxy::class . '].',
+        );
 });
 
 test('third party parameter attributes execute through the shared attribute resolver', function (): void {
@@ -110,8 +123,8 @@ test('third party parameter attributes execute through the shared attribute reso
 });
 
 test('third party capabilities can define their own cardinality without runtime behavior', function (): void {
-    $container = (new ContainerBuilder())
-        ->defineAttributeCapability(new CapabilityPolicy(ExclusiveCapability::class, 1))
+    $builder = static fn(int $limit): ContainerBuilder => (new ContainerBuilder())
+        ->defineAttributeCapability(new CapabilityPolicy(ExclusiveCapability::class, $limit))
         ->addAttributeDefinition(new AttributeDefinition(
             ExclusiveA::class,
             handler: null,
@@ -121,11 +134,18 @@ test('third party capabilities can define their own cardinality without runtime 
             ExclusiveB::class,
             handler: null,
             capabilities: [ExclusiveCapability::class],
-        ))
-        ->build();
+        ));
 
-    expect(fn() => $container->make(CustomCapabilityConflict::class))
-        ->toThrow(AttributeCompositionException::class);
+    $exclusive = $builder(1)->build();
+    $matchesBoth = $builder(2)->build();
+
+    expect(fn() => $exclusive->make(CustomCapabilityConflict::class))
+        ->toThrow(
+            AttributeCompositionException::class,
+            'accepts at most 1 attribute(s) with capability ' . ExclusiveCapability::class
+                . '; found #[' . ExclusiveA::class . '], #[' . ExclusiveB::class . '].',
+        )
+        ->and($matchesBoth->make(CustomCapabilityConflict::class))->toBeInstanceOf(CustomCapabilityConflict::class);
 });
 
 

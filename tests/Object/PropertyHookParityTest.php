@@ -27,34 +27,30 @@ final class HookInjectedTarget
 final class HookInitTarget
 {
     public string $captured = '';
+    public int $writes = 0;
 
     #[Init('strtoupper', ['hooked'])]
     public string $value {
         set(string $value) {
+            ++$this->writes;
             $this->captured = $value;
         }
     }
 }
 
-test('Inject and Init execute PHP property set hooks identically for every container build', function (): void {
+test('Inject and Init pass resolved values to their property set hooks once', function (): void {
     $dependency = new HookInjectedDependency();
-    $containers = [
-        (new ContainerBuilder())
-            ->addService(HookInjectedDependency::class, $dependency)
-            ->build(),
-        (new ContainerBuilder())
-            ->addService(HookInjectedDependency::class, $dependency)
-            ->build(),
-    ];
+    $container = (new ContainerBuilder())
+        ->addService(HookInjectedDependency::class, $dependency)
+        ->build();
 
-    foreach ($containers as $container) {
-        $injected = $container->make(HookInjectedTarget::class);
-        Assert::assertInstanceOf(HookInjectedTarget::class, $injected);
-        $initialized = $container->make(HookInitTarget::class);
-        Assert::assertInstanceOf(HookInitTarget::class, $initialized);
+    $injected = $container->make(HookInjectedTarget::class);
+    Assert::assertInstanceOf(HookInjectedTarget::class, $injected);
+    $initialized = $container->make(HookInitTarget::class);
+    Assert::assertInstanceOf(HookInitTarget::class, $initialized);
 
-        expect($injected->dependency)->toBe($dependency)
-            ->and($injected->writes)->toBe(1)
-            ->and($initialized->captured)->toBe('HOOKED');
-    }
+    expect($injected->dependency)->toBe($dependency)
+        ->and($injected->writes)->toBe(1)
+        ->and($initialized->captured)->toBe('HOOKED')
+        ->and($initialized->writes)->toBe(1);
 });

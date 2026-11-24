@@ -4,30 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Callable\CallableUnionValidationContract;
 
-use Attribute;
-use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
-use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeSet;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
-use Componenta\DI\Container;
-use Componenta\DI\Tests\Support\ContainerBuilder;
-
-#[Attribute(Attribute::TARGET_PARAMETER)]
-final class CacheControl {}
-
-final class NoOpRule implements AttributeCompositionRuleInterface
-{
-    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
-}
-
-function container(bool $uncached): Container
-{
-    $builder = new ContainerBuilder();
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(CacheControl::class, rules: [new NoOpRule()]));
-    }
-    return $builder->build();
-}
+use function Componenta\DI\Tests\Support\container;
 
 /** @param callable|array<array-key,mixed> $value */
 function readArray(callable|array $value): mixed
@@ -49,8 +26,8 @@ function readIterable(callable|iterable $value): mixed
 test('callable unions accept an alternative native type without autoloading it as a callback', function (
     string $kind,
     callable $target,
-    bool $uncached,
 ): void {
+    $container = container();
     $class = __NAMESPACE__ . '\\UnnecessaryOwner_' . bin2hex(random_bytes(5));
     $input = $kind === 'string' ? $class . '::run' : [$class, 'run'];
     $loads = 0;
@@ -61,7 +38,6 @@ test('callable unions accept an alternative native type without autoloading it a
         }
     };
     spl_autoload_register($loader);
-    $container = container($uncached);
 
     try {
         expect($target($input))->toBe($input)->and($loads)->toBe(0);
@@ -78,7 +54,7 @@ test('callable unions accept an alternative native type without autoloading it a
     'array' => ['array', __NAMESPACE__ . '\\readArray'],
     'string' => ['string', __NAMESPACE__ . '\\readString'],
     'iterable' => ['iterable', __NAMESPACE__ . '\\readIterable'],
-])->with(['cached plans' => false, 'non-memoized plans' => true]);
+]);
 
 final class AutoloadedOwner
 {
@@ -92,6 +68,7 @@ test('callable unions still validate callable values that need their callable ar
     string $kind,
     callable $target,
 ): void {
+    $container = container();
     $class = __NAMESPACE__ . '\\RequiredOwner_' . bin2hex(random_bytes(5));
     $input = $kind === 'string' ? [$class, 'value'] : $class . '::value';
     $loads = 0;
@@ -102,7 +79,6 @@ test('callable unions still validate callable values that need their callable ar
         }
     };
     spl_autoload_register($loader);
-    $container = container(false);
 
     try {
         foreach (['value', 0] as $key) {

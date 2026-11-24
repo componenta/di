@@ -16,15 +16,19 @@ use Componenta\DI\Resolver\Parameter\Request\ExtractorInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
+use WeakReference;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class AuditUntouchedRequestExtractor implements ExtractorInterface
 {
     /** @var list<string> */
     public static array $seenAttributes = [];
+    /** @var WeakReference<ServerRequestInterface>|null */
+    public static ?WeakReference $seenRequest = null;
 
     public function extract(ServerRequestInterface $request): mixed
     {
+        self::$seenRequest = WeakReference::create($request);
         self::$seenAttributes = array_keys($request->getAttributes());
         return 'custom-ok';
     }
@@ -67,6 +71,7 @@ test('custom request extractors receive the original PSR request without DI meta
     );
 
     expect($result)->toBe('custom-ok')
+        ->and(AuditUntouchedRequestExtractor::$seenRequest?->get())->toBe($request)
         ->and(AuditUntouchedRequestExtractor::$seenAttributes)->toBe(['public']);
 });
 

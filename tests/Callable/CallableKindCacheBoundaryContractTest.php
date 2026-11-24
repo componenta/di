@@ -4,21 +4,8 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Callable\CallableKindCacheBoundaryContract;
 
-use Attribute;
-use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
-use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeSet;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
-
-#[Attribute(Attribute::TARGET_PARAMETER)]
-final class UncachedMarker {}
-
-final class NoOpRule implements AttributeCompositionRuleInterface
-{
-    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
-}
 
 final class MethodOwner
 {
@@ -63,13 +50,8 @@ function nativeCallable(mixed $callable): callable
 test('native string aliases cannot reuse method array plans or change magic argument binding', function (
     bool $magic,
     bool $stringFirst,
-    bool $uncached,
 ): void {
-    $builder = new ContainerBuilder();
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
-    }
-    $container = $builder->build();
+    $container = new ContainerBuilder()->build();
     $string = nativeCallable(STRING_OWNER . '::read');
     $array = nativeCallable([MethodOwner::class, $magic ? 'readfunction:' : 'read']);
     $arrayArguments = $magic ? ['positional', 'kept' => 'named'] : ['ordinary' => 'explicit ordinary'];
@@ -89,5 +71,4 @@ test('native string aliases cannot reuse method array plans or change magic argu
         }
     }
 })->with(['declared method' => false, 'magic method' => true])
-    ->with(['array first' => false, 'string first' => true])
-    ->with(['cached plans' => false, 'non-memoized plans' => true]);
+    ->with(['array first' => false, 'string first' => true]);

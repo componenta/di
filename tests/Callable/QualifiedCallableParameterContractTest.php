@@ -4,12 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Callable\QualifiedCallableParameterContract;
 
-use Attribute;
 use Closure;
-use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
-use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeSet;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -17,14 +12,6 @@ use ErrorException;
 use Fiber;
 use LogicException;
 use WeakReference;
-
-#[Attribute(Attribute::TARGET_PARAMETER)]
-final class UncachedMarker {}
-
-final class NoOpRule implements AttributeCompositionRuleInterface
-{
-    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
-}
 
 final class Dependency {}
 
@@ -88,15 +75,6 @@ function allowingQualifiedCallable(Closure $operation): mixed
     }
 }
 
-function builder(bool $uncached): ContainerBuilder
-{
-    $builder = new ContainerBuilder();
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
-    }
-    return $builder;
-}
-
 function nativeCallable(mixed $callable): callable
 {
     if (!is_callable($callable)) {
@@ -105,8 +83,8 @@ function nativeCallable(mixed $callable): callable
     return $callable;
 }
 
-test('qualified callable routes resolve the selected ancestor parameters on cold and repeated calls', function (string $route, bool $uncached): void {
-    allowingQualifiedCallable(static function () use ($route, $uncached): void {
+test('qualified callable routes resolve the selected ancestor parameters on first and repeated calls', function (string $route): void {
+    allowingQualifiedCallable(static function () use ($route): void {
         $owner = new Child();
         $static = str_starts_with($route, 'static');
         $method = Ancestor::class . ($static ? '::consumeStatic' : '::consume');
@@ -116,7 +94,7 @@ test('qualified callable routes resolve the selected ancestor parameters on cold
         $calledClass = $route === 'static class' ? Ancestor::class : Child::class;
         $ownerLabel = $static ? 'static' : 'original';
         expect($native($dependency, 'native'))->toBe([$dependency, 'native', $calledClass, $ownerLabel]);
-        $container = builder($uncached)->addServices([
+        $container = new ContainerBuilder()->addServices([
             Dependency::class => $dependency,
             'qualified.label' => 'configured',
             'qualified.owner' => $owner,
@@ -146,12 +124,11 @@ test('qualified callable routes resolve the selected ancestor parameters on cold
             expect($container->call($callable))->toBe([$replacement, 'updated', Child::class, 'replacement']);
         }
     });
-})->with(['object pair', 'service pair', 'instance shorthand', 'exact callable service', 'static object', 'static class'])
-    ->with(['cached plans' => false, 'non-memoized plans' => true]);
+})->with(['object pair', 'service pair', 'instance shorthand', 'exact callable service', 'static object', 'static class']);
 
-test('qualified parameter plans retain variadic binding and reject unsupported references', function (bool $uncached): void {
-    allowingQualifiedCallable(static function () use ($uncached): void {
-        $container = builder($uncached)->build();
+test('qualified parameter plans retain variadic binding and reject unsupported references', function (): void {
+    allowingQualifiedCallable(static function (): void {
+        $container = new ContainerBuilder()->build();
         $owner = new Child();
         $variadic = [$owner, Ancestor::class . '::variadic'];
         expect($container->call($variadic, ['first' => 'head', 'values' => ['tail', 'named' => 'last']]))
@@ -163,7 +140,7 @@ test('qualified parameter plans retain variadic binding and reject unsupported r
         $arguments = ['positional', 'named' => 'value'];
         expect($container->call([$owner, 'missing'], $arguments))->toBe(['missing', $arguments]);
     });
-})->with(['cached plans' => false, 'non-memoized plans' => true]);
+});
 
 class MagicAncestor
 {
@@ -215,7 +192,7 @@ test('qualified ancestor magic keeps arguments when the called class has a same-
         $callable = $captured ? Closure::fromCallable($qualified) : $qualified;
         $arguments = ['positional', 42];
         $expected = ['static', 'childMethod', $arguments];
-        $container = builder(false)->build();
+        $container = new ContainerBuilder()->build();
 
         expect(call_user_func_array($callable, $arguments))->toBe($expected)
             ->and($container->call($callable, $arguments))->toBe($expected)
@@ -223,9 +200,9 @@ test('qualified ancestor magic keeps arguments when the called class has a same-
     });
 })->with(['qualified pair' => false, 'native closure' => true]);
 
-test('qualified magic routes preserve native arguments without using an inaccessible method signature', function (bool $uncached, bool $object, string $method): void {
-    allowingQualifiedCallable(static function () use ($uncached, $object, $method): void {
-        $container = builder($uncached)->build();
+test('qualified magic routes preserve native arguments without using an inaccessible method signature', function (bool $object, string $method): void {
+    allowingQualifiedCallable(static function () use ($object, $method): void {
+        $container = new ContainerBuilder()->build();
         $arguments = ['positional', 'named' => 'value'];
         if ($method !== 'missing') {
             expect(new MagicChild()->accessible($method)())->toBe($method === 'privateStatic' ? 'static default' : 'instance default');
@@ -238,8 +215,7 @@ test('qualified magic routes preserve native arguments without using an inaccess
                 ->and($container->call($callable, $arguments))->toBe($expected);
         }
     });
-})->with(['cached plans' => false, 'non-memoized plans' => true])
-    ->with(['class receiver' => false, 'object receiver' => true])
+})->with(['class receiver' => false, 'object receiver' => true])
     ->with(['missing', 'privateInstance', 'privateStatic']);
 
 final class Lifetime
@@ -280,9 +256,9 @@ function temporaryCallable(bool $instance): array
     return [$receiver, TemporaryAncestor::class . ($instance ? '::consumeInstance' : '::consume')];
 }
 
-test('qualified parameter metadata retains temporary receivers only through the active invocation', function (bool $uncached, string $mode, bool $instance): void {
-    allowingQualifiedCallable(static function () use ($uncached, $mode, $instance): void {
-        $container = builder($uncached)->addService(Dependency::class, new Dependency())->build();
+test('qualified parameter metadata retains temporary receivers only through the active invocation', function (string $mode, bool $instance): void {
+    allowingQualifiedCallable(static function () use ($mode, $instance): void {
+        $container = new ContainerBuilder()->addService(Dependency::class, new Dependency())->build();
         Lifetime::$fail = $mode === 'body failure';
         Lifetime::$suspend = $mode === 'fiber';
         Lifetime::$failure = new LogicException('Exact qualified body failure.');
@@ -312,6 +288,5 @@ test('qualified parameter metadata retains temporary receivers only through the 
         }
         Lifetime::$failure = null;
     });
-})->with(['cached plans' => false, 'non-memoized plans' => true])
-    ->with(['success', 'body failure', 'fiber'])
+})->with(['success', 'body failure', 'fiber'])
     ->with(['static receiver' => false, 'instance receiver' => true]);

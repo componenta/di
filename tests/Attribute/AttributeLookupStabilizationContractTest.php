@@ -69,13 +69,13 @@ function fixture(): array
 }
 
 /** @param list<AttributeDefinition> $definitions */
-function container(array $definitions, bool $uncached): Container
+function container(array $definitions, bool $customRule = false): Container
 {
     $builder = (new ContainerBuilder())->replaceAttributeDefinitions();
     foreach ($definitions as $definition) {
         $builder->addAttributeDefinition($definition);
     }
-    if ($uncached) {
+    if ($customRule) {
         $builder->addAttributeDefinition(new AttributeDefinition(CacheControl::class, rules: [new NoOpRule()]));
     }
     return $builder->build();
@@ -97,7 +97,6 @@ final class DelayedLoader
 
 test('attribute lookup revisits earlier definitions when a later probe makes the class available', function (
     string $registration,
-    bool $uncached,
     bool $warm,
 ): void {
     $target = fixture();
@@ -109,7 +108,7 @@ test('attribute lookup revisits earlier definitions when a later probe makes the
         'generic before' => [$generic, $specific],
         default => throw new LogicException('Unexpected registration fixture.'),
     };
-    $container = container($definitions, $uncached);
+    $container = container($definitions);
     $loader = new DelayedLoader($target['attribute']);
     spl_autoload_register($loader);
 
@@ -129,18 +128,14 @@ test('attribute lookup revisits earlier definitions when a later probe makes the
         spl_autoload_unregister($loader);
     }
 })->with(['unrelated after', 'generic after', 'generic before'])
-    ->with(['cached plans' => false, 'uncached plans' => true])
     ->with(['cold metadata' => false, 'warm metadata' => true]);
 
-test('attribute lookup retains ambiguity when a later probe reveals two equally specific definitions', function (
-    bool $uncached,
-    bool $warm,
-): void {
+test('attribute lookup retains ambiguity when a later probe reveals two equally specific definitions', function (bool $warm): void {
     $target = fixture();
     $container = container([
         new AttributeDefinition(GenericMarker::class, new RecordHandler('first')),
         new AttributeDefinition(OtherGenericMarker::class, new RecordHandler('second')),
-    ], $uncached);
+    ]);
     $loader = new DelayedLoader($target['attribute']);
     spl_autoload_register($loader);
 
@@ -154,15 +149,14 @@ test('attribute lookup retains ambiguity when a later probe reveals two equally 
     } finally {
         spl_autoload_unregister($loader);
     }
-})->with(['cached plans' => false, 'uncached plans' => true])
-    ->with(['cold metadata' => false, 'warm metadata' => true]);
+})->with(['cold metadata' => false, 'warm metadata' => true]);
 
-test('attribute lookup terminates while an unregistered class remains unavailable', function (bool $uncached): void {
+test('attribute lookup terminates while an unregistered class remains unavailable', function (bool $customRule): void {
     $target = fixture();
     $container = container([
         new AttributeDefinition(SpecificMarker::class, new RecordHandler('specific')),
         new AttributeDefinition(UnrelatedMarker::class),
-    ], $uncached);
+    ], $customRule);
     $loader = new DelayedLoader($target['attribute'], available: false);
     spl_autoload_register($loader);
 
@@ -179,4 +173,4 @@ test('attribute lookup terminates while an unregistered class remains unavailabl
     } finally {
         spl_autoload_unregister($loader);
     }
-})->with(['cached plans' => false, 'uncached plans' => true]);
+})->with(['default discovery' => false, 'revalidate pending declarations' => true]);

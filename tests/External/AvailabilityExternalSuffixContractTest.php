@@ -66,16 +66,17 @@ test('has inspects providers appended during its local miss in registration orde
 })->with(['first provider' => false, 'an earlier miss' => true])
     ->with(['owns requested entry' => true, 'misses requested entry' => false]);
 
-test('an appended provider can query the same ID without reentering the finished local lookup', function (): void {
+test('an appended provider can query the same ID without reentering its active ownership callback', function (): void {
     $di = new ContainerBuilder()->build();
     $legacy = __NAMESPACE__ . '\\Legacy_' . bin2hex(random_bytes(5));
     $di->alias('preferred.product', $legacy);
     $queries = 0;
-    $new = new Provider(static function () use ($di, &$queries): bool {
+    $nestedAvailability = null;
+    $new = new Provider(static function () use ($di, &$queries, &$nestedAvailability): bool {
         if (++$queries > 1) {
             throw new \LogicException('The active ownership callback was entered recursively.');
         }
-        expect($di->has('preferred.product'))->toBeFalse();
+        $nestedAvailability = $di->has('preferred.product');
         return true;
     });
     $loader = static function (string $name) use ($di, $legacy, $new): void {
@@ -87,6 +88,7 @@ test('an appended provider can query the same ID without reentering the finished
 
     try {
         expect($di->has('preferred.product'))->toBeTrue()
+            ->and($nestedAvailability)->toBeFalse()
             ->and($queries)->toBe(1);
     } finally {
         spl_autoload_unregister($loader);

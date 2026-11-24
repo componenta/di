@@ -236,7 +236,8 @@ test('a custom Make handler receives its own arguments alongside the built-in Pr
     $pipeline = new ObjectPipeline(new AttributeProcessor($plans), new ParametersResolver($plans), $di);
 
     $owner = fixtureInstance($pipeline->create(ObservedMakeOwner::class), ObservedMakeOwner::class);
-    expect($owner->product->options->state)->toBe('declared')
+    expect(new ReflectionClass(ObservedMakeProduct::class)->isUninitializedLazyObject($owner->product))->toBeTrue()
+        ->and($owner->product->options->state)->toBe('declared')
         ->and(ObservedMakeOptions::$retired)->toBe(['custom handler']);
 })->with(['custom handler after Proxy' => false, 'custom handler before Proxy' => true]);
 

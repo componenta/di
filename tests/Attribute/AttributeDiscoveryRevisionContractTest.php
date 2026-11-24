@@ -79,7 +79,7 @@ final class DiscoveryHandler implements AttributeHandlerInterface
     }
 }
 
-test('attribute discovery validates one revision when a later autoload reveals an earlier dependency', function (bool $uncached, bool $warm, bool $directPlan): void {
+test('attribute discovery validates one revision when a later autoload reveals an earlier dependency', function (bool $customRule, bool $warm, bool $directPlan): void {
     $suffix = bin2hex(random_bytes(6));
     $required = 'LateRequired_' . $suffix;
     $dependent = 'LateDependent_' . $suffix;
@@ -99,7 +99,7 @@ test('attribute discovery validates one revision when a later autoload reveals a
     $builder = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(DiscoveryRequired::class, $handler))
         ->addAttributeDefinition(new AttributeDefinition(DiscoveryDependent::class, $handler, requires: [DiscoveryRequired::class]));
-    if ($uncached) {
+    if ($customRule) {
         $builder->addAttributeDefinition(new AttributeDefinition(DiscoveryUncachedMarker::class, rules: [new DiscoveryNoOpRule()]));
     }
     [$container, $runtime] = $builder->assemble();
@@ -148,6 +148,6 @@ test('attribute discovery validates one revision when a later autoload reveals a
         DiscoveryPayload::$instances = [];
         DiscoveryPayload::$current = 0;
     }
-})->with(['cached plans' => false, 'uncached plans' => true])
+})->with(['default discovery' => false, 'revalidate pending declarations' => true])
     ->with(['cold metadata' => false, 'warm metadata' => true])
     ->with(['container creation' => false, 'direct plan' => true]);

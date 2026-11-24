@@ -110,12 +110,12 @@ test('Transform on a mapped array receives the completed mapping and resolves cu
         array $data,
     ): array => $data;
 
-    foreach (['first', 'second'] as $suffix) {
+    foreach (['first input' => 'first service', 'second input' => 'second service'] as $input => $suffix) {
         $container->set('request.transform.suffix', $suffix);
-        $request = (new ServerRequest('GET', '/'))->withQueryParams(['input' => $suffix]);
+        $request = (new ServerRequest('GET', '/'))->withQueryParams(['input' => $input]);
 
         expect($container->call($target, [ServerRequestInterface::class => $request]))
-            ->toBe(['name' => $suffix, 'suffix' => $suffix]);
+            ->toBe(['name' => $input, 'suffix' => $suffix]);
     }
 
     expect(State::$events)->toBe(['transform', 'transform']);

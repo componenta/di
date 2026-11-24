@@ -9,6 +9,7 @@ use Componenta\DI\Definition\Definition;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
 use stdClass;
+use WeakReference;
 
 final class Product
 {
@@ -40,6 +41,7 @@ test('fresh class definitions reevaluate references and object defaults without 
     $initial = new stdClass();
     $replacement = new stdClass();
     $override = new stdClass();
+    $runtimeReference = WeakReference::create($override);
     $container = (new ContainerBuilder())
         ->addService('dependency', $initial)
         ->addDefinition('product', ClassDefinition::create(Product::class)
@@ -77,4 +79,10 @@ test('fresh class definitions reevaluate references and object defaults without 
         }
         $previous = $product;
     }
+
+    unset($previous, $product, $params, $override);
+    gc_collect_cycles();
+
+    expect($runtimeReference->get())->toBeNull()
+        ->and($container->get('dependency'))->toBe($replacement);
 })->with(['native omitted defaults' => false, 'defaults before positional variadics' => true]);

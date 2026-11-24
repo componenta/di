@@ -51,17 +51,22 @@ use Throwable;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class CacheControl {}
 
-final class NoOpCompositionRule implements AttributeCompositionRuleInterface
+final class CacheControlRule implements AttributeCompositionRuleInterface
 {
-    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
+    public private(set) int $validations = 0;
+
+    public function validate(AttributeUsage $attribute, AttributeSet $set): void
+    {
+        ++$this->validations;
+    }
 }
 
-function builder(bool $uncached, ?TrustedValue $trusted = null): ContainerBuilder
+function builder(?CacheControlRule $rule = null, ?TrustedValue $trusted = null): ContainerBuilder
 {
     return (new ContainerBuilder(new Config(['trusted' => $trusted], new Environment([]))))
         ->addAttributeDefinition(new AttributeDefinition(
             CacheControl::class,
-            rules: $uncached ? [new NoOpCompositionRule()] : [],
+            rules: $rule === null ? [] : [$rule],
         ));
 }
 
@@ -69,17 +74,17 @@ final class Consumer
 {
     /** @return list<mixed> */
     public function extract(
-        #[CurrentRequest] ServerRequestInterface $request,
-        #[CurrentUri] UriInterface $uri,
-        #[QueryParam('query')] mixed $query,
-        #[PayloadParam(new ConfigPath('nested.value'))] mixed $payload,
-        #[Header('X-Token')] string $header,
-        #[Cookie('cookie')] mixed $cookie,
-        #[RequestAttribute('attribute')] mixed $attribute,
-        #[ServerParam('server')] mixed $server,
-        #[UploadedFile('attachment')] ?UploadedFileInterface $upload,
-        #[QueryParam] mixed $fallback,
-        #[QueryParam('absent', default: 'default')] mixed $missing,
+        #[CacheControl, CurrentRequest] ServerRequestInterface $request,
+        #[CacheControl, CurrentUri] UriInterface $uri,
+        #[CacheControl, QueryParam('query')] mixed $query,
+        #[CacheControl, PayloadParam(new ConfigPath('nested.value'))] mixed $payload,
+        #[CacheControl, Header('X-Token')] string $header,
+        #[CacheControl, Cookie('cookie')] mixed $cookie,
+        #[CacheControl, RequestAttribute('attribute')] mixed $attribute,
+        #[CacheControl, ServerParam('server')] mixed $server,
+        #[CacheControl, UploadedFile('attachment')] ?UploadedFileInterface $upload,
+        #[CacheControl, QueryParam] mixed $fallback,
+        #[CacheControl, QueryParam('absent', default: 'default')] mixed $missing,
     ): array {
         return [$request, $uri, $query, $payload, $header, $cookie, $attribute, $server, $upload, $fallback, $missing];
     }
@@ -96,14 +101,14 @@ final class Consumer
      * @return list<array<array-key,mixed>>
      */
     public function map(
-        #[MapQueryString] array $query,
-        #[MapRequestPayload] array $payload,
-        #[MapHeaders] array $headers,
-        #[MapCookies] array $cookies,
-        #[MapRequestAttributes] array $attributes,
-        #[MapServerParams] array $server,
-        #[MapUploadedFiles] array $files,
-        #[MapRequest(sources: [RequestDataSource::Query, RequestDataSource::Cookies])] array $combined,
+        #[CacheControl, MapQueryString] array $query,
+        #[CacheControl, MapRequestPayload] array $payload,
+        #[CacheControl, MapHeaders] array $headers,
+        #[CacheControl, MapCookies] array $cookies,
+        #[CacheControl, MapRequestAttributes] array $attributes,
+        #[CacheControl, MapServerParams] array $server,
+        #[CacheControl, MapUploadedFiles] array $files,
+        #[CacheControl, MapRequest(sources: [RequestDataSource::Query, RequestDataSource::Cookies])] array $combined,
     ): array {
         return [$query, $payload, $headers, $cookies, $attributes, $server, $files, $combined];
     }
@@ -163,13 +168,13 @@ final class MappingConsumer
 {
     public int $calls = 0;
 
-    public function cast(#[MapRequest(sources: [RequestDataSource::Query], cast: ['value' => 'stamp'])] MappedValue $dto): string
+    public function cast(#[CacheControl, MapRequest(sources: [RequestDataSource::Query], cast: ['value' => 'stamp'])] MappedValue $dto): string
     {
         ++$this->calls;
         return $dto->value;
     }
 
-    public function trusted(#[MapQueryString] TrustedDto $dto): TrustedDto
+    public function trusted(#[CacheControl, MapQueryString] TrustedDto $dto): TrustedDto
     {
         ++$this->calls;
         return $dto;
@@ -183,7 +188,7 @@ final readonly class TrustedValue
 
 final readonly class TrustedDto
 {
-    public function __construct(#[ConfigValue('trusted')] public TrustedValue $trusted, public mixed $value) {}
+    public function __construct(#[CacheControl, ConfigValue('trusted')] public TrustedValue $trusted, public mixed $value) {}
 }
 
 /** @return array{class-string<Throwable>,string,class-string<Throwable>|null} */
@@ -198,10 +203,12 @@ function failure(Closure $operation): array
 }
 
 test('warmed request extractor plans preserve every current source and authoritative request identity', function (): void {
-    $containers = [builder(false)->build(), builder(true)->build()];
+    $rule = new CacheControlRule();
+    $containers = [builder()->build(), builder($rule)->build()];
     $spoof = new ServerRequest('GET', '/spoof');
     $consumer = new Consumer();
     foreach ([null, false, 0, 'changed'] as $index => $value) {
+        $validations = $rule->validations;
         $upload = new RequestUpload(Stream::create('file-' . $index), 6, UPLOAD_ERR_OK);
         $request = (new ServerRequest('POST', '/request-' . $index, ['X-Token' => ['first', (string) $index]], '', '1.1', ['server' => $value]))
             ->withQueryParams(['query' => $value, 'fallback' => $value])
@@ -217,6 +224,7 @@ test('warmed request extractor plans preserve every current source and authorita
             $explicit[2] = 'explicit';
             expect($container->call([$consumer, 'extract'], ['query' => 'explicit', ...$provided]))->toBe($explicit);
         }
+        expect($rule->validations)->toBeGreaterThan($validations);
     }
     $errors = [];
     foreach ($containers as $container) {
@@ -226,9 +234,11 @@ test('warmed request extractor plans preserve every current source and authorita
 });
 
 test('all warmed request mapper plans preserve source keys nulls objects and uploads', function (): void {
-    $containers = [builder(false)->build(), builder(true)->build()];
+    $rule = new CacheControlRule();
+    $containers = [builder()->build(), builder($rule)->build()];
     $consumer = new Consumer();
     foreach ([null, false, 'changed'] as $index => $value) {
+        $validations = $rule->validations;
         $upload = new RequestUpload(Stream::create('file-' . $index), 6, UPLOAD_ERR_OK);
         $leaf = (object) ['value' => $value];
         $request = (new ServerRequest('POST', '/map-' . $index, ['X-Token' => ['a', 'b']], '', '1.1', ['server' => $value]))
@@ -244,17 +254,18 @@ test('all warmed request mapper plans preserve source keys nulls objects and upl
         foreach ($containers as $container) {
             expect($container->call([$consumer, 'map'], [ServerRequestInterface::class => $request]))->toBe($expected);
         }
+        expect($rule->validations)->toBeGreaterThan($validations);
     }
 });
 
 test('warmed mapping plans read current provider bindings and validate raw data before casting', function (): void {
     $outcomes = [];
-    foreach ([false, true] as $uncached) {
+    foreach ([null, new CacheControlRule()] as $rule) {
         $first = new StampProvider('first:');
         $second = new StampProvider('second:');
         $validation = new ValidationProvider();
         $replacement = new ValidationProvider();
-        $container = builder($uncached)
+        $container = builder($rule)
             ->addServices(['caster.first' => $first, 'caster.second' => $second, ValidationProviderInterface::class => $validation])
             ->addAlias(CasterProviderInterface::class, 'caster.first')
             ->build();
@@ -262,9 +273,13 @@ test('warmed mapping plans read current provider bindings and validate raw data 
         $request = (new ServerRequest('GET', '/'))->withQueryParams(['value' => 'raw']);
         $provided = [ServerRequestInterface::class => $request];
         expect($container->call([$consumer, 'cast'], $provided))->toBe('first:raw');
+        $validations = $rule->validations ?? 0;
         $container->alias(CasterProviderInterface::class, 'caster.second');
         $container->set(ValidationProviderInterface::class, $replacement);
         expect($container->call([$consumer, 'cast'], $provided))->toBe('second:raw');
+        if ($rule !== null) {
+            expect($rule->validations)->toBeGreaterThan($validations);
+        }
         $replacement->reject = true;
         $error = failure(fn() => $container->call([$consumer, 'cast'], $provided));
         expect($consumer->calls)->toBe(2)
@@ -281,18 +296,22 @@ test('warmed mapping plans read current provider bindings and validate raw data 
 
 test('static mapped DTO source metadata does not retain another container or permit shadowing after warmup', function (): void {
     $errors = [];
-    foreach ([false, true, false] as $index => $uncached) {
+    foreach ([null, new CacheControlRule(), null] as $index => $rule) {
         $trusted = new TrustedValue('container-' . $index);
-        $container = builder($uncached, $trusted)->build();
+        $container = builder($rule, $trusted)->build();
         $consumer = new MappingConsumer();
         $request = (new ServerRequest('GET', '/'))->withQueryParams(['value' => null]);
         foreach ([null, false] as $value) {
+            $validations = $rule->validations ?? 0;
             $dto = $container->call([$consumer, 'trusted'], [ServerRequestInterface::class => $request->withQueryParams(['value' => $value])]);
             expect($dto)->toBeInstanceOf(TrustedDto::class);
             if (!$dto instanceof TrustedDto) {
                 throw new \LogicException('Expected a mapped DTO.');
             }
             expect($dto->trusted)->toBe($trusted)->and($dto->value)->toBe($value);
+            if ($rule !== null) {
+                expect($rule->validations)->toBeGreaterThan($validations);
+            }
         }
         foreach (['trusted', TrustedValue::class] as $key) {
             $error = failure(fn() => $container->call([$consumer, 'trusted'], [

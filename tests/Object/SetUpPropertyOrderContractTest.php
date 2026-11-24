@@ -112,6 +112,8 @@ test('property injection and setup run only for attribute-driven creation', func
 
     expect($events->steps)->toBe($useDefinition || $deferred ? [] : ['initialize', 'finish'])
         ->and($target->observed)->toBe($useDefinition ? 'raw' : 'dependency:configured:finished')
+        ->and(isset($target->dependency))->toBe(!$useDefinition)
+        ->and(isset($target->label))->toBe(!$useDefinition)
         ->and($events->steps)->toBe($useDefinition ? [] : ['initialize', 'finish']);
 })->with([
     'eager' => [EagerSetUpPropertyTarget::class, false],
@@ -134,7 +136,7 @@ test('failed property injection prevents setup side effects', function (): void 
     }
 
     expect(fn() => $container->make(FailedSetUpPropertyTarget::class))
-        ->toThrow(ResolutionException::class)
+        ->toThrow(ResolutionException::class, 'Cannot resolve property "' . FailedSetUpPropertyTarget::class . '::$value"')
         ->and($events->steps)->toBe([]);
 });
 

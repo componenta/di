@@ -49,13 +49,20 @@ final class CastDefaultPropertyParityDto
 final class CastPropertyParityDto
 {
     #[Cast('int')]
-    public int $value;
+    public int $value = 51;
 }
 
 final class InitPropertyParityDto
 {
     #[Init([TestCounter::class, 'next'])]
     public int $value;
+
+    public readonly int $callsAtConstruction;
+
+    public function __construct()
+    {
+        $this->callsAtConstruction = TestCounter::$value;
+    }
 }
 
 final class ConfigOverrideParityDto
@@ -188,12 +195,12 @@ test('Cast keeps its attribute-owned default contract', function (): void {
         ->and(fixtureInstance($container->make(CastDefaultPropertyParityDto::class, ['value' => '0']), CastDefaultPropertyParityDto::class)->value)->toBe(0);
 });
 
-test('Cast property reads object creation parameters rather than initialized property state', function (): void {
+test('Cast property requires a creation parameter even when the property is initialized', function (): void {
     $container = parityValueContainer();
 
     expect(fixtureInstance($container->make(CastPropertyParityDto::class, ['value' => '9']), CastPropertyParityDto::class)->value)->toBe(9)
         ->and(fn() => $container->make(CastPropertyParityDto::class))
-        ->toThrow(ResolutionException::class);
+        ->toThrow(ResolutionException::class, 'missing context key "value"');
 });
 
 test('Init remains a property attribute handler and executes once after instantiation', function (): void {
@@ -202,7 +209,8 @@ test('Init remains a property attribute handler and executes once after instanti
     $dto = parityValueContainer()->make(InitPropertyParityDto::class);
     Assert::assertInstanceOf(InitPropertyParityDto::class, $dto);
 
-    expect($dto->value)->toBe(1)
+    expect($dto->callsAtConstruction)->toBe(0)
+        ->and($dto->value)->toBe(1)
         ->and(TestCounter::$value)->toBe(1);
 });
 
@@ -308,13 +316,14 @@ test('EntryId preserves the container missing-entry failure contract', function 
 });
 
 test('Config Env and Make resolve properties through the same public object pipeline', function (): void {
+    $raw = new \stdClass();
     $config = new Config(
         ['application' => ['name' => 'Componenta']],
         new Environment([
             'API_TOKEN' => 'secret',
             'RATE' => '1.25',
             'FLAGS' => ['first', 'second'],
-            'RAW' => new \stdClass(),
+            'RAW' => $raw,
         ]),
     );
     $container = ContainerBuilder::configure($config)->build();
@@ -327,7 +336,7 @@ test('Config Env and Make resolve properties through the same public object pipe
         ->and($dto->apiToken)->toBe('secret')
         ->and($dto->rate)->toBe(1.25)
         ->and($dto->flags)->toBe(['first', 'second'])
-        ->and($dto->raw)->toBeInstanceOf(\stdClass::class)
+        ->and($dto->raw)->toBe($raw)
         ->and($dto->made->value)->toBe('fresh-property');
 });
 
@@ -337,6 +346,7 @@ test('missing required Env property reports the public resolution context', func
     expect(fn() => $container->make(MissingPropertyEnvironmentDto::class))
         ->toThrow(
             ResolutionException::class,
-            'Environment variable "MISSING_REQUIRED_VALUE" is not defined',
+            'Environment variable "MISSING_REQUIRED_VALUE" is not defined (required by '
+                . MissingPropertyEnvironmentDto::class . '::$required).',
         );
 });

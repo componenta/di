@@ -310,7 +310,7 @@ test('cached and uncached object plans notice an existing autoloader becoming re
     $attribute = 'ReadySetUp_' . $suffix;
     $target = 'ReadyTarget_' . $suffix;
     eval(sprintf(
-        'namespace %s; #[%s("initialize")] final class %s extends ReadinessFixture {}',
+        'namespace %s; #[CacheControl, %s("initialize")] final class %s extends ReadinessFixture {}',
         __NAMESPACE__,
         $attribute,
         $target,
@@ -371,7 +371,7 @@ test('cached and uncached native closure attribute arguments keep fresh closure 
         <<<'PHP'
         namespace %s;
         final class %s extends NativeClosureFixture {
-            #[\Componenta\DI\Attribute\Init(static function (ClosureDependency $dependency): int {
+            #[CacheControl, \Componenta\DI\Attribute\Init(static function (ClosureDependency $dependency): int {
                 static $invocations = 0;
                 return $dependency->value + ++$invocations;
             })]

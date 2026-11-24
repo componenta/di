@@ -96,17 +96,21 @@ test('mapped request provenance stays internal when a DTO is created by a user f
         ->and($captured)->toBe(['value' => 'payload', ServerRequestInterface::class => $request]);
 });
 
-test('lazy service factories use the current ContainerValue runtime ABI', function (): void {
+test('lazy service factories receive the container runtime context from get and make', function (): void {
     $factory = new AuditLazyFactory();
     $container = (new ContainerBuilder())
         ->addFactory('audit.lazy', $factory)
         ->build();
+    $context = $container->get(ContainerValue::class);
+    Assert::assertInstanceOf(ContainerValue::class, $context);
+    expect($context->container)->toBe($container);
 
     $first = $container->get('audit.lazy');
     Assert::assertInstanceOf(AuditLazyProduct::class, $first);
     expect($container->get('audit.lazy'))->toBe($first)
         ->and($factory->calls)->toBe(1)
         ->and($factory->initializations)->toBe(0)
+        ->and($factory->seenContainer)->toBe($context)
         ->and($factory->seenContext)->toBe([]);
 
     $fresh = $container->make('audit.lazy', ['label' => 'caller']);
@@ -115,7 +119,7 @@ test('lazy service factories use the current ContainerValue runtime ABI', functi
         ->and($factory->calls)->toBe(2)
         ->and($factory->initializations)->toBe(0)
         ->and($factory->seenContext)->toBe(['label' => 'caller'])
-        ->and($factory->seenContainer)->toBeInstanceOf(ContainerValue::class)
+        ->and($factory->seenContainer)->toBe($context)
         ->and($fresh->label)->toBe('caller')
         ->and($factory->initializations)->toBe(1)
         ->and($first->label)->toBe('default')
@@ -124,10 +128,4 @@ test('lazy service factories use the current ContainerValue runtime ABI', functi
         ->and($factory->calls)->toBe(2)
         ->and($first->label)->toBe('default')
         ->and($factory->initializations)->toBe(2);
-
-    if (!$factory->seenContainer instanceof ContainerValue) {
-        throw new \LogicException('The lazy factory did not receive ContainerValue.');
-    }
-
-    expect($factory->seenContainer->container)->toBe($container);
 });

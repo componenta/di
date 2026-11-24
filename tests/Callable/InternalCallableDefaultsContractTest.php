@@ -45,8 +45,19 @@ test('internal methods and constructors keep native defaults', function (): void
         ->and($container->call([$seeded, 'generate']))->toBe($native->generate());
 });
 
-test('internal optional non-nullable parameters can use unavailable native defaults', function (): void {
-    expect(container()->call('rand'))->toBeInt();
+test('omitted internal non-nullable parameters preserve native default behavior', function (): void {
+    $container = container();
+    $seed = 123;
+
+    try {
+        mt_srand($seed);
+        $expected = rand();
+
+        mt_srand($seed);
+        expect($container->call('rand'))->toBe($expected);
+    } finally {
+        mt_srand();
+    }
 });
 
 test('bootstrap detects later resolvers that would replace omitted native arguments', function (): void {

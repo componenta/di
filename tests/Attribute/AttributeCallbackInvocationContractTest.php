@@ -81,10 +81,9 @@ final class ObservedInvoker implements CallableInvokerInterface
     }
 }
 
-test('semantic callback input bypasses resolver classification and remains visible to its suffix', function (bool $uncached): void {
+test('semantic callback input bypasses resolver classification and remains visible to its suffix', function (): void {
     $probe = new SuffixStateResolver();
     [$container, $runtime] = (new ContainerBuilder())
-        ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->addParameterResolver($probe, 2000)
         ->assemble();
     $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
@@ -93,11 +92,10 @@ test('semantic callback input bypasses resolver classification and remains visib
     expect($callbacks->invoke($callback, 7, [0 => 80, 'semantic' => 90]))->toBe([7, 7])
         ->and($callbacks->invoke($callback, 8))->toBe([8, 8])
         ->and($probe->classified)->not->toContain(0);
-})->with(['cached' => false, 'non-memoized' => true]);
+});
 
-test('semantic callbacks resolve full suffix signatures and current services', function (bool $uncached): void {
+test('semantic callbacks resolve full suffix signatures and current services', function (): void {
     [$container, $runtime] = (new ContainerBuilder())
-        ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
         ->addService('callback.dependency', new Dependency('first'))
         ->assemble();
     $callbacks = new AttributeCallbackInvoker($runtime->parameters, $container);
@@ -115,7 +113,7 @@ test('semantic callbacks resolve full suffix signatures and current services', f
     $container->set('callback.dependency', new Dependency('second'));
     expect($callbacks->invoke($callback, [], [4 => 'position', 5 => 4]))
         ->toBe([[], 'second', 'injected', null, 'position', [4]]);
-})->with(['cached' => false, 'non-memoized' => true]);
+});
 
 test('empty callbacks receive zero native arguments through one prepared decorator call', function (): void {
     [$container, $runtime] = (new ContainerBuilder())->assemble();
@@ -245,11 +243,11 @@ final class InvocationLog
 
 final class LoadingDependency {}
 
-test('late DI metadata on the reserved callback argument rejects completed suffix work without replay', function (bool $uncached): void {
+test('late DI metadata on the reserved callback argument rejects completed suffix work without replay', function (bool $customRule): void {
     $attribute = 'ReservedAfterSuffix_' . bin2hex(random_bytes(5));
     $counter = new CountedTransformer();
     [$container, $runtime] = (new ContainerBuilder())
-        ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $uncached ? [new NoOpRule()] : []))
+        ->addAttributeDefinition(new AttributeDefinition(ReservedMetadata::class, rules: $customRule ? [new NoOpRule()] : []))
         ->addAttributeDefinition(new AttributeDefinition(CompletedTransformer::class, $counter, [ValueTransformer::class]))
         ->addFactory(LoadingDependency::class, static function () use ($attribute): LoadingDependency {
             eval(sprintf('namespace %s; #[\\Attribute(\\Attribute::TARGET_PARAMETER)] final class %s extends ReservedMetadata {}', __NAMESPACE__, $attribute));
@@ -271,9 +269,9 @@ test('late DI metadata on the reserved callback argument rejects completed suffi
         ->toThrow(AttributeCompositionException::class)
         ->and($counter->calls)->toBe(1)
         ->and(InvocationLog::$calls)->toBe(0);
-})->with(['cached' => false, 'non-memoized' => true]);
+})->with(['late metadata has no rule' => false, 'rule on late metadata' => true]);
 
-test('reserved-target discovery cannot change an already completed callback suffix silently', function (bool $uncached): void {
+test('reserved-target discovery cannot change an already completed callback suffix silently', function (bool $customRule): void {
     $id = bin2hex(random_bytes(5));
     $first = 'NeutralFirst_' . $id;
     $last = 'LateSuffix_' . $id;
@@ -281,7 +279,7 @@ test('reserved-target discovery cannot change an already completed callback suff
     $late = new CountedTransformer();
     $armed = false;
     [$container, $runtime] = (new ContainerBuilder())
-        ->addAttributeDefinition(new AttributeDefinition(CompletedTransformer::class, $counter, [ValueTransformer::class], rules: $uncached ? [new NoOpRule()] : []))
+        ->addAttributeDefinition(new AttributeDefinition(CompletedTransformer::class, $counter, [ValueTransformer::class], rules: $customRule ? [new NoOpRule()] : []))
         ->addAttributeDefinition(new AttributeDefinition(LateTransformer::class, $late, [ValueTransformer::class]))
         ->addFactory(LoadingDependency::class, static function () use (&$armed): LoadingDependency {
             $armed = true;
@@ -320,4 +318,4 @@ test('reserved-target discovery cannot change an already completed callback suff
     } finally {
         spl_autoload_unregister($autoload);
     }
-})->with(['cached' => false, 'non-memoized' => true]);
+})->with(['completed transformer has no rule' => false, 'rule on completed transformer' => true]);

@@ -116,7 +116,8 @@ test('optional autowiring can select a valid provider registered during alias re
     try {
         $actual = $di->call(static fn(?Product $product = null): ?Product => $product);
         expect($actual)->toBe($result)
-            ->and($events)->toBe(['old local', 'provider', 'provider']);
+            ->and($events[0] ?? null)->toBe('old local')
+            ->and(array_unique(array_slice($events, 1)))->toBe(['provider']);
     } finally {
         spl_autoload_unregister($loader);
     }

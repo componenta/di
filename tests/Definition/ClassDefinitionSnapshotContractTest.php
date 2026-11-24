@@ -9,6 +9,7 @@ use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use LogicException;
+use PHPUnit\Framework\Assert;
 
 final class Product
 {
@@ -111,11 +112,15 @@ test('class definition properties expose readable recursive arrays without shari
         $definition = $definition->call('configure', ['payload' => $payload]);
     }
     $view = $method ? $definition->methodCalls[0]['params']['payload'] : $definition->constructorParams['payload'];
-    if (!is_array($view) || !is_array($view['cycle'])) {
-        throw new LogicException('Expected a readable recursive configured payload.');
-    }
+    Assert::assertIsArray($view);
+    Assert::assertIsArray($view['cycle'] ?? null);
     expect($view['cycle']['label'])->toBe('configured');
-    $view['cycle'] = ['label' => 'public view changed'];
+
+    $view['cycle']['label'] = 'public view changed';
+    Assert::assertIsArray($view['cycle']['cycle'] ?? null);
+    expect($view['cycle']['cycle']['label'])->toBe('public view changed')
+        ->and($payload['label'])->toBe('configured');
+    $view['cycle']['cycle'] = ['label' => 'public view changed'];
 
     $container = (new ContainerBuilder())->addDefinition('product', $definition)->build();
     expect(fn() => $container->make('product'))->toThrow(InvalidConfigurationException::class, 'recursive array');
@@ -244,10 +249,13 @@ test('recursive configuration stays deferred and stable while runtime overrides 
     $override = ['literal' => $literal];
     $override['cycle'] = &$override;
     $resolved = product($container->make('product', ['payload' => $override]));
-    $nested = $resolved->payload['cycle'];
-    if (!is_array($nested)) {
-        throw new LogicException('Expected the literal recursive runtime value.');
-    }
+    Assert::assertIsArray($resolved->payload['cycle'] ?? null);
     expect($resolved->payload['literal'])->toBe($literal)
-        ->and($nested['literal'])->toBe($literal);
+        ->and($resolved->payload['cycle']['literal'])->toBe($literal);
+
+    $replacement = Definition::reference('replacement.runtime.reference');
+    $resolved->payload['cycle']['literal'] = $replacement;
+
+    Assert::assertIsArray($resolved->payload['cycle']['cycle'] ?? null);
+    expect($resolved->payload['cycle']['cycle']['literal'])->toBe($replacement);
 })->with(['self reference' => false, 'mutual reference' => true]);

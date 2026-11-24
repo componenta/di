@@ -76,11 +76,14 @@ test('method attributes including private parent methods run once in each regist
         ->and($handler->before)->toBe([])
         ->and($handler->after)->toBe([]);
 
-    $container->make($class);
-    $container->make($class);
-    sort($handler->before);
-    sort($handler->after);
+    for ($attempt = 0; $attempt < 2; ++$attempt) {
+        $handler->before = [];
+        $handler->after = [];
+        $container->make($class);
 
-    expect($handler->before)->toBe(['hook', 'hook', 'inheritedHook', 'inheritedHook'])
-        ->and($handler->after)->toBe(['hook', 'hook', 'inheritedHook', 'inheritedHook']);
+        sort($handler->before);
+        sort($handler->after);
+        expect($handler->before)->toBe(['hook', 'inheritedHook'])
+            ->and($handler->after)->toBe(['hook', 'inheritedHook']);
+    }
 });

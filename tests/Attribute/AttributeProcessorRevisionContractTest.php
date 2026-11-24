@@ -58,7 +58,7 @@ final class ClassHandler implements AttributeHandlerInterface
     }
 }
 
-test('object handler discovery returns a complete revision after member autoloading', function (bool $uncached, bool $warm): void {
+test('object handler discovery returns a complete revision after member autoloading', function (bool $customRule, bool $warm): void {
     $suffix = bin2hex(random_bytes(6));
     $classAttribute = 'LateClassMarker_' . $suffix;
     $memberAttribute = 'LateMemberMarker_' . $suffix;
@@ -78,7 +78,7 @@ test('object handler discovery returns a complete revision after member autoload
     $builder = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(ClassMarker::class, $handler))
         ->addAttributeDefinition(new AttributeDefinition(MemberMarker::class));
-    if ($uncached) {
+    if ($customRule) {
         $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
     }
     [$container, $runtime] = $builder->assemble();
@@ -115,5 +115,5 @@ test('object handler discovery returns a complete revision after member autoload
         spl_autoload_unregister($loader);
         NativePayload::$constructions = 0;
     }
-})->with(['cached plans' => false, 'uncached plans' => true])
+})->with(['default discovery' => false, 'revalidate pending declarations' => true])
     ->with(['cold metadata' => false, 'warm metadata' => true]);

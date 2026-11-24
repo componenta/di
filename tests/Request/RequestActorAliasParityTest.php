@@ -73,5 +73,6 @@ test('request attribute aliases populate fresh actor-aware messages for every bu
         ->and($expected->private)->toBeNull()
         ->and($actual->actor)->toBe($actor)
         ->and($actual->commandId)->toBe('command-42')
-        ->and($actual->private)->toBeNull();
+        ->and($actual->private)->toBeNull()
+        ->and($actual)->not->toBe($expected);
 });

@@ -78,6 +78,7 @@ final class SourceHandler implements ParameterAttributeHandlerInterface
 }
 
 test('parameter execution never silently skips an available attribute source', function (bool $warm, bool $uncached, string $priorHandler): void {
+    $sourceResolved = false;
     // These delays span every current cold/warm discovery point, including the
     // uncached control and loading after resolution. They are test inputs, not
     // an expected poll count or a production retry limit. The endpoints also
@@ -151,6 +152,7 @@ test('parameter execution never silently skips an available attribute source', f
             if (class_exists($attributeClass, false)) {
                 expect($result)->toBe(['source-value', true])
                     ->and($handler->calls)->toBe(1);
+                $sourceResolved = true;
             } else {
                 expect($result)->toBe([$withoutSource, false])
                     ->and($handler->calls)->toBe(0);
@@ -159,6 +161,8 @@ test('parameter execution never silently skips an available attribute source', f
             spl_autoload_unregister($loader);
         }
     }
+
+    expect($sourceResolved)->toBeTrue('At least one fixture must resolve its discovered source.');
 })->with(['cold' => false, 'warm' => true])
     ->with(['cached' => false, 'uncached' => true])
     ->with(['none', 'resolved', 'unresolved']);

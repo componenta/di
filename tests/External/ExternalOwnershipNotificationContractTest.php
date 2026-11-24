@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\External\ExternalOwnershipNotificationContract;
 
 use Closure;
+use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\NotFoundException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Fiber;
@@ -36,6 +37,17 @@ function decoration(string $label): Closure
 {
     return static fn(Product $product): Product => new Product($label);
 }
+
+test('external change notifications require the reporting provider to be registered', function (bool $registerOther): void {
+    $di = new ContainerBuilder()->build();
+    $provider = new Provider(['owner' => decoration('unregistered')]);
+    if ($registerOther) {
+        $di->addContainer(new Provider(['owner' => decoration('registered')]));
+    }
+
+    expect(fn() => $di->notifyExternalEntriesChanged($provider, 'owner'))
+        ->toThrow(InvalidConfigurationException::class, 'registered provider');
+})->with(['empty registry' => false, 'another provider is registered' => true]);
 
 test('an external notification refreshes the affected delegator and preserves unrelated identity', function (): void {
     $di = (new ContainerBuilder())

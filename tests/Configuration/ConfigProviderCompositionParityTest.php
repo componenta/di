@@ -105,6 +105,7 @@ final readonly class ProviderBuiltInDefaultsTarget
 }
 
 interface ProviderMergeExclusiveCapability extends AttributeCapabilityInterface {}
+interface ProviderMergeSecondaryCapability extends AttributeCapabilityInterface {}
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class ProviderMergeAttributeA {}
@@ -112,8 +113,14 @@ final readonly class ProviderMergeAttributeA {}
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class ProviderMergeAttributeB {}
 
+#[Attribute(Attribute::TARGET_CLASS)]
+final readonly class ProviderMergeAttributeC {}
+
 #[ProviderMergeAttributeA, ProviderMergeAttributeB]
 final readonly class ProviderMergeAttributeTarget {}
+
+#[ProviderMergeAttributeB, ProviderMergeAttributeC]
+final readonly class ProviderMergeSecondaryTarget {}
 
 test('ordered provider composition survives the complete DI consumer boundary', function (): void {
     $composition = (new ConfigFactory())->create(
@@ -248,7 +255,7 @@ test('provider merge preserves keyed overrides and numeric invokable order at th
         )))->toBe([ProviderFirstInvokable::class, ProviderSecondInvokable::class]);
 });
 
-test('provider merge appends attribute definitions and capabilities before DI seals the pipeline', function (): void {
+test('DI enforces composed attribute definitions and capability limits from both providers', function (): void {
     $composition = (new ConfigFactory())->create(
         new Environment([]),
         static fn(): array => [
@@ -261,15 +268,22 @@ test('provider merge appends attribute definitions and capabilities before DI se
                         ProviderMergeAttributeA::class,
                         capabilities: [ProviderMergeExclusiveCapability::class],
                     ),
+                    new AttributeDefinition(
+                        ProviderMergeAttributeC::class,
+                        capabilities: [ProviderMergeSecondaryCapability::class],
+                    ),
                 ],
             ],
         ],
         static fn(): array => [
             ConfigKey::DEPENDENCIES => [
+                ConfigKey::ATTRIBUTE_CAPABILITIES => [
+                    new CapabilityPolicy(ProviderMergeSecondaryCapability::class, 1),
+                ],
                 ConfigKey::ATTRIBUTE_DEFINITIONS => [
                     new AttributeDefinition(
                         ProviderMergeAttributeB::class,
-                        capabilities: [ProviderMergeExclusiveCapability::class],
+                        capabilities: [ProviderMergeExclusiveCapability::class, ProviderMergeSecondaryCapability::class],
                     ),
                 ],
             ],
@@ -286,5 +300,7 @@ test('provider merge appends attribute definitions and capabilities before DI se
     }
 
     expect(fn() => $container->make(ProviderMergeAttributeTarget::class))
-        ->toThrow(AttributeCompositionException::class, 'accepts at most 1 attribute');
+        ->toThrow(AttributeCompositionException::class, 'accepts at most 1 attribute(s) with capability ' . ProviderMergeExclusiveCapability::class)
+        ->and(fn() => $container->make(ProviderMergeSecondaryTarget::class))
+        ->toThrow(AttributeCompositionException::class, 'accepts at most 1 attribute(s) with capability ' . ProviderMergeSecondaryCapability::class);
 });

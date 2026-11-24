@@ -33,26 +33,28 @@ use LogicException;
 use Nyholm\Psr7\ServerRequest;
 use PHPUnit\Framework\Assert;
 use Psr\Http\Message\ServerRequestInterface;
+use ReflectionParameter;
 use RuntimeException;
 use Throwable;
 use WeakReference;
 
-#[Attribute(Attribute::TARGET_ALL)]
-final class UncachedMarker {}
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final class CacheControl {}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
     public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
 }
 
-function builder(bool $uncached = false): ContainerBuilder
+function builder(): ContainerBuilder
 {
-    $builder = new ContainerBuilder(new Config(['label' => '  configured  '], new Environment([])));
-    $builder->addService(CasterProviderInterface::class, new TestCasterProvider());
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(UncachedMarker::class, rules: [new NoOpRule()]));
-    }
-    return $builder;
+    return (new ContainerBuilder(new Config(['label' => '  configured  '], new Environment([]))))
+        ->addService(CasterProviderInterface::class, new TestCasterProvider());
+}
+
+function cacheControlDefinition(bool $customRule): AttributeDefinition
+{
+    return new AttributeDefinition(CacheControl::class, rules: $customRule ? [new NoOpRule()] : []);
 }
 
 final class State
@@ -216,18 +218,18 @@ afterEach(function (): void {
     State::$references = [];
 });
 
-test('transform uses exact explicit named positional and null inputs before defaults', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('transform uses exact explicit named positional and null inputs before defaults', function (): void {
+    $container = builder()->build();
     $callback = static fn(#[Transform(IDENTITY)] mixed $value = 'fallback'): mixed => $value;
 
     expect($container->call($callback, ['value' => 'named']))->toBe('named')
         ->and($container->call($callback, [0 => 'position']))->toBe('position')
         ->and($container->call($callback, ['value' => null]))->toBeNull()
         ->and(State::$inputs)->toBe(['named', 'position', null]);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform uses fresh native defaults nullable fallback and one empty variadic collection', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('transform uses fresh native defaults nullable fallback and one empty variadic collection', function (): void {
+    $container = builder()->build();
     $defaults = static fn(#[Transform(VISITED)] Source $value = new Source()): Source => $value;
     $first = $container->call($defaults);
     $second = $container->call($defaults);
@@ -241,20 +243,20 @@ test('transform uses fresh native defaults nullable fallback and one empty varia
         ->and($container->call(static fn(#[Transform(IDENTITY)] ?string $value): ?string => $value))->toBeNull()
         ->and($container->call(static fn(#[Transform(REVERSED)] string ...$values): array => $values))->toBe([])
         ->and(State::$inputs)->toBe(['  default  ', null, []]);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('zero parameter transforms require a source and receive zero native arguments', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('zero parameter transforms require a source and receive zero native arguments', function (): void {
+    $container = builder()->build();
     $required = static fn(#[Transform(ZERO)] string $value): string => $value;
     expect(fn() => $container->call($required))->toThrow(ResolutionException::class, 'missing required value')
         ->and(State::$inputs)->toBe([])
         ->and($container->call($required, ['value' => 'source']))->toBe('zero')
         ->and(State::$inputs)->toBe([0]);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform runs after configured sources and can consume shared and fresh objects', function (bool $uncached): void {
+test('transform runs after configured sources and can consume shared and fresh objects', function (): void {
     $shared = new Source();
-    $container = builder($uncached)->addService('transform.source', $shared)->build();
+    $container = builder()->addService('transform.source', $shared)->build();
     $config = static fn(#[Transform(TRIMMED), ConfigAttribute('label')] string $value): string => $value;
     $entry = static fn(#[Transform(VISITED), EntryId('transform.source')] Source $value): Source => $value;
     $fresh = static fn(#[Transform(VISITED), Make(Source::class)] Source $value): Source => $value;
@@ -268,11 +270,11 @@ test('transform runs after configured sources and can consume shared and fresh o
         ->and($shared->visits)->toBe(1)
         ->and($created)->not->toBe($shared)
         ->and($created->visits)->toBe(1);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform does not implicitly autowire its source parameter', function (bool $uncached): void {
+test('transform does not implicitly autowire its source parameter', function (): void {
     $created = 0;
-    $container = builder($uncached)->addFactory(Source::class, static function () use (&$created): Source {
+    $container = builder()->addFactory(Source::class, static function () use (&$created): Source {
         ++$created;
         return new Source();
     })->build();
@@ -280,27 +282,27 @@ test('transform does not implicitly autowire its source parameter', function (bo
     expect(fn() => $container->call(static fn(#[Transform(VISITED)] Source $value): Source => $value))
         ->toThrow(ResolutionException::class, 'missing required value')
         ->and($created)->toBe(0);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('invalid supplied transform input does not fall back to a native default', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('invalid supplied transform input does not fall back to a native default', function (): void {
+    $container = builder()->build();
     expect(fn() => $container->call(static fn(#[Transform(TRIMMED)] string $value = 'fallback'): string => $value, ['value' => null]))
         ->toThrow(ResolutionException::class)
         ->and(State::$inputs)->toBe([]);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('repeatable transform and cast preserve mutual declaration order', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('repeatable transform and cast preserve mutual declaration order', function (): void {
+    $container = builder()->build();
     $first = static fn(#[Transform(PADDED), Cast('trim'), Transform(BRACKETED)] string $value): string => $value;
     $second = static fn(#[Cast('trim'), Transform(PADDED), Transform(BRACKETED)] string $value): string => $value;
 
     expect($container->call($first, ['value' => 'a']))->toBe('[a]')
         ->and($container->call($second, ['value' => '  b  ']))->toBe('[  b  ]')
         ->and(State::$inputs)->toBe(['a', 'a', 'b', '  b  ']);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform validates only the final parameter value and preserves void as null', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('transform validates only the final parameter value and preserves void as null', function (): void {
+    $container = builder()->build();
     expect($container->call(static fn(#[Transform(LENGTH), Transform(STRINGIFIED)] string $value): string => $value, ['value' => 'four']))->toBe('4')
         ->and($container->call(static fn(#[Transform(VOID_RESULT)] ?string $value): ?string => $value, ['value' => 'source']))->toBeNull()
         ->and(State::$inputs)->toBe(['four', 4, 'source']);
@@ -308,10 +310,10 @@ test('transform validates only the final parameter value and preserves void as n
     expect(fn() => $container->call(static fn(#[Transform(LENGTH)] string $value): string => $value, ['value' => 'wrong']))
         ->toThrow(ResolutionException::class);
     expect(State::$inputs)->toBe(['four', 4, 'source', 'wrong']);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform receives the entire variadic collection once and validates resulting element types', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('transform receives the entire variadic collection once and validates resulting element types', function (): void {
+    $container = builder()->build();
     $callback = static fn(#[Transform(REVERSED)] string ...$values): array => $values;
     expect($container->call($callback, ['values' => ['left' => 'a', 'right' => 'b']]))
         ->toBe(['right' => 'b', 'left' => 'a'])
@@ -321,10 +323,10 @@ test('transform receives the entire variadic collection once and validates resul
     // Reversing this valid collection would put a named argument before a positional one.
     expect(fn() => $container->call($callback, ['values' => [0 => 'positional', 'named' => 'named']]))
         ->toThrow(ResolutionException::class);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform suffix dependencies never inherit the outer parameter bag', function (bool $uncached): void {
-    $container = builder($uncached)
+test('transform suffix dependencies never inherit the outer parameter bag', function (): void {
+    $container = builder()
         ->addService(Dependency::class, new Dependency('trusted'))
         ->addService('transform.marker', 'trusted-marker')
         ->build();
@@ -342,20 +344,20 @@ test('transform suffix dependencies never inherit the outer parameter bag', func
         'items' => ['replacement'],
     ]))->toBe('source:trusted:trusted-marker')
         ->and(State::$inputs)->toBe([['source', 'trusted', 'trusted-marker', 'default', null, []]]);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform suffix does not inherit the ambient HTTP invocation request', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('transform suffix does not inherit the ambient HTTP invocation request', function (): void {
+    $container = builder()->build();
     $request = new ServerRequest('POST', '/transform');
     expect(fn() => $container->call(
         static fn(#[Transform(WITH_REQUEST)] string $value): string => $value,
         ['value' => 'input', ServerRequestInterface::class => $request],
     ))->toThrow(ResolutionException::class)
         ->and(State::$inputs)->toBe([]);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('warmed transform suffix plans observe dependency and provider replacement', function (bool $uncached): void {
-    $container = builder($uncached)
+test('warmed transform suffix plans observe dependency and provider replacement', function (): void {
+    $container = builder()
         ->addService(Dependency::class, new Dependency('first'))
         ->addService('transform.marker', 'one')
         ->build();
@@ -365,10 +367,10 @@ test('warmed transform suffix plans observe dependency and provider replacement'
     $container->set('transform.marker', 'two');
     expect($container->call($callback, ['value' => 'source']))->toBe('source:second:two')
         ->and(State::$inputs)->toHaveCount(2);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('transform exceptions retain the owning parameter and original cause', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('transform exceptions retain the owning parameter and original cause', function (): void {
+    $container = builder()->build();
     $cause = new RuntimeException('original transform failure');
     State::$error = $cause;
     try {
@@ -387,10 +389,10 @@ test('transform exceptions retain the owning parameter and original cause', func
     } catch (ResolutionException $error) {
         expect($error)->toBe($identity);
     }
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
-test('reentrant transformation retains the independent outer value and invokes each usage once', function (bool $uncached): void {
-    $container = builder($uncached)->build();
+test('reentrant transformation retains the independent outer value and invokes each usage once', function (): void {
+    $container = builder()->build();
     $callback = static fn(#[Transform(REENTERS), Transform(BRACKETED)] string $value): string => $value;
     State::$reentry = static function () use ($container, $callback): string {
         $value = $container->call($callback, ['value' => 'inner']);
@@ -402,7 +404,7 @@ test('reentrant transformation retains the independent outer value and invokes e
 
     expect($container->call($callback, ['value' => 'outer']))->toBe('[outer:[inner]]')
         ->and(State::$inputs)->toBe(['outer', 'inner', 'inner', 'outer:[inner]']);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final class PendingTransformer
@@ -430,7 +432,7 @@ final class PendingHandler implements ParameterAttributeHandlerInterface
     }
 }
 
-test('late transform discovery does not replay completed callbacks or reconstruct a pending attribute', function (bool $uncached): void {
+test('late transform discovery does not replay completed callbacks or reconstruct a pending attribute', function (bool $customRule): void {
     $alias = 'LateTransform_' . bin2hex(random_bytes(5));
     PendingTransformer::$reveal = __NAMESPACE__ . '\\' . $alias;
     PendingTransformer::$constructions = 0;
@@ -443,11 +445,10 @@ test('late transform discovery does not replay completed callbacks or reconstruc
         throw new LogicException('Expected the late-transform callback.');
     }
     $handler = new PendingHandler();
-    $container = builder($uncached)->addAttributeDefinition(new AttributeDefinition(
-        PendingTransformer::class,
-        $handler,
-        [ValueTransformer::class],
-    ))->build();
+    $container = builder()
+        ->addAttributeDefinition(cacheControlDefinition($customRule))
+        ->addAttributeDefinition(new AttributeDefinition(PendingTransformer::class, $handler, [ValueTransformer::class]))
+        ->build();
 
     try {
         expect($container->call($callback, ['value' => '  late  ']))->toBe('[late]')
@@ -457,9 +458,9 @@ test('late transform discovery does not replay completed callbacks or reconstruc
     } finally {
         PendingTransformer::$reveal = null;
     }
-})->with(['cached plans' => false, 'uncached plans' => true]);
+})->with(['default discovery' => false, 'unrelated composition rule' => true]);
 
-test('a transformer cannot reveal an earlier provider and replay a completed callback', function (bool $uncached): void {
+test('a transformer cannot reveal an earlier provider and replay a completed callback', function (bool $customRule): void {
     $alias = 'LateProvider_' . bin2hex(random_bytes(5));
     $callback = eval(sprintf(
         'namespace %s; return static fn(#[\\Componenta\\DI\\Attribute\\Transform(REVEALS), %s("label")] string $value): string => $value;',
@@ -472,18 +473,18 @@ test('a transformer cannot reveal an earlier provider and replay a completed cal
     State::$reveal = static function () use ($alias): void {
         class_alias(ConfigAttribute::class, __NAMESPACE__ . '\\' . $alias);
     };
-    $container = builder($uncached)->build();
+    $container = builder()->addAttributeDefinition(cacheControlDefinition($customRule))->build();
     expect(fn() => $container->call($callback, ['value' => 'input']))
         ->toThrow(AttributeCompositionException::class)
         ->and(State::$inputs)->toBe(['input']);
-})->with(['cached plans' => false, 'uncached plans' => true]);
+})->with(['default discovery' => false, 'unrelated composition rule' => true]);
 
 final class TransientValue
 {
     public function __construct(public int $number) {}
 }
 
-test('native inline transform closures keep fresh state without retaining values dependencies or local objects', function (bool $uncached): void {
+test('native inline transform closures keep fresh state without retaining values dependencies or local objects', function (): void {
     $callback = eval(<<<'PHP'
     namespace Componenta\DI\Tests\Attribute\TransformContract;
     return static fn(
@@ -504,7 +505,7 @@ test('native inline transform closures keep fresh state without retaining values
     if (!$callback instanceof Closure) {
         throw new LogicException('Expected the native transform callback.');
     }
-    $container = builder($uncached)->build();
+    $container = builder()->build();
     foreach ([10, 20, 30] as $number) {
         $value = new TransientValue($number);
         expect($container->call($callback, ['value' => $value]))->toBe($number + 1);
@@ -514,7 +515,7 @@ test('native inline transform closures keep fresh state without retaining values
             expect($reference->get())->toBeNull();
         }
     }
-})->with(['cached plans' => false, 'uncached plans' => true]);
+});
 
 test('native transform first-class references preserve private static scope and current alias dependencies', function (bool $uncached): void {
     $name = 'NativeReferences_' . bin2hex(random_bytes(5));
@@ -528,10 +529,10 @@ test('native transform first-class references preserve private static scope and 
                 return self::PREFIX . ':' . $input . ':' . $dependency->label . ':' . ++$calls;
             }
             public static function consume(
-                #[\Componenta\DI\Attribute\Transform(self::format(...))] string $value,
+                #[CacheControl, \Componenta\DI\Attribute\Transform(self::format(...))] string $value,
             ): string { return $value; }
             public static function named(
-                #[\Componenta\DI\Attribute\Transform(withSuffix(...))] string $value,
+                #[CacheControl, \Componenta\DI\Attribute\Transform(withSuffix(...))] string $value,
             ): string { return $value; }
         }
         PHP,
@@ -542,15 +543,22 @@ test('native transform first-class references preserve private static scope and 
     if (!class_exists($class, false)) {
         throw new LogicException('Expected the first-class-reference fixture.');
     }
-    $container = builder($uncached)
+    [$container, $runtime] = builder()
+        ->addAttributeDefinition(cacheControlDefinition($uncached))
         ->addService('native.first', new Dependency('first'))
         ->addService('native.second', new Dependency('second'))
         ->addAlias(Dependency::class, 'native.first')
         ->addService('transform.marker', 'marker')
-        ->build();
+        ->assemble();
+
+    $target = new ReflectionParameter([$class, 'consume'], 0);
+    $plan = $runtime->plans->build($target);
+    expect($plan->attributes(CacheControl::class))->toHaveCount(1)
+        ->and($runtime->plans->build($target) === $plan)->toBe(!$uncached);
+
     expect($container->call([$class, 'consume'], ['value' => 'input']))->toBe('private:input:first:1')
         ->and($container->call([$class, 'named'], ['value' => 'input']))->toBe('input:first:marker');
     $container->alias(Dependency::class, 'native.second');
     expect($container->call([$class, 'consume'], ['value' => 'input']))->toBe('private:input:second:2')
         ->and($container->call([$class, 'named'], ['value' => 'input']))->toBe('input:second:marker');
-})->with(['cached plans' => false, 'uncached plans' => true]);
+})->with(['cached semantic plan' => false, 'fresh rule validation' => true]);

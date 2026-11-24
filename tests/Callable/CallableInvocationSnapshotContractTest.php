@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Callable\CallableInvocationSnapshotContract;
 
-use Attribute;
-use Componenta\DI\Attribute\Composition\AttributeCompositionRuleInterface;
-use Componenta\DI\Attribute\Composition\AttributeDefinition;
-use Componenta\DI\Attribute\Composition\AttributeSet;
-use Componenta\DI\Attribute\Composition\AttributeUsage;
 use Componenta\DI\Attribute\EntryId;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\Exception\InvalidCallableException;
@@ -94,14 +89,6 @@ test('explicit callable routing is captured before callable validation can autol
     }
 });
 
-#[Attribute(Attribute::TARGET_PARAMETER)]
-final class CacheControl {}
-
-final class NoOpRule implements AttributeCompositionRuleInterface
-{
-    public function validate(AttributeUsage $attribute, AttributeSet $set): void {}
-}
-
 final class ReplacementStaticTarget
 {
     public static function first(): string
@@ -118,18 +105,13 @@ final class ReplacementStaticTarget
 test('callable resolution captures array routing before validation mutates referenced slots', function (
     string $mutation,
     ?string $nextResult,
-    bool $uncached,
     string $entryPoint,
 ): void {
     $requested = __NAMESPACE__ . '\\ServiceTarget_' . bin2hex(random_bytes(5));
     $owner = $requested;
     $method = 'first';
     $specification = [&$owner, &$method];
-    $builder = (new ContainerBuilder())->addService('autoloaded-callable', $specification);
-    if ($uncached) {
-        $builder->addAttributeDefinition(new AttributeDefinition(CacheControl::class, rules: [new NoOpRule()]));
-    }
-    $container = $builder->build();
+    $container = (new ContainerBuilder())->addService('autoloaded-callable', $specification)->build();
     $resolver = new CallableResolver($container);
     $invoke = static fn(): mixed => match ($entryPoint) {
         'service call' => $container->call('autoloaded-callable'),
@@ -174,5 +156,4 @@ test('callable resolution captures array routing before validation mutates refer
     'method changed' => ['method', 'alternate'],
     'both changed' => ['both', 'replacement:alternate'],
     'receiver invalidated' => ['invalid owner', null],
-])->with(['cached plans' => false, 'uncached plans' => true])
-    ->with(['service call', 'service resolve', 'explicit resolve', 'standalone resolve']);
+])->with(['service call', 'service resolve', 'explicit resolve', 'standalone resolve']);

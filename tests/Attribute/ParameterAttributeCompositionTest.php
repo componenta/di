@@ -8,14 +8,17 @@ use Componenta\Caster\CasterProviderInterface;
 use Componenta\Config\Config;
 use Componenta\Config\Environment;
 use Componenta\DI\Attribute\Cast;
+use Componenta\DI\Attribute\Composition\Capability\ValueProvider;
 use Componenta\DI\Attribute\Config as ConfigAttribute;
 use Componenta\DI\Attribute\Header;
 use Componenta\DI\Attribute\QueryParam;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\Tests\Support\TestCasterProvider;
+use LogicException;
 use Nyholm\Psr7\ServerRequest;
 use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
@@ -55,6 +58,18 @@ final class ConfigThenCastPropertyDto
     public string $value;
 }
 
+abstract class RequestSourceFixtures extends TestCase
+{
+    public static function unreadableRequest(): ServerRequestInterface
+    {
+        $request = self::createStub(ServerRequestInterface::class);
+        $failure = new LogicException('Conflicting request sources must fail before reading the request.');
+        $request->method('getQueryParams')->willThrowException($failure);
+        $request->method('hasHeader')->willThrowException($failure);
+        return $request;
+    }
+}
+
 function composedParameterContainer(): \Componenta\DI\Container
 {
     return (new ContainerBuilder())
@@ -89,14 +104,16 @@ test('composition ordering runs value providers before transformers regardless o
 });
 
 test('incompatible parameter value sources fail composition before resolution', function (): void {
-    $request = (new ServerRequest('GET', '/?value=query'))
-        ->withQueryParams(['value' => 'query'])
-        ->withHeader('X-Value', 'header');
+    $request = RequestSourceFixtures::unreadableRequest();
 
     expect(fn() => composedParameterContainer()->make(
         ConflictingRequestSourcesDto::class,
         [ServerRequestInterface::class => $request],
-    ))->toThrow(AttributeCompositionException::class);
+    ))->toThrow(
+        AttributeCompositionException::class,
+        'accepts at most 1 attribute(s) with capability ' . ValueProvider::class
+            . '; found #[' . QueryParam::class . '], #[' . Header::class . '].',
+    );
 });
 
 test('attribute composition transforms explicit caller input', function (): void {

@@ -33,7 +33,7 @@ test('ClassDefinition rejects unused configured arguments', function (ClassDefin
     'no constructor' => [ClassDefinition::create(NoConstructor::class)->constructor(['unused' => 5])],
 ]);
 
-test('ClassDefinition preserves runtime context and discards overridden configured references', function (): void {
+test('ClassDefinition permits unused runtime arguments and skips overridden configured references', function (): void {
     $definition = ClassDefinition::create(Client::class)
         ->constructor(['timeout' => Definition::reference('missing'), 0 => Definition::reference('also.missing')])
         ->call('configure', ['label' => 'configured']);

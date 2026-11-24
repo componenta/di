@@ -122,7 +122,7 @@ function readonlyTarget(): string
         eval(<<<'PHP'
         namespace Componenta\DI\Tests\Object\TransformPropertyContract;
         final class ReadonlyTarget extends ReadonlyState {
-            #[\Componenta\DI\Attribute\Transform(TRIMMED), \Componenta\DI\Attribute\Config('label'), \Componenta\DI\Attribute\Transform(BRACKETED)]
+            #[UncachedMarker, \Componenta\DI\Attribute\Transform(TRIMMED), \Componenta\DI\Attribute\Config('label'), \Componenta\DI\Attribute\Transform(BRACKETED)]
             public readonly string $label;
         }
         PHP);
@@ -135,13 +135,13 @@ function readonlyTarget(): string
 
 final class IntermediateTarget
 {
-    #[ConfigAttribute('label'), Transform(LENGTH), Transform(POSITIVE)]
+    #[UncachedMarker, ConfigAttribute('label'), Transform(LENGTH), Transform(POSITIVE)]
     public bool $label;
 }
 
 final class ContextTarget
 {
-    #[Transform(IDENTITY)]
+    #[UncachedMarker, Transform(IDENTITY)]
     public ?string $label = 'default';
 
     public function __construct()
@@ -152,12 +152,12 @@ final class ContextTarget
 
 final class PromotedTarget
 {
-    public function __construct(#[Transform(TRIMMED)] public string $label) {}
+    public function __construct(#[UncachedMarker, Transform(TRIMMED)] public string $label) {}
 }
 
 final class InitializedReadonlyTarget
 {
-    #[Transform(TRIMMED)]
+    #[UncachedMarker, Transform(TRIMMED)]
     public readonly string $label;
 
     public function __construct()
@@ -171,7 +171,7 @@ final class WriteOnlyTarget
     /** @var list<string> */
     public array $assigned = [];
 
-    #[Transform(TRIMMED), ConfigAttribute('label'), Transform(BRACKETED)]
+    #[UncachedMarker, Transform(TRIMMED), ConfigAttribute('label'), Transform(BRACKETED)]
     public string $label {
         set(string $value) {
             $this->assigned[] = $value;
@@ -184,7 +184,7 @@ final class WiderSetterTarget
     public int $assignments = 0;
     private int $stored = 0;
 
-    #[Transform(TRIMMED)]
+    #[UncachedMarker, Transform(TRIMMED)]
     public int $number {
         get => $this->stored;
         set(int|string $value) {
@@ -204,7 +204,7 @@ final class FailureTarget
         State::$entry = $this;
     }
 
-    #[Transform(TRIMMED), Transform(FAILS)]
+    #[UncachedMarker, Transform(TRIMMED), Transform(FAILS)]
     public string $label {
         get => $this->stored;
         set(string $value) {
@@ -216,7 +216,7 @@ final class FailureTarget
 
 final class StaticTarget
 {
-    #[Transform(TRIMMED)]
+    #[UncachedMarker, Transform(TRIMMED)]
     public static string $label = 'before';
 }
 
@@ -294,7 +294,7 @@ test('static and get-only virtual properties reject transformation before callba
         eval(<<<'PHP'
         namespace Componenta\DI\Tests\Object\TransformPropertyContract;
         final class GetOnlyTarget {
-            #[\Componenta\DI\Attribute\Transform(TRIMMED)]
+            #[UncachedMarker, \Componenta\DI\Attribute\Transform(TRIMMED)]
             public string $label { get => 'existing'; }
         }
         PHP);
@@ -322,7 +322,7 @@ test('native lazy property transformations retry with fresh closures and release
         namespace %s;
         #[\Componenta\DI\Attribute\Lazy]
         final class %s extends NativeLazyTarget {
-            #[\Componenta\DI\Attribute\Transform(static function (string $input): string {
+            #[UncachedMarker, \Componenta\DI\Attribute\Transform(static function (string $input): string {
                 static $count = 0;
                 static $local = new \stdClass();
                 State::$references[] = \WeakReference::create($local);

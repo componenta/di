@@ -8,6 +8,7 @@ use Attribute;
 use Componenta\DI\Attribute\Composition\AttributeDefinition;
 use Componenta\DI\Exception\AttributeCompositionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use ReflectionClass;
 
 use function Componenta\DI\Tests\Support\fixtureInstance;
 
@@ -72,11 +73,14 @@ it('rejects repeated non-repeatable metadata without constructing attribute inst
 
 it('allows repeatable metadata without evaluating runtime attribute constructors', function (): void {
     RepeatableMetadataMarker::$constructions = 0;
-    $container = (new ContainerBuilder())
+    [$container, $runtime] = (new ContainerBuilder())
         ->addAttributeDefinition(new AttributeDefinition(RepeatableMetadataMarker::class))
-        ->build();
+        ->assemble();
 
-    expect($container->make(ValidRepeatedMetadata::class))->toBeInstanceOf(ValidRepeatedMetadata::class)
+    $plan = $runtime->plans->build(new ReflectionClass(ValidRepeatedMetadata::class));
+
+    expect($plan->attributes(RepeatableMetadataMarker::class))->toHaveCount(2)
+        ->and($container->make(ValidRepeatedMetadata::class))->toBeInstanceOf(ValidRepeatedMetadata::class)
         ->and(RepeatableMetadataMarker::$constructions)->toBe(0);
 });
 

@@ -24,8 +24,8 @@ final class SetUpEnvironmentTarget
 {
     public int $port = 0;
     public int $runtimePort = 0;
-    public bool $debug = false;
-    public bool $runtimeDebug = false;
+    public bool $debug;
+    public bool $runtimeDebug;
 
     public function configure(
         int $port,
@@ -40,11 +40,15 @@ final class SetUpEnvironmentTarget
     }
 }
 
-test('SetUp resolves typed environment descriptors through the public runtime factory', function (string $mode): void {
+test('SetUp resolves typed environment descriptors through the public runtime factory', function (
+    string $port,
+    string $debug,
+    int $expectedPort,
+    bool $expectedDebug,
+): void {
     $environment = new Environment([
-        'APP_ENV' => $mode,
-        'PORT' => '9001',
-        'DEBUG' => 'yes',
+        'PORT' => $port,
+        'DEBUG' => $debug,
     ]);
     $config = new Config([], $environment);
     $container = (new ContainerFactory())->create(
@@ -59,11 +63,13 @@ test('SetUp resolves typed environment descriptors through the public runtime fa
     $entry = $container->make(SetUpEnvironmentTarget::class);
     Assert::assertInstanceOf(SetUpEnvironmentTarget::class, $entry);
 
-    expect($entry->port)->toBe(9001)
-        ->and($entry->runtimePort)->toBe(9001)
-        ->and($entry->debug)->toBeTrue()
-        ->and($entry->runtimeDebug)->toBeTrue()
+    expect($entry->port)->toBe($expectedPort)
+        ->and($entry->runtimePort)->toBe($expectedPort)
+        ->and($entry->debug)->toBe($expectedDebug)
+        ->and($entry->runtimeDebug)->toBe($expectedDebug)
         ->and($container->get(Config::class))->toBe($config)
-        ->and($container->get(Environment::class))->toBe($environment)
-        ->and($environment->get('APP_ENV'))->toBe($mode);
-})->with(['development', 'production']);
+        ->and($container->get(Environment::class))->toBe($environment);
+})->with([
+    'enabled' => ['9001', 'yes', 9001, true],
+    'disabled' => ['9090', 'no', 9090, false],
+]);

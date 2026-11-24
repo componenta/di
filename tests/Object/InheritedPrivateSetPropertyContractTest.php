@@ -22,7 +22,7 @@ use ReflectionClass;
 use RuntimeException;
 use Throwable;
 
-#[Attribute(Attribute::TARGET_CLASS)]
+#[Attribute(Attribute::TARGET_PROPERTY)]
 final class UncachedMarker {}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
@@ -47,7 +47,7 @@ class Product
     #[EntryId('private-set.label')]
     protected private(set) string $protected;
 
-    #[EntryId('private-set.label')]
+    #[EntryId('private-set.label'), UncachedMarker]
     public private(set) string $hooked {
         set {
             State::$events[] = 'hook:' . $value;

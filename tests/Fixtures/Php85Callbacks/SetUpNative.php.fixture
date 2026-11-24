@@ -13,6 +13,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 
 require $argv[1];
+require_once dirname(__DIR__, 2) . '/Support/functions.php';
 $canonicalPath = static function (string|false $path): string|false {
     $canonical = $path === false ? false : realpath($path);
     return $canonical === false ? false : str_replace(DIRECTORY_SEPARATOR, '/', $canonical);
@@ -29,8 +30,8 @@ if (in_array(false, $sourceMap, true)) {
     throw new RuntimeException('The fixture must load the selected checkout source.');
 }
 
-#[Attribute]
-final class UnusedMarker {}
+#[Attribute(Attribute::TARGET_CLASS)]
+final class CacheControl {}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
 {
@@ -62,7 +63,7 @@ final class Helpers
     }
 }
 
-#[SetUp(static function (Target $instance, Dependency $dependency): object {
+#[CacheControl, SetUp(static function (Target $instance, Dependency $dependency): object {
     static $count = 0;
     static $held;
     $held ??= new stdClass();
@@ -82,7 +83,7 @@ final class Target
     public readonly Dependency $injected;
 }
 
-#[SetUp(self::initialize(...))]
+#[CacheControl, SetUp(self::initialize(...))]
 final class PrivateScope
 {
     public string $value;
@@ -98,7 +99,7 @@ final class Calls
     public static int $count = 0;
 }
 
-#[Lazy, SetUp(static function (Delayed $instance): void { ++Calls::$count; $instance->value = 'initialized'; })]
+#[CacheControl, Lazy, SetUp(static function (Delayed $instance): void { ++Calls::$count; $instance->value = 'initialized'; })]
 final class Delayed
 {
     public string $value;
@@ -123,7 +124,7 @@ final readonly class TrackedSetUp extends SetUp
     }
 }
 
-#[TrackedSetUp(static function (Retried $instance): void {
+#[CacheControl, TrackedSetUp(static function (Retried $instance): void {
     static $held;
     $held ??= new stdClass();
     Failures::$held[] = WeakReference::create($held);
@@ -139,7 +140,7 @@ class Retried
     public string $value;
 }
 
-#[Lazy, TrackedSetUp(static function (DeferredRetry $instance): void {
+#[CacheControl, Lazy, TrackedSetUp(static function (DeferredRetry $instance): void {
     static $held;
     $held ??= new stdClass();
     Failures::$held[] = WeakReference::create($held);
@@ -154,11 +155,18 @@ final class DeferredRetry
     public string $value;
 }
 
-$builder = new ContainerBuilder();
-if ($argv[3] === 'uncached') {
-    $builder->addAttributeDefinition(new AttributeDefinition(UnusedMarker::class, rules: [new NoOpRule()]));
+[$container, $runtime] = (new ContainerBuilder())
+    ->addAttributeDefinition(new AttributeDefinition(
+        CacheControl::class,
+        rules: $argv[3] === 'uncached' ? [new NoOpRule()] : [],
+    ))
+    ->assemble();
+$metadataTarget = new ReflectionClass(Target::class);
+$firstPlan = $runtime->plans->build($metadataTarget);
+if (count($firstPlan->attributes(CacheControl::class)) !== 1) {
+    throw new RuntimeException('Expected the cache-control marker on the callback target.');
 }
-$container = $builder->build();
+$planReused = $runtime->plans->build($metadataTarget) === $firstPlan;
 $values = [];
 $references = [];
 foreach (['one', 'two', 'three'] as $value) {
@@ -207,6 +215,7 @@ gc_collect_cycles();
 
 echo json_encode([
     'source_map' => $sourceMap,
+    'plan_reused' => $planReused,
     'values' => $values,
     'shared' => $first === $second,
     'private_scope' => $private->value,

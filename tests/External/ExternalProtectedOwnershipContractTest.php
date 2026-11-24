@@ -212,15 +212,17 @@ test('later ownership proof cannot invalidate an earlier alias that became prote
     ])->build();
     $container->alias('lookup', 'local.lookup');
     $state = new class () {
-        public bool $armed = false;
+        public bool $candidateInspectedLookup = false;
+        public bool $existingRecheckedLookup = false;
+        public ?Product $warmed = null;
     };
-    $triggerProbes = 0;
-    $warmed = null;
-    $earlier = new External([], static function (string $id) use ($container, $state, &$triggerProbes, &$warmed): bool {
-        if ($state->armed && $id === 'trigger' && ++$triggerProbes === 2) {
-            $state->armed = false;
+    $earlier = new External([], static function (string $id) use ($container, $state): bool {
+        if ($id === 'lookup' && $state->candidateInspectedLookup) {
+            $state->existingRecheckedLookup = true;
+        }
+        if ($id === 'trigger' && $state->existingRecheckedLookup && $state->warmed === null) {
             $container->alias('lookup', Config::class);
-            $warmed = product($container);
+            $state->warmed = product($container);
         }
         return false;
     });
@@ -230,14 +232,18 @@ test('later ownership proof cannot invalidate an earlier alias that became prote
     product($container);
     product($container, 'trigger.product');
     $replacement = new Lookup('external');
-    $candidate = new External(['lookup' => $replacement, 'trigger' => $replacement]);
-    $state->armed = true;
+    $candidate = new External(['lookup' => $replacement, 'trigger' => $replacement], static function (string $id) use ($state): bool {
+        if ($id === 'lookup') {
+            $state->candidateInspectedLookup = true;
+        }
+        return $id === 'lookup' || $id === 'trigger';
+    });
 
     $container->addContainer($candidate);
     $inspection = array_count_values($candidate->queries);
 
-    expect($warmed)->toBeInstanceOf(Product::class)
-        ->and(product($container))->toBe($warmed)
+    expect($state->warmed)->toBeInstanceOf(Product::class)
+        ->and(product($container))->toBe($state->warmed)
         ->and(product($container, 'trigger.product')->source)->toBe($replacement)
         ->and($inspection['lookup'] ?? 0)->toBe(1)
         ->and($inspection['trigger'] ?? 0)->toBe(1);
@@ -250,13 +256,11 @@ test('final ownership proof continues to later public dependencies after protect
     ])->build();
     $container->alias('lookup', 'local.lookup');
     $state = new class () {
-        public bool $armed = false;
-        public int $probes = 0;
+        public bool $candidateInspectedLookup = false;
         public ?Product $warmed = null;
     };
     $earlier = new External([], static function (string $id) use ($container, $state): bool {
-        if ($state->armed && $id === 'lookup' && ++$state->probes === 2) {
-            $state->armed = false;
+        if ($id === 'lookup' && $state->candidateInspectedLookup && $state->warmed === null) {
             $container->alias('lookup', Config::class);
             $state->warmed = product($container);
         }
@@ -268,8 +272,12 @@ test('final ownership proof continues to later public dependencies after protect
     product($container);
     $previous = product($container, 'second.product');
     $replacement = new Lookup('external');
-    $candidate = new External(['lookup' => $replacement, 'second.lookup' => $replacement]);
-    $state->armed = true;
+    $candidate = new External(['lookup' => $replacement, 'second.lookup' => $replacement], static function (string $id) use ($state): bool {
+        if ($id === 'lookup') {
+            $state->candidateInspectedLookup = true;
+        }
+        return $id === 'lookup' || $id === 'second.lookup';
+    });
 
     $container->addContainer($candidate);
     $inspection = array_count_values($candidate->queries);
@@ -328,17 +336,15 @@ test('final proof revisits an alias that becomes public again without replaying 
     ])->build();
     $container->alias('lookup', 'local.lookup');
     $state = new class () {
-        public bool $armed = false;
         public bool $protected = false;
+        public bool $candidateInspectedTrigger = false;
     };
-    $triggerProbes = 0;
     $warmed = null;
-    $earlier = new External([], static function (string $id) use ($container, $state, &$triggerProbes, &$warmed): bool {
+    $earlier = new External([], static function (string $id) use ($container, $state, &$warmed): bool {
         if ($id === 'lookup' && $state->protected) {
             throw new LogicException('Protected aliases do not need final owner callbacks.');
         }
-        if ($state->armed && $id === 'trigger' && ++$triggerProbes === 2) {
-            $state->armed = false;
+        if ($id === 'trigger' && $state->protected && $state->candidateInspectedTrigger) {
             $state->protected = false;
             $container->alias('lookup', 'local.lookup');
             $warmed = product($container);
@@ -357,9 +363,11 @@ test('final proof revisits an alias that becomes public again without replaying 
             $container->alias('lookup', Config::class);
             product($container);
         }
+        if ($id === 'trigger') {
+            $state->candidateInspectedTrigger = true;
+        }
         return $id === 'lookup' || $id === 'trigger';
     });
-    $state->armed = true;
 
     $container->addContainer($candidate);
     $inspection = array_count_values($candidate->queries);

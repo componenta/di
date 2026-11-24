@@ -40,10 +40,15 @@ test('type inspection recognizes canonical relative class types with and without
 test('intersection parameters accept type-keyed objects only when every component matches', function (): void {
     $container = (new ContainerBuilder())->build();
     $value = new IntersectionValue();
+    $partial = new class () implements IntersectionLeft {};
     $callback = static fn(IntersectionLeft&IntersectionRight $value): object => $value;
 
     expect($container->call($callback, [IntersectionLeft::class => $value]))->toBe($value)
-        ->and($container->call($callback, [IntersectionRight::class => $value]))->toBe($value);
+        ->and($container->call($callback, [IntersectionRight::class => $value]))->toBe($value)
+        ->and($container->call($callback, [
+            IntersectionLeft::class => $partial,
+            IntersectionRight::class => $value,
+        ]))->toBe($value);
 });
 
 /**

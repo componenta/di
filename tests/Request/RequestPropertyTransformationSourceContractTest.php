@@ -18,7 +18,7 @@ use Componenta\DI\Tests\Support\ContainerBuilder;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ServerRequestInterface;
 
-#[Attribute(Attribute::TARGET_PARAMETER)]
+#[Attribute(Attribute::TARGET_PROPERTY)]
 final class UncachedMarker {}
 
 final class NoOpRule implements AttributeCompositionRuleInterface
@@ -105,7 +105,7 @@ test('property transformations recheck mapped sources after preparing their depe
     $attribute = $transform ? '\\Componenta\\DI\\Attribute\\Transform(TRANSFORM)' : '\\Componenta\\DI\\Attribute\\Cast("role")';
     eval(sprintf(
         'namespace %s; %s final class %s {
-            #[%s] public string $role = "default" {
+            #[UncachedMarker, %s] public string $role = "default" {
                 set { ++State::$written; $this->role = $value; }
             }
             public function __construct(#[\\%s("trusted")] string $role) { ++State::$constructed; }
@@ -167,7 +167,7 @@ test('transforming a provider-owned property does not materialize unused context
     $attribute = $transform ? '\\Componenta\\DI\\Attribute\\Transform(TRANSFORM)' : '\\Componenta\\DI\\Attribute\\Cast("role")';
     eval(sprintf(
         'namespace %s; #[\\Componenta\\DI\\Attribute\\NoConstructor] final class %s {
-            #[\\Componenta\\DI\\Attribute\\EntryId("trusted"), %s] public string $role;
+            #[UncachedMarker, \\Componenta\\DI\\Attribute\\EntryId("trusted"), %s] public string $role;
         }',
         __NAMESPACE__,
         $dto,

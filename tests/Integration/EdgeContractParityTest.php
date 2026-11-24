@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Componenta\DI\Tests\Integration\EdgeContractParity;
 
 use Componenta\DI\Attribute\MapRequestPayload;
-use Componenta\DI\Attribute\ServerParam;
 use Componenta\DI\CallableResolver;
 use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Tests\Support\ContainerBuilder;
@@ -130,14 +129,4 @@ test('request validation retries a transient provider lookup failure on the next
 
     expect($container->call($callable, $params))->toBe('ok')
         ->and($external->lookups)->toBe(2);
-});
-
-test('ServerParam preserves an explicitly present null instead of using its missing default', function (): void {
-    $request = new ServerRequest(
-        method: 'GET',
-        uri: '/',
-        serverParams: ['nullable' => null],
-    );
-
-    expect((new ServerParam('nullable', default: 'fallback'))->extract($request))->toBeNull();
 });

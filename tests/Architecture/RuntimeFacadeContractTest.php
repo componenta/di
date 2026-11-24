@@ -12,16 +12,23 @@ use Componenta\DI\Resolver\Entry\ObjectCreationContext;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 
 test('standalone facades expose application operations without publishing attached runtime controls', function (): void {
-    $runtimeMethods = [
-        AttributePlanBuilder::class => ['refreshAvailability', 'refreshLoaded', 'hasSameLoadedDeclarations'],
-        AttributeProcessor::class => ['process', 'processTracked', 'metadataState', 'recordBootstrapUse'],
-        CompositeResolver::class => ['attach', 'tryResolveShared', 'knows'],
-        ObjectCreationContext::class => ['__construct', 'startAttempt', 'runPhase', 'assertParametersReadable', 'resolveProperty'],
-        ParametersResolver::class => ['prepare', 'prepareTargets', 'resolvePrepared', 'resolveTracked', 'isCurrentPlan'],
+    $publicMethods = [
+        AttributePlanBuilder::class => ['__construct', 'build'],
+        AttributeProcessor::class => ['__construct', 'hasHandlers', 'prepare'],
+        CompositeResolver::class => ['__construct', 'can', 'resolve', 'setDefinition'],
+        ObjectCreationContext::class => [
+            'claimProperty', 'disableConstructor', 'propertyClaimed', 'readProperty', 'selectStrategy', 'writeProperty',
+        ],
+        ParametersResolver::class => [
+            '__construct', 'add', 'resolve', 'resolveParameter', 'resolveTargets', 'seal', 'target', 'targets',
+        ],
     ];
 
-    foreach ($runtimeMethods as $class => $methods) {
-        expect(array_intersect($methods, get_class_methods($class)))->toBe([], $class);
+    foreach ($publicMethods as $class => $expected) {
+        $actual = get_class_methods($class);
+        sort($actual, SORT_STRING);
+
+        expect($actual)->toBe($expected, $class);
     }
 });
 

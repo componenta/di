@@ -8,6 +8,7 @@ use Componenta\DI\Definition\ClassDefinition;
 use Componenta\DI\Definition\Definition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use LogicException;
+use PHPUnit\Framework\Assert;
 use Psr\Container\ContainerInterface;
 
 use function Componenta\DI\Tests\Support\container;
@@ -85,13 +86,12 @@ test('class definition runtime overrides preserve recursive arrays as literal va
 
     $product = $container->make('runtime-arguments', ['payload' => $payload]);
 
-    expect($product)->toBeInstanceOf(RecursiveArgumentsProduct::class);
-    if (!$product instanceof RecursiveArgumentsProduct) {
-        throw new LogicException('Expected a configured product.');
-    }
-    $nested = $product->payload['self'];
-    if (!is_array($nested)) {
-        throw new LogicException('Expected the literal recursive array.');
-    }
-    expect($nested['value'])->toBe('runtime');
+    Assert::assertInstanceOf(RecursiveArgumentsProduct::class, $product);
+    Assert::assertIsArray($product->payload['self'] ?? null);
+    expect($product->payload['self']['value'])->toBe('runtime');
+
+    $product->payload['self']['value'] = 'updated';
+
+    Assert::assertIsArray($product->payload['self']['self'] ?? null);
+    expect($product->payload['self']['self']['value'])->toBe('updated');
 });

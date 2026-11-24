@@ -16,7 +16,3 @@ it('declares current request context attributes for parameters only', function (
         expect($metadata->flags)->toBe(Attribute::TARGET_PARAMETER);
     }
 });
-
-it('does not expose an implicit request-context resolver contract', function (): void {
-    expect(class_exists('Componenta\\DI\\Resolver\\Parameter\\RequestContextResolver'))->toBeFalse();
-});

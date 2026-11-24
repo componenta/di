@@ -109,7 +109,7 @@ function mapName(array $data, #[EntryId('mapping.marker')] string $marker): arra
 define(__NAMESPACE__ . '\\MAP_NAME', mapName(...));
 
 function mapped(
-    #[MapRequest(sources: [RequestDataSource::Query], map: ['raw' => 'name'], afterMap: MAP_NAME)]
+    #[UncachedMarker, MapRequest(sources: [RequestDataSource::Query], map: ['raw' => 'name'], afterMap: MAP_NAME)]
     ProductContract $product,
 ): Product {
     State::$events[] = 'target';
@@ -170,21 +170,24 @@ test('afterMap completes once before the DTO factory across eager lazy and proxy
         throw new LogicException('Expected a lifecycle product class.');
     }
     $container = mappedContainer($class, $uncached);
-    $request = (new ServerRequest('GET', '/'))->withQueryParams(['raw' => ' Ada ']);
-    $product = $container->call(mapped(...), [ServerRequestInterface::class => $request]);
-    if (!$product instanceof Product) {
-        throw new LogicException('Expected the mapped product.');
-    }
     $eager = $class === Product::class;
+    foreach (['Ada', 'Grace'] as $name) {
+        State::$events = [];
+        $request = (new ServerRequest('GET', '/'))->withQueryParams(['raw' => ' ' . $name . ' ']);
+        $product = $container->call(__NAMESPACE__ . '\\mapped', [ServerRequestInterface::class => $request]);
+        if (!$product instanceof Product) {
+            throw new LogicException('Expected the mapped product.');
+        }
 
-    expect(State::$events)->toBe($eager
-        ? ['afterMap:first', 'factory', 'constructor', 'init', 'target']
-        : ['afterMap:first', 'factory', 'target'])
-        ->and($product->name)->toBe('Ada:first')
-        ->and($product->ready)->toBe('ready')
-        ->and(State::$events)->toBe($eager
+        expect(State::$events)->toBe($eager
             ? ['afterMap:first', 'factory', 'constructor', 'init', 'target']
-            : ['afterMap:first', 'factory', 'target', 'constructor', 'init']);
+            : ['afterMap:first', 'factory', 'target'])
+            ->and($product->name)->toBe($name . ':first')
+            ->and($product->ready)->toBe('ready')
+            ->and(State::$events)->toBe($eager
+                ? ['afterMap:first', 'factory', 'constructor', 'init', 'target']
+                : ['afterMap:first', 'factory', 'target', 'constructor', 'init']);
+    }
 })->with([Product::class, LazyProduct::class, ProxyProduct::class])
     ->with(['cached plans' => false, 'non-memoized plans' => true]);
 
@@ -311,9 +314,9 @@ final class LazyPayloadProduct extends PayloadProduct {}
 #[Proxy]
 final class ProxyPayloadProduct extends PayloadProduct {}
 
-function transientContainer(bool $uncached): Container
+function transientContainer(): Container
 {
-    return builder($uncached)->addAttributeDefinition(static function (Container $container): AttributeDefinition {
+    return builder(false)->addAttributeDefinition(static function (Container $container): AttributeDefinition {
         $handler = $container->get(RequestAttributeHandler::class);
         if (!$handler instanceof RequestAttributeHandler) {
             throw new LogicException('Expected the shared request attribute handler.');
@@ -322,11 +325,8 @@ function transientContainer(bool $uncached): Container
     })->build();
 }
 
-test('request callback metadata releases transient closures captures inputs dependencies and results', function (
-    string $mode,
-    bool $uncached,
-): void {
-    $container = transientContainer($uncached);
+test('request callback metadata releases transient closures captures inputs dependencies and results', function (string $mode): void {
+    $container = transientContainer();
     $target = match ($mode) {
         'array' => static fn(#[TransientMapping] array $data): array => $data,
         'lazy' => static fn(#[TransientMapping] LazyPayloadProduct $product): PayloadProduct => $product,
@@ -364,11 +364,10 @@ test('request callback metadata releases transient closures captures inputs depe
             expect($reference->get())->toBeNull();
         }
     }
-})->with(['array', 'eager', 'lazy', 'proxy'])
-    ->with(['cached plans' => false, 'non-memoized plans' => true]);
+})->with(['array', 'eager', 'lazy', 'proxy']);
 
 test('releasing a failed mapping exception releases callback state and allows a later successful attempt', function (): void {
-    $container = transientContainer(false);
+    $container = transientContainer();
     $target = static fn(#[TransientMapping] array $data): array => $data;
     $payload = new \stdClass();
     $request = (new ServerRequest('GET', '/'))->withQueryParams(['payload' => $payload]);
@@ -506,7 +505,7 @@ final readonly class TransientInput
     public function __construct(public int $number) {}
 }
 
-test('native inline afterMap closures keep fresh local state and release their values and dependencies', function (bool $uncached): void {
+test('native inline afterMap closures keep fresh local state and release their values and dependencies', function (): void {
     $target = eval(<<<'PHP'
     namespace Componenta\DI\Tests\Request\RequestMappingCallbackLifecycleContract;
     return static fn(
@@ -534,7 +533,7 @@ test('native inline afterMap closures keep fresh local state and release their v
     if (!$target instanceof Closure) {
         throw new LogicException('Expected the native mapping callback target.');
     }
-    $container = builder($uncached)->build();
+    $container = builder(false)->build();
 
     foreach ([10, 20] as $number) {
         $input = new TransientInput($number);
@@ -546,4 +545,4 @@ test('native inline afterMap closures keep fresh local state and release their v
             expect($reference->get())->toBeNull();
         }
     }
-})->with(['cached plans' => false, 'non-memoized plans' => true]);
+});

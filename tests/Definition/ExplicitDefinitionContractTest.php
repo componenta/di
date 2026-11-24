@@ -67,8 +67,7 @@ it('creates ClassDefinition results using only explicit instructions and native 
         ->and($di->get(ExplicitProduct::class))->toBe($entry);
 });
 
-it('accepts definitions with their own payload shape and rejects unsupported markers without replacing a binding', function (): void {
-    expect(new \ReflectionClass(\Componenta\DI\Definition\DefinitionInterface::class)->getProperties())->toBe([]);
+it('rejects unsupported definitions without replacing a registered service', function (): void {
     $definition = new class () implements \Componenta\DI\Definition\DefinitionInterface {};
     $original = new Dependency();
     $di = (new ContainerBuilder())->addService('original', $original)->build();

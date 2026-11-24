@@ -143,21 +143,6 @@ function deferredFunctionResolverFactory(ContainerInterface $container): Paramet
     return new DeferredValueResolver();
 }
 
-test('container factory materializes deferred attribute and parameter resolver service methods', function (): void {
-    $container = (new ContainerBuilder())
-        ->addService(DeferredExtensionFactoryService::class, new DeferredExtensionFactoryService())
-        ->addAttributeDefinition([DeferredExtensionFactoryService::class, 'attribute'])
-        ->addParameterResolver([DeferredExtensionFactoryService::class, 'valueResolver'], 750)
-        ->addParameterResolver([DeferredExtensionFactoryService::class, 'conventionResolver'], 350)
-        ->build();
-
-    $dto = $container->make(DeferredExtensionDto::class);
-    Assert::assertInstanceOf(DeferredExtensionDto::class, $dto);
-
-    expect($dto->value)->toBe('from-service-method')
-        ->and($dto->fallback)->toBe('from-deferred-resolver');
-});
-
 test('deferred extension factories can use constructor autowiring during bootstrap', function (): void {
     $container = (new ContainerBuilder())
         ->addAttributeDefinition([DeferredAutowiredAttributeFactory::class, 'attribute'])

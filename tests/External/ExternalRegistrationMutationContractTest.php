@@ -86,36 +86,49 @@ test('external registration discovers deferred dependencies added by ownership c
         ->and($registrationQueries)->toBe(['first.decorator' => 1, 'second.decorator' => 1, 'third.decorator' => 1]);
 });
 
-test('external registration invalidates new dependents of an already inspected dependency', function (): void {
+test('external registration invalidates a dependent added after its dependency was inspected', function (bool $reverse): void {
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
     $remote = static fn(Product $entry): Product => new Product($entry->value . ':external');
     $container = (new ContainerBuilder())->addServices([
         'first' => new Product('first'),
-        'trigger' => new Product('trigger'),
+        'second' => new Product('second'),
         'late' => new Product('late'),
+        'unrelated' => new Product('unrelated'),
         'first.decorator' => $local,
-        'trigger.decorator' => $local,
+        'second.decorator' => $local,
     ])->build();
-    $container->delegator('first', 'first.decorator');
-    $container->delegator('trigger', 'trigger.decorator');
-    $trigger = $container->get('trigger');
+    foreach ($reverse ? ['second', 'first'] : ['first', 'second'] as $id) {
+        $container->delegator($id, $id . '.decorator');
+    }
+    $container->delegator('unrelated', $local);
+    $unrelated = $container->get('unrelated');
+    $entries = ['first.decorator' => $remote, 'second.decorator' => $remote];
+    $firstInspected = null;
     $warmed = null;
-    $external = new CallbackContainer(['first.decorator' => $remote], static function (string $id) use ($container, &$warmed): void {
-        if ($id === 'trigger.decorator' && $warmed === null) {
-            $container->delegator('late', 'first.decorator');
+    $external = new CallbackContainer($entries, static function (string $id) use ($container, $entries, &$firstInspected, &$warmed): void {
+        if (!isset($entries[$id])) {
+            return;
+        }
+        if ($firstInspected === null) {
+            $firstInspected = $id;
+        } elseif ($id !== $firstInspected && $warmed === null) {
+            $container->delegator('late', $firstInspected);
             $warmed = $container->get('late');
         }
     });
 
     $container->addContainer($external);
+    $queries = $external->queries;
+    ksort($queries);
 
-    expect($external->queries)->toBe(['first.decorator' => 1, 'trigger.decorator' => 1])
+    expect($queries)->toBe(['first.decorator' => 1, 'second.decorator' => 1])
         ->and($warmed)->toEqual(new Product('late:local'))
         ->and($container->get('first'))->toEqual(new Product('first:external'))
+        ->and($container->get('second'))->toEqual(new Product('second:external'))
         ->and($container->get('late'))->toEqual(new Product('late:external'))
         ->and($container->get('late'))->not->toBe($warmed)
-        ->and($container->get('trigger'))->toBe($trigger);
-});
+        ->and($container->get('unrelated'))->toBe($unrelated);
+})->with(['first registered earlier' => false, 'second registered earlier' => true]);
 
 test('a newly discovered ownership failure rejects the external container and preserves nested mutations', function (): void {
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
@@ -201,43 +214,60 @@ test('external registration preserves results warmed by a nested owner registrat
         ->and($calls)->toBe(1);
 })->with(['earlier owner' => false, 'same candidate' => true]);
 
-test('a later ownership callback can establish an earlier owner for an already inspected dependency', function (): void {
+test('a later ownership callback can establish an earlier owner for an already inspected dependency', function (bool $reverse): void {
     $calls = 0;
     $selected = static function (Product $entry) use (&$calls): Product {
         ++$calls;
         return new Product($entry->value . ':selected');
     };
     $local = static fn(Product $entry): Product => new Product($entry->value . ':local');
+    $later = static fn(Product $entry): Product => new Product($entry->value . ':later');
     $container = (new ContainerBuilder())->addServices([
-        'entry' => new Product('base'),
-        'trigger' => new Product('trigger'),
-        'owner' => $local,
-        'trigger.owner' => $local,
-    ])->addDelegator('entry', 'owner')->addDelegator('trigger', 'trigger.owner')->build();
-    expect($container->get('entry'))->toEqual(new Product('base:local'));
-    $trigger = $container->get('trigger');
-    $earlier = new CallbackContainer(['owner' => $selected], static function (): void {});
+        'first' => new Product('first'),
+        'second' => new Product('second'),
+        'unrelated' => new Product('unrelated'),
+        'first.owner' => $local,
+        'second.owner' => $local,
+    ])->addDelegator('unrelated', $local)->build();
+    foreach ($reverse ? ['second', 'first'] : ['first', 'second'] as $id) {
+        $container->delegator($id, $id . '.owner');
+        expect($container->get($id))->toEqual(new Product($id . ':local'));
+    }
+    $unrelated = $container->get('unrelated');
+    $entryIds = ['first.owner' => 'first', 'second.owner' => 'second'];
+    $firstInspected = null;
     $warmed = null;
     $candidate = new CallbackContainer([
-        'owner' => static fn(Product $entry): Product => new Product($entry->value . ':later'),
-    ], static function (string $id) use ($container, $earlier, &$warmed): void {
-        if ($id === 'trigger.owner' && $warmed === null) {
+        'first.owner' => $later,
+        'second.owner' => $later,
+    ], static function (string $id) use ($container, $entryIds, $selected, &$firstInspected, &$warmed): void {
+        if (!isset($entryIds[$id])) {
+            return;
+        }
+        if ($firstInspected === null) {
+            $firstInspected = $id;
+        } elseif ($id !== $firstInspected && $warmed === null) {
+            $earlier = new CallbackContainer([$firstInspected => $selected], static function (): void {});
             $container->addContainer($earlier);
-            $warmed = $container->get('entry');
+            $warmed = $container->get($entryIds[$firstInspected]);
         }
     });
 
     $container->addContainer($candidate);
     $registrationQueries = $candidate->queries;
-    $current = $container->get('entry');
+    ksort($registrationQueries);
+    $id = $entryIds[$firstInspected ?? ''] ?? throw new LogicException('Expected a deferred dependency to be inspected.');
+    $current = $container->get($id);
+    $other = $id === 'first' ? 'second' : 'first';
 
-    expect($current)->toEqual(new Product('base:selected'))
+    expect($current)->toEqual(new Product($id . ':selected'))
         ->and($current)->toBe($warmed)
-        ->and($container->get('entry'))->toBe($current)
-        ->and($container->get('trigger'))->toBe($trigger)
+        ->and($container->get($id))->toBe($current)
+        ->and($container->get($other))->toEqual(new Product($other . ':later'))
+        ->and($container->get('unrelated'))->toBe($unrelated)
         ->and($calls)->toBe(1)
-        ->and($registrationQueries)->toBe(['owner' => 1, 'trigger.owner' => 1]);
-});
+        ->and($registrationQueries)->toBe(['first.owner' => 1, 'second.owner' => 1]);
+})->with(['first registered earlier' => false, 'second registered earlier' => true]);
 
 test('external registration does not inspect a candidate for an already owned dependency', function (): void {
     $selected = static fn(Product $entry): Product => new Product($entry->value . ':selected');
