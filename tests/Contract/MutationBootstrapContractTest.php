@@ -34,7 +34,7 @@ test('mutation bootstrap applies function substitutions before Composer can load
                 '-d',
                 'xdebug.mode=off',
                 $packageDirectory . '/tests/mutate.php',
-                'tests/V5/RequestMappingContractTest.php',
+                $packageDirectory . '/tests/Request/RequestMappingContractTest.php',
                 '--filter=MapRequest excludes fields from the mapped result',
                 '--colors=never',
                 '--compact',
@@ -45,7 +45,7 @@ test('mutation bootstrap applies function substitutions before Composer can load
                 'PEST_MUTATION_FILE' => $functions,
             ]);
             $original->run();
-            expect($original->getExitCode())->toBe(0)
+            expect($original->getExitCode())->toBe(0, $original->getOutput() . $original->getErrorOutput())
                 ->and($original->getOutput())->toContain('1 passed');
 
             $mutated = new Process($command, $packageDirectory, [
