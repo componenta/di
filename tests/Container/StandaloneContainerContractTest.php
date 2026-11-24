@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Componenta\DI\Tests\Container\StandaloneContainerContract;
 
+use Closure;
 use Componenta\Config\Config;
 use Componenta\Config\DependencyDefinitions;
 use Componenta\Config\Environment;
 use Componenta\DI\CallableExecutorInterface;
+use Componenta\DI\CallableResolver;
 use Componenta\DI\Container;
 use Componenta\DI\Definition\ReferenceDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
@@ -21,6 +23,8 @@ use Componenta\DI\Resolver\Entry\CompositeResolver;
 use Componenta\DI\Resolver\Entry\EntryParameters;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
+use Fiber;
+use LogicException;
 use Psr\Container\ContainerInterface;
 
 final readonly class StandaloneProduct
@@ -348,6 +352,138 @@ test('standalone mutations refresh supplied delegator pipelines for affected req
         ->and($container->get('first'))->toBe($first)
         ->and($container->get('second'))->toEqual(new StandaloneProduct(['source' => 'second']));
 });
+
+final class StandaloneDecoratorExecutor implements CallableExecutorInterface
+{
+    public Container $container;
+
+    /** @param Closure(Container):callable $select */
+    public function __construct(private readonly Closure $select) {}
+
+    public function call(mixed $callable, array $params = []): mixed
+    {
+        throw new LogicException('Delegators invoke the selected callable directly.');
+    }
+
+    public function resolve(mixed $callable): callable
+    {
+        if ($callable !== 'selected.decorator') {
+            throw new LogicException('Expected the application decorator token.');
+        }
+        return ($this->select)($this->container);
+    }
+}
+
+/** @return Closure(StandaloneProduct):StandaloneProduct */
+function standaloneDecorator(string $label): Closure
+{
+    return static fn(StandaloneProduct $entry): StandaloneProduct => new StandaloneProduct($entry->parameters + ['decorator' => $label]);
+}
+
+/**
+ * @param Closure(Container):callable $select
+ * @param array<string,mixed> $services
+ * @param array<string,string> $aliases
+ */
+function standaloneDelegatedContainer(Closure $select, array $services, array $aliases = []): Container
+{
+    $executor = new StandaloneDecoratorExecutor($select);
+    $container = new Container(new StandaloneEntryResolver(), $executor, aliases: $aliases, services: $services);
+    $executor->container = $container;
+    $container->delegator('product', 'selected.decorator');
+    return $container;
+}
+
+function boundDecorator(Container $container, string $id): Closure
+{
+    $decorator = $container->get($id);
+    if (!$decorator instanceof Closure) {
+        throw new LogicException('Expected a bound decorator.');
+    }
+    return $decorator;
+}
+
+test('custom standalone delegators track the selected service and its current alias target', function (bool $nativeLookup): void {
+    $container = standaloneDelegatedContainer(
+        $nativeLookup
+            ? static fn(Container $container): callable => new CallableResolver($container)->resolve('active.decorator')
+            : static fn(Container $container): Closure => boundDecorator($container, 'active.decorator'),
+        ['first.decorator' => standaloneDecorator('initial'), 'second.decorator' => standaloneDecorator('second')],
+        ['active.decorator' => 'first.decorator'],
+    );
+    $first = $container->get('product');
+    expect($first)->toEqual(new StandaloneProduct(['decorator' => 'initial']));
+
+    $container->set('unrelated', standaloneDecorator('unrelated'));
+    expect($container->get('product'))->toBe($first);
+
+    $container->set('first.decorator', standaloneDecorator('replacement'));
+    expect($container->get('product'))->toEqual(new StandaloneProduct(['decorator' => 'replacement']));
+
+    $container->alias('active.decorator', 'second.decorator');
+    $second = $container->get('product');
+    expect($second)->toEqual(new StandaloneProduct(['decorator' => 'second']));
+
+    $container->set('first.decorator', standaloneDecorator('retired'));
+    expect($container->get('product'))->toBe($second);
+})->with(['public get' => false, 'resolvable lookup' => true]);
+
+test('custom standalone delegators refresh a route selected by a previously missing binding', function (): void {
+    $container = standaloneDelegatedContainer(
+        static fn(Container $container): Closure => boundDecorator(
+            $container,
+            $container->has('override.decorator') ? 'override.decorator' : 'default.decorator',
+        ),
+        ['default.decorator' => standaloneDecorator('default')],
+    );
+    expect($container->get('product'))->toEqual(new StandaloneProduct(['decorator' => 'default']));
+
+    $container->set('override.decorator', standaloneDecorator('override'));
+
+    expect($container->get('product'))->toEqual(new StandaloneProduct(['decorator' => 'override']));
+});
+
+test('custom standalone delegators publish a selection only while its observed bindings stay current', function (
+    bool $suspended,
+    bool $affected,
+): void {
+    $selection = 0;
+    $changedId = $affected ? 'actual.decorator' : 'unrelated';
+    $container = standaloneDelegatedContainer(
+        static function (Container $container) use (&$selection, $suspended, $changedId): Closure {
+            $decorator = boundDecorator($container, 'actual.decorator');
+            if (++$selection === 1) {
+                if ($suspended) {
+                    Fiber::suspend('selected');
+                } else {
+                    $container->set($changedId, standaloneDecorator('replacement'));
+                }
+            }
+            return $decorator;
+        },
+        ['actual.decorator' => standaloneDecorator('initial')],
+    );
+    if ($suspended) {
+        $fiber = new Fiber(static fn(): mixed => $container->get('product'));
+        expect($fiber->start())->toBe('selected');
+        expect($container->has($changedId))->toBe($affected);
+        $container->set($changedId, standaloneDecorator('replacement'));
+        $fiber->resume();
+        $first = $fiber->getReturn();
+    } else {
+        $first = $container->get('product');
+    }
+    expect($first)->toEqual(new StandaloneProduct(['decorator' => 'initial']));
+
+    $current = $container->get('product');
+    if ($affected) {
+        expect($current)->toEqual(new StandaloneProduct(['decorator' => 'replacement']));
+    } else {
+        expect($current)->toBe($first);
+    }
+    expect($container->get('product'))->toBe($current)
+        ->and($selection)->toBe($affected ? 2 : 1);
+})->with(['reentrant' => false, 'suspended' => true])->with(['related' => true, 'unrelated' => false]);
 
 test('standalone construction rejects a cycle guard until its existing resolution is complete', function (): void {
     $guard = new CycleGuard();

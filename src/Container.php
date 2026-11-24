@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Componenta\DI;
 
+use Closure;
 use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Exception\CircularDependencyException;
 use Componenta\DI\Exception\ExceptionInterface;
@@ -13,6 +14,7 @@ use Componenta\DI\Exception\ResolutionException;
 use Componenta\DI\Internal\AliasResolver;
 use Componenta\DI\Internal\ContainerEntryOperations;
 use Componenta\DI\Internal\CycleGuard;
+use Componenta\DI\Internal\DelegatorLookupScope;
 use Componenta\DI\Internal\DelegatorRegistry;
 use Componenta\DI\Internal\EntryCache;
 use Componenta\DI\Internal\EntryLookupRevision;
@@ -42,10 +44,13 @@ final class Container extends ContainerEntryOperations implements
     private readonly CallableExecutorInterface $callableExecutor;
     private readonly EntryCache $cache;
     private readonly DelegatorRegistry $delegators;
+    private ?DelegatorLookupScope $delegatorLookups = null;
     private ?ExternalContainerRegistry $externalContainers = null;
     private readonly CycleGuard $cycleGuard;
     private ?CycleGuard $lookupGuard = null;
     private ?ExternalLookupProbes $providerProbes = null;
+    /** @var (Closure(string):void)|null */
+    private ?Closure $recordSharedLookup = null;
     private readonly CycleGuard $resolvedEntryGuard;
     private readonly ProxyFactoryInterface $proxyFactory;
     private readonly AttachedEntryBindings $resolver;
@@ -123,7 +128,7 @@ final class Container extends ContainerEntryOperations implements
         $root = $resolver instanceof CompositeResolver ? $resolver : new CompositeResolver($resolver);
 
         $this->cache = $cache ?? new EntryCache();
-        $this->delegators = $delegators ?? new DelegatorRegistry($this);
+        $this->delegators = $delegators ?? new DelegatorRegistry($this, selectionLookups: $this->standaloneDelegatorLookups(...));
         $this->externalContainers = $externalContainers;
         $this->cycleGuard = $cycleGuard ?? new CycleGuard();
         $this->resolvedEntryGuard = new CycleGuard();
@@ -157,7 +162,7 @@ final class Container extends ContainerEntryOperations implements
     {
         try {
             if ($this->externalContainers === null && $this->cache->tryGetResolved($id, $entry)) {
-                $this->providerProbes?->trackLookup($id);
+                ($this->recordSharedLookup)?->__invoke($id);
                 return $entry;
             }
         } catch (Throwable $e) {
@@ -170,6 +175,7 @@ final class Container extends ContainerEntryOperations implements
     protected function getEntry(string $id, bool $requireResolvable): mixed
     {
         try {
+            $delegatorObservation = $this->delegatorLookups?->beginLookup($id);
             $this->providerProbes?->trackLookup($id);
             $entryId = null;
             if ($this->externalContainers !== null) {
@@ -178,7 +184,7 @@ final class Container extends ContainerEntryOperations implements
                     $externalGuard = "\0external:" . $id;
                     $lookupGuard = $this->lookupGuard ??= new CycleGuard();
                     $lookupGuard->assertInactive($externalGuard);
-                    $probes = $this->providerProbes ??= new ExternalLookupProbes();
+                    $probes = $this->providerProbes ?? $this->externalLookupProbes();
                     $registry = $this->externalContainers;
                     $external = $registry->findOwning(
                         $id,
@@ -226,6 +232,10 @@ final class Container extends ContainerEntryOperations implements
             }
         } catch (Throwable $e) {
             throw self::entryResolutionFailure($id, $e);
+        } finally {
+            if (isset($delegatorObservation)) {
+                $this->delegatorLookups?->replace($delegatorObservation);
+            }
         }
 
         throw NotFoundException::forService($id);
@@ -255,7 +265,7 @@ final class Container extends ContainerEntryOperations implements
                 $externalGuard = "\0external:" . $id;
                 $lookupGuard = $this->lookupGuard ??= new CycleGuard();
                 $lookupGuard->assertInactive($externalGuard);
-                $probes = $this->providerProbes ??= new ExternalLookupProbes();
+                $probes = $this->providerProbes ?? $this->externalLookupProbes();
                 $external = $registry->findOwning(
                     $id,
                     fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
@@ -386,6 +396,7 @@ final class Container extends ContainerEntryOperations implements
     protected function hasEntry(string $id, bool $requireResolvable): bool
     {
         try {
+            $delegatorObservation = $this->delegatorLookups?->beginLookup($id);
             $this->providerProbes?->trackLookup($id);
             $entryId = $this->aliases->resolve($id);
             // A callback may retarget this alias to an existing core service.
@@ -406,7 +417,7 @@ final class Container extends ContainerEntryOperations implements
                         $id,
                         fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
                         $requireResolvable,
-                        $this->providerProbes ??= new ExternalLookupProbes(),
+                        $this->providerProbes ?? $this->externalLookupProbes(),
                     );
                     // External has() may retarget aliases before local availability checks.
                     $entryId = $this->aliases->resolve($id);
@@ -432,6 +443,10 @@ final class Container extends ContainerEntryOperations implements
                 return false;
             }
             throw self::entryResolutionFailure($id, $e);
+        } finally {
+            if (isset($delegatorObservation)) {
+                $this->delegatorLookups?->replace($delegatorObservation);
+            }
         }
     }
 
@@ -478,7 +493,7 @@ final class Container extends ContainerEntryOperations implements
                     $id,
                     fn(string $dependencyId): bool => !$this->isProtectedDependency($dependencyId),
                     $requireResolvable,
-                    $this->providerProbes ??= new ExternalLookupProbes(),
+                    $this->providerProbes ?? $this->externalLookupProbes(),
                     afterRevision: $checkedProviderRevision,
                 );
                 $currentId = $this->aliases->resolve($id);
@@ -625,7 +640,7 @@ final class Container extends ContainerEntryOperations implements
                 $this->delegators,
                 fn(): ?ExternalContainerRegistry => $this->externalContainers,
                 fn(string $id): bool => !$this->isProtectedDependency($id),
-                $this->providerProbes ??= new ExternalLookupProbes(),
+                $this->providerProbes ?? $this->externalLookupProbes(),
             )->takenOverBy($container);
         } catch (ExceptionInterface $e) {
             throw $e;
@@ -772,6 +787,25 @@ final class Container extends ContainerEntryOperations implements
     {
         $this->cache->invalidateRequested($id, $canonical, $retirement, $this->runtimeAuthority);
         $this->delegators->invalidate($id, $retirement, $this->runtimeAuthority);
+    }
+
+    private function externalLookupProbes(): ExternalLookupProbes
+    {
+        $probes = $this->providerProbes ??= new ExternalLookupProbes();
+        $this->recordSharedLookup ??= $probes->trackLookup(...);
+        return $probes;
+    }
+
+    private function standaloneDelegatorLookups(): DelegatorLookupScope
+    {
+        if ($this->delegatorLookups === null) {
+            $scope = $this->delegatorLookups = new DelegatorLookupScope();
+            $this->recordSharedLookup = function (string $id) use ($scope): void {
+                $this->providerProbes?->trackLookup($id);
+                $scope->record($id);
+            };
+        }
+        return $this->delegatorLookups;
     }
 
     /** @return list<string> */

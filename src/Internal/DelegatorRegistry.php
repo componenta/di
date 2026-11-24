@@ -48,9 +48,11 @@ final class DelegatorRegistry
         get => $this->raw !== [];
     }
 
+    /** @param (Closure():DelegatorLookupScope)|null $selectionLookups */
     public function __construct(
         private readonly CallableResolverInterface $callableResolver,
         private readonly ?ContainerInterface $lookup = null,
+        private readonly ?Closure $selectionLookups = null,
     ) {}
 
     /** @return PreparedDelegator */
@@ -93,7 +95,9 @@ final class DelegatorRegistry
             $retirement->retain($this->callables[$id]);
             // A cold selection must be invalidated across callback reentry,
             // including when its next owner differs from the warmed route.
-            if (isset($this->refinableDependencies[$id])) {
+            if (isset($this->refinableDependencies[$id])
+                || ($this->selectionLookups !== null && isset($this->indexedDependencies[$id]))
+            ) {
                 $this->indexDependencies($id, $this->registeredDependencies[$id] ?? []);
             }
         }
@@ -217,8 +221,26 @@ final class DelegatorRegistry
                 : null;
             $standaloneDependencies = $this->lookup === null && $refine ? [] : null;
             $resolver = $lookup === null ? $this->callableResolver : new CallableResolver($lookup);
-            $callables = $this->resolveChain($id, $resolver, $standaloneDependencies);
-            if (($this->revisions[$id] ?? 0) === $revision && EntryLookupRevision::current() === $lookupVersion) {
+            $selection = ($this->selectionLookups)?->__invoke();
+            $observed = [];
+            $previous = $selection?->replace(function (string $dependency) use ($id, &$observed): void {
+                $observed[$dependency] = true;
+                // Publish the edge before the read. Mutations during selection
+                // must invalidate both the callable and its pending result.
+                $this->indexedDependencies[$id][$dependency] = true;
+                $this->linkDependency($dependency, $id);
+            });
+            $publish = false;
+            try {
+                $callables = $this->resolveChain($id, $resolver, $standaloneDependencies);
+                $publish = ($this->revisions[$id] ?? 0) === $revision && EntryLookupRevision::current() === $lookupVersion;
+            } finally {
+                $selection?->replace($previous);
+                if (!$publish && $observed !== []) {
+                    $this->indexDependencies($id, $this->registeredDependencies[$id] ?? []);
+                }
+            }
+            if ($publish) {
                 if ($lookup !== null) {
                     $dependencies = $lookup->dependencies;
                     // Exact string bindings can override the currently selected callable.
@@ -233,8 +255,9 @@ final class DelegatorRegistry
                         $this->registeredDependencies[$id] = $dependencies;
                         unset($this->refinableDependencies[$id]);
                     }
-                } elseif ($standaloneDependencies !== null) {
-                    $this->indexDependencies($id, $standaloneDependencies);
+                } elseif ($standaloneDependencies !== null || $observed !== []) {
+                    $dependencies = $standaloneDependencies ?? $this->registeredDependencies[$id] ?? [];
+                    $this->indexDependencies($id, $dependencies + $observed);
                 }
                 $this->callables[$id] = $callables;
             }

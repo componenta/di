@@ -8,6 +8,8 @@
 
 Reflection metadata, parameter plans and alias paths are cached in container memory. Binding mutations invalidate affected entries rather than rebuilding the entire container. The same construction and validation pipeline is used in development and production.
 
+A custom callable executor supplied to `new Container(...)` can read the same container when selecting a delegator. The container tracks direct `get()` and `has()` calls made during that selection. Changes to those bindings invalidate the selected callable and its cached entry. An in-flight resolution can finish with the callable it already selected.
+
 ## Exceptions
 
 Componenta-owned exceptions implement `Componenta\DI\Exception\ExceptionInterface`, which extends the PSR-11 container exception contract. Common types:
