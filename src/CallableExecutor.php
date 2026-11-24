@@ -7,6 +7,8 @@ namespace Componenta\DI;
 use Closure;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidCallableException;
+use Componenta\DI\Internal\CallableInvocationResolver;
+use Componenta\DI\Internal\CallableMagicInvocation;
 use Componenta\DI\Internal\CallableReflector;
 use Componenta\DI\Internal\ResolutionMetadata;
 use Componenta\DI\Internal\Resolver\Parameter\ParameterExecution;
@@ -19,6 +21,8 @@ use ReflectionParameter;
 use Throwable;
 
 use function Componenta\DI\Internal\is_magic_closure_trampoline;
+use function Componenta\DI\Internal\is_qualified_method_pair;
+use function Componenta\DI\Internal\try_capture_qualified_callable;
 
 /** DI-aware callable executor. */
 final class CallableExecutor implements CallableExecutorInterface
@@ -38,12 +42,24 @@ final class CallableExecutor implements CallableExecutorInterface
     /** @param array<string|int, mixed> $params */
     public function call(mixed $callable, array $params = []): mixed
     {
+        $qualified = null;
         try {
-            $resolved = $this->callableResolver->resolve(
-                is_array($callable) ? self::snapshotCallable($callable) : $callable,
-            );
+            $source = is_array($callable) ? self::snapshotCallable($callable) : $callable;
+            $resolver = $this->callableResolver;
+            if ($resolver::class === CallableResolver::class
+                && (is_string($source) || (is_array($source) && is_qualified_method_pair($source)))
+            ) {
+                [$resolved, $qualified] = CallableInvocationResolver::resolve($resolver, $source);
+            } else {
+                $resolved = $resolver->resolve($source);
+            }
             if (is_array($resolved)) {
                 $resolved = self::snapshotCallable($resolved);
+                if (is_qualified_method_pair($resolved)) {
+                    $qualified = $resolved;
+                    $resolved = try_capture_qualified_callable($resolved, deferAbstractDispatch: false)
+                        ?? throw InvalidCallableException::forValue($callable);
+                }
             }
             $arguments = $this->resolveArguments($resolved, $params);
         } catch (ExceptionInterface $e) {
@@ -52,8 +68,14 @@ final class CallableExecutor implements CallableExecutorInterface
             throw InvalidCallableException::forValue($callable, $e);
         }
 
-        // Deliberately outside the normalization boundary: once control enters
-        // the explicit user callable, its throwables belong to application code.
+        // Binding and body failures retain their native form. Retain the
+        // original receiver for a qualified static route through invocation.
+        if ($qualified !== null && $resolved instanceof Closure
+            && ($magic = CallableMagicInvocation::prepare($resolved, $arguments)) !== null
+        ) {
+            return call_user_func_array($magic[0], $magic[1]);
+        }
+
         return call_user_func_array($resolved, $arguments);
     }
 
@@ -99,13 +121,6 @@ final class CallableExecutor implements CallableExecutorInterface
             && strcasecmp((string) $callable[1], '__invoke') === 0
         ) {
             $callable = $callable[0];
-        }
-
-        if (is_array($callable) && str_contains((string) $callable[1], '::')) {
-            // Native qualified methods have a concrete selected declaration even
-            // though method_exists() cannot inspect this array representation.
-            // Prepare its native capture per call without caching the receiver.
-            $callable = Closure::fromCallable($callable);
         }
 
         if ($callable instanceof Closure) {

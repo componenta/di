@@ -15,6 +15,11 @@ use WeakReference;
 /** @method array{string,class-string,string,array<array-key,mixed>} Unused(mixed ...$arguments) */
 class NativeMagicOwner
 {
+    public function declared(string $value): string
+    {
+        return 'declared:' . $value;
+    }
+
     /**
      * @param array<array-key,mixed> $arguments
      * @return array{string,class-string,string,array<array-key,mixed>}
@@ -48,6 +53,38 @@ final class NativeMagicReplacement extends NativeMagicOwner
     }
 }
 
+/** @method bool releaseMagic(?object &$value) */
+final class ArgumentLifetimeProbe
+{
+    /** @param-out null $value */
+    public function release(?object &$value): bool
+    {
+        $reference = WeakReference::create($value ?? throw new LogicException('Expected a live argument.'));
+        $value = null;
+        return $reference->get() === null;
+    }
+
+    /** @param array{object|null} $arguments */
+    public function __call(string $method, array $arguments): bool
+    {
+        return $this->release($arguments[0]);
+    }
+}
+
+/** @method array<array-key,mixed> append(mixed ...$arguments) */
+final class AppendingMagicArguments
+{
+    /**
+     * @param array<array-key,mixed> $arguments
+     * @return array<array-key,mixed>
+     */
+    public function __call(string $method, array $arguments): array
+    {
+        $arguments[] = 'appended';
+        return $arguments;
+    }
+}
+
 test('native callable invoker preserves named variadic arguments', function (): void {
     $result = (new CallableInvoker())->call(
         static fn(string $prefix, string ...$parts): array => [$prefix, $parts],
@@ -55,6 +92,51 @@ test('native callable invoker preserves named variadic arguments', function (): 
     );
 
     expect($result)->toBe(['start', ['first' => 'one', 'second' => 'two']]);
+});
+
+test('native invoker binds named arguments for an invokable object', function (): void {
+    $callback = new class () {
+        public function __invoke(string $value): string
+        {
+            return 'invoked:' . $value;
+        }
+    };
+
+    expect(new CallableInvoker()->call($callback, ['value' => 'named']))->toBe('invoked:named');
+});
+
+test('native invoker selects the declared method when its receiver also has a magic hook', function (): void {
+    $callback = [new NativeMagicChild(), 'declared'];
+
+    expect(new CallableInvoker()->call($callback, ['value' => 'named']))->toBe('declared:named');
+});
+
+test('native invoker releases the original positional argument when a method replaces its reference', function (bool $magic): void {
+    $receiver = new ArgumentLifetimeProbe();
+    $target = $magic ? [$receiver, 'releaseMagic'] : [$receiver, 'release'];
+    $value = new \stdClass();
+    $native = \call_user_func_array($target, [&$value]);
+
+    $value = new \stdClass();
+    $actual = new CallableInvoker()->call($target, [&$value]);
+
+    expect($native)->toBeTrue()
+        ->and($actual)->toBe($native)
+        ->and($value)->toBeNull();
+})->with(['ordinary method' => false, 'magic method' => true]);
+
+test('native invoker gives a magic method a fresh positional append index with references intact', function (): void {
+    $target = [new AppendingMagicArguments(), 'append'];
+    $value = 'before';
+    $arguments = [&$value, 100 => 'removed'];
+    unset($arguments[100]);
+
+    $native = \call_user_func_array($target, $arguments);
+    $actual = new CallableInvoker()->call($target, $arguments);
+    $value = 'after';
+
+    expect($native)->toBe(['after', 'appended'])
+        ->and($actual)->toBe($native);
 });
 
 test('native invoker preserves arguments and reference cells for raw magic callables', function (callable $target, string $kind): void {

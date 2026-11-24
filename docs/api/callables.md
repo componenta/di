@@ -31,6 +31,8 @@ $callable = $container->resolve('controller.handle');
 
 A resolved callable is not invoked until application code calls it. `call()` can resolve missing typed arguments and DI parameter attributes, including simple union types with exactly one available candidate.
 
+When the built-in resolver selects a qualified ancestor array for `Container::call()`, PHP emits its deprecation during preparation. Parameter resolution and invocation use the same selected declaration.
+
 ## Native invocation and pre-resolved parameters
 
 `CallableInvoker` deliberately **does not autowire**. It accepts a complete argument list and can pass reference-bearing arrays to native PHP callables. By contrast, `PreparedCallable` forwards arguments by value and is unsuitable for by-reference parameters.

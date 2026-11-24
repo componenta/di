@@ -12,6 +12,8 @@ use ReflectionReference;
 use Throwable;
 use TypeError;
 
+use function Componenta\DI\Internal\is_native_callable_capture_error;
+
 /**
  * Thin callable-invocation wrapper.
  *
@@ -55,14 +57,7 @@ final class CallableInvoker implements CallableInvokerInterface
         } catch (ExceptionInterface $e) {
             throw $e;
         } catch (Throwable $e) {
-            $origin = $e->getTrace()[0] ?? [];
-            $nativeFailure = $e instanceof TypeError
-                && $e->getFile() === __FILE__
-                && $e->getLine() === $captureLine
-                && ($origin['class'] ?? null) === Closure::class
-                && ($origin['function'] ?? null) === 'fromCallable'
-                && ($origin['file'] ?? null) === __FILE__
-                && ($origin['line'] ?? null) === $captureLine;
+            $nativeFailure = $e instanceof TypeError && is_native_callable_capture_error($e, __FILE__, $captureLine);
             // PHP's conversion error wraps an existing autoload/diagnostic error.
             // Remove only this call's native layer, preserving any original cause.
             $cause = $nativeFailure ? $e->getPrevious() : $e;
@@ -75,7 +70,8 @@ final class CallableInvoker implements CallableInvokerInterface
         if ($params !== [] && (is_array($callable) || (is_string($callable) && str_contains($callable, '::')))) {
             $prepareMagic = !array_is_list($params);
             if (!$prepareMagic) {
-                foreach ($params as $position => $_) {
+                $count = count($params);
+                for ($position = 0; $position < $count; ++$position) {
                     if (ReflectionReference::fromArrayElement($params, $position) !== null) {
                         $prepareMagic = true;
                         break;

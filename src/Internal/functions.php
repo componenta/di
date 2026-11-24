@@ -20,6 +20,8 @@ use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use ReflectionParameter;
 use ReflectionProperty;
+use Throwable;
+use TypeError;
 
 /** @internal */
 function is_abstract_static_dispatch_error(Error $error, string $source): bool
@@ -57,6 +59,66 @@ function is_public_callable(mixed $candidate, bool $deferAbstractDispatch = fals
 function require_public_callable(callable $callable): mixed
 {
     return $callable;
+}
+
+/**
+ * @internal
+ * @param array<array-key,mixed> $candidate
+ */
+function is_qualified_method_pair(array $candidate): bool
+{
+    return count($candidate) === 2
+        && array_key_exists(0, $candidate)
+        && is_string($candidate[1] ?? null)
+        && str_contains($candidate[1], '::');
+}
+
+/** @internal */
+function is_native_callable_capture_error(Throwable $error, string $source, int $line): bool
+{
+    $origin = $error->getTrace()[0] ?? [];
+    return $error->getFile() === $source
+        && $error->getLine() === $line
+        && ($origin['class'] ?? null) === Closure::class
+        && ($origin['function'] ?? null) === 'fromCallable'
+        && ($origin['file'] ?? null) === $source
+        && ($origin['line'] ?? null) === $line;
+}
+
+/**
+ * Captures a qualified call in application scope while retaining the resolver's
+ * native-miss fallback and the original failures of application code.
+ *
+ * @internal
+ * @param array<array-key,mixed> $candidate
+ */
+function try_capture_qualified_callable(array $candidate, bool $deferAbstractDispatch): ?Closure
+{
+    if (!is_callable($candidate, syntax_only: true)) {
+        return null;
+    }
+
+    try {
+        $captureLine = __LINE__ + 1;
+        return Closure::fromCallable($candidate);
+    } catch (Error $error) {
+        if (!is_native_callable_capture_error($error, __FILE__, $captureLine)) {
+            throw $error;
+        }
+
+        if ($error instanceof TypeError) {
+            if ($error->getPrevious() !== null) {
+                throw $error->getPrevious();
+            }
+            return null;
+        }
+        if ($deferAbstractDispatch && $error::class === Error::class
+            && str_starts_with($error->getMessage(), 'Cannot call abstract method ')
+        ) {
+            return null;
+        }
+        throw $error;
+    }
 }
 
 /** @internal */

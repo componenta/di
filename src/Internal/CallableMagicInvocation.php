@@ -53,18 +53,18 @@ final class CallableMagicInvocation
      */
     private static function pack(array $arguments): array
     {
-        if (array_is_list($arguments)) {
-            return $arguments;
-        }
-        $named = false;
-        foreach ($arguments as $key => $_) {
-            if (is_string($key)) {
-                $named = true;
-            } elseif ($named) {
-                throw new Error('Cannot use positional argument after named argument');
+        if (!array_is_list($arguments)) {
+            $named = false;
+            foreach ($arguments as $key => $_) {
+                if (is_string($key)) {
+                    $named = true;
+                } elseif ($named) {
+                    throw new Error('Cannot use positional argument after named argument');
+                }
             }
         }
-        // PHP's magic argument array renumbers integer keys and retains refs.
+        // PHP uses a fresh append index even if the source is already a list.
+        // Renumber positional arguments while keeping their reference cells.
         return array_merge($arguments);
     }
 }
