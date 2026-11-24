@@ -12,8 +12,6 @@ Supports autowiring, explicit service and factory definitions, aliases, decorato
 composer require componenta/di
 ```
 
-Requires PHP 8.5.13 or a later compatible PHP 8.x release.
-
 ## Documentation
 
 - [Getting started](docs/guide/getting-started.md) — configure and build a container.

@@ -12,8 +12,6 @@
 composer require componenta/di
 ```
 
-Требуется PHP 8.5.13 или более поздний совместимый выпуск PHP 8.x.
-
 ## Документация
 
 - [Начало работы](docs/ru/guide/getting-started.md) — настройка и создание контейнера.

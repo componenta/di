@@ -39,7 +39,7 @@ $container->call($join, ['parts' => ['one', 'two']]); // 'one-two'
 $container->call($join);                            // ''
 ```
 
-The collection supplied under the variadic parameter name overrides positional tail values, even when empty. Otherwise, integer keys from the variadic position onward form the tail. Every element is checked against the declared element type. Non-positional unrelated keys are not appended; unresolved variadics use an empty collection. The elements are not implicitly autowired. By-reference parameter injection is unsupported.
+The collection supplied under the variadic parameter name overrides positional tail values, even when empty. Otherwise, integer keys from the variadic position onward form the tail. Every element is checked against the declared element type. Unrelated named keys are not appended. String keys inside an explicitly supplied collection are preserved as named variadic arguments; positional elements must precede named ones and must not bind an earlier parameter. An unresolved variadic uses an empty collection. The elements are not implicitly autowired. By-reference parameter injection is unsupported.
 
 Optional arguments of built-in PHP functions may be omitted rather than replaced with an explicit `null` when native defaults apply.
 

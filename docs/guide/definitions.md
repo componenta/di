@@ -39,7 +39,7 @@ protected function getFactories(): array
 }
 ```
 
-A factory is responsible for creating its result. The container does not subsequently apply DI attributes to it. Callable arguments that can be checked immediately are validated at registration; unresolved callable service owners are checked when used.
+A factory is responsible for creating its result. The container does not subsequently apply DI attributes to it. In `getFactories()`, you can also specify a service identifier whose value is a callable, a deferred pair `['factory.service', 'create']`, or an object implementing `LazyServiceFactoryInterface`. See the [factory contracts](../api/definitions.md) and [factory-owned laziness](../api/lazy.md). `Definition::factory()` specifically accepts a valid PHP callable; use the configuration section for unresolved service specifications.
 
 ## Declarative class definitions
 
@@ -55,7 +55,7 @@ $definition = ClassDefinition::create(Client::class)
     ->autowire();
 ```
 
-`constructor()`, `call()` and `autowire()` return new definitions, leaving the original unchanged. `call()` replaces the former `method()` API; repeated calls are preserved.
+`constructor()`, `call()` and `autowire()` return new definitions, leaving the original unchanged. Repeated `call()` instructions are preserved.
 
 By default, only explicitly configured arguments, runtime constructor overrides and PHP defaults are used. `autowire()` enables resolution by class/interface type for *missing* arguments; explicit `null` still takes precedence. It does not enable parameter attributes or custom parameter resolvers. Neither the class, constructor parameters nor its properties/methods have their DI attributes executed by `ClassDefinition`.
 
@@ -71,7 +71,7 @@ $container->set(Service::class, Definition::factory(static fn(): Service => new 
 $container->set(Utility::class, Definition::invokable(Utility::class));
 ```
 
-`Definition::factory()` registers a factory definition; `Definition::invokable()` registers a class created without supplied constructor arguments.
+`Definition::factory()` creates a factory descriptor; `Definition::invokable()` creates a descriptor for zero-argument construction. Registration is performed by `set()` or a configuration provider.
 
 ## Invokable classes and aliases
 

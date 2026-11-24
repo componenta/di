@@ -35,6 +35,6 @@ Attribute and parameter-resolver factories may obtain their dependencies from th
 
 ## Definition strategies and external containers
 
-A custom explicit-definition strategy implements `DefinitionResolverInterface`: classify, validate, then execute a supplied definition without retaining its own registration map. A fallback entry resolver implements `EntryResolverInterface` and receives `EntryParameters`. See [Definition migration](../migrations/di6-definitions.md) for interfaces and constructors.
+A custom explicit-definition strategy implements `DefinitionResolverInterface`: classify, validate, then execute a supplied definition without retaining its own registration map. A fallback entry resolver implements `EntryResolverInterface` and receives `EntryParameters`. These are low-level extension contracts for explicit assembly; the standard `ContainerFactory` does not accept arbitrary entry strategies through a configuration-provider section. See [Entry resolution](../api/entry-resolvers.md) for the contracts.
 
 `Container::addContainer()` registers another PSR-11 container. External entries cannot shadow protected internal services; the external provider owns sharing of its results. If its registered entries subsequently change, `notifyExternalEntriesChanged()` can report affected IDs. See [Container API](container.md).
