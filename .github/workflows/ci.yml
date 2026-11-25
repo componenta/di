@@ -19,9 +19,6 @@ concurrency:
   group: di-ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  USE_CONFIG_V3_WORKSPACE: ${{ github.ref == 'refs/heads/v5' || github.base_ref == 'v5' || github.ref == 'refs/heads/main' || github.base_ref == 'main' }}
-
 jobs:
   check:
     name: PHP ${{ matrix.php }}
@@ -36,22 +33,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Checkout config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/config
-          ref: main
-          path: .ci/config
-
-      - name: Checkout validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/validation
-          ref: main
-          path: .ci/validation
-
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -62,18 +43,6 @@ jobs:
 
       - name: Validate Composer metadata
         run: composer validate --strict
-
-      - name: Use config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-config
-          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
-
-      - name: Use validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -157,22 +126,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Checkout config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/config
-          ref: main
-          path: .ci/config
-
-      - name: Checkout validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/validation
-          ref: main
-          path: .ci/validation
-
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -185,26 +138,6 @@ jobs:
 
       - name: Validate Composer metadata
         run: composer validate --strict
-
-      - name: Use companion workspaces
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        shell: pwsh
-        run: |
-          $manifestPath = Join-Path $PWD 'composer.json'
-          $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -AsHashtable
-          if (!$manifest.Contains('repositories')) { $manifest['repositories'] = [ordered]@{} }
-          $versions = [ordered]@{ config = '3.0.0'; validation = '3.0.1' }
-          foreach ($package in $versions.Keys) {
-            $manifest['repositories']["componenta-$package"] = @{
-              type = 'path'
-              url = ".ci/$package"
-              options = @{
-                symlink = $false
-                versions = @{ "componenta/$package" = $versions[$package] }
-              }
-            }
-          }
-          [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -220,22 +153,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Checkout config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/config
-          ref: main
-          path: .ci/config
-
-      - name: Checkout validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/validation
-          ref: main
-          path: .ci/validation
-
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -247,18 +164,6 @@ jobs:
 
       - name: Validate Composer metadata
         run: composer validate --strict
-
-      - name: Use config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-config
-          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
-
-      - name: Use validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -301,22 +206,6 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Checkout config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/config
-          ref: main
-          path: .ci/config
-
-      - name: Checkout validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/validation
-          ref: main
-          path: .ci/validation
-
       - name: Checkout v4.0.10 baseline
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -332,18 +221,6 @@ jobs:
 
       - name: Validate Composer metadata
         run: composer validate --strict
-
-      - name: Use config v3 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-config
-          '{"type":"path","url":".ci/config","options":{"symlink":false,"versions":{"componenta/config":"3.0.0"}}}'
-
-      - name: Use validation workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-validation
-          '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
 
       - name: Install candidate dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
