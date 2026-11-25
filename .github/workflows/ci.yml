@@ -52,14 +52,6 @@ jobs:
           ref: main
           path: .ci/validation
 
-      - name: Checkout reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/reflection
-          ref: main
-          path: .ci/reflection
-
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -82,12 +74,6 @@ jobs:
         run: >-
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
-
-      - name: Use reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-reflection
-          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -187,14 +173,6 @@ jobs:
           ref: main
           path: .ci/validation
 
-      - name: Checkout reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/reflection
-          ref: main
-          path: .ci/reflection
-
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -215,7 +193,7 @@ jobs:
           $manifestPath = Join-Path $PWD 'composer.json'
           $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -AsHashtable
           if (!$manifest.Contains('repositories')) { $manifest['repositories'] = [ordered]@{} }
-          $versions = [ordered]@{ config = '3.0.0'; validation = '3.0.1'; reflection = '2.0.1' }
+          $versions = [ordered]@{ config = '3.0.0'; validation = '3.0.1' }
           foreach ($package in $versions.Keys) {
             $manifest['repositories']["componenta-$package"] = @{
               type = 'path'
@@ -258,14 +236,6 @@ jobs:
           ref: main
           path: .ci/validation
 
-      - name: Checkout reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/reflection
-          ref: main
-          path: .ci/reflection
-
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -289,12 +259,6 @@ jobs:
         run: >-
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
-
-      - name: Use reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-reflection
-          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.1"}}}'
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -353,14 +317,6 @@ jobs:
           ref: main
           path: .ci/validation
 
-      - name: Checkout reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: componenta/reflection
-          ref: main
-          path: .ci/reflection
-
       - name: Checkout v4.0.10 baseline
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -388,12 +344,6 @@ jobs:
         run: >-
           composer config repositories.componenta-validation
           '{"type":"path","url":".ci/validation","options":{"symlink":false,"versions":{"componenta/validation":"3.0.1"}}}'
-
-      - name: Use reflection v2 workspace
-        if: env.USE_CONFIG_V3_WORKSPACE == 'true'
-        run: >-
-          composer config repositories.componenta-reflection
-          '{"type":"path","url":".ci/reflection","options":{"symlink":false,"versions":{"componenta/reflection":"2.0.1"}}}'
 
       - name: Install candidate dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
