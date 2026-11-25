@@ -41,8 +41,7 @@ abstract class ContainerConstruction extends ContainerEntryOperations
         ProxyFactoryInterface $proxies,
         Config $config,
         ParametersResolverInterface $parametersResolver,
-    ): Container
-    {
+    ): Container {
         return new ReflectionClass(Container::class)->newLazyGhost(
             static function (Container $container) use ($bootstrap, $aliases, $cache, $proxies, $config, $parametersResolver): void {
                 $container->assemble(
