@@ -18,6 +18,7 @@ use Componenta\DI\Definition\DefinitionInterface;
 use Componenta\DI\Definition\InvokableDefinition;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Internal\Resolver\Entry\ConfiguredFactoryDefinition;
+use Componenta\DI\Internal\Resolver\Parameter\ParameterResolutionService;
 use Componenta\DI\Object\ObjectPipeline;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
@@ -165,7 +166,14 @@ final class ContainerAssembly
         }
 
         $bootstrap = new ContainerBootstrapState();
-        $container = ContainerConstruction::defer($bootstrap, $aliases, $cache, $proxyFactory, $config);
+        $container = ContainerConstruction::defer(
+            $bootstrap,
+            $aliases,
+            $cache,
+            $proxyFactory,
+            $config,
+            new ParameterResolutionService($parameters),
+        );
 
         $executor = new CallableExecutor(new CallableResolver($container), $parameters);
         $entryResolver = $this->createEntryResolver(

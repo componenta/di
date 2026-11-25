@@ -24,6 +24,7 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Parameter\ParametersResolverInterface;
 use Componenta\DI\Tests\Support\ContainerBuilder;
 use Componenta\DI\VirtualProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -78,5 +79,6 @@ test('rejected mutations preserve protected service identity or unavailability',
     AttributeProcessor::class,
     RequestAttributeHandler::class,
     ParametersResolver::class,
+    ParametersResolverInterface::class,
     ObjectPipeline::class,
 ]);

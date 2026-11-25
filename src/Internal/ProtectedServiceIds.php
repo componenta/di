@@ -22,6 +22,7 @@ use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Attribute\AttributeProcessor;
 use Componenta\DI\Resolver\Attribute\Handler\RequestAttributeHandler;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
+use Componenta\DI\Resolver\Parameter\ParametersResolverInterface;
 use Componenta\DI\VirtualProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
 
@@ -54,6 +55,7 @@ final class ProtectedServiceIds
         CallableInvokerInterface::class => false,
         CallableResolverInterface::class => false,
         CallableExecutorInterface::class => false,
+        ParametersResolverInterface::class => ParametersResolverInterface::class,
         ProxyFactoryInterface::class => false,
         LazyObjectFactoryInterface::class => false,
         VirtualProxyFactoryInterface::class => false,

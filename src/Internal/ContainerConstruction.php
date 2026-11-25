@@ -11,6 +11,7 @@ use Componenta\DI\CallableExecutorInterface;
 use Componenta\DI\Container;
 use Componenta\DI\ProxyFactoryInterface;
 use Componenta\DI\Resolver\Entry\EntryResolverInterface;
+use Componenta\DI\Resolver\Parameter\ParametersResolverInterface;
 use ReflectionClass;
 
 /** Creates a container with collaborators owned by its assembly. @internal */
@@ -33,10 +34,17 @@ abstract class ContainerConstruction extends ContainerEntryOperations
         return $container;
     }
 
-    public static function defer(ContainerBootstrapState $bootstrap, AliasResolver $aliases, EntryCache $cache, ProxyFactoryInterface $proxies, Config $config): Container
+    public static function defer(
+        ContainerBootstrapState $bootstrap,
+        AliasResolver $aliases,
+        EntryCache $cache,
+        ProxyFactoryInterface $proxies,
+        Config $config,
+        ParametersResolverInterface $parametersResolver,
+    ): Container
     {
         return new ReflectionClass(Container::class)->newLazyGhost(
-            static function (Container $container) use ($bootstrap, $aliases, $cache, $proxies, $config): void {
+            static function (Container $container) use ($bootstrap, $aliases, $cache, $proxies, $config, $parametersResolver): void {
                 $container->assemble(
                     $bootstrap->entryResolver,
                     $aliases,
@@ -48,6 +56,7 @@ abstract class ContainerConstruction extends ContainerEntryOperations
                         Config::class => $config,
                         Environment::class => $config->environment,
                         ContainerValue::class => new ContainerValue($container, $config),
+                        ParametersResolverInterface::class => $parametersResolver,
                     ],
                 );
             },

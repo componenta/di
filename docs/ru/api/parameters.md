@@ -17,6 +17,22 @@ interface ParameterResolverInterface
 
 `supports()` определяет применимость обработчика без изменения цепочки. `resolveParameter()` возвращает `[позиция параметра, значение]` либо `null` для перехода к следующему обработчику. Предусмотренные ошибки разрешения следует выражать через `ResolutionException`. Для параметра переменной длины передаётся единый массив всех его значений, а не отдельный результат для каждого элемента.
 
+## Разрешение аргументов без вызова обработчика
+
+Контейнер, созданный через `ContainerFactory`, предоставляет защищённый сервис `ParametersResolverInterface`. Метод `resolve(array $parameters, array $providedParameters = []): array` использует настроенную и закрытую для регистрации цепочку разрешения параметров, включая пользовательские разрешатели и обработчики атрибутов, не вызывая целевую функцию. Результат — список аргументов для нативного вызова с развёрнутыми вариативными значениями и пропущенными нативными значениями по умолчанию там, где это необходимо.
+
+```php
+use Componenta\DI\PreparedCallable;
+use Componenta\DI\Resolver\Parameter\ParametersResolverInterface;
+
+$target = static fn(string $label = 'default'): string => $label;
+$resolver = $container->get(ParametersResolverInterface::class);
+$arguments = $resolver->resolve((new ReflectionFunction($target))->getParameters(), ['label' => 'example']);
+$result = $container->call(new PreparedCallable($target), $arguments);
+```
+
+Сервис не предоставляет операции регистрации, управления кешем планов или закрытия цепочки. Конкретный `ParametersResolver`, используемый при сборке, остаётся скрытым. Разрешение через этот контракт допустимо после закрытия цепочки для регистрации.
+
 ## ParametersResolver
 
 ```php

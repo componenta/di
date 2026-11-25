@@ -17,6 +17,22 @@ interface ParameterResolverInterface
 
 `supports()` classifies the target without mutating the chain. `resolveParameter()` returns `[parameter position, value]` or `null` to continue the chain. Expected failures should raise `ResolutionException`. For a variadic declaration, a resolver supplies an array representing the entire variadic argument list, not one value per element.
 
+## Resolving an invocation without executing its target
+
+Containers assembled by `ContainerFactory` expose `ParametersResolverInterface` as a protected service. Its `resolve(array $parameters, array $providedParameters = []): array` method uses the container's configured, sealed parameter chain, including custom resolvers and attribute handlers, without calling the target. The result is a native argument vector with variadics expanded and native defaults omitted where required.
+
+```php
+use Componenta\DI\PreparedCallable;
+use Componenta\DI\Resolver\Parameter\ParametersResolverInterface;
+
+$target = static fn(string $label = 'default'): string => $label;
+$resolver = $container->get(ParametersResolverInterface::class);
+$arguments = $resolver->resolve((new ReflectionFunction($target))->getParameters(), ['label' => 'example']);
+$result = $container->call(new PreparedCallable($target), $arguments);
+```
+
+The service exposes no registration, plan-cache or sealing operations. The concrete assembly collaborator `ParametersResolver` remains private to the container. Resolution through this capability requires a sealed parameter chain; it cannot be used to resolve arguments while the chain is still being configured.
+
 ## ParametersResolver
 
 ```php
