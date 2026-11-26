@@ -45,6 +45,7 @@ use WeakReference;
 final class BootstrapResolutionGuard
 {
     private bool $active = true;
+    public private(set) bool $isComplete = false;
 
     /** @var list<array{source:AttributeMetadataSource,phase:?AttributePhase,usages:list<array{AttributeDefinition,class-string,int}>,observed:array<int,ReflectionAttribute<object>>}> */
     private array $attributeUses = [];
@@ -196,6 +197,7 @@ final class BootstrapResolutionGuard
 
         $releaseConfiguration();
         $this->assertReleasedMetadataUnchanged($closureTargets);
+        $this->isComplete = true;
     }
 
     /**

@@ -2,11 +2,13 @@
 
 ## Требования и установка
 
-Для работы библиотеки нужен PHP 8.5.13 или более поздний совместимый выпуск PHP 8.x. Установка выполняется через Composer:
+Для DI 6 требуются PHP 8.x начиная с 8.5.13 и Componenta Config 4. При стандартных настройках Composer выбирает последнюю совместимую стабильную версию.
 
 ```bash
 composer require componenta/di
 ```
+
+Для проверки DI 6 из ветки `main` до первого стабильного релиза используйте `composer require componenta/di:6.0.x-dev`.
 
 Зависимости перечислены в файле [composer.json](../../../composer.json). Минимальный выпуск PHP 8.5.13 содержит исправление ошибок области видимости и доступности методов при использовании ссылок на функции в атрибутах примесей.
 
@@ -14,12 +16,20 @@ composer require componenta/di
 
 `ConfigFactory` объединяет данные поставщиков конфигурации. Результат содержит настройки приложения в `Config` и отдельные определения зависимостей в `DependencyDefinitions`. Оба объекта передаются в `ContainerFactory`.
 
+Сохраните пример как `greeting.php` рядом с `composer.json` приложения и запустите `php greeting.php`.
+
 ```php
+<?php
+
+declare(strict_types=1);
+
 use Componenta\Config\ConfigFactory;
 use Componenta\Config\ConfigProvider;
 use Componenta\Config\ContainerValue;
 use Componenta\Config\Environment;
 use Componenta\DI\ContainerFactory;
+
+require __DIR__ . '/vendor/autoload.php';
 
 final readonly class Greeting
 {
@@ -64,9 +74,12 @@ assert($shared->message === 'Привет!');
 assert($fresh->message === 'Добро пожаловать!');
 assert($context->config === $composition->config);
 assert($container->get(Environment::class) === $environment);
+
+echo $shared->message, PHP_EOL;
+echo $fresh->message, PHP_EOL;
 ```
 
-Метод `get()` возвращает общий результат для собственной записи контейнера. Метод `make()` начинает отдельную попытку создания объекта и позволяет передать дополнительные аргументы. Сама фабрика при этом вправе вернуть ранее созданный объект.
+Скрипт выводит `Привет!` и `Добро пожаловать!` на отдельных строках. Метод `get()` возвращает общий результат для собственной записи контейнера. Метод `make()` начинает отдельную попытку создания объекта и позволяет передать дополнительные аргументы. Сама фабрика при этом вправе вернуть ранее созданный объект.
 
 ## Объединение конфигурации
 

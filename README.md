@@ -2,7 +2,7 @@
 
 [Русская версия](README.ru.md)
 
-A [PSR-11](https://www.php-fig.org/psr/psr-11/) dependency injection container for PHP 8.5.13+.
+A [PSR-11](https://www.php-fig.org/psr/psr-11/) dependency injection container for PHP 8.x starting at 8.5.13.
 
 Supports autowiring, explicit service and factory definitions, aliases, decorators, PHP attributes, callable invocation, PSR-7 request mapping, and native lazy objects.
 

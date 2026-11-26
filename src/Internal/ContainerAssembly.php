@@ -172,7 +172,7 @@ final class ContainerAssembly
             $cache,
             $proxyFactory,
             $config,
-            new ParameterResolutionService($parameters),
+            new ParameterResolutionService($parameters, $runtime->bootstrapGuard),
         );
 
         $executor = new CallableExecutor(new CallableResolver($container), $parameters);

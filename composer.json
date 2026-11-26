@@ -27,7 +27,7 @@
     "require": {
         "php": "^8.5.13",
         "componenta/caster": "^1.0",
-        "componenta/config": "^3.0.0",
+        "componenta/config": "^4.0",
         "componenta/reflection": "^3.0.0",
         "componenta/validation": "^3.1",
         "psr/container": "^2.0",
@@ -42,6 +42,7 @@
         "phpunit/phpunit": "^12.0"
     },
     "conflict": {
+        "componenta/clock": "<1.2.0",
         "symfony/polyfill-php83": "<1.30.0"
     },
     "autoload": {

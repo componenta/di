@@ -35,6 +35,7 @@ The default `ProxyFactory` rejects otherwise eligible classes with no stored ins
 A registered factory object implementing `LazyServiceFactoryInterface` may be non-invokable. Register it directly in `getFactories()`; the resolver calls `lazy()` with the container's `ContainerValue` (a PSR-11 container), proxy factory and runtime arguments instead of invoking it as an ordinary factory. The class in this example must satisfy the native adapter's restrictions.
 
 ```php
+use Componenta\Config\ConfigProvider;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -53,10 +54,12 @@ final class CatalogFactory implements LazyServiceFactoryInterface
     }
 }
 
-// In ConfigProvider:
-protected function getFactories(): array
+final class CatalogProvider extends ConfigProvider
 {
-    return [Catalog::class => new CatalogFactory()];
+    protected function getFactories(): array
+    {
+        return [Catalog::class => new CatalogFactory()];
+    }
 }
 ```
 

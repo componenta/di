@@ -7,6 +7,7 @@ namespace Componenta\DI\Internal\Resolver\Parameter;
 use Componenta\DI\Exception\ExceptionInterface;
 use Componenta\DI\Exception\InvalidConfigurationException;
 use Componenta\DI\Exception\ResolutionException;
+use Componenta\DI\Internal\BootstrapResolutionGuard;
 use Componenta\DI\Resolver\Parameter\ParametersResolver;
 use Componenta\DI\Resolver\Parameter\ParametersResolverInterface;
 use ReflectionParameter;
@@ -15,7 +16,10 @@ use Throwable;
 /** Read-only capability backed by the container's own parameter pipeline. @internal */
 final readonly class ParameterResolutionService implements ParametersResolverInterface
 {
-    public function __construct(private ParametersResolver $resolver) {}
+    public function __construct(
+        private ParametersResolver $resolver,
+        private BootstrapResolutionGuard $bootstrap,
+    ) {}
 
     /**
      * @param list<ReflectionParameter> $parameters
@@ -24,8 +28,10 @@ final readonly class ParameterResolutionService implements ParametersResolverInt
      */
     public function resolve(array $parameters, array $providedParameters = []): array
     {
-        if (!$this->resolver->isSealed) {
-            throw new InvalidConfigurationException('The parameter resolution service requires a sealed resolver pipeline.');
+        if (!$this->bootstrap->isComplete) {
+            throw new InvalidConfigurationException(
+                'The parameter resolution service requires a sealed resolver pipeline in a fully assembled container.',
+            );
         }
 
         try {
