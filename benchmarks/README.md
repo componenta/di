@@ -21,6 +21,8 @@ composer bench-smoke
 
 The smoke command uses the committed configuration, checks the actual PHPBench XML report against the declared subjects and parameter counts, and verifies revolutions, warmup and the single successful iteration for every variant. It rejects accidental global overrides and silent discovery omissions. The temporary report is deleted after verification.
 
+CI runs this smoke check on pushes and pull requests covered by the workflow. To run the historical comparison with v4.0.10 on GitHub Actions, dispatch `CI` manually. The comparison starts after the Linux, Windows, coverage and mutation checks pass. [CI workflow](../.github/workflows/ci.yml)
+
 To compare revisions, use separate checkouts with the same PHP build, extensions, Composer dependency versions, CPU/power settings and PHP configuration. Record OPcache/JIT and Xdebug settings. For example, export a baseline to an absolute path outside both checkouts with `vendor/bin/phpbench run --config=phpbench.json.dist --dump-file=/tmp/di-baseline.xml --report=aggregate`. In the candidate checkout compare using `vendor/bin/phpbench run --config=phpbench.json.dist --file=/tmp/di-baseline.xml --report=aggregate`. Use the same suite, fixture data, operation counts, and PHP configuration for both runs. Keep local results out of version control.
 
 ## Coverage

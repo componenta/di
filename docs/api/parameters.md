@@ -31,7 +31,7 @@ $arguments = $resolver->resolve((new ReflectionFunction($target))->getParameters
 $result = $container->call(new PreparedCallable($target), $arguments);
 ```
 
-The service exposes no registration, plan-cache or sealing operations. The concrete assembly collaborator `ParametersResolver` remains private to the container. Resolution through this capability requires a sealed parameter chain; it cannot be used to resolve arguments while the chain is still being configured.
+The container owns resolver registration and plan caching. Use the service after assembly succeeds.
 
 ## ParametersResolver
 

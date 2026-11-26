@@ -2,7 +2,7 @@
 
 [Английская версия](README.md)
 
-Контейнер внедрения зависимостей для PHP 8.5.13+, соответствующий стандарту [PSR-11](https://www.php-fig.org/psr/psr-11/).
+Контейнер внедрения зависимостей для PHP 8.x начиная с 8.5.13, соответствующий стандарту [PSR-11](https://www.php-fig.org/psr/psr-11/).
 
 Использует Componenta Config 4, Reflection 3 и Validation 3.1.
 

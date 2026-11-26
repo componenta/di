@@ -35,6 +35,7 @@ $proxy = $container->makeProxy(
 Объект фабрики с интерфейсом `LazyServiceFactoryInterface` не обязан быть вызываемым. Зарегистрируйте его непосредственно в `getFactories()`. Вместо обычного вызова фабрики контейнер вызывает `lazy()` с объектом `ContainerValue` (контейнер PSR-11), фабрикой заместителей и переданными аргументами. Класс в примере должен удовлетворять ограничениям встроенного механизма.
 
 ```php
+use Componenta\Config\ConfigProvider;
 use Componenta\DI\LazyServiceFactoryInterface;
 use Componenta\DI\ProxyFactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -53,10 +54,12 @@ final class CatalogFactory implements LazyServiceFactoryInterface
     }
 }
 
-// В классе поставщика конфигурации:
-protected function getFactories(): array
+final class CatalogProvider extends ConfigProvider
 {
-    return [Catalog::class => new CatalogFactory()];
+    protected function getFactories(): array
+    {
+        return [Catalog::class => new CatalogFactory()];
+    }
 }
 ```
 
