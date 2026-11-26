@@ -4,6 +4,8 @@
 
 A [PSR-11](https://www.php-fig.org/psr/psr-11/) dependency injection container for PHP 8.5.13+.
 
+Uses Componenta Config 4, Reflection 3, and Validation 3.1.
+
 Supports autowiring, explicit service and factory definitions, aliases, decorators, PHP attributes, callable invocation, PSR-7 request mapping, and native lazy objects.
 
 ## Installation
